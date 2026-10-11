@@ -12,6 +12,10 @@ class TandemKitNotificationsViewModel: ObservableObject {
     @Published var lastRefreshTime: Date?
     @Published var errorMessage: String?
 
+    /// Notifications the hosting screen handles itself: kept out of `notifications`, listed here.
+    var hiding: (NotificationItem) -> Bool = { _ in false }
+    @Published private(set) var hiddenNotifications: [NotificationItem] = []
+
     /// Callers waiting for a refresh that reflects state read after they asked. Drained on the
     /// main queue when the read they are waiting on finishes; see `refreshNotifications`.
     private var pendingCompletions: [() -> Void] = []
@@ -84,7 +88,9 @@ class TandemKitNotificationsViewModel: ObservableObject {
 
         pumpManager.refreshNotifications { succeeded in
             DispatchQueue.main.async {
-                self.notifications = pumpManager.notificationBundle.get()
+                let current = pumpManager.notificationBundle.get()
+                self.notifications = current.filter { !self.hiding($0) }
+                self.hiddenNotifications = current.filter(self.hiding)
                 self.isRefreshing = false
                 if succeeded {
                     self.lastRefreshTime = Date()

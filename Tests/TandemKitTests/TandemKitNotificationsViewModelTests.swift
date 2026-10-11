@@ -77,6 +77,19 @@ import XCTest
         XCTAssertNotNil(viewModel.lastRefreshTime, "The screen shows when the pump was last read")
     }
 
+    func testHiddenNotificationsAreKeptOutOfTheListAndReportedSeparately() {
+        let alerts: [AlertStatusResponse.AlertResponseType] = [.LOW_INSULIN_ALERT, .FILL_TUBING_STILL_IN_PROGRESS]
+        let bitmask = alerts.reduce(UInt64(0)) { $0 | (UInt64(1) << UInt64($1.rawValue)) }
+        bluetooth.stub(AlertStatusRequest.self, with: AlertStatusResponse(intMap: bitmask))
+        viewModel.hiding = { $0.name == "FILL_TUBING_STILL_IN_PROGRESS" }
+
+        viewModel.refreshNotifications()
+        drainMainQueue()
+
+        XCTAssertEqual(viewModel.notifications.map(\.name), ["LOW_INSULIN_ALERT"])
+        XCTAssertEqual(viewModel.hiddenNotifications.map(\.name), ["FILL_TUBING_STILL_IN_PROGRESS"])
+    }
+
     /// Without a pump manager there is nothing to read, but the caller still has to be released —
     /// the fill screen keeps its complete button disabled until the completion comes back.
     func testRefreshWithoutAPumpManagerStillCallsBack() {

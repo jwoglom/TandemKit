@@ -1528,6 +1528,17 @@
         }
       }
     },
+    "Filling has been paused. Do you see insulin dripping from the cannula? Press OK to continue with or complete the fill." : {
+      "comment" : "Message of the prompt shown when the pump pauses a tubing fill",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filling has been paused. Do you see insulin dripping from the cannula? Press OK to continue with or complete the fill."
+          }
+        }
+      }
+    },
     "Filling tubing requires suspending insulin delivery. You will use the pump button to fill." : {
       "comment" : "Warning message for tubing fill",
       "localizations" : {
@@ -2671,6 +2682,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Refresh Status"
+          }
+        }
+      }
+    },
+    "Release the Pump Button" : {
+      "comment" : "Title of the prompt shown when the pump pauses a tubing fill",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Release the Pump Button"
           }
         }
       }

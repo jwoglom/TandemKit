@@ -384,6 +384,19 @@ struct TandemKitFillTubingView: View {
                 .wizardCard(background: guidanceColors.critical.opacity(0.1))
             }
         }
+        .alert(
+            String(localized: "Release the Pump Button", comment: "Title of the prompt shown when the pump pauses a tubing fill"),
+            isPresented: $viewModel.isShowingFillPausedPrompt
+        ) {
+            Button(String(localized: "OK", comment: "OK button")) {
+                viewModel.acknowledgeFillPause()
+            }
+        } message: {
+            Text(
+                "Filling has been paused. Do you see insulin dripping from the cannula? Press OK to continue with or complete the fill.",
+                comment: "Message of the prompt shown when the pump pauses a tubing fill"
+            )
+        }
         .task {
             // Start periodic notification checking when this step appears
             await viewModel.startPeriodicNotificationCheck()

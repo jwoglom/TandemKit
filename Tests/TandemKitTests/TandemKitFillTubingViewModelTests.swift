@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 @testable import TandemKit
 import XCTest
@@ -90,6 +91,115 @@ import XCTest
         XCTAssertEqual(notificationReads, 3)
     }
 
+    // MARK: - The pump's pause
+
+    func testThePausePromptsOnceTheReleaseReadSeesIt() {
+        stubAlerts(.FILL_TUBING_STILL_IN_PROGRESS)
+        viewModel.currentStep = .filling
+
+        viewModel.handleButtonState(buttonDown: true)
+        viewModel.handleButtonState(buttonDown: false)
+        drainMainQueue()
+
+        XCTAssertTrue(viewModel.isShowingFillPausedPrompt)
+        XCTAssertFalse(viewModel.hasActiveNotifications, "The prompt answers for the pause; it is not also a card")
+        XCTAssertFalse(viewModel.canCompleteFill, "The pump still waits to be acknowledged")
+    }
+
+    func testOtherNotificationsStayOnScreenAlongsideThePause() {
+        stubAlerts(.FILL_TUBING_STILL_IN_PROGRESS, .LOW_INSULIN_ALERT)
+        viewModel.currentStep = .filling
+
+        refreshNotifications()
+
+        XCTAssertTrue(viewModel.isShowingFillPausedPrompt)
+        XCTAssertEqual(viewModel.notificationsViewModel.notifications.map(\.name), ["LOW_INSULIN_ALERT"])
+    }
+
+    func testThePauseDoesNotPromptBeforeTheFillStarts() {
+        stubAlerts(.FILL_TUBING_STILL_IN_PROGRESS)
+        viewModel.currentStep = .enterMode
+
+        refreshNotifications()
+
+        XCTAssertFalse(viewModel.isShowingFillPausedPrompt, "Before the fill it is an ordinary notification to clear")
+        XCTAssertTrue(viewModel.hasActiveNotifications)
+    }
+
+    func testThePromptGoesWhenThePumpNoLongerHasThePause() {
+        stubAlerts(.FILL_TUBING_STILL_IN_PROGRESS)
+        viewModel.currentStep = .filling
+        refreshNotifications()
+
+        stubAlerts()
+        refreshNotifications()
+
+        XCTAssertFalse(viewModel.isShowingFillPausedPrompt, "Acknowledged on the pump itself")
+    }
+
+    func testOKDismissesThePauseAndLetsTheFillComplete() {
+        stubAlerts(.FILL_TUBING_STILL_IN_PROGRESS)
+        bluetooth.stub(DismissNotificationRequest.self, with: DismissNotificationResponse(status: 0))
+        viewModel.currentStep = .filling
+        refreshNotifications()
+
+        stubAlerts()
+        viewModel.isShowingFillPausedPrompt = false
+        viewModel.acknowledgeFillPause()
+        drainAcknowledgement()
+
+        let dismissals = bluetooth.sent(DismissNotificationRequest.self)
+        XCTAssertEqual(dismissals.count, 1)
+        XCTAssertEqual(dismissals.first?.notificationId, UInt32(AlertStatusResponse.AlertResponseType.FILL_TUBING_STILL_IN_PROGRESS.rawValue))
+        XCTAssertEqual(dismissals.first?.notificationType, .alert)
+        XCTAssertFalse(viewModel.isShowingFillPausedPrompt)
+        XCTAssertTrue(viewModel.canCompleteFill)
+    }
+
+    func testARefusedDismissalBringsThePromptBack() {
+        stubAlerts(.FILL_TUBING_STILL_IN_PROGRESS)
+        bluetooth.stub(DismissNotificationRequest.self, with: DismissNotificationResponse(status: 1))
+        viewModel.currentStep = .filling
+        refreshNotifications()
+
+        viewModel.isShowingFillPausedPrompt = false
+        viewModel.acknowledgeFillPause()
+        drainAcknowledgement()
+
+        XCTAssertTrue(viewModel.isShowingFillPausedPrompt)
+        XCTAssertFalse(viewModel.canCompleteFill)
+    }
+
+    func testAPollLandingMidDismissalDoesNotBringThePromptBack() {
+        stubAlerts(.FILL_TUBING_STILL_IN_PROGRESS)
+        bluetooth.stub(DismissNotificationRequest.self, with: DismissNotificationResponse(status: 0))
+        viewModel.currentStep = .filling
+        refreshNotifications()
+
+        viewModel.isShowingFillPausedPrompt = false
+        var shownSinceOK = false
+        let observation = viewModel.$isShowingFillPausedPrompt.dropFirst().sink { shownSinceOK = shownSinceOK || $0 }
+        defer { observation.cancel() }
+
+        // The poll lands before the dismissal's answer, while the pump still reports the alert.
+        viewModel.notificationsViewModel.refreshNotifications()
+        viewModel.acknowledgeFillPause()
+        stubAlerts()
+        drainAcknowledgement()
+
+        XCTAssertFalse(shownSinceOK)
+    }
+
+    func testLeavingTheFillingStepTakesThePromptDown() {
+        stubAlerts(.FILL_TUBING_STILL_IN_PROGRESS)
+        viewModel.currentStep = .filling
+        refreshNotifications()
+
+        viewModel.currentStep = .exiting
+
+        XCTAssertFalse(viewModel.isShowingFillPausedPrompt)
+    }
+
     // MARK: - Which reports warrant a read
 
     func testAReleaseIsRead() {
@@ -118,6 +228,17 @@ import XCTest
     private func stubAlerts(_ alerts: AlertStatusResponse.AlertResponseType...) {
         let bitmask = alerts.reduce(UInt64(0)) { $0 | (UInt64(1) << UInt64($1.rawValue)) }
         bluetooth.stub(AlertStatusRequest.self, with: AlertStatusResponse(intMap: bitmask))
+    }
+
+    private func refreshNotifications() {
+        viewModel.notificationsViewModel.refreshNotifications()
+        drainMainQueue()
+    }
+
+    /// The dismissal's answer hops to the main queue to start the confirming read, which hops again to publish.
+    private func drainAcknowledgement() {
+        drainMainQueue()
+        drainMainQueue()
     }
 
     /// How many notification reads the driver has performed. Every read sends exactly one
