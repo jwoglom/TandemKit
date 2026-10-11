@@ -3,9 +3,10 @@ name: macOS
 # TandemKit in the iOS simulator, against the LoopKit frameworks from .github/actions/loopkit-frameworks,
 # with no Trio and no secrets. unit builds TandemKit plain and runs TandemKitTests; integration, once
 # unit has passed, builds it with VirtualPump.xcconfig and runs the virtual CoreBluetooth tests and
-# TandemKitIntegrationTests against faketandem (docs/integration-harness.md). Each job builds its own
-# variant once, in its own work directory; the flag changes every target's compilation conditions, so
-# the two builds share nothing but the LoopKit and SwiftPM caches. Every build goes through
+# the TandemKitIntegrationTests classes that need macOS against faketandem
+# (docs/integration-harness.md); linux.yml runs every class. Each job builds its own variant once, in
+# its own work directory; the flag changes every target's compilation conditions, so the two builds
+# share nothing but the LoopKit and SwiftPM caches. Every build goes through
 # scripts/test-local.sh, the same path a local run takes.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -21,6 +22,10 @@ on:
         description: "faketandem branch/tag/SHA for the integration tests (default: its default branch)"
         required: false
         default: ""
+      all_integration_tests:
+        description: "Run every TandemKitIntegrationTests class on macOS, not only those that need it"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -136,9 +141,15 @@ jobs:
     name: integration tests (faketandem)
     needs: unit
     runs-on: [self-hosted, macOS]
-    # A warm run takes ~20 minutes, ~15 of it the integration suite.
-    timeout-minutes: 30
+    # A warm run takes ~5 minutes; with every class, ~25.
+    timeout-minutes: ${{ inputs.all_integration_tests && 45 || 20 }}
     env:
+      # Linux runs every class (linux.yml). These need macOS: fresh JPAKE pairing needs SwiftECC, and
+      # the rest are one pass through the plainest flows on the real LoopKit and Apple's Foundation.
+      MACOS_SUITES: >-
+        PairingIntegrationTests ScanIntegrationTests TransportIntegrationTests MTUIntegrationTests
+        OnboardingIntegrationTests SyncIntegrationTests BolusIntegrationTests ConformanceSmokeTests
+      ALL_INTEGRATION_TESTS: ${{ inputs.all_integration_tests == true }}
       VIRTUAL_PUMP: '1'
       FAKETANDEM_DIR: ${{ github.workspace }}/faketandem
       FAKETANDEM_BIN: ${{ github.workspace }}/integration-logs/faketandem
@@ -208,12 +219,21 @@ jobs:
         run: TandemKit/scripts/ci/check-test-count.py xcodebuild-test-virtual-pump.log --label "virtual pump tests"
 
       - name: Run TandemKitIntegrationTests against faketandem
-        run: TandemKit/scripts/integration-test.sh test -disableAutomaticPackageResolution
+        run: |
+          selection=()
+          if [[ "${ALL_INTEGRATION_TESTS}" != "true" ]]; then
+            for suite in ${MACOS_SUITES}; do
+              selection+=("-only-testing:TandemKitIntegrationTests/${suite}")
+            done
+          fi
+          TandemKit/scripts/integration-test.sh test -disableAutomaticPackageResolution ${selection[@]+"${selection[@]}"}
 
       # Every test throws XCTSkip when the emulator's addresses do not reach the test process, so
-      # a run that never talked to faketandem would still pass.
+      # a run that never talked to faketandem would still pass; a renamed class would not run at all.
       - name: Check that integration tests actually ran
-        run: TandemKit/scripts/ci/check-test-count.py "${LOG_DIR}/xcodebuild.log" --label TandemKitIntegrationTests --no-skips
+        run: |
+          TandemKit/scripts/ci/check-test-count.py "${LOG_DIR}/xcodebuild.log" --label TandemKitIntegrationTests \
+            --no-skips --suites ${MACOS_SUITES}
 
       - name: Upload test logs/results (on failure)
         if: failure()

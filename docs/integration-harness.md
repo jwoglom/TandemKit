@@ -71,6 +71,12 @@ branch of the same name when one exists, so a driver change is tested with the e
 needs. The job fails if any integration test skips, because a skip means the emulator's addresses
 never reached the test process.
 
+It runs only the classes its `MACOS_SUITES` names, since Linux runs every class (below), and the
+macOS runners are few: `PairingIntegrationTests`, whose fresh JPAKE pairing needs SwiftECC, and one
+pass through the plainest flows on the real LoopKit and Apple's Foundation. A class that tests
+something only Apple's frameworks show goes on that list. `all_integration_tests` on a manual run
+runs every class here too.
+
 `.github/workflows/linux.yml` runs it too, on GitHub-hosted Ubuntu, for every push to `main` and
 `dev`, pull request and manual run. Its `virtual-pump` job builds the suite and its `faketandem`
 job the emulator and jar, from the same faketandem ref the macOS job picks, side by side; the `integration` job then runs the suite in two halves at
