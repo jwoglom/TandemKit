@@ -384,6 +384,13 @@ edit instead of at the next sync.
   (seeded from `PumpManagerSetupSettings` at setup, then whatever the host app last synced).
   The pump enforces the same ceiling in firmware, because `syncDeliveryLimits` pushes it down
   via `SetMaxBolusLimitRequest`.
+- A command the pump answers with a non-zero status fails as `.deviceState` carrying
+  `PumpCommError.errorResponse` (`PumpRefusal`), naming the command and the status; an unanswered
+  write is `noResponse`, and nothing reports `invalidPacket`. The pump gives no reason, so the
+  message adds only what the driver can read off the command: a temp whose percent of the pump's
+  rate works out under its 0.1 U/hr minimum or over the synced max basal limit, whether the temp it
+  replaced was already stopped, a bolus's nack reason. A refused bolus cancel says the bolus may
+  still be delivering.
 - `enactBolus` refuses automatic boluses while Control-IQ is active. `enactTempBasal` refuses
   while Control-IQ is active or a bolus is running.
 - A zero temp basal is always allowed, whatever the profile, sync or update state below, since 0%

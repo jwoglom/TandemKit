@@ -705,15 +705,16 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            guard let permissionResponse = self.bluetooth.write(BolusPermissionRequest()) else {
+            let permissionRequest = BolusPermissionRequest()
+            guard let permissionResponse = self.bluetooth.write(permissionRequest) else {
                 self.logger.error("Failed to request bolus permission")
                 completion(.communication(PumpCommError.noResponse))
                 return
             }
 
             guard permissionResponse.isPermissionGranted else {
-                self.logger.error("Pump rejected bolus permission request")
-                completion(.communication(PumpCommError.invalidPacket))
+                self.logger.error("Pump rejected bolus permission request: \(permissionResponse.description)")
+                completion(.deviceState(PumpRefusal.bolusPermission(permissionResponse, to: permissionRequest)))
                 return
             }
 
@@ -738,9 +739,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
             }
 
             guard initiateResponse.wasBolusInitiated else {
-                self.logger.error("Bolus was not initiated")
+                self.logger.error("Bolus was not initiated: \(initiateResponse.description)")
                 self.releaseBolusPermission(bolusId: permissionResponse.bolusId)
-                completion(.communication(PumpCommError.invalidPacket))
+                completion(.deviceState(PumpRefusal.initiateBolus(initiateResponse, to: bolusRequest)))
                 return
             }
 
@@ -800,15 +801,16 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            guard let response = self.bluetooth.write(CancelBolusRequest(bolusId: bolusId)) else {
+            let cancelRequest = CancelBolusRequest(bolusId: bolusId)
+            guard let response = self.bluetooth.write(cancelRequest) else {
                 self.logger.error("Failed to cancel bolus")
                 completion(.failure(.communication(PumpCommError.noResponse)))
                 return
             }
 
             guard response.wasCancelled else {
-                self.logger.error("Pump failed to cancel bolus")
-                completion(.failure(.communication(PumpCommError.invalidPacket)))
+                self.logger.error("Pump failed to cancel bolus: \(response.description)")
+                completion(.failure(.deviceState(PumpRefusal.cancelBolus(response, to: cancelRequest))))
                 return
             }
             let stoppedAt = self.now
@@ -950,8 +952,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            if currentBasal.basalType == .tempBasal {
-                guard let stopCurrentRate = self.bluetooth.write(StopTempRateRequest()) else {
+            let tempWasRunning = currentBasal.basalType == .tempBasal
+            if tempWasRunning {
+                let stopRequest = StopTempRateRequest()
+                guard let stopCurrentRate = self.bluetooth.write(stopRequest) else {
                     self.logger.error("Failed to stop temp rate")
                     completion(.communication(PumpCommError.noResponse))
                     return
@@ -959,7 +963,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
                 guard stopCurrentRate.isStatusOK else {
                     self.logger.error("Failed to stop temp rate - Status: \(stopCurrentRate.status)")
-                    completion(.communication(PumpCommError.invalidPacket))
+                    completion(.deviceState(PumpRefusal.stopTempBasal(stopCurrentRate, to: stopRequest, replacing: !isCancel)))
                     return
                 }
 
@@ -1005,7 +1009,13 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     .error(
                         "Failed to set temp rate - Status: \(response.status), percent: \(percent), duration: \(minutes)min"
                     )
-                completion(.communication(PumpCommError.invalidPacket))
+                completion(.deviceState(PumpRefusal.tempBasal(
+                    response,
+                    to: request,
+                    pumpBasalRate: currentBasal.profileBasalRate,
+                    maximumTempBasalRate: self.state.settings.maxTempBasalRate,
+                    afterStoppingATemp: tempWasRunning
+                )))
                 return
             }
 
@@ -1349,13 +1359,13 @@ public class TandemPumpManager: PumpManager, Pluggable {
             if let basalRequest {
                 guard let basalResponse = self.bluetooth.write(basalRequest) else {
                     self.logger.error("Failed to set maxBasalLimit")
-                    completion(.failure(PumpCommError.invalidPacket))
+                    completion(.failure(PumpCommError.noResponse))
                     return
                 }
 
                 guard basalResponse.isStatusOK else {
                     self.logger.error("Failed to set maxBasalLimit - Status: \(basalResponse.status)")
-                    completion(.failure(PumpCommError.invalidPacket))
+                    completion(.failure(PumpRefusal.maximumBasalLimit(basalResponse, to: basalRequest)))
                     return
                 }
             }
@@ -1363,13 +1373,13 @@ public class TandemPumpManager: PumpManager, Pluggable {
             if let bolusRequest {
                 guard let bolusResponse = self.bluetooth.write(bolusRequest) else {
                     self.logger.error("Failed to set maxBolusLimit")
-                    completion(.failure(PumpCommError.invalidPacket))
+                    completion(.failure(PumpCommError.noResponse))
                     return
                 }
 
                 guard bolusResponse.isStatusOK else {
                     self.logger.error("Failed to set maxBolusLimit - Status: \(bolusResponse.status)")
-                    completion(.failure(PumpCommError.invalidPacket))
+                    completion(.failure(PumpRefusal.maximumBolusLimit(bolusResponse, to: bolusRequest)))
                     return
                 }
             }
