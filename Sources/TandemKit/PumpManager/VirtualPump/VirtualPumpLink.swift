@@ -279,8 +279,7 @@ final class SocketLink {
 /// A TCP listener on 127.0.0.1 only, handing each accepted connection to `onAccept` on its own thread.
 final class SocketListener {
     let port: UInt16
-    private let lock = NSLock()
-    private var fd: Int32
+    private let stopped = StopFlag()
 
     /// `port` 0 takes an ephemeral one, read back from `port`.
     init(port: UInt16 = 0, name: String, onAccept: @escaping (SocketLink) -> Void) throws {
@@ -318,13 +317,20 @@ final class SocketListener {
             }
         }
         self.port = UInt16(bigEndian: assigned.sin_port)
-        self.fd = fd
 
+        let stopped = self.stopped
         let thread = Thread {
-            while true {
+            // Only this thread closes the socket: closed by stop() while this loop could still accept,
+            // its number went to the next socket opened, and the loop took that socket's connections.
+            defer { Glue.close(fd) }
+            while !stopped.isSet {
+                var listening = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
+                guard poll(&listening, 1, 100) > 0, !stopped.isSet else {
+                    continue
+                }
                 let client = accept(fd, nil, nil)
                 guard client >= 0 else {
-                    return
+                    continue
                 }
                 let link = SocketLink(fd: client)
                 let connection = Thread { onAccept(link) }
@@ -336,21 +342,30 @@ final class SocketListener {
         thread.start()
     }
 
-    /// Stops accepting; connections already handed out stay open.
+    /// Stops accepting, and frees the port within 100 ms; connections already handed out stay open.
     func stop() {
-        lock.lock()
-        let fd = self.fd
-        self.fd = -1
-        lock.unlock()
-        guard fd >= 0 else {
-            return
-        }
-        Glue.shutdown(fd, Int32(SHUT_RDWR))
-        Glue.close(fd)
+        stopped.set()
     }
 
     deinit {
         stop()
+    }
+}
+
+private final class StopFlag {
+    private let lock = NSLock()
+    private var value = false
+
+    var isSet: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return value
+    }
+
+    func set() {
+        lock.lock()
+        value = true
+        lock.unlock()
     }
 }
 
