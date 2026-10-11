@@ -232,6 +232,12 @@ edit instead of at the next sync.
   it ran. An id not past `lastTempRateEventRaw` mints nothing: the pump's 16-bit counter may
   restart, and a host still holding a row under the id's earlier use would swallow the new temp.
   The part after a segment cut or a restatement is a dose of its own, keyed the second way.
+- A `.basal` marker, suspend or resume is reported once, keyed on its type and its date to the
+  millisecond (#352): of two rows under one `raw`, both hosts keep the first, and two of one type
+  can fall in one second. `getActivePumpEvents(endDate:)` closes a temp basal that ran out with a
+  marker at its end only when `endDate`, where each caller reports its own change, is a second or
+  more later; in that second the caller's change says the same, and Trio would order the two rows
+  arbitrarily.
 - A history pass sends all its non-bolus reports (suspends, resumes, temp basal ends, basal
   corrections) as one batch, ascending (`HistoryReportBatch`, `emitHistoryReports`). It replaces
   only when it ends or re-states the temp basal the host holds as mutable, and then carries

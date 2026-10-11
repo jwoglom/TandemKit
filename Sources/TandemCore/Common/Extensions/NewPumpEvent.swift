@@ -26,33 +26,38 @@ public extension NewPumpEvent {
     }
 
     static func basal(dose: DoseEntry, date: Date = Date.now) -> NewPumpEvent {
-        let dateFormatter = ISO8601DateFormatter()
-        return NewPumpEvent(
+        NewPumpEvent(
             date: date,
             dose: dose,
-            raw: "\(DoseType.basal.rawValue) \(dateFormatter.string(from: date))".data(using: .utf8) ?? Data([]),
+            raw: deliveryChangeRaw(.basal, at: date),
             title: String(localized: "Basal", comment: "Pump Event title for UnfinalizedDose with doseType of .basal")
         )
     }
 
     static func resume(dose: DoseEntry, date: Date = Date.now) -> NewPumpEvent {
-        let dateFormatter = ISO8601DateFormatter()
-        return NewPumpEvent(
+        NewPumpEvent(
             date: date,
             dose: dose,
-            raw: "\(DoseType.resume.rawValue) \(dateFormatter.string(from: date))".data(using: .utf8) ?? Data([]),
+            raw: deliveryChangeRaw(.resume, at: date),
             title: String(localized: "Resume", comment: "Pump Event title for UnfinalizedDose with doseType of .resume")
         )
     }
 
     static func suspend(dose: DoseEntry, date: Date = Date.now) -> NewPumpEvent {
-        let dateFormatter = ISO8601DateFormatter()
-        return NewPumpEvent(
+        NewPumpEvent(
             date: date,
             dose: dose,
-            raw: "\(DoseType.suspend.rawValue) \(dateFormatter.string(from: date))".data(using: .utf8) ?? Data([]),
+            raw: deliveryChangeRaw(.suspend, at: date),
             title: String(localized: "Suspend", comment: "Pump Event title for UnfinalizedDose with doseType of .suspend")
         )
+    }
+
+    /// To the millisecond: each host keeps one row per `raw`, and two changes of one type can fall
+    /// in one second.
+    private static func deliveryChangeRaw(_ type: DoseType, at date: Date) -> Data {
+        let dateFormatter = ISO8601DateFormatter()
+        dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return Data("\(type.rawValue) \(dateFormatter.string(from: date))".utf8)
     }
 
     /// Cannula / infusion-set change, reported as a `.replaceComponent` pump event.
