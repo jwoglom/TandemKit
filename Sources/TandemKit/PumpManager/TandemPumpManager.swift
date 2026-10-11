@@ -2289,7 +2289,8 @@ extension TandemPumpManager {
             NewPumpEvent.tempBasal(dose: basalEntry, of: state.basalDose)
         ]
 
-        if endDate != nil, basalEntry.endDate == state.basalDose.estimatedEndDate {
+        // Every caller reports its own change at `endDate`; Trio orders two rows in one second arbitrarily.
+        if let endDate, basalEntry.endDate == state.basalDose.estimatedEndDate, endDate.timeIntervalSince(basalEntry.endDate) >= 1 {
             let dose = UnfinalizedDose(
                 basalRate: scheduledBasalRateInForce(at: basalEntry.endDate),
                 insulinType: state.insulinType,

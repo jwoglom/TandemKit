@@ -642,7 +642,7 @@ final class IdempotencyConformanceTests: ConformanceTestCase {
     // MARK: - C9 (§4, §8: raw is the identity; #352)
 
     /// The phone's clock half a second ahead of the pump's, and a neutral temp in the second a temp
-    /// basal was due to end: the expiry's basal marker and the neutral temp's go out in one batch.
+    /// basal was due to end: the batch that ends the temp basal also carries the neutral temp's marker.
     func testEventsInOneBatchNeverShareAnIdentity() throws {
         try startPairedDriver(scheduledBasalRate: Self.scheduledBasalRate)
         let duration: TimeInterval = .minutes(30)
@@ -662,6 +662,7 @@ final class IdempotencyConformanceTests: ConformanceTestCase {
         )
 
         let beforeNeutral = allPumpEventBatches.count
+        let neutralAt = clock.now
         XCTAssertNil(try enactTempBasal(unitsPerHour: Self.scheduledBasalRate, duration: .minutes(30)), "a neutral temp")
         let neutralBatches = newBatches(since: beforeNeutral)
         XCTAssertTrue(
@@ -669,25 +670,62 @@ final class IdempotencyConformanceTests: ConformanceTestCase {
             "the neutral temp finalizes the running temp basal: \(neutralBatches.map(describe))"
         )
 
-        XCTExpectFailure(
-            "jwoglom/TandemKit#352: basal, suspend and resume raw is the type and an ISO8601 date to the whole second "
-                + "with no discriminator, so the temp basal's end marker and the neutral temp's scheduled-basal marker "
-                + "in the same second share one raw"
-        ) {
-            for batch in neutralBatches {
-                let raws = batch.events.map(\.raw)
-                XCTAssertEqual(Set(raws).count, raws.count, "one identity per event in a batch: \(describe(batch))")
-            }
+        for batch in neutralBatches {
+            let raws = batch.events.map(\.raw)
+            XCTAssertEqual(Set(raws).count, raws.count, "one identity per event in a batch: \(describe(batch))")
         }
+        XCTAssertEqual(
+            neutralBatches.flatMap(\.events).filter { $0.dose?.type == .basal }.map(\.date), [neutralAt],
+            "the neutral temp's marker says the schedule is back; one at the temp basal's end would share its second: "
+                + "\(neutralBatches.map(describe))"
+        )
 
-        let (loop, _) = feedOracles()
+        let (loop, trio) = feedOracles()
         loop.assertNoDuplicates()
+        trio.assertNoDuplicates()
+        trio.assertNoSameSecondBasalRows()
         XCTAssertEqual(
             loop.permanentDoses.filter { $0.dose.type == .tempBasal }.count, 1,
             "one temp basal ran: \(loop.doses.map(LoopDoseStoreOracle.describe))"
         )
         // The pump stopped the temp rate 0.4 s before the phone's scheduled end.
         try timeline().assertMatches(loop, tolerance: PumpTimeline.Tolerance(time: 2, units: 0.001, rate: 0.005), "a neutral temp in a temp basal's last second")
+    }
+
+    // MARK: - C10 (§4, §8: raw is the identity; #352)
+
+    /// A neutral temp, a temp basal and its cancel inside one second of the phone's clock: the
+    /// neutral temp's marker and the cancel's go out in two batches, both in that second.
+    func testMarkersInOneSecondAcrossBatchesKeepTheirOwnIdentities() throws {
+        try startPairedDriver(scheduledBasalRate: Self.scheduledBasalRate)
+        let beforeNeutral = allPumpEventBatches.count
+        let neutralAt = clock.now
+
+        XCTAssertNil(try enactTempBasal(unitsPerHour: Self.scheduledBasalRate, duration: .minutes(30)), "a neutral temp")
+        manualClock.advance(by: 0.2)
+        XCTAssertNil(try enactTempBasal(unitsPerHour: Self.tempBasalRate, duration: .minutes(30)))
+        manualClock.advance(by: 0.3)
+        XCTAssertNil(try enactTempBasal(unitsPerHour: 0, duration: 0), "cancel")
+
+        let batches = newBatches(since: beforeNeutral)
+        let markers = batches.flatMap(\.events).filter { $0.dose?.type == .basal }
+        XCTAssertEqual(markers.map(\.date), [neutralAt, neutralAt.addingTimeInterval(0.5)], "\(batches.map(describe))")
+        XCTAssertEqual(Set(markers.map(\.raw)).count, markers.count, "two markers, two identities: \(batches.map(describe))")
+
+        let (loop, trio) = feedOracles()
+        XCTAssertEqual(
+            loop.pumpEvents.filter { $0.dose?.type == .basal && $0.date >= neutralAt }.map(\.date),
+            markers.map(\.date),
+            "Loop keeps one PumpEvent row per raw"
+        )
+        XCTAssertEqual(
+            trio.scheduledBasals.filter { $0.timestamp >= neutralAt }.map(\.timestamp),
+            markers.map(\.date),
+            "Trio matches a report on its syncIdentifier first"
+        )
+        XCTAssertFalse(trio.skipped.contains { $0.event.dose?.type == .basal }, "Trio dropped a marker: \(trio.skipped)")
+        loop.assertNoDuplicates()
+        trio.assertNoDuplicates()
     }
 
     // MARK: - Helpers

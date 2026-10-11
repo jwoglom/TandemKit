@@ -112,7 +112,8 @@ oracle one rule at a time.
 | C6 | Relaunch and re-sync | with a finalized bolus and a running TBR, relaunch from `rawValue`; sync | no duplicate of the finalized bolus; TBR continues with the same `raw` |
 | C7 | Events before the delegate attaches (#342, #332) | pair and sync; set `delegate = nil`; pump `suspend`; sync; attach delegate; sync | the suspend transition is emitted after attach, not lost |
 | C8 | A bolus that outlives the driver's estimate (#347, #330) | enact 1 U at 0.005 U/s; advance past the driver's model, inside the pump's; wait for the guard to release; enact a TBR | no replacing batch drops the running bolus (refusing the TBR also satisfies it); once the pump finishes, Loop holds the bolus at the pump's amount |
-| C9 | Two markers in one second (#352) | enact TBR; step both clocks to 0.4 s short of its end, the driver's alone 0.5 s on; neutral temp | no batch carries two events under one `raw` |
+| C9 | Two markers in one second (#352) | enact TBR; step both clocks to 0.4 s short of its end, the driver's alone 0.5 s on; neutral temp | no batch carries two events under one `raw`; the neutral temp's marker is the only one, so Trio holds no two basal rows in one second |
+| C10 | Two markers in one second, across batches (#352) | neutral temp; the driver's clock alone 0.2 s on, TBR; 0.3 s on, cancel | the two markers have their own `raw`, and Loop and Trio store both |
 
 ## D. Pump-side failures and events (§7, §10 suspend/resume and faults; P10, P13, P14, G04, G06; #331, #333, #338, #348, #349, #350, #351, #424, #452)
 
