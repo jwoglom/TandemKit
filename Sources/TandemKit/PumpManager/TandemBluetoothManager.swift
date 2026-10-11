@@ -223,7 +223,9 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
                 completion(PumpCommError.pumpNotConnected)
                 return
             }
-            completion(self.awaitConnect(on: manager, timeout: self.pairingTimeout) { onConnect in
+            // A dropped link leaves the attempt to the setup, which knows the round it lost: a Mobi
+            // refuses a wrong code by dropping the link at key confirmation.
+            completion(self.awaitConnect(on: manager, timeout: self.pairingTimeout, endsOnLinkLoss: false) { onConnect in
                 self.startConnect(peripheral, on: manager, completion: onConnect)
                 return nil
             })
@@ -464,15 +466,19 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
     }
 
     /// Starts a connect through `start`, which returns an error when it could not, and waits for
-    /// it until `timeout`. MUST be called on `commandQueue`.
+    /// it until `timeout`, or with `endsOnLinkLoss` until the link or Bluetooth goes away. MUST be
+    /// called on `commandQueue`.
     private func awaitConnect(
         on manager: CBCentralManager,
         timeout: DispatchTimeInterval,
+        endsOnLinkLoss: Bool = true,
         _ start: (_ onConnect: @escaping (Error?) -> Void) -> Error?
     ) -> Error? {
         let group = TandemDispatchGroup()
         group.enter()
-        setInFlightConnectGroup(group)
+        if endsOnLinkLoss {
+            setInFlightConnectGroup(group)
+        }
         defer { setInFlightConnectGroup(nil) }
 
         // Per-attempt result holder so a late/stale connect callback from a previous attempt can
