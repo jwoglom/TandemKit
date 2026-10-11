@@ -200,6 +200,7 @@ jobs:
             -resultBundlePath "TandemKitTests-virtual-pump.xcresult" \
             -only-testing:TandemKitTests/VirtualCoreBluetoothTests \
             -only-testing:TandemKitTests/VirtualPumpControlTests \
+            -only-testing:TandemKitTests/SocketListenerTests \
             -disableAutomaticPackageResolution \
             2>&1 | tee "xcodebuild-test-virtual-pump.log"
 

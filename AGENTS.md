@@ -51,7 +51,8 @@ compiles to nothing and the driver runs on real CoreBluetooth, unchanged. On Lin
 `swift test --build-path .build-virtual -Xswiftc -DTANDEMKIT_VIRTUAL_PUMP`. Test files import both, so
 `Tests/TandemKitTests/VirtualCoreBluetoothNames.swift` pins the names; `VirtualCoreBluetoothTests`
 exists only in a flagged build, which the `integration` job in `.github/workflows/macos.yml` and
-the `virtual-pump` job in `.github/workflows/linux.yml` both run.
+the `virtual-pump` job in `.github/workflows/linux.yml` both run. Each names the flagged-only test
+classes it runs, so a new one goes on both lists.
 
 The same build carries `VirtualPumpControl`: with `TANDEMKIT_VIRTUAL_PUMP_CONTROL=<port>` in the
 host app's environment, the driver listens on 127.0.0.1 for a test to make the calls the host and
