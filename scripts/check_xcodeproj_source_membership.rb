@@ -46,7 +46,8 @@ TEST_TARGET = "TandemKitTests"
 # so they live in a separate target and scheme the unit-test CI never runs.
 TEST_TARGET_OVERRIDES = {
   "Tests/TandemKitIntegrationTests" => "TandemKitIntegrationTests",
-  "Tests/TrioIntegrationTests" => "TrioIntegrationTests"
+  "Tests/TrioIntegrationTests" => "TrioIntegrationTests",
+  "Tests/LoopIntegrationTests" => "LoopIntegrationTests"
 }.freeze
 
 def repo_root

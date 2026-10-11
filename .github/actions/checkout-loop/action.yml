@@ -1,0 +1,61 @@
+name: Check out LoopWorkspace with TandemKit under test
+description: >-
+  Checks out LoopWorkspace into loop/ without its TandemKit submodule, puts the TandemKit revision
+  under test at loop/TandemKit, and initializes LoopWorkspace's other submodules. For jobs that run
+  the Loop app in the simulator. The LoopWorkspace checkout empties loop/, so a caller must fetch
+  .github/actions somewhere else first (a sparse checkout of this repo) to reach this action at all.
+
+inputs:
+  repository:
+    description: LoopWorkspace repository (must contain a TandemKit submodule at path TandemKit).
+    default: LoopKit/LoopWorkspace
+  ref:
+    description: Branch, tag or SHA of the LoopWorkspace repository.
+    default: feat/tandem-closed-beta
+  token:
+    description: Token that can read the LoopWorkspace repository, if it is private.
+    default: ''
+  tandemkit-ref:
+    description: TandemKit revision to test.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Checkout LoopWorkspace (no submodules)
+      uses: actions/checkout@v6
+      with:
+        repository: ${{ inputs.repository }}
+        ref: ${{ inputs.ref }}
+        path: loop
+        submodules: false
+        fetch-depth: 1
+        token: ${{ inputs.token || github.token }}
+
+    - name: Remove LoopWorkspace TandemKit submodule working tree placeholder
+      shell: bash
+      run: rm -rf "loop/TandemKit"
+
+    - name: Checkout TandemKit under test into loop/TandemKit
+      uses: actions/checkout@v6
+      with:
+        ref: ${{ inputs.tandemkit-ref }}
+        path: loop/TandemKit
+        fetch-depth: 1
+
+    - name: Initialize LoopWorkspace submodules (excluding TandemKit)
+      shell: bash
+      run: |
+        set -euo pipefail
+        cd loop
+
+        git submodule sync --recursive
+
+        submodule_paths=()
+        while IFS= read -r path; do
+          [[ -z "${path}" ]] && continue
+          [[ "${path}" == "TandemKit" ]] && continue
+          submodule_paths+=("${path}")
+        done < <(git config -f .gitmodules --get-regexp '^submodule\..*\.path$' | awk '{print $2}')
+
+        git submodule update --init --recursive --depth 1 "${submodule_paths[@]}"

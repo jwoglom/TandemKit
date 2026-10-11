@@ -4,10 +4,10 @@ name: macOS
 # with no Trio and no secrets. unit builds TandemKit plain and runs TandemKitTests; integration, once
 # unit has passed, builds it with VirtualPump.xcconfig and runs the virtual CoreBluetooth tests and
 # the TandemKitIntegrationTests classes that need macOS against faketandem
-# (docs/integration-harness.md); linux.yml runs every class. Each job builds its own variant once, in
-# its own work directory; the flag changes every target's compilation conditions, so the two builds
-# share nothing but the LoopKit and SwiftPM caches. Every build goes through
-# scripts/test-local.sh, the same path a local run takes.
+# (docs/integration-harness.md); linux.yml runs every class. trio and loop run the two host apps
+# themselves on that build. Each job builds its own variant once, in its own work directory; the flag
+# changes every target's compilation conditions, so the builds share nothing but the LoopKit and
+# SwiftPM caches. Every build goes through scripts/test-local.sh, the same path a local run takes.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -54,7 +54,7 @@ jobs:
         with:
           fetch-depth: 1
 
-      # nightscout/Trio's ref is checkout-trio's default.
+      # nightscout/Trio's and LoopKit/LoopWorkspace's refs are checkout-trio's and checkout-loop's defaults.
       - name: Plan
         id: plan
         uses: ./.github/actions/ci-plan
@@ -63,6 +63,7 @@ jobs:
           externals: |
             jwoglom/faketandem ${{ github.head_ref }}
             nightscout/Trio feat/tandem-closed-beta
+            LoopKit/LoopWorkspace feat/tandem-closed-beta
 
   unit:
     name: unit tests
@@ -251,7 +252,7 @@ jobs:
             ${{ env.LOG_DIR }}/TandemKitIntegrationTests.xcresult
 
   # Trio itself, built with this TandemKit on the virtual pump, in the simulator against faketandem.
-  # scripts/trio-launcher.py installs Trio for each test, seeded with an unpaired Tandem pump, and
+  # scripts/app-launcher.py installs Trio for each test, seeded with an unpaired Tandem pump, and
   # launches it with the address of TandemKit's control channel (VirtualPumpControl);
   # TrioIntegrationTests drive the driver inside Trio through it and compare what Trio stored with
   # TrioDoseStoreOracle's prediction.
@@ -330,9 +331,88 @@ jobs:
             ${{ env.LOG_DIR }}
             !${{ env.LOG_DIR }}/faketandem
 
+  # Loop itself, from LoopKit/LoopWorkspace feat/tandem-closed-beta with this TandemKit as its
+  # TandemKitPlugin, on the virtual pump against faketandem, as trio runs Trio: upstream LoopKit and its
+  # DoseStore, where trio has Trio's fork and its own pump history. LoopIntegrationTests compare both of
+  # DoseStore's tables with LoopDoseStoreOracle's prediction.
+  loop:
+    name: Loop in the simulator (faketandem)
+    needs: unit
+    runs-on: [self-hosted, macOS]
+    # Loop, its LoopKit and the other kits build from source on every run.
+    timeout-minutes: 120
+    env:
+      FAKETANDEM_DIR: ${{ github.workspace }}/faketandem
+      FAKETANDEM_BIN: ${{ github.workspace }}/loop-logs/faketandem
+      FAKETANDEM_REF: ${{ github.event.inputs.faketandem_ref || '' }}
+      LOG_DIR: ${{ github.workspace }}/loop-logs
+      LOOP_DIR: ${{ github.workspace }}/loop
+      LOOP_DERIVED_DATA: ${{ github.workspace }}/LoopDerivedData
+    steps:
+      - name: Checkout TandemKit
+        uses: actions/checkout@v6
+        with:
+          path: TandemKit
+          fetch-depth: 1
+
+      - name: Set up Xcode and a simulator
+        uses: ./TandemKit/.github/actions/setup-simulator
+
+      - name: Cache SwiftPM artifacts
+        uses: actions/cache@v6
+        with:
+          path: |
+            ${{ env.DERIVED_DATA_PATH }}/SourcePackages
+            ~/.swiftpm
+          key: ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-tandemkit-spm-${{ hashFiles('TandemKit/TandemKit.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-tandemkit-spm-
+
+      # For the LoopIntegrationTests bundle, which builds in TandemKit's own project like the
+      # integration tests; Loop builds its own LoopKit from its submodule.
+      - name: Stage LoopKit frameworks
+        uses: ./TandemKit/.github/actions/loopkit-frameworks
+        with:
+          derived-data-path: ${{ env.DERIVED_DATA_PATH }}
+          destination: ${{ env.SIMULATOR_DESTINATION }}
+          xcode-version: ${{ env.XCODE_VERSION }}
+
+      - name: Check out LoopWorkspace with this TandemKit
+        uses: ./TandemKit/.github/actions/checkout-loop
+        with:
+          tandemkit-ref: ${{ github.sha }}
+
+      - name: Build faketandem
+        uses: ./TandemKit/.github/actions/faketandem
+        with:
+          ref: ${{ env.FAKETANDEM_REF }}
+          binary: ${{ env.FAKETANDEM_BIN }}
+
+      - name: Build Loop and LoopIntegrationTests with the virtual pump
+        run: TandemKit/scripts/loop-test.sh build -quiet
+
+      - name: Wait for the simulator to finish booting
+        run: xcrun simctl bootstatus "${SIMULATOR_UDID}" -b || true
+
+      - name: Run LoopIntegrationTests against Loop and faketandem
+        run: TandemKit/scripts/loop-test.sh test -disableAutomaticPackageResolution
+
+      - name: Check that the Loop tests actually ran
+        run: TandemKit/scripts/ci/check-test-count.py "${LOG_DIR}/xcodebuild.log" --label LoopIntegrationTests --no-skips
+
+      - name: Upload logs, results and Loop's store (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: macos-loop-test-artifacts
+          path: |
+            xcodebuild-loopkit.log
+            ${{ env.LOG_DIR }}
+            !${{ env.LOG_DIR }}/faketandem
+
   passed:
     name: passed
-    needs: [plan, unit, integration, trio]
+    needs: [plan, unit, integration, trio, loop]
     if: success() && needs.plan.outputs.run == 'true' && needs.plan.outputs.marker != ''
     runs-on: ubuntu-latest
     timeout-minutes: 5

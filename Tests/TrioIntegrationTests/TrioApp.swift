@@ -6,7 +6,7 @@ import FoundationNetworking
 import XCTest
 
 /// Trio running in the simulator on the virtual pump build of TandemKit, launched by
-/// scripts/trio-launcher.py: its driver reached through the control channel, and what Trio made of
+/// scripts/app-launcher.py: its driver reached through the control channel, and what Trio made of
 /// the driver's reports read from its data container.
 struct TrioApp {
     /// scripts/trio-test.sh sets it to the launcher's address.
@@ -106,10 +106,10 @@ struct TrioApp {
             }
             box.set(.success((data ?? Data(), response as! HTTPURLResponse)))
         }.resume()
-        let (data, response) = try box.wait("trio-launcher \(url.path)", timeout: 310).get()
+        let (data, response) = try box.wait("app-launcher \(url.path)", timeout: 310).get()
         guard response.statusCode == 200 else {
             let reason = (try? JSONDecoder().decode(LauncherError.self, from: data))?.error ?? String(decoding: data, as: UTF8.self)
-            throw VirtualPumpControl.ControlError("trio-launcher \(url.path): \(reason)")
+            throw VirtualPumpControl.ControlError("app-launcher \(url.path): \(reason)")
         }
         return data
     }
