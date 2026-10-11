@@ -120,7 +120,16 @@ final class StubPumpBluetooth: PumpBluetoothConnection {
 
     func stopScan() {}
 
+    /// Set to hold `connect`'s completion in `heldConnectCompletion` for the test to call, as a real
+    /// attempt's arrives later.
+    var holdsConnectCompletion = false
+    private(set) var heldConnectCompletion: ((Error?) -> Void)?
+
     func connect(_: CBPeripheral, completion: @escaping (Error?) -> Void) {
+        guard !holdsConnectCompletion else {
+            heldConnectCompletion = completion
+            return
+        }
         completion(connectError)
     }
 

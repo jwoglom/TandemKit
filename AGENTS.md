@@ -128,7 +128,8 @@ Bluetooth powers on (`reconnectAutomatically`). A host command still tries, sinc
 can tell that the pump has stopped refusing. A successful handshake clears the count, and so does
 Bluetooth powering back on, which is the one thing a person can do to ask for a fresh attempt. Until
 then `connectionIssue` is `.handshakeFailing`, shown at once on the status highlight, settings and
-troubleshooting screens. The count is not persisted, so a relaunch tries afresh.
+troubleshooting screens. The count is not persisted, so a relaunch tries afresh. A first pairing is
+not counted: its attempts are the user's own, and a refused code is theirs to fix (see Pairing).
 
 ### Qualifying events
 `QualifyingEvent.suggestedHandlers` / `groupSuggestedHandlers` are ported from pumpX2's
@@ -152,6 +153,19 @@ Control-IQ opcode. Two deliberate additions to pumpX2's table: `pumpSuspend`/`pu
 the basal status, since that is what emits the suspend/resume dose to LoopKit, and
 `profileChange`/`activeProfileSegmentChange` refresh it so the basal rate check runs on a profile
 edit instead of at the next sync.
+
+### Pairing
+- Only `pairPump` starts a first pairing. `connectIfNeeded` refuses a pump with no derived secret: the
+  auto-reconnect after the pump dropped the link would otherwise replay the last code entered, silently,
+  at a pump that had just refused it (#399). `pairPump` forgets a code whose attempt failed, unless a
+  newer attempt has replaced it.
+- The pump checks the code only at key confirmation. On a first pairing, `Jpake4KeyConfirmationRequest`
+  unanswered (a Mobi drops the link) or answered with a digest that does not match fails the connect with
+  `PumpCommError.pairingCodeRejected`; any other failed round is `noResponse`. The link drop is the
+  signature in field logs, and a glitch at that exact round reads the same.
+- Every error `pairPump` completes with has to reach `TandemKitScanViewModel.onPairFailure`, which ends
+  the pairing step (alert, back to the double-tap step, scan restarts when the alert is dismissed). The
+  step has no exit of its own.
 
 ### Onboarding and the basal schedule
 - `applyOnboardingSettings` writes the host's `PumpManagerSetupSettings` to a freshly paired
@@ -557,7 +571,8 @@ integration scenarios.
 - **Pairing.**
   - `JpakeRound1Framing` is unit-tested and pairs against faketandem, whose JPAKE is pumpX2's,
     but has not been confirmed against pump firmware.
-  - A failed pairing is not shown properly in the onboarding UI (#399).
+  - `pairPump` has no deadline: a connect CoreBluetooth never completes (the pump stopped advertising
+    after the scan) leaves the pairing step waiting.
   - The legacy 16-character pump-challenge pairing is not implemented; only the 6-digit JPAKE
     code is.
 - **Delivery-uncertainty recovery.** `deliveryUncertaintyRecoveryViewController` returns the

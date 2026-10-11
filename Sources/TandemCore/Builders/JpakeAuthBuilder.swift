@@ -198,6 +198,12 @@ public class JpakeAuthBuilder {
         step == .INVALID
     }
 
+    /// The pump answered key confirmation with a digest that is not the one this side derived,
+    /// which is what a different pairing code on each side produces.
+    public func rejectedAtKeyConfirmation() -> Bool {
+        step == .INVALID && receivedMessages.last is Jpake4KeyConfirmationResponse
+    }
+
     public func getDerivedSecret() -> Data? {
         derivedSecret
     }

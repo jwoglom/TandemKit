@@ -60,11 +60,13 @@ struct TandemKitScanView: View {
             }
         }
         .alert(
-            String(localized: "Error while connecting to device", comment: "Connection error message"),
+            viewModel.connectionErrorTitle,
             isPresented: $viewModel.isConnectionError,
             presenting: $viewModel.connectionErrorMessage,
             actions: { _ in
-                Button(String(localized: "OK", comment: "OK button"), action: {})
+                Button(String(localized: "OK", comment: "OK button"), action: {
+                    viewModel.connectionErrorDismissed()
+                })
             },
             message: { detail in Text(detail.wrappedValue ?? "") }
         )

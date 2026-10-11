@@ -391,6 +391,13 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
             return nil
         }
 
+        // Only pairPump starts a first pairing; a reconnect would replay the last code entered at a
+        // pump that just refused it.
+        guard pumpManager?.isOnboarded == true else {
+            logger.info("Pump is not paired; not connecting")
+            return PumpCommError.pumpNotConnected
+        }
+
         guard let manager else {
             return PumpCommError.pumpNotConnected
         }
