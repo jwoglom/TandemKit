@@ -20,7 +20,7 @@ import XCTest
 ///   reads each `TempBasal` row at its `timestamp`, `rate` and whole-minute `duration`; never its
 ///   `deliveredUnits`, which only TDD reads.
 final class TrioDoseStoreOracle: DoseOracle {
-    /// `PumpEventStored.EventType` raw values (`Models/PumpHistoryEvent.swift`), for the types
+    /// `PumpEventStored.EventType` raw values (`Model/Helper/PumpEvent+helper.swift`), for the types
     /// `storePumpEvents` writes.
     enum EventType: String {
         case bolus = "Bolus"
@@ -30,7 +30,7 @@ final class TrioDoseStoreOracle: DoseOracle {
         case pumpAlarm = "PumpAlarm"
         case rewind = "Rewind"
         case prime = "Prime"
-        case siteChange = "Site Change"
+        case siteChange = "SiteChange"
 
         /// PHS:683-701, `PumpEventType.storedEventType`.
         init?(_ type: PumpEventType?) {
@@ -101,7 +101,8 @@ final class TrioDoseStoreOracle: DoseOracle {
 
     /// `pumpSettings.maxBasal` for the DDM filter.
     let maxBasal: Double
-    /// `preferences.bolusIncrement` for `roundDose` (PHS:46-49); Trio's default is 0.1.
+    /// `preferences.bolusIncrement` as Trio loaded it at launch, for `roundDose` (PHS:46-49); Trio's
+    /// default is 0.1.
     let bolusIncrement: Double
 
     private(set) var events: [StoredEvent] = []

@@ -25,7 +25,8 @@ protocol PumpBluetoothConnection: AnyObject {
 
     func stopScan()
 
-    /// Connects to a specific peripheral, e.g. the one the user picked during pairing.
+    /// Connects to the peripheral the user picked during pairing, as a serialized command job:
+    /// `completion` runs on the command queue once the session is up, or with an error.
     func connect(_ peripheral: CBPeripheral, completion: @escaping (Error?) -> Void)
 
     /// Runs `completion` as a serialized command job: the pump is connected first if necessary, and

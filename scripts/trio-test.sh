@@ -3,10 +3,11 @@
 # against faketandem.
 #
 # Builds Trio from a checkout whose TandemKit is this revision (CI's checkout-trio action makes
-# one), installs it fresh, writes the files that make it start already set up with an unpaired
-# Tandem pump, and launches it with faketandem's address and a control-channel port
-# (VirtualPumpControl). TrioIntegrationTests then drive the driver inside Trio through that
-# channel and read what Trio stored from its data container. Logs land in LOG_DIR.
+# one), then starts faketandem and scripts/trio-launcher.py, which installs Trio fresh for each
+# test, seeded to start set up with an unpaired Tandem pump, and launches it with faketandem's
+# address and a control-channel port (VirtualPumpControl). TrioIntegrationTests drive the driver
+# inside Trio through that channel and read what Trio stored from its data container. Logs land in
+# LOG_DIR, with each test's Trio log and store under LOG_DIR/<test>.
 #
 # Usage:
 #   scripts/trio-test.sh                  # build + test
@@ -72,40 +73,6 @@ elif [[ "$mode" != "test" ]]; then
   exit 2
 fi
 
-plist() {
-  printf '<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0">%s</plist>\n' "$2" > "$1"
-}
-
-# Trio reads these at launch (Documents/<key>.plist for its @PersistedProperty values): onboarding
-# done, an unpaired Tandem pump manager, and both telemetry streams off, which are on unless
-# explicitly false. settings/settings.json pins the pump limits the tests read back.
-seed_trio() {
-  local documents="$1/Documents"
-  mkdir -p "$documents/settings"
-  plist "$documents/onboardingCompleted.plist" '<true/>'
-  plist "$documents/hasSeenFatProteinOrderChange.plist" '<true/>'
-  plist "$documents/crashlyticsSharingEnabled.plist" '<false/>'
-  plist "$documents/telemetrySharingEnabled.plist" '<false/>'
-  plist "$documents/PumpManagerState.plist" \
-    '<dict><key>managerIdentifier</key><string>TandemPumpManager</string><key>state</key><dict/></dict>'
-  printf '{"insulin_action_curve": 10, "maxBolus": 10, "maxBasal": 2}\n' > "$documents/settings/settings.json"
-}
-
-wait_for_port() {
-  python3 - "$1" "$2" <<'PY'
-import socket, sys, time
-port, timeout = int(sys.argv[1]), float(sys.argv[2])
-deadline = time.time() + timeout
-while time.time() < deadline:
-    try:
-        socket.create_connection(("127.0.0.1", port), timeout=1).close()
-        sys.exit(0)
-    except OSError:
-        time.sleep(1)
-sys.exit(f"nothing listening on 127.0.0.1:{port} after {timeout:.0f}s")
-PY
-}
-
 if [[ ! -d "$TRIO_APP" ]]; then
   echo "No Trio build at $TRIO_APP; run '$0 build' first" >&2
   exit 1
@@ -116,50 +83,50 @@ BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$TRIO_APP/I
 source "$ROOT/scripts/faketandem.sh"
 
 LOG_STREAM_PID=""
-CONTAINER=""
+LAUNCHER_PID=""
 cleanup() {
+  if [[ -n "$LAUNCHER_PID" ]]; then
+    kill "$LAUNCHER_PID" 2>/dev/null || true
+    wait "$LAUNCHER_PID" 2>/dev/null || true
+  fi
   xcrun simctl terminate "$UDID" "$BUNDLE_ID" 2>/dev/null || true
   if [[ -n "$LOG_STREAM_PID" ]]; then
     kill "$LOG_STREAM_PID" 2>/dev/null || true
   fi
-  if [[ -n "$CONTAINER" ]]; then
-    # Trio's own log, and its store, for a failed run's artifacts. Simulated data only.
-    cp -R "$CONTAINER/Documents/logs" "$LOG_DIR/trio-documents-logs" 2>/dev/null || true
-    find "$CONTAINER" -name 'TrioCoreDataPersistentContainer.sqlite*' -exec cp {} "$LOG_DIR/" \; 2>/dev/null || true
-  fi
   stop_faketandem
   grep -h -E 'Fatal error|Terminating app|EXC_[A-Z]+' "$LOG_DIR/trio.log" 2>/dev/null | tail -n 5 | sed 's/^/Trio stopped: /' >&2 || true
-  echo "Trio log: $LOG_DIR/trio.log"
+  echo "Trio log: $LOG_DIR/trio.log; launcher log: $LOG_DIR/trio-launcher.log"
   echo "test log: $TEST_LOG"
 }
 trap cleanup EXIT
 start_faketandem
 
-xcrun simctl terminate "$UDID" "$BUNDLE_ID" 2>/dev/null || true
-xcrun simctl uninstall "$UDID" "$BUNDLE_ID" 2>/dev/null || true
-xcrun simctl install "$UDID" "$TRIO_APP"
-CONTAINER="$(xcrun simctl get_app_container "$UDID" "$BUNDLE_ID" data)"
-seed_trio "$CONTAINER"
-
-CONTROL_PORT="$(free_port)"
+# One stream for every launch.
 xcrun simctl spawn "$UDID" log stream --style compact --level debug \
   --predicate 'process == "Trio" AND NOT subsystem BEGINSWITH "com.apple."' \
   > "$LOG_DIR/trio.log" 2>&1 &
 LOG_STREAM_PID=$!
-echo "Launching $BUNDLE_ID; data container $CONTAINER; control port $CONTROL_PORT"
-SIMCTL_CHILD_TANDEMKIT_VIRTUAL_PUMP="$GATT_ADDR" SIMCTL_CHILD_TANDEMKIT_VIRTUAL_PUMP_CONTROL="$CONTROL_PORT" \
-  xcrun simctl launch "$UDID" "$BUNDLE_ID"
-# TandemKit opens the channel when Trio creates its pump manager, after Core Data is up.
-wait_for_port "$CONTROL_PORT" 180
+
+port_file="$LOG_DIR/trio-launcher.port"
+rm -f "$port_file"
+python3 "$ROOT/scripts/trio-launcher.py" --udid "$UDID" --app "$TRIO_APP" --bundle-id "$BUNDLE_ID" \
+  --gatt "$GATT_ADDR" --log-dir "$LOG_DIR" --port-file "$port_file" > "$LOG_DIR/trio-launcher.log" 2>&1 &
+LAUNCHER_PID=$!
+for _ in $(seq 1 100); do
+  [[ -s "$port_file" ]] && break
+  kill -0 "$LAUNCHER_PID" 2>/dev/null || { cat "$LOG_DIR/trio-launcher.log" >&2; exit 1; }
+  sleep 0.1
+done
+[[ -s "$port_file" ]] || { echo "trio-launcher.py never listened" >&2; exit 1; }
 
 # xcodebuild strips the TEST_RUNNER_ prefix and hands the rest to the test process.
 export TEST_RUNNER_FAKETANDEM_GATT="$GATT_ADDR"
 export TEST_RUNNER_FAKETANDEM_API_URL="$API_URL"
-export TEST_RUNNER_TRIO_CONTROL_PORT="$CONTROL_PORT"
-export TEST_RUNNER_TRIO_DATA_CONTAINER="$CONTAINER"
+export TEST_RUNNER_TRIO_LAUNCHER_URL="http://127.0.0.1:$(cat "$port_file")"
 rm -rf "$RESULT_BUNDLE"
 set +e
-"$ROOT/scripts/test-local.sh" test -resultBundlePath "$RESULT_BUNDLE" "$@" 2>&1 | tee "$TEST_LOG"
+# Every test takes over the one install of Trio.
+"$ROOT/scripts/test-local.sh" test -resultBundlePath "$RESULT_BUNDLE" -parallel-testing-enabled NO "$@" 2>&1 | tee "$TEST_LOG"
 status=${PIPESTATUS[0]}
 set -e
 echo "result bundle: $RESULT_BUNDLE"

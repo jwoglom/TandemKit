@@ -75,6 +75,72 @@ final class VirtualPumpControlTests: XCTestCase {
         }
     }
 
+    func testCommandsMissingTheirArgumentsAreRefused() {
+        XCTAssertThrowsError(try client.send(.init(command: .tempBasal, unitsPerHour: 1))) { error in
+            XCTAssertEqual(String(describing: error), "tempBasal needs unitsPerHour and duration")
+        }
+        XCTAssertThrowsError(try client.send(.init(command: .syncBasalSchedule))) { error in
+            XCTAssertEqual(String(describing: error), "syncBasalSchedule needs basalSchedule")
+        }
+    }
+
+    func testATempBasalReachesTheDriverWhichRefusesADurationThePumpDoesNot() {
+        XCTAssertThrowsError(try client.send(.init(command: .tempBasal, unitsPerHour: 1, duration: .minutes(5)))) { error in
+            XCTAssertTrue(String(describing: error).contains("unsupportedTempBasalDuration(minutes: 5)"), "\(error)")
+        }
+    }
+
+    func testAScheduleReachesTheDriverWhichRefusesOneNotStartingAtMidnight() {
+        let schedule = [RepeatingScheduleValue(startTime: .hours(1), value: 0.85)]
+
+        XCTAssertThrowsError(try client.send(.init(command: .syncBasalSchedule, basalSchedule: schedule))) { error in
+            XCTAssertTrue(String(describing: error).contains("firstEntryNotAtMidnight"), "\(error)")
+        }
+    }
+
+    func testAFeatureFlagIsSetAsTheFlagsScreenSetsIt() throws {
+        XCTAssertFalse(manager.state.featureFlags[.historyDoseReporting])
+
+        try client.send(.init(command: .setFeatureFlag, featureFlag: "historyDoseReporting", enabled: true))
+
+        XCTAssertTrue(manager.state.featureFlags[.historyDoseReporting])
+        XCTAssertThrowsError(try client.send(.init(command: .setFeatureFlag, featureFlag: "noSuchFlag", enabled: true))) { error in
+            XCTAssertEqual(String(describing: error), "no feature flag noSuchFlag")
+        }
+    }
+
+    func testCartridgeAndSiteChangesReadBackAsTheMarkersTheDelegateReceived() throws {
+        try client.send(.init(command: .recordCartridgeChange))
+        try client.send(.init(command: .recordSiteChange, units: 0.3))
+        delegateQueue.sync {}
+
+        let events = try XCTUnwrap(client.send(.init(command: .pumpEventBatches)).batches).flatMap(\.pumpEvents)
+
+        XCTAssertEqual(events, delegate.pumpEventBatches.flatMap(\.events))
+        XCTAssertEqual(events.map(\.type), [.rewind, .replaceComponent(componentType: .infusionSet)])
+        XCTAssertEqual(manager.state.lastCannulaFillAmount, 0.3)
+    }
+
+    func testACancelWithNoBolusRunningAnswersWithTheDriversRefusal() {
+        XCTAssertThrowsError(try client.send(.init(command: .cancelBolus))) { error in
+            XCTAssertTrue(String(describing: error).contains("noActiveBolus"), "\(error)")
+        }
+    }
+
+    func testARequestSurvivesTheWireUnchanged() throws {
+        let request = VirtualPumpControl.Request(
+            id: 7,
+            command: .syncBasalSchedule,
+            unitsPerHour: 1.5,
+            duration: .minutes(30),
+            basalSchedule: [RepeatingScheduleValue(startTime: 0, value: 1.0), RepeatingScheduleValue(startTime: .hours(6), value: 0.75)]
+        )
+
+        let decoded = try JSONDecoder().decode(VirtualPumpControl.Request.self, from: JSONEncoder().encode(request))
+
+        XCTAssertEqual(decoded, request)
+    }
+
     func testEventsSurviveTheWireUnchanged() throws {
         let start = Date(timeIntervalSinceReferenceDate: 781_234_567.125)
         let events = [
@@ -108,6 +174,9 @@ final class VirtualPumpControlTests: XCTestCase {
             ),
             NewPumpEvent(date: start.addingTimeInterval(600), dose: DoseEntry(suspendDate: start.addingTimeInterval(600)), raw: Data([0x0B]), title: "Suspend"),
             NewPumpEvent(date: start.addingTimeInterval(900), dose: DoseEntry(resumeDate: start.addingTimeInterval(900), wasProgrammedByPumpUI: true), raw: Data([0x0C]), title: "Resume"),
+            NewPumpEvent(date: start.addingTimeInterval(960), dose: nil, raw: Data([0x0D]), title: "Cartridge Change", type: .rewind),
+            NewPumpEvent(date: start.addingTimeInterval(990), dose: nil, raw: Data([0x0E]), title: "Site Change", type: .replaceComponent(componentType: .infusionSet)),
+            NewPumpEvent(date: start.addingTimeInterval(1020), dose: nil, raw: Data([0x0F]), title: "Occlusion", type: .alarm, alarmType: .occlusion),
         ]
         let batch = VirtualPumpControl.Batch(
             index: 3,

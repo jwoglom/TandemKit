@@ -106,10 +106,27 @@ enum VirtualPumpControl {
             /// does. With `longTermKey` (hex), the driver takes that key as a completed pairing's
             /// first, so only the quick-reconnect rounds run; the test gives faketandem the same one.
             case pair
+            /// `applyOnboardingSettings`, as setup does once paired, with the settings the host
+            /// gave the setup screen, which a seeded state stands in for.
+            case applyOnboardingSettings
             /// `enactBolus(units:activationType:)`, `automatic` choosing the activation type.
             case bolus
+            /// `cancelBolus`, as the bolus progress screen's cancel does.
+            case cancelBolus
             /// `syncPumpData`, as a pull to refresh does; answers with `lastSync`.
             case sync
+            /// `syncBasalRateSchedule(items:)` with `basalSchedule`, as saving the basal profile does.
+            case syncBasalSchedule
+            /// `enactTempBasal(unitsPerHour:for:)`; a `duration` of 0 cancels, as hosts cancel.
+            case tempBasal
+            case suspend
+            case resume
+            /// `recordCartridgeChange` and `recordSiteChange(primeAmount:)` with `units`: what the
+            /// cartridge and fill cannula wizards report once the pump has done its part.
+            case recordCartridgeChange
+            case recordSiteChange
+            /// `setFeatureFlag(_:enabled:)` with `featureFlag` and `enabled`, as the flags screen does.
+            case setFeatureFlag
             /// Every batch sent to the delegate after index `after`.
             case pumpEventBatches
         }
@@ -121,6 +138,12 @@ enum VirtualPumpControl {
         var units: Double?
         var automatic: Bool?
         var after: Int?
+        var unitsPerHour: Double?
+        /// Seconds.
+        var duration: TimeInterval?
+        var basalSchedule: [RepeatingScheduleValue<Double>]?
+        var featureFlag: String?
+        var enabled: Bool?
     }
 
     struct Response: Codable, Equatable {
@@ -176,23 +199,66 @@ enum VirtualPumpControl {
         }
     }
 
-    /// LoopKit's `NewPumpEvent` is not `Codable`; its `DoseEntry` is. The driver gives every event a
-    /// dose and lets the dose name its type, so date, raw, title and dose rebuild it exactly.
+    /// LoopKit's `NewPumpEvent` and `PumpEventType` are not `Codable`; `DoseEntry` and
+    /// `PumpAlarmType` are. A marker (cartridge, site change, alarm) has no dose to name its type.
     struct Event: Codable, Equatable {
         var date: Date
         var raw: Data
         var title: String
         var dose: DoseEntry?
+        var type: EventType?
+        var alarmType: PumpAlarmType?
 
         init(_ event: NewPumpEvent) {
             date = event.date
             raw = event.raw
             title = event.title
             dose = event.dose
+            type = event.type.map(EventType.init)
+            alarmType = event.alarmType
         }
 
         var pumpEvent: NewPumpEvent {
-            NewPumpEvent(date: date, dose: dose, raw: raw, title: title)
+            NewPumpEvent(date: date, dose: dose, raw: raw, title: title, type: type?.pumpEventType, alarmType: alarmType)
+        }
+    }
+
+    enum EventType: String, Codable {
+        case alarm, alarmClear, basal, bolus, prime, resume, rewind, suspend, tempBasal
+        case replaceReservoir, replacePump, replaceInfusionSet
+
+        init(_ type: PumpEventType) {
+            switch type {
+            case .alarm: self = .alarm
+            case .alarmClear: self = .alarmClear
+            case .basal: self = .basal
+            case .bolus: self = .bolus
+            case .prime: self = .prime
+            case .resume: self = .resume
+            case .rewind: self = .rewind
+            case .suspend: self = .suspend
+            case .tempBasal: self = .tempBasal
+            case .replaceComponent(componentType: .reservoir): self = .replaceReservoir
+            case .replaceComponent(componentType: .pump): self = .replacePump
+            case .replaceComponent(componentType: .infusionSet): self = .replaceInfusionSet
+            }
+        }
+
+        var pumpEventType: PumpEventType {
+            switch self {
+            case .alarm: .alarm
+            case .alarmClear: .alarmClear
+            case .basal: .basal
+            case .bolus: .bolus
+            case .prime: .prime
+            case .resume: .resume
+            case .rewind: .rewind
+            case .suspend: .suspend
+            case .tempBasal: .tempBasal
+            case .replaceReservoir: .replaceComponent(componentType: .reservoir)
+            case .replacePump: .replaceComponent(componentType: .pump)
+            case .replaceInfusionSet: .replaceComponent(componentType: .infusionSet)
+            }
         }
     }
 
@@ -242,10 +308,28 @@ enum VirtualPumpControl {
                     break
                 case .pair:
                     try pair(manager, code: request.code, longTermKey: request.longTermKey)
+                case .applyOnboardingSettings:
+                    try applyOnboardingSettings(manager)
                 case .bolus:
                     try bolus(manager, units: request.units, automatic: request.automatic ?? false)
+                case .cancelBolus:
+                    try cancelBolus(manager)
                 case .sync:
                     response.lastSync = try sync(manager)
+                case .syncBasalSchedule:
+                    try syncBasalSchedule(manager, items: request.basalSchedule)
+                case .tempBasal:
+                    try tempBasal(manager, unitsPerHour: request.unitsPerHour, duration: request.duration)
+                case .suspend:
+                    try deliveryChange("suspendDelivery") { manager.suspendDelivery(completion: $0) }
+                case .resume:
+                    try deliveryChange("resumeDelivery") { manager.resumeDelivery(completion: $0) }
+                case .recordCartridgeChange:
+                    manager.recordCartridgeChange()
+                case .recordSiteChange:
+                    manager.recordSiteChange(primeAmount: request.units)
+                case .setFeatureFlag:
+                    try setFeatureFlag(manager, name: request.featureFlag, enabled: request.enabled)
                 case .pumpEventBatches:
                     response.batches = VirtualPumpControl.batches(of: manager, after: request.after)
                 }
@@ -287,7 +371,7 @@ enum VirtualPumpControl {
             }
             let paired = Completion<Error?>()
             manager.pairPump(code: code, peripheral: found.peripheral) { paired.finish($0) }
-            if let error = try paired.wait("pairPump", timeout: 90) {
+            if let error = try paired.wait("pairPump", timeout: 180) {
                 throw error
             }
         }
@@ -305,10 +389,66 @@ enum VirtualPumpControl {
             }
         }
 
+        private static func applyOnboardingSettings(_ manager: TandemPumpManager) throws {
+            let applied = Completion<OnboardingSettingsFailure?>()
+            manager.applyOnboardingSettings { applied.finish($0) }
+            if let failure = try applied.wait("applyOnboardingSettings", timeout: 240) {
+                let basal = failure.basalSchedule.map { String(describing: $0) } ?? "written"
+                let limits = failure.deliveryLimits.map { String(describing: $0) } ?? "written"
+                throw ControlError("applyOnboardingSettings: basal schedule \(basal), delivery limits \(limits)")
+            }
+        }
+
+        private static func cancelBolus(_ manager: TandemPumpManager) throws {
+            let cancelled = Completion<PumpManagerResult<DoseEntry?>>()
+            manager.cancelBolus { cancelled.finish($0) }
+            if case let .failure(error) = try cancelled.wait("cancelBolus", timeout: 120) {
+                throw error
+            }
+        }
+
+        private static func setFeatureFlag(_ manager: TandemPumpManager, name: String?, enabled: Bool?) throws {
+            guard let name, let enabled else {
+                throw ControlError("setFeatureFlag needs featureFlag and enabled")
+            }
+            guard let flag = TandemFeatureFlags.Flag(rawValue: name) else {
+                throw ControlError("no feature flag \(name)")
+            }
+            manager.setFeatureFlag(flag, enabled: enabled)
+        }
+
         private static func sync(_ manager: TandemPumpManager) throws -> Date? {
             let synced = Completion<Date?>()
             manager.syncPumpData { synced.finish($0) }
             return try synced.wait("syncPumpData", timeout: 240)
+        }
+
+        private static func syncBasalSchedule(_ manager: TandemPumpManager, items: [RepeatingScheduleValue<Double>]?) throws {
+            guard let items else {
+                throw ControlError("syncBasalSchedule needs basalSchedule")
+            }
+            let synced = Completion<Result<BasalRateSchedule, Error>>()
+            manager.syncBasalRateSchedule(items: items) { synced.finish($0) }
+            _ = try synced.wait("syncBasalRateSchedule", timeout: 240).get()
+        }
+
+        private static func tempBasal(_ manager: TandemPumpManager, unitsPerHour: Double?, duration: TimeInterval?) throws {
+            guard let unitsPerHour, let duration else {
+                throw ControlError("tempBasal needs unitsPerHour and duration")
+            }
+            let enacted = Completion<PumpManagerError?>()
+            manager.enactTempBasal(unitsPerHour: unitsPerHour, for: duration) { enacted.finish($0) }
+            if let error = try enacted.wait("enactTempBasal", timeout: 120) {
+                throw error
+            }
+        }
+
+        private static func deliveryChange(_ name: String, _ command: (@escaping (Error?) -> Void) -> Void) throws {
+            let changed = Completion<Error?>()
+            command { changed.finish($0) }
+            if let error = try changed.wait(name, timeout: 120) {
+                throw error
+            }
         }
     }
 

@@ -54,10 +54,13 @@ exists only in a flagged build, which the `integration` job in `.github/workflow
 the `virtual-pump` job in `.github/workflows/linux.yml` both run.
 
 The same build carries `VirtualPumpControl`: with `TANDEMKIT_VIRTUAL_PUMP_CONTROL=<port>` in the
-host app's environment, the driver listens on 127.0.0.1 for a test to pair, bolus and sync it, and
-logs every batch it hands the host's delegate with the host's completion. `TrioIntegrationTests`
-(macOS only; `scripts/trio-test.sh`, the `trio` job) use it to run Trio itself in the simulator and
-compare its stored pump history with `TrioDoseStoreOracle`
+host app's environment, the driver listens on 127.0.0.1 for a test to make the calls the host and
+the driver's own screens make (pair, onboarding settings, sync, bolus and cancel, basal schedule,
+temp basal, suspend, resume, cartridge and site changes, feature flags), and logs every batch it
+hands the host's delegate with the host's completion. `TrioIntegrationTests` (macOS only;
+`scripts/trio-test.sh`, the `trio` job) use it to run Trio itself in the simulator, a new install
+per test from `scripts/trio-launcher.py`, through each dosing journey and Trio's own closed loop,
+and compare its stored pump history with `TrioDoseStoreOracle`
 ([docs/integration-harness.md](docs/integration-harness.md#trio-in-the-simulator)).
 
 Coverage that was dropped along with the code it tested (`PumpComm` fault taxonomy and retry
@@ -166,6 +169,11 @@ edit instead of at the next sync.
 - Every error `pairPump` completes with has to reach `TandemKitScanViewModel.onPairFailure`, which ends
   the pairing step (alert, back to the double-tap step, scan restarts when the alert is dismissed). The
   step has no exit of its own.
+- `pairPump`'s connect is a command job, bounded at `pairingTimeout` (120 s). Its setup writes bypass the
+  command queue, and a command that connected meanwhile took over its completion, so pairing never ended.
+  A command queued during pairing waits, then runs on the session pairing opened or is refused as unpaired.
+  A lost link ends a reconnect's wait at once, but not pairing's, so the setup reports the round it lost:
+  only then does a link dropped at key confirmation reach `pairPump` as `pairingCodeRejected`.
 
 ### Onboarding and the basal schedule
 - `applyOnboardingSettings` writes the host's `PumpManagerSetupSettings` to a freshly paired
@@ -571,8 +579,6 @@ integration scenarios.
 - **Pairing.**
   - `JpakeRound1Framing` is unit-tested and pairs against faketandem, whose JPAKE is pumpX2's,
     but has not been confirmed against pump firmware.
-  - `pairPump` has no deadline: a connect CoreBluetooth never completes (the pump stopped advertising
-    after the scan) leaves the pairing step waiting.
   - The legacy 16-character pump-challenge pairing is not implemented; only the 6-digit JPAKE
     code is.
 - **Delivery-uncertainty recovery.** `deliveryUncertaintyRecoveryViewController` returns the

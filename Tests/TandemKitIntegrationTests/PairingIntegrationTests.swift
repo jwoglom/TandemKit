@@ -8,6 +8,41 @@ final class PairingIntegrationTests: FaketandemIntegrationTestCase {
         }
     }
 
+    /// As when re-pairing a manager the host already holds, which keeps sending it commands.
+    func testACommandQueuedWhilePairingRunsOnTheSessionPairingOpens() throws {
+        let driver = makeDriver()
+        let scan = try harness.discover(driver)
+        _ = try harness.seedLongTermKey(driver, peripheralId: scan.peripheral.identifier)
+        let paired = ResultBox<Error?>()
+        let command = ResultBox<Error?>()
+
+        driver.manager.pairPump(code: FaketandemHarness.pairingCode, peripheral: scan.peripheral) { paired.set($0) }
+        driver.bluetooth.ensureConnected { command.set($0) }
+
+        XCTAssertNil(try paired.wait("pairPump completion", timeout: 60))
+        XCTAssertNil(try command.wait("the queued command", timeout: 60))
+        XCTAssertTrue(driver.manager.state.isConnected)
+        XCTAssertEqual(
+            try authRequests.map(\.opcode),
+            [Int(Jpake3SessionKeyRequest.props.opCode), Int(Jpake4KeyConfirmationRequest.props.opCode)],
+            "one session, authenticated once"
+        )
+    }
+
+    /// testPairingWithTheWrongCodeIsRefused's dropped link, where Linux can run it: a first pairing needs SwiftECC.
+    func testARePairingCutOffAtKeyConfirmationFailsAsAnUnansweredRound() throws {
+        let driver = makeDriver()
+        let scan = try harness.discover(driver)
+        _ = try harness.seedLongTermKey(driver, peripheralId: scan.peripheral.identifier)
+        try harness.client.armFault(FaketandemFaultSpec(.disconnect, message: "Jpake4KeyConfirmationRequest"))
+
+        let error = try harness.pair(driver, with: scan)
+
+        guard let error, case PumpCommError.noResponse = error else {
+            return XCTFail("pairPump must fail with the handshake's own error, got \(String(describing: error))")
+        }
+    }
+
     // Rounds 1-2 are EC-JPAKE, which is a trapping stub where SwiftECC does not build (Linux).
     #if canImport(SwiftECC)
     func testFreshJpakePairingAuthenticatesBothSides() throws {
