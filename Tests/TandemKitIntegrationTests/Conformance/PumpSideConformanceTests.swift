@@ -525,8 +525,8 @@ final class PumpSideConformanceTests: ConformanceTestCase {
 
     // MARK: - D6
 
-    /// The pump drops the link while nothing is running. The driver reconnects on its own — and a
-    /// reconnect should sync and report a fresh boundary, since anything can have happened meanwhile.
+    /// The pump drops the link while nothing is running. The driver reconnects on its own, then syncs
+    /// and reports a fresh boundary, since anything can have happened meanwhile (#351).
     func testD6AutoReconnectAfterAPumpSideDropSyncsAndReports() throws {
         let driver = try startPairedDriver(scheduledRate: Self.profileRate)
         // Move time on so a post-reconnect boundary would be strictly newer than the last one.
@@ -549,18 +549,15 @@ final class PumpSideConformanceTests: ConformanceTestCase {
             try driver.manager.state.isConnected && harness.client.snapshot().auth.authenticated
         }
 
-        // A bounded real-time window for the driver to sync on its own after reconnecting.
-        let reportedOnReconnect = (try? IntegrationWait.until("a hasNewPumpEvents after the reconnect", timeout: 15) {
-            self.allPumpEventBatches.count > batchesBefore
-        }) != nil
-
-        try expectDefect("jwoglom/TandemKit#351: BLE auto-reconnect completes authenticated setup and flips isConnected only; no sync, no lastReconciliation stamp and no hasNewPumpEvents until the next throttled poll") {
-            XCTAssertTrue(reportedOnReconnect, "the reconnect itself should produce a delegate report")
-            let latest = allPumpEventBatches.dropFirst(batchesBefore).last
-            XCTAssertNotNil(latest?.lastReconciliation)
-            XCTAssertGreaterThan(latest?.lastReconciliation ?? .distantPast, reconciliationBefore, "a fresh boundary")
-            XCTAssertGreaterThan(driver.manager.state.lastReconciliation ?? .distantPast, reconciliationBefore)
+        // The sync's reservoir read already reports a batch, ahead of its basal read.
+        try IntegrationWait.until("the reconnect's sync to read the pump and report", timeout: 30) {
+            let reads = try self.harness.requestLog(since: logStart).filter(\.isRequest).compactMap(\.message)
+            return self.allPumpEventBatches.count > batchesBefore && reads.contains("CurrentBasalStatusRequest")
         }
+        let latest = allPumpEventBatches.dropFirst(batchesBefore).last
+        XCTAssertNotNil(latest?.lastReconciliation)
+        XCTAssertGreaterThan(latest?.lastReconciliation ?? .distantPast, reconciliationBefore, "a fresh boundary")
+        XCTAssertGreaterThan(driver.manager.state.lastReconciliation ?? .distantPast, reconciliationBefore)
 
         // The new session serves a sync and the host is left consistent.
         try clock.advanceBoth(seconds: .minutes(1))
@@ -929,8 +926,8 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         return driver
     }
 
-    /// The pump stops delivery while the link is down, so none of its qualifying events reach the
-    /// driver, and the link comes back without a sync (#351): the driver's state is left as it was.
+    /// The pump stops delivery while the link is down, so none of its qualifying events reach the driver;
+    /// the next command's own connect queues the reconnect's sync behind it, so it finds the state as it was.
     private func suspendOutOfEarshot(reason: String = "user", thenAdvance seconds: TimeInterval) throws -> Date {
         _ = try harness.client.armFault(FaketandemFaultSpec(.radioOff))
         try IntegrationWait.until("the emulator to drop the link", timeout: 30) {

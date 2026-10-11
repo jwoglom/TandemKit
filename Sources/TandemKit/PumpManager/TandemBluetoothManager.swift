@@ -303,12 +303,16 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
                 completion(PumpCommError.pumpNotConnected)
                 return
             }
+            let hadSession = self.hasLiveSession
             let error = self.connectIfNeeded()
             // Covers every way connectIfNeeded can fail, including the ones CoreBluetooth never
             // reports as a disconnect. A session that landed since the attempt gave up is live.
             if error != nil, !self.hasLiveSession {
                 self.markLinkDown()
                 self.scheduleReconnectRetry()
+            }
+            if error == nil, !hadSession {
+                self.pumpManager?.didReconnect()
             }
             completion(error)
         }

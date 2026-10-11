@@ -830,7 +830,10 @@ final class InterruptConformanceTests: ConformanceTestCase {
         XCTAssertEqual(cut.fragmentsSent, 1)
         XCTAssertGreaterThan(cut.fragments?.count ?? 0, 1, "a multi-fragment response")
         try waitForLinkDown(since: logStart)
-        let afterCut = try harness.requestLog(since: cut.seq).filter(\.isRequest).map { $0.message ?? "" }
+        // Up to the reconnect, whose own sync reads both.
+        let afterCut = try harness.requestLog(since: cut.seq)
+            .prefix { !($0.kind == "connection" && $0.connected == true) }
+            .filter(\.isRequest).map { $0.message ?? "" }
         XCTAssertFalse(afterCut.contains("CurrentBasalStatusRequest") || afterCut.contains("CurrentBolusStatusRequest"), "no dose status was read on the dropped link before the reconnect: \(afterCut)")
 
         // No dose was emitted or duplicated.
