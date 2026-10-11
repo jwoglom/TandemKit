@@ -119,14 +119,14 @@ final class ReconnectIntegrationTests: FaketandemIntegrationTestCase {
         file: StaticString = #filePath,
         line: UInt = #line
     ) throws {
+        // The sync's reservoir read already reports a batch, ahead of its basal read.
         try IntegrationWait.until("the driver to sync on its own", timeout: timeout) {
-            driver.delegate.pumpEventBatches.count > outage.batchesBefore
+            try driver.delegate.pumpEventBatches.count > outage.batchesBefore
+                && self.harness.requestsSeen(since: outage.logStart).contains { $0.message == "CurrentBasalStatusRequest" }
         }
         let boundary = try XCTUnwrap(driver.manager.state.lastReconciliation, file: file, line: line)
         XCTAssertGreaterThan(boundary, outage.reconciliationBefore, file: file, line: line)
         XCTAssertEqual(driver.delegate.pumpEventBatches.last?.lastReconciliation, boundary, file: file, line: line)
-        let reads = try harness.requestsSeen(since: outage.logStart).map(\.message)
-        XCTAssertTrue(reads.contains("CurrentBasalStatusRequest"), "\(reads)", file: file, line: line)
         XCTAssertTrue(driver.delegate.errors.isEmpty, "\(driver.delegate.errors)", file: file, line: line)
     }
 

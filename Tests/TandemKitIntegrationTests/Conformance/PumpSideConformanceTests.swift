@@ -549,15 +549,15 @@ final class PumpSideConformanceTests: ConformanceTestCase {
             try driver.manager.state.isConnected && harness.client.snapshot().auth.authenticated
         }
 
-        try IntegrationWait.until("a hasNewPumpEvents after the reconnect", timeout: 30) {
-            self.allPumpEventBatches.count > batchesBefore
+        // The sync's reservoir read already reports a batch, ahead of its basal read.
+        try IntegrationWait.until("the reconnect's sync to read the pump and report", timeout: 30) {
+            let reads = try self.harness.requestLog(since: logStart).filter(\.isRequest).compactMap(\.message)
+            return self.allPumpEventBatches.count > batchesBefore && reads.contains("CurrentBasalStatusRequest")
         }
         let latest = allPumpEventBatches.dropFirst(batchesBefore).last
         XCTAssertNotNil(latest?.lastReconciliation)
         XCTAssertGreaterThan(latest?.lastReconciliation ?? .distantPast, reconciliationBefore, "a fresh boundary")
         XCTAssertGreaterThan(driver.manager.state.lastReconciliation ?? .distantPast, reconciliationBefore)
-        let reads = try harness.requestLog(since: logStart).filter(\.isRequest).compactMap(\.message)
-        XCTAssertTrue(reads.contains("CurrentBasalStatusRequest"), "the reconnect's sync read the pump: \(reads)")
 
         // The new session serves a sync and the host is left consistent.
         try clock.advanceBoth(seconds: .minutes(1))
