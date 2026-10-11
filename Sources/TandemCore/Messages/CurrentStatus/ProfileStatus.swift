@@ -48,6 +48,7 @@ public class ProfileStatusResponse: Message {
     public required init(cargo: Data) {
         self.cargo = cargo
         numberOfProfiles = Int(cargo[0])
+        // Unsigned, like every IDP id here, so an unused slot reads 0xFF where pumpX2 reads -1.
         idpSlot0Id = Int(cargo[1])
         idpSlot1Id = Int(cargo[2])
         idpSlot2Id = Int(cargo[3])
@@ -57,7 +58,7 @@ public class ProfileStatusResponse: Message {
         activeSegmentIndex = Int(cargo[7])
     }
 
-    public init(
+    public convenience init(
         numberOfProfiles: Int,
         idpSlot0Id: Int,
         idpSlot1Id: Int,
@@ -67,7 +68,7 @@ public class ProfileStatusResponse: Message {
         idpSlot5Id: Int,
         activeSegmentIndex: Int
     ) {
-        cargo = Bytes.combine(
+        self.init(cargo: Bytes.combine(
             Bytes.firstByteLittleEndian(numberOfProfiles),
             Bytes.firstByteLittleEndian(idpSlot0Id),
             Bytes.firstByteLittleEndian(idpSlot1Id),
@@ -76,15 +77,7 @@ public class ProfileStatusResponse: Message {
             Bytes.firstByteLittleEndian(idpSlot4Id),
             Bytes.firstByteLittleEndian(idpSlot5Id),
             Bytes.firstByteLittleEndian(activeSegmentIndex)
-        )
-        self.numberOfProfiles = numberOfProfiles
-        self.idpSlot0Id = idpSlot0Id
-        self.idpSlot1Id = idpSlot1Id
-        self.idpSlot2Id = idpSlot2Id
-        self.idpSlot3Id = idpSlot3Id
-        self.idpSlot4Id = idpSlot4Id
-        self.idpSlot5Id = idpSlot5Id
-        self.activeSegmentIndex = activeSegmentIndex
+        ))
     }
 
     /// Returns the active insulin delivery profile ID.

@@ -25,7 +25,6 @@ final class ProfileStatusResponseTests: XCTestCase {
         MessageTester.assertHexEquals(expected.cargo, parsed.cargo)
         XCTAssertEqual(1, parsed.numberOfProfiles)
         XCTAssertEqual(0, parsed.idpSlot0Id)
-        // pumpX2 reads an unused slot as signed -1; TandemKit reads the byte unsigned.
         XCTAssertEqual(0xFF, parsed.idpSlot1Id)
         XCTAssertEqual(0xFF, parsed.idpSlot2Id)
         XCTAssertEqual(0xFF, parsed.idpSlot3Id)

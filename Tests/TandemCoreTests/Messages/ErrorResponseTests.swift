@@ -14,6 +14,8 @@ final class ErrorResponseTests: XCTestCase {
         )
 
         MessageTester.assertHexEquals(expected.cargo, parsed.cargo)
+        XCTAssertEqual(144, parsed.requestCodeId)
+        XCTAssertEqual(144, expected.requestCodeId)
         XCTAssertEqual(.badOpcode, parsed.errorCode)
     }
 

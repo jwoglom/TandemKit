@@ -65,7 +65,9 @@ public class SetTempRateResponse: Message, StatusMessage {
     public init(status: Int, tempRateId: Int) {
         cargo = Bytes.combine(
             Data([UInt8(status & 0xFF)]),
-            Bytes.firstTwoBytesLittleEndian(tempRateId)
+            Bytes.firstTwoBytesLittleEndian(tempRateId),
+            // Byte 3 is not decoded; 0 in the captured successful response.
+            Data([0])
         )
         self.status = status
         self.tempRateId = tempRateId
