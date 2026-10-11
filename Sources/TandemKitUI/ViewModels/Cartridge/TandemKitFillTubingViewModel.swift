@@ -309,6 +309,9 @@ class TandemKitFillTubingViewModel: ObservableObject {
                 self.loadingExitMode = false
                 self.isProcessing = false
                 if let response = response, response.status == 0 {
+                    if self.hasDisplayedFlow {
+                        self.pumpManager?.recordTubingFill()
+                    }
                     self.failedExitMode = false
                     self.exitState = .tubingFilled
                     self.currentStep = self.currentStep.nextStep() ?? .done

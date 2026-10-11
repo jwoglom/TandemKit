@@ -38,6 +38,90 @@ extension NotificationItem {
     }
 }
 
+// MARK: - Alarm pump events
+
+extension AlarmStatusResponse.AlarmResponseType {
+    var pumpAlarmType: PumpAlarmType {
+        switch self {
+        case .OCCLUSION_ALARM, .OCCLUSION_ALARM2: return .occlusion
+        case .EMPTY_CARTRIDGE_ALARM: return .noInsulin
+        case .AUTO_OFF_ALARM: return .autoOff
+        case .BATTERY_SHUTDOWN_ALARM: return .noPower
+        case .RESUME_PUMP_ALARM, .RESUME_PUMP_ALARM2: return .noDelivery
+        default: return .other(alertSlug == "other" ? String(describing: self) : alertSlug)
+        }
+    }
+}
+
+extension NewPumpEvent {
+    /// The pump's alarm status gives no time, so it is dated when the driver read it.
+    static func pumpAlarm(_ item: NotificationItem, date: Date) -> NewPumpEvent {
+        let alarmType: PumpAlarmType = item.type == .malfunction
+            ? .other("malfunction")
+            : AlarmStatusResponse.AlarmResponseType(rawValue: Int(item.notificationId))?.pumpAlarmType ?? .other(item.name)
+        let title = item.type == .malfunction
+            ? String(
+                format: String(localized: "Pump Malfunction %@", comment: "Pump Event title for a pump malfunction; the placeholder is the pump's fault code"),
+                item.name
+            )
+            : item.title
+        return NewPumpEvent(
+            date: date,
+            dose: nil,
+            raw: "alarm \(item.stableIdentifier) \(ISO8601DateFormatter().string(from: date))".data(using: .utf8) ?? Data([]),
+            title: title,
+            type: .alarm,
+            alarmType: alarmType
+        )
+    }
+
+    static func pumpAlarmCleared(stableIdentifier: String, date: Date) -> NewPumpEvent {
+        NewPumpEvent(
+            date: date,
+            dose: nil,
+            raw: "alarmClear \(stableIdentifier) \(ISO8601DateFormatter().string(from: date))".data(using: .utf8) ?? Data([]),
+            title: String(localized: "Alarm Cleared", comment: "Pump Event title for a pump alarm or malfunction that has cleared"),
+            type: .alarmClear
+        )
+    }
+}
+
+extension TandemPumpManagerState {
+    mutating func reconcileReportedPumpAlarms(
+        active: [NotificationItem],
+        fetchedCategories: Set<NotificationItem.NotificationType>
+    ) -> TandemAlertReconciliation {
+        let reconciliation = TandemAlertReconciler.reconcile(
+            activeItems: active,
+            fetchedCategories: fetchedCategories,
+            issuedIdentifiers: reportedPumpAlarmIdentifiers,
+            surfacedCategories: TandemPumpManager.pumpAlarmCategories
+        )
+        reportedPumpAlarmIdentifiers = reconciliation.updatedIssuedIdentifiers
+        return reconciliation
+    }
+}
+
+extension TandemPumpManager {
+    /// Alerts and reminders are not faults, so only these reach the host's pump event log.
+    static let pumpAlarmCategories: Set<NotificationItem.NotificationType> = [.alarm, .malfunction]
+
+    /// Reports each alarm and malfunction the pump raises as an `.alarm` pump event, and an
+    /// `.alarmClear` once a fetch that read its category no longer finds it.
+    func reportPumpAlarms(from bundle: NotificationBundle) {
+        let active = bundle.get().filter { Self.pumpAlarmCategories.contains($0.type) }
+        let reconciliation = state.reconcileReportedPumpAlarms(active: active, fetchedCategories: bundle.fetchedCategories)
+        guard !reconciliation.isEmpty else { return }
+
+        let date = now
+        let events = reconciliation.identifiersToRetract.map { NewPumpEvent.pumpAlarmCleared(stableIdentifier: $0, date: date) }
+            + reconciliation.itemsToIssue.map { NewPumpEvent.pumpAlarm($0, date: date) }
+        logger.info("Reporting pump alarms: \(events.map(\.title))")
+        notifyDelegateStateUpdated()
+        emitPumpEvents(events, replacePendingEvents: false)
+    }
+}
+
 // MARK: - Alert reconciliation
 
 extension TandemPumpManager {

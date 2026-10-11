@@ -586,6 +586,26 @@ edit instead of at the next sync.
   cartridge, enter change cartridge, and no refusal stops it. It is offered once, not again after a
   refused retry. The refusal rule is inferred from a field report and not confirmed on firmware.
 
+### Marker events
+Events with no dose, each in a `replacePendingEvents: false` batch under a `raw` of its kind and date.
+- The wizards report a change once the pump has done its part: `recordCartridgeChange` a `.rewind`,
+  `recordTubingFill` a `.prime` when insulin flowed before fill tubing mode was left, and
+  `recordSiteChange(primeAmount:)` a `.prime` with its `.replaceComponent(.infusionSet)`. Loop
+  derives no doses from reservoir drops within an insulin duration of a `.prime`, so meanwhile a pump
+  bolus held behind `reconciliationBoundary` (#353) is missing from Loop's IOB until history reports
+  it, as it always is from Trio's. A fill done on the pump's screen is not reported (conformance D8).
+- `reportPumpAlarms`, at every `fetchNotifications`, reports each alarm and malfunction once as an
+  `.alarm` with its `pumpAlarmType`, dated at the read since the alarm status gives no time, and an
+  `.alarmClear` once a read that answered its category no longer finds it. `TandemAlertReconciler`
+  diffs them against `reportedPumpAlarmIdentifiers` (persisted), as it does the LoopKit alerts.
+  Alerts, reminders and CGM alerts are not faults and are not reported. Trio stores an alarm as
+  `PumpAlarm`, its title the note, and nothing for a clear.
+- A pump whose serial differs from `lastPumpSerial` (persisted, and kept through
+  `deleteSavedPumpState`) is reported as `.replaceComponent(.pump)`, which Trio stores as a site
+  change, and through `pumpManagerPumpWasReplaced`, which both hosts ignore. The first pump paired is
+  not a replacement. The serial is read with the daily settings, which `deleteSavedPumpState` makes
+  due, so the sync after a re-pair reads the next pump's.
+
 ## Open work
 Beyond the missing tests and the history items above. The `loopkit-conformance` issues track
 where dose reporting departs from LoopKit's guide; `docs/conformance-test-plan.md` maps them to

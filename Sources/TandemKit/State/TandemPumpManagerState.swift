@@ -170,6 +170,9 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
     public var issuedAlertIdentifiers: Set<String> = []
     /// Persisted, like `issuedAlertIdentifiers`, so a relaunch retracts the alert rather than re-issuing it.
     public var pumpClockSkewAlertIssued = false
+    /// `stableIdentifier`s of the alarms and malfunctions reported as `.alarm` pump events and not yet
+    /// cleared. Persisted so a relaunch neither reports a standing alarm again nor misses its clearing.
+    public var reportedPumpAlarmIdentifiers: Set<String> = []
     /// Whether CGM alerts are forwarded as LoopKit alerts in addition to alerts, alarms,
     /// and malfunctions. Off by default: users running their CGM vendor's app already
     /// receive these and duplicates are noisy.
@@ -183,6 +186,9 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
     /// Prime amount, in units, of the last successful cannula fill. Persisted so the fill
     /// cannula wizard can pre-fill the amount the user chose last time instead of the default.
     public var lastCannulaFillAmount: Double?
+    /// Kept through `deleteSavedPumpState`, unlike `pumpState.pumpSerial`, so pairing another pump
+    /// is reported as a replacement.
+    public var lastPumpSerial: UInt32?
 
     public static func == (lhs: TandemPumpManagerState, rhs: TandemPumpManagerState) -> Bool {
         // Not one && chain: that takes the type checker ten times as long, most of a second.
@@ -251,10 +257,12 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
               lhs.lastNotificationUpdate == rhs.lastNotificationUpdate,
               lhs.issuedAlertIdentifiers == rhs.issuedAlertIdentifiers,
               lhs.pumpClockSkewAlertIssued == rhs.pumpClockSkewAlertIssued,
+              lhs.reportedPumpAlarmIdentifiers == rhs.reportedPumpAlarmIdentifiers,
               lhs.forwardCGMAlerts == rhs.forwardCGMAlerts,
               lhs.lastSiteChangeDate == rhs.lastSiteChangeDate,
               lhs.lastCartridgeChangeDate == rhs.lastCartridgeChangeDate,
-              lhs.lastCannulaFillAmount == rhs.lastCannulaFillAmount
+              lhs.lastCannulaFillAmount == rhs.lastCannulaFillAmount,
+              lhs.lastPumpSerial == rhs.lastPumpSerial
         else {
             return false
         }
@@ -305,6 +313,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         notificationCount = rawValue["notificationCount"] as? Int
         issuedAlertIdentifiers = Set(rawValue["issuedAlertIdentifiers"] as? [String] ?? [])
         pumpClockSkewAlertIssued = rawValue["pumpClockSkewAlertIssued"] as? Bool ?? false
+        reportedPumpAlarmIdentifiers = Set(rawValue["reportedPumpAlarmIdentifiers"] as? [String] ?? [])
         forwardCGMAlerts = rawValue["forwardCGMAlerts"] as? Bool ?? false
         currentPumpTime = rawValue["currentPumpTime"] as? Date
         lastPumpTimeCheckDate = rawValue["lastPumpTimeCheckDate"] as? Date
@@ -497,6 +506,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         lastSiteChangeDate = rawValue["lastSiteChangeDate"] as? Date
         lastCartridgeChangeDate = rawValue["lastCartridgeChangeDate"] as? Date
         lastCannulaFillAmount = rawValue["lastCannulaFillAmount"] as? Double
+        lastPumpSerial = rawValue["lastPumpSerial"] as? UInt32 ?? pumpState.pumpSerial
 
         if let rawInsulinType = rawValue["insulinType"] as? InsulinType.RawValue {
             insulinType = InsulinType(rawValue: rawInsulinType)
@@ -552,10 +562,12 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         raw["lastNotificationUpdate"] = lastNotificationUpdate?.timeIntervalSinceReferenceDate
         raw["issuedAlertIdentifiers"] = Array(issuedAlertIdentifiers).sorted()
         raw["pumpClockSkewAlertIssued"] = pumpClockSkewAlertIssued
+        raw["reportedPumpAlarmIdentifiers"] = Array(reportedPumpAlarmIdentifiers).sorted()
         raw["forwardCGMAlerts"] = forwardCGMAlerts
         raw["lastSiteChangeDate"] = lastSiteChangeDate
         raw["lastCartridgeChangeDate"] = lastCartridgeChangeDate
         raw["lastCannulaFillAmount"] = lastCannulaFillAmount
+        raw["lastPumpSerial"] = lastPumpSerial
         raw["insulinType"] = insulinType?.rawValue
         raw["useSilentTones"] = useSilentTones
         raw["basalRateSchedule"] = TandemPumpManagerState.encodeBasalSchedule(basalRateSchedule)
@@ -710,10 +722,12 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
             "* lastNotificationUpdate: \(String(describing: lastNotificationUpdate))",
             "* issuedAlertIdentifiers: \(issuedAlertIdentifiers.sorted())",
             "* pumpClockSkewAlertIssued: \(pumpClockSkewAlertIssued)",
+            "* reportedPumpAlarmIdentifiers: \(reportedPumpAlarmIdentifiers.sorted())",
             "* forwardCGMAlerts: \(forwardCGMAlerts)",
             "* lastSiteChangeDate: \(String(describing: lastSiteChangeDate))",
             "* lastCartridgeChangeDate: \(String(describing: lastCartridgeChangeDate))",
             "* lastCannulaFillAmount: \(String(describing: lastCannulaFillAmount))",
+            "* lastPumpSerial: \(String(describing: lastPumpSerial))",
             "* quickBolusEnabled: \(String(describing: quickBolusEnabled))",
             "* quickBolusEntryType: \(String(describing: quickBolusEntryType))",
             "* quickBolusIncrementUnits: \(String(describing: quickBolusIncrementUnits))",

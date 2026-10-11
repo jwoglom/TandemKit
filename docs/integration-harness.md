@@ -475,6 +475,9 @@ shape of it explains what the harness is for:
   and `SetMaxBasalLimitRequest` never changed what the pump reported, and the default max bolus
   read as 2.5 U. They are pump state in milliunits now, and a bolus above the max is refused
   (with status 1; the status a real pump uses is unconfirmed).
+- **An occlusion raised an alert but no `AlarmStatusResponse` bit**, so a driver reading the alarm
+  status, as one reads a pump's, never saw it (D2, B7). It stands as `OCCLUSION_ALARM` until the
+  alarm is cleared.
 - **A `HistoryLogRequest` for 128 or more records streamed one.** `numberOfLogs` is one
   unsigned byte that cliparser prints signed, so a full 255-record slice arrived as -1 and was
   served as a single record; a walk took a chunk timeout per record.

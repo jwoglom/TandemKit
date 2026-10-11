@@ -200,6 +200,51 @@ import XCTest
         XCTAssertFalse(viewModel.isShowingFillPausedPrompt)
     }
 
+    // MARK: - Reporting the prime
+
+    func testLeavingFillTubingModeAfterInsulinFlowedReportsAPrime() {
+        let delegate = attachDelegate()
+        stubAlerts()
+        bluetooth.stub(ExitFillTubingModeRequest.self, with: ExitFillTubingModeResponse(status: 0))
+        viewModel.handleButtonState(buttonDown: true)
+        viewModel.handleButtonState(buttonDown: false)
+        drainMainQueue()
+
+        viewModel.exitFillTubingMode()
+        drainMainQueue()
+        manager.delegateQueue.sync {}
+
+        XCTAssertEqual(delegate.pumpEventBatches.flatMap(\.events).map(\.type), [.prime])
+        XCTAssertEqual(delegate.pumpEventBatches.last?.replacePendingEvents, false)
+    }
+
+    func testLeavingFillTubingModeBeforeAnyInsulinFlowedReportsNoPrime() {
+        let delegate = attachDelegate()
+        bluetooth.stub(ExitFillTubingModeRequest.self, with: ExitFillTubingModeResponse(status: 0))
+
+        viewModel.exitFillTubingMode()
+        drainMainQueue()
+        manager.delegateQueue.sync {}
+
+        XCTAssertEqual(delegate.pumpEventBatches.flatMap(\.events), [])
+    }
+
+    func testARefusedExitFromFillTubingModeReportsNoPrime() {
+        let delegate = attachDelegate()
+        stubAlerts()
+        bluetooth.stub(ExitFillTubingModeRequest.self, with: ExitFillTubingModeResponse(status: 1))
+        viewModel.handleButtonState(buttonDown: true)
+        viewModel.handleButtonState(buttonDown: false)
+        drainMainQueue()
+
+        viewModel.exitFillTubingMode()
+        drainMainQueue()
+        manager.delegateQueue.sync {}
+
+        XCTAssertEqual(delegate.pumpEventBatches.flatMap(\.events), [])
+        XCTAssertTrue(viewModel.failedExitMode)
+    }
+
     // MARK: - Which reports warrant a read
 
     func testAReleaseIsRead() {
@@ -223,6 +268,14 @@ import XCTest
     }
 
     // MARK: - Helpers
+
+    private func attachDelegate() -> MockPumpManagerDelegate {
+        let delegate = MockPumpManagerDelegate()
+        manager.pumpManagerDelegate = delegate
+        manager.delegateQueue = DispatchQueue(label: "fill-tubing-view-model-test")
+        manager.delegateQueue.sync {}
+        return delegate
+    }
 
     /// Answers the pump's alert read with exactly `alerts` active.
     private func stubAlerts(_ alerts: AlertStatusResponse.AlertResponseType...) {

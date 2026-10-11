@@ -121,9 +121,11 @@ enum VirtualPumpControl {
             case tempBasal
             case suspend
             case resume
-            /// `recordCartridgeChange` and `recordSiteChange(primeAmount:)` with `units`: what the
-            /// cartridge and fill cannula wizards report once the pump has done its part.
+            /// `recordCartridgeChange`, `recordTubingFill` and `recordSiteChange(primeAmount:)` with
+            /// `units`: what the cartridge, fill tubing and fill cannula wizards report once the pump
+            /// has done its part.
             case recordCartridgeChange
+            case recordTubingFill
             case recordSiteChange
             /// `setFeatureFlag(_:enabled:)` with `featureFlag` and `enabled`, as the flags screen does.
             case setFeatureFlag
@@ -326,6 +328,8 @@ enum VirtualPumpControl {
                     try deliveryChange("resumeDelivery") { manager.resumeDelivery(completion: $0) }
                 case .recordCartridgeChange:
                     manager.recordCartridgeChange()
+                case .recordTubingFill:
+                    manager.recordTubingFill()
                 case .recordSiteChange:
                     manager.recordSiteChange(primeAmount: request.units)
                 case .setFeatureFlag:

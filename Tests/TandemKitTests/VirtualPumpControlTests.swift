@@ -109,15 +109,16 @@ final class VirtualPumpControlTests: XCTestCase {
         }
     }
 
-    func testCartridgeAndSiteChangesReadBackAsTheMarkersTheDelegateReceived() throws {
+    func testCartridgeTubingAndSiteChangesReadBackAsTheMarkersTheDelegateReceived() throws {
         try client.send(.init(command: .recordCartridgeChange))
+        try client.send(.init(command: .recordTubingFill))
         try client.send(.init(command: .recordSiteChange, units: 0.3))
         delegateQueue.sync {}
 
         let events = try XCTUnwrap(client.send(.init(command: .pumpEventBatches)).batches).flatMap(\.pumpEvents)
 
         XCTAssertEqual(events, delegate.pumpEventBatches.flatMap(\.events))
-        XCTAssertEqual(events.map(\.type), [.rewind, .replaceComponent(componentType: .infusionSet)])
+        XCTAssertEqual(events.map(\.type), [.rewind, .prime, .prime, .replaceComponent(componentType: .infusionSet)])
         XCTAssertEqual(manager.state.lastCannulaFillAmount, 0.3)
     }
 

@@ -175,13 +175,14 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         XCTAssertEqual(stoppedTimeline.suspends.first?.reason, "occlusion")
 
         let midway = feedOracles()
-        try expectDefect("jwoglom/TandemKit#349: pump alarms are surfaced only as LoopKit Alerts; no live path emits NewPumpEvent(type: .alarm) and alarmType is never populated (P14-1, P14-2, P10-6)") {
-            let alarm = eventsSince(batchesBefore).first { $0.type == .alarm }
-            XCTAssertNotNil(alarm, "an .alarm pump event for the occlusion: \(eventsSince(batchesBefore))")
-            XCTAssertEqual(alarm?.alarmType, .occlusion, "alarmType names the fault")
-            XCTAssertEqual(alarm?.date.timeIntervalSince(stoppedAt) ?? .infinity, 0, accuracy: 1, "the alarm is dated at the pump's alarm")
-            XCTAssertEqual(midway.trio.alarms.count, 1, "Trio stores the alarm as PumpAlarm: \(midway.trio.events)")
-        }
+        let alarms = eventsSince(batchesBefore).filter { $0.type == .alarm }
+        XCTAssertEqual(alarms.count, 1, "one .alarm pump event for the occlusion: \(eventsSince(batchesBefore))")
+        let alarm = alarms.first
+        XCTAssertEqual(alarm?.alarmType, .occlusion, "alarmType names the fault")
+        XCTAssertNil(alarm?.dose)
+        XCTAssertEqual(alarm?.date.timeIntervalSince(stoppedAt) ?? .infinity, 0, accuracy: 1, "the alarm is dated at the pump's alarm")
+        XCTAssertEqual(midway.trio.alarms.count, 1, "Trio stores the alarm as PumpAlarm: \(midway.trio.events)")
+        XCTAssertEqual(midway.trio.alarms.first?.note, alarm?.title)
 
         // The pump resumes with the alarm acknowledged.
         try clock.advanceBoth(seconds: .minutes(5), ticks: 5)
@@ -202,10 +203,11 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         XCTAssertEqual(trio.suspends.count, 1)
         let timeline = try timeline()
 
-        try expectDefect("jwoglom/TandemKit#349: no .alarmClear pump event when the pump's alarm clears (the LoopKit Alert channel is the only one retracted)") {
-            let cleared = eventsSince(batchesBefore).first { $0.type == .alarmClear }
-            XCTAssertNotNil(cleared, "an .alarmClear event once the alarm is acknowledged: \(eventsSince(batchesBefore))")
-        }
+        let cleared = eventsSince(batchesBefore).filter { $0.type == .alarmClear }
+        XCTAssertEqual(cleared.count, 1, "an .alarmClear event once the alarm is acknowledged: \(eventsSince(batchesBefore))")
+        XCTAssertGreaterThanOrEqual(cleared.first?.date ?? .distantPast, resumedAt, "cleared no earlier than the pump cleared it")
+        XCTAssertEqual(eventsSince(batchesBefore).filter { $0.type == .alarm }.count, 1, "the alarm is not reported again")
+        XCTAssertEqual(trio.alarms.count, 1, "Trio stores no row for the clear")
 
         let resume = eventsSince(batchesBefore).first { $0.type == .resume }
         XCTAssertNotNil(resume, "\(eventsSince(batchesBefore))")
@@ -687,7 +689,7 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         let timeline = try timeline()
         XCTAssertTrue(timeline.unplaced.contains { $0.type == "CartridgeFilled" }, "the pump recorded the fill: \(timeline.unplaced)")
 
-        try expectDefect("jwoglom/TandemKit#349: a cartridge fill recorded by the pump (CartridgeFilledHistoryLog) is never turned into a pump event — the history mapper drops it and is unwired behind default-off flags; only the app's own wizard emits a component event (P14-4)") {
+        try expectDefect("a cartridge fill done on the pump's screen (CartridgeFilledHistoryLog) is never turned into a pump event; only the app's own wizards report one. jwoglom/TandemKit#349 rated this not applicable, taking the wizards as the only change path (P14-4)") {
             let event = eventsSince(batchesBefore).first(where: Self.isComponentReplacement)
             XCTAssertNotNil(event, "a .replaceComponent(.reservoir) / .rewind / .prime for the pump's cartridge fill: \(eventsSince(batchesBefore))")
             XCTAssertEqual(event?.date.timeIntervalSince(changedAt) ?? .infinity, 0, accuracy: 2, "dated at the pump's record")
@@ -902,6 +904,78 @@ final class PumpSideConformanceTests: ConformanceTestCase {
             XCTAssertEqual(extended?.dose?.wasProgrammedByPumpUI, true)
             XCTAssertGreaterThan(feedOracles().loop.iob(at: completedAt), 0, "the extended bolus counts towards IOB")
         }
+    }
+
+    // MARK: - D14
+
+    /// The fill tubing and fill cannula wizards each report a `.prime` once the pump has done its
+    /// part, the cannula's with its site change (#349 P10-5). Neither is a dose.
+    func testD14TheFillWizardsReportAPrimeEach() throws {
+        let driver = try startPairedDriver(scheduledRate: Self.profileRate)
+        let batchesBefore = allPumpEventBatches.count
+
+        let tubingFilledAt = clock.now
+        driver.manager.recordTubingFill()
+        try clock.advanceBoth(seconds: .minutes(2))
+        let cannulaFilledAt = clock.now
+        driver.manager.recordSiteChange(primeAmount: 0.3)
+
+        let batches = Array(allPumpEventBatches.dropFirst(batchesBefore))
+        XCTAssertTrue(batches.allSatisfy { !$0.replacePendingEvents }, "a marker does not purge pending doses")
+        let events = batches.flatMap(\.events)
+        XCTAssertEqual(events.map(\.type), [.prime, .prime, .replaceComponent(componentType: .infusionSet)], "\(events)")
+        XCTAssertEqual(events.map(\.date), [tubingFilledAt, cannulaFilledAt, cannulaFilledAt])
+        XCTAssertTrue(events.allSatisfy { $0.dose == nil }, "a fill carries no dose")
+        XCTAssertEqual(Set(events.map(\.raw)).count, events.count, "each marker has its own raw")
+
+        let (loop, trio) = feedOracles()
+        XCTAssertTrue(loop.doses.isEmpty, "no insulin dose came out of a fill: \(loop.doses.map(LoopDoseStoreOracle.describe))")
+        XCTAssertEqual(trio.events.filter { $0.type == .prime }.count, 2, "\(trio.events)")
+        XCTAssertEqual(trio.events.filter { $0.type == .siteChange }.count, 1, "\(trio.events)")
+        try timeline().assertMatches(loop)
+    }
+
+    // MARK: - D15
+
+    /// A pump with another serial than the last one the driver read is reported once as a
+    /// replacement (#349 P14-5). The first pump paired is not one: C4 and D6 see no events at all.
+    func testD15APumpWithAnotherSerialIsReportedAsAReplacement() throws {
+        let driver = try startPairedDriver(scheduledRate: Self.profileRate)
+        let firstSerial = try XCTUnwrap(driver.manager.state.lastPumpSerial)
+        XCTAssertFalse(eventsSince(0).contains { $0.type == .replaceComponent(componentType: .pump) }, "pairing the first pump is no replacement")
+        let batchesBefore = allPumpEventBatches.count
+
+        // The emulator answers PumpVersionB from this constant, so another serial in it is another pump to the driver.
+        var version = try harness.client.settingsConfig(for: "PumpVersionBRequest")
+        var value = try XCTUnwrap(version["value"] as? [String: Any])
+        let secondSerial = firstSerial + 1
+        value["serialNumber"] = Int(secondSerial)
+        version["value"] = value
+        try harness.client.setSettingsConfig(version, for: "PumpVersionBRequest")
+        // As the debug screen's "Re-run Pump Setup": the pairing is forgotten, then made again.
+        driver.manager.deleteSavedPumpState()
+        try disconnectFromPump()
+        _ = try harness.control.resetLongTermKey()
+        try harness.client.setPairingState(.pairStep2)
+        try clock.advanceBoth(seconds: .minutes(5))
+        let replacedAt = clock.now
+        try harness.pair(driver)
+        _ = try sync()
+
+        let replacements = eventsSince(batchesBefore).filter { $0.type == .replaceComponent(componentType: .pump) }
+        XCTAssertEqual(replacements.count, 1, "\(eventsSince(batchesBefore))")
+        XCTAssertNil(replacements.first?.dose)
+        XCTAssertEqual(replacements.first?.date.timeIntervalSince(replacedAt) ?? .infinity, 0, accuracy: 1)
+        XCTAssertEqual(driver.manager.state.lastPumpSerial, secondSerial)
+        drainDelegate()
+        XCTAssertEqual(driver.delegate.pumpWasReplacedCount, 1)
+
+        _ = try sync()
+        XCTAssertEqual(eventsSince(batchesBefore).filter { $0.type == .replaceComponent(componentType: .pump) }.count, 1, "reported once")
+
+        let (loop, trio) = feedOracles()
+        XCTAssertTrue(loop.doses.isEmpty, "\(loop.doses.map(LoopDoseStoreOracle.describe))")
+        XCTAssertEqual(trio.events.filter { $0.type == .siteChange }.count, 1, "Trio stores a pump replacement as a site change: \(trio.events)")
     }
 
     // MARK: - Helpers
