@@ -265,7 +265,7 @@ class TandemKitFillTubingViewModel: ObservableObject {
         isAcknowledgingFillPause = true
         pumpManager.dismissNotification(notification: item) { [weak self] _ in
             DispatchQueue.main.async {
-                self?.notificationsViewModel.refreshNotifications {
+                self?.notificationsViewModel.refreshNotifications { [weak self] in
                     guard let self else { return }
                     isAcknowledgingFillPause = false
                     updateFillPausedPrompt(step: currentStep, hidden: notificationsViewModel.hiddenNotifications)
