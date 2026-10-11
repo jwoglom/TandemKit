@@ -333,7 +333,9 @@ on the pump; a basal profile edit while a temp runs; a cartridge and site change
 pump's code with Trio's settings applied; and Trio's closed loop.
 
 `trio.log` (the simulator's log stream, every launch) and `trio-launcher.log` land in `LOG_DIR`, and
-each test's Trio `Documents/logs` and store in `LOG_DIR/<test>`. The `trio` job in
+each test's Trio `Documents/logs` and store in `LOG_DIR/<test>`. A failed test also leaves
+`trio-sample.txt` there, a few seconds of Trio's stacks that the launcher takes with `sample` before
+stopping it, since a Trio that stops answering logs nothing about why. The `trio` job in
 `.github/workflows/macos.yml` runs it on the self-hosted runners.
 
 ## What the harness found

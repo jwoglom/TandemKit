@@ -8,10 +8,11 @@ cannot reach simctl themselves. It serves HTTP on 127.0.0.1, which the simulator
                              {"files": {path: text}} adds or replaces files in the container
   POST /launch               launch it; a JSON body {"arguments": [...]} passes launch arguments
   POST /relaunch             stop Trio and launch it again on the same data, with the same arguments
-  POST /stop                 stop Trio
+  POST /stop                 stop Trio; {"sample": true} first samples its stacks for a few seconds
 
 /install answers {"dataContainer": path}; /launch and /relaunch add "controlPort" once TandemKit
-inside Trio accepts on it. Stopping an install copies its logs and store to LOG_DIR/<test>.
+inside Trio accepts on it. Stopping an install copies its logs and store to LOG_DIR/<test>, with
+the stack sample as trio-sample.txt.
 """
 
 import argparse
@@ -88,20 +89,31 @@ class Trio:
         self.name = None
         self.arguments = []
         self.running = False
+        self.pid = None
 
     def simctl(self, *args, check=True):
         return subprocess.run(["xcrun", "simctl", *args], check=check, capture_output=True, text=True)
 
-    def stop(self):
+    def stop(self, sample=False):
+        if sample and self.running and self.pid:
+            # A Trio that stopped answering logs nothing about why; its stacks say where it is stuck.
+            path = self.archive_dir() / "trio-sample.txt"
+            print(f"sampling Trio ({self.pid}) into {path}", flush=True)
+            subprocess.run(["sample", str(self.pid), "3", "-file", str(path)], check=False, capture_output=True, timeout=120)
         self.simctl("terminate", self.udid, self.bundle_id, check=False)
         if self.running and self.container:
             self.archive()
         self.running = False
+        self.pid = None
+
+    def archive_dir(self):
+        target = self.log_dir / re.sub(r"[^A-Za-z0-9._-]+", "_", self.name or "trio").strip("_-")
+        target.mkdir(parents=True, exist_ok=True)
+        return target
 
     def archive(self):
         """Simulated data only: what a failed test's artifacts need."""
-        target = self.log_dir / re.sub(r"[^A-Za-z0-9._-]+", "_", self.name or "trio").strip("_-")
-        target.mkdir(parents=True, exist_ok=True)
+        target = self.archive_dir()
         logs = Path(self.container) / "Documents" / "logs"
         if logs.is_dir():
             shutil.copytree(logs, target / "documents-logs", dirs_exist_ok=True)
@@ -130,9 +142,17 @@ class Trio:
             "SIMCTL_CHILD_TANDEMKIT_VIRTUAL_PUMP_CONTROL": str(port),
         }
         print(f"launching {self.bundle_id} {arguments} for {self.name}; control port {port}; data {self.container}", flush=True)
-        subprocess.run(
-            ["xcrun", "simctl", "launch", self.udid, self.bundle_id, *arguments], check=True, env={**os.environ, **env}
+        launched = subprocess.run(
+            ["xcrun", "simctl", "launch", self.udid, self.bundle_id, *arguments],
+            check=True,
+            capture_output=True,
+            text=True,
+            env={**os.environ, **env},
         )
+        print(launched.stdout, end="", flush=True)
+        # simctl prints "<bundle id>: <pid>".
+        pid = re.search(r":\s*(\d+)\s*$", launched.stdout.strip())
+        self.pid = int(pid.group(1)) if pid else None
         self.running = True
         wait_for_port(port, CONTROL_PORT_TIMEOUT)
         return {"controlPort": port, "dataContainer": self.container}
@@ -153,7 +173,7 @@ def serve(trio, port_file):
                 elif url.path == "/relaunch":
                     body = trio.launch(trio.arguments)
                 elif url.path == "/stop":
-                    trio.stop()
+                    trio.stop(sample=bool(request.get("sample")))
                     body = {}
                 else:
                     return self.answer(404, {"error": f"no {url.path}"})

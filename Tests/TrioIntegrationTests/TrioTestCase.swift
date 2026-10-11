@@ -59,7 +59,7 @@ class TrioTestCase: FaketandemIntegrationTestCase {
         control?.close()
         control = nil
         do {
-            try trio?.stop()
+            try trio?.stop(sample: testRun?.hasSucceeded == false)
         } catch {
             XCTFail("stopping Trio failed: \(error)")
         }

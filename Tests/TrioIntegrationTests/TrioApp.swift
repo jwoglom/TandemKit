@@ -41,8 +41,9 @@ struct TrioApp {
         try Self.launch(launcher, "relaunch", [:])
     }
 
-    func stop() throws {
-        _ = try Self.post(launcher.appendingPathComponent("stop"), [:])
+    /// With `sample`, the launcher first records a few seconds of Trio's stacks into the test's logs.
+    func stop(sample: Bool = false) throws {
+        _ = try Self.post(launcher.appendingPathComponent("stop"), ["sample": sample])
     }
 
     func connectControl() throws -> VirtualPumpControl.Client {
