@@ -67,7 +67,7 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
         return .seconds(30)
     }
     // Pairing runs JPAKE on top of the connect, and had no bound at all before it was a command job.
-    private let pairingTimeout: DispatchTimeInterval = .seconds(120)
+    var pairingTimeout: DispatchTimeInterval = .seconds(120)
     // The in-flight connect attempt's wait group, so a disconnect / Bluetooth-off can cancel it and
     // release awaitConnect immediately rather than letting it block out its full timeout.
     // Guarded by connectStateLock because it is set on commandQueue and cancelled on managerQueue.

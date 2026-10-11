@@ -169,6 +169,9 @@ edit instead of at the next sync.
 - Every error `pairPump` completes with has to reach `TandemKitScanViewModel.onPairFailure`, which ends
   the pairing step (alert, back to the double-tap step, scan restarts when the alert is dismissed). The
   step has no exit of its own.
+- `pairPump`'s connect is a command job, bounded at `pairingTimeout` (120 s). Its setup writes bypass the
+  command queue, and a command that connected meanwhile took over its completion, so pairing never ended.
+  A command queued during pairing waits, then runs on the session pairing opened or is refused as unpaired.
 
 ### Onboarding and the basal schedule
 - `applyOnboardingSettings` writes the host's `PumpManagerSetupSettings` to a freshly paired
@@ -574,8 +577,6 @@ integration scenarios.
 - **Pairing.**
   - `JpakeRound1Framing` is unit-tested and pairs against faketandem, whose JPAKE is pumpX2's,
     but has not been confirmed against pump firmware.
-  - `pairPump` has no deadline: a connect CoreBluetooth never completes (the pump stopped advertising
-    after the scan) leaves the pairing step waiting.
   - The legacy 16-character pump-challenge pairing is not implemented; only the 6-digit JPAKE
     code is.
 - **Delivery-uncertainty recovery.** `deliveryUncertaintyRecoveryViewController` returns the

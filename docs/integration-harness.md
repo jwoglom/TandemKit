@@ -357,7 +357,9 @@ Running Trio itself found a third, fixed with a regression test in `PairingInteg
 - Pairing connected outside the command queue. A command job that ran meanwhile, such as the
   delivery limits sync Trio sends when it sets up the pump manager, connected again and took over
   pairing's completion, so pairing never finished. Pairing's connect is now a command job, bounded
-  at 120 s, and a job queued behind it finds the session up.
+  at 120 s, and a job queued behind it finds the session up. `connectIfNeeded` has since come to
+  refuse an unpaired pump, so the race needs a pairing over a derived secret the driver already
+  holds, as the control channel's seeded-key pairing is.
 
 And two things in Trio that the scenarios step around:
 

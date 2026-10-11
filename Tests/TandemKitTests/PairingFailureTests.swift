@@ -62,6 +62,8 @@ import XCTest
         let realBluetooth = TandemBluetoothManager()
         let unpaired = TandemPumpManager(state: TandemPumpManagerState(rawValue: [:]), bluetooth: realBluetooth)
         realBluetooth.manager?.state = .poweredOn
+        // The Linux central never completes a connect, and the command below waits behind the attempt.
+        realBluetooth.pairingTimeout = .milliseconds(500)
         realBluetooth.connect(peripheral) { _ in }
 
         let started = Date()
