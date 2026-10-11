@@ -23,6 +23,11 @@ extension PumpConnectionIssue {
             )
         case .pumpUnreachable:
             return String(localized: "Pump Disconnected", comment: "title for pump disconnected notice")
+        case .handshakeFailing:
+            return String(
+                localized: "Pump Pairing Problem",
+                comment: "Pump keeps ending the secure connection while the app connects, so the app stopped retrying"
+            )
         case .noRecentSync:
             return String(
                 localized: "No Recent Pump Data",
@@ -63,6 +68,14 @@ extension PumpConnectionIssue {
                 ),
                 appName
             )
+        case .handshakeFailing:
+            return String(
+                format: String(
+                    localized: "Your pump is rejecting connections from this device. This may be caused by a Bluetooth connection problem, pairing the pump to a different device, or running multiple apps that control the pump on the same device. Please disconnect the pump from all apps and re-pair to resume %@ controlling insulin delivery. Your pump's profile settings are used until this is resolved.",
+                    comment: "detail for the pump pairing problem notice; the placeholder is the app's name"
+                ),
+                appName
+            )
         case .noRecentSync:
             return String(
                 format: String(
@@ -77,7 +90,7 @@ extension PumpConnectionIssue {
     /// SF Symbol for the home-screen status highlight.
     var imageName: String {
         switch self {
-        case .bluetoothOff, .bluetoothUnauthorized, .bluetoothUnavailable:
+        case .bluetoothOff, .bluetoothUnauthorized, .bluetoothUnavailable, .handshakeFailing:
             return "exclamationmark.circle.fill"
         case .pumpUnreachable, .noRecentSync:
             return "antenna.radiowaves.left.and.right.slash"

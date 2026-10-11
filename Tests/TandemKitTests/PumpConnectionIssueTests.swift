@@ -159,6 +159,44 @@ import XCTest
             XCTAssertEqual(manager.sustainedConnectionIssue, expected, "for \(state.rawValue)")
         }
     }
+
+    // MARK: - A handshake the pump keeps ending
+
+    func testAHandshakeThePumpKeepsEndingIsReportedInPlaceOfADroppedLink() {
+        makeConnected()
+        manager.state.isConnected = false
+        bluetooth.isJpakeFailureLimitReached = true
+
+        XCTAssertEqual(manager.connectionIssue, .handshakeFailing)
+    }
+
+    func testARadioProblemOutranksAHandshakeThePumpKeepsEnding() {
+        makeConnected()
+        bluetooth.bluetoothState = .poweredOff
+        bluetooth.isJpakeFailureLimitReached = true
+
+        XCTAssertEqual(manager.connectionIssue, .bluetoothOff)
+    }
+
+    /// The driver has stopped retrying, so unlike a dropped link there is nothing to wait out.
+    func testAHandshakeThePumpKeepsEndingReachesTheHomeScreenImmediately() {
+        bluetooth.bluetoothState = .poweredOn
+        manager.state.isConnected = false
+        manager.state.lastReconciliation = nil
+        bluetooth.isJpakeFailureLimitReached = true
+
+        XCTAssertEqual(manager.sustainedConnectionIssue, .handshakeFailing)
+    }
+
+    func testTheIssueClearsWhenTheHandshakeSucceedsAgain() {
+        makeConnected()
+        bluetooth.isJpakeFailureLimitReached = true
+        XCTAssertEqual(manager.connectionIssue, .handshakeFailing)
+
+        bluetooth.isJpakeFailureLimitReached = false
+
+        XCTAssertNil(manager.connectionIssue)
+    }
 }
 
 /// The BLE layer's side of it: `state.isConnected` has to actually go false when the session ends,
@@ -304,6 +342,19 @@ import XCTest
             highlight.localizedMessage.localizedCaseInsensitiveContains("suspended"),
             "Got: \(highlight.localizedMessage)"
         )
+    }
+
+    func testAHandshakeThePumpKeepsEndingIsSurfacedOnTheHomeScreen() throws {
+        manager.state.isConnected = false
+        bluetooth.isJpakeFailureLimitReached = true
+
+        let highlight = try XCTUnwrap(manager.pumpStatusHighlight)
+
+        XCTAssertTrue(
+            highlight.localizedMessage.localizedCaseInsensitiveContains("pairing"),
+            "Got: \(highlight.localizedMessage)"
+        )
+        XCTAssertEqual(highlight.state, .critical)
     }
 }
 

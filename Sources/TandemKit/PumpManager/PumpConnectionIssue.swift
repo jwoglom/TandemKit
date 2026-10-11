@@ -10,6 +10,9 @@ public enum PumpConnectionIssue: Equatable {
     case bluetoothUnavailable
     /// Radio is fine, but there is no session with the pump. The driver keeps retrying.
     case pumpUnreachable
+    /// The pump has ended the secure handshake several times in a row, and the driver has stopped
+    /// reconnecting on its own. Retrying faster does not help; something about the pairing does.
+    case handshakeFailing
     /// A link that is up but no longer carrying traffic looks healthy from the link's point of
     /// view; the age of the last completed sync is the only evidence that it is not.
     case noRecentSync
@@ -36,6 +39,10 @@ public extension TandemPumpManager {
             break
         }
 
+        if bluetooth.isJpakeFailureLimitReached {
+            return .handshakeFailing
+        }
+
         guard state.isConnected else {
             return .pumpUnreachable
         }
@@ -50,7 +57,8 @@ public extension TandemPumpManager {
     }
 
     /// `connectionIssue` narrowed to what is worth the host app's home screen. Radio problems
-    /// qualify immediately — they will not clear on their own. A dropped link waits until it has
+    /// qualify immediately — they will not clear on their own, and neither will a handshake the pump
+    /// keeps ending, since the driver has stopped retrying it. A dropped link waits until it has
     /// cost loop cycles, so the drops auto-reconnect clears in seconds do not teach the user to
     /// ignore the banner. A pump that has never synced is still being set up.
     var sustainedConnectionIssue: PumpConnectionIssue? {
@@ -59,7 +67,7 @@ public extension TandemPumpManager {
         }
 
         switch issue {
-        case .bluetoothOff, .bluetoothUnauthorized, .bluetoothUnavailable, .noRecentSync:
+        case .bluetoothOff, .bluetoothUnauthorized, .bluetoothUnavailable, .handshakeFailing, .noRecentSync:
             return issue
         case .pumpUnreachable:
             guard let lastSync = state.lastReconciliation,

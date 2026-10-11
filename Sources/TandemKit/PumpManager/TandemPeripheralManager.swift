@@ -665,6 +665,7 @@ extension TandemPeripheralManager {
                 while let request = authBuilder.nextRequest() {
                     guard let response = write(request) else {
                         logger.error("Failed to send JPAKE confirm")
+                        bluetoothManager.recordJpakeFailure()
                         failSetup(PumpCommError.noResponse)
                         return
                     }
@@ -683,10 +684,12 @@ extension TandemPeripheralManager {
 
                     // Must complete the connect attempt, otherwise connectIfNeeded blocks for the
                     // full connectTimeout and stalls every queued command behind it.
+                    bluetoothManager.recordJpakeFailure()
                     failSetup(PumpCommError.noResponse)
                     return
                 }
 
+                bluetoothManager.recordJpakeSuccess()
                 pumpManager.state.pumpState.serverNonce = serverNonce
                 pumpManager.state.pumpState.derivedSecret = secret
                 pumpManager.state.pumpState.peripheralUuid = peripheral.identifier.uuidString

@@ -34,6 +34,10 @@ protocol PumpBluetoothConnection: AnyObject {
     /// could not be established.
     func ensureConnected(completion: @escaping (Error?) -> Void)
 
+    /// True once the pump has ended the secure handshake several times in a row. The driver has
+    /// then stopped reconnecting on its own; a successful handshake clears it.
+    var isJpakeFailureLimitReached: Bool { get }
+
     /// Responses the pump has actually returned. Compared before and after a sequence of reads to
     /// tell a pump that answered something from one that answered nothing.
     var responseCount: Int { get }
