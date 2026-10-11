@@ -134,6 +134,18 @@ then `connectionIssue` is `.handshakeFailing`, shown at once on the status highl
 troubleshooting screens. The count is not persisted, so a relaunch tries afresh. A first pairing is
 not counted: its attempts are the user's own, and a refused code is theirs to fix (see Pairing).
 
+### Reconnect
+- A connect the driver starts on its own (`reconnectAutomatically`: the backoff retry, the one after
+  a disconnect, the one when Bluetooth powers on or the manager is attached) that brings a session up
+  queues `syncPumpData(onlyIfIdle: true)` through `didReconnectAutomatically` (#351). The pump's
+  qualifying events are lost while the link is down, so what it did meanwhile reaches the host only
+  through a sync, and the host's poll is throttled for 4.5 minutes after the last one. Not before
+  the host has adopted the manager (`canNotifyDelegate`), whose first poll syncs, so not during
+  onboarding; not for a host command's connect; not when the session was already up.
+- A poll (`onlyIfIdle`) that finds a sync in flight queues nothing and is handed that sync's result
+  (`SyncResult`) when it completes, not the `lastSync` from before it: Trio loops as soon as its
+  poll completes, and the sync in flight may be the first to read the pump since an outage.
+
 ### Qualifying events
 `QualifyingEvent.suggestedHandlers` / `groupSuggestedHandlers` are ported from pumpX2's
 suggested-handler table, including the version-dependent Control-IQ info / last-bolus / battery /
@@ -574,8 +586,6 @@ integration scenarios.
 - **CGM data.** Glucose from the pump's sensor (`CurrentEGVGuiDataRequest`) does not reach the
   host; TandemKit is not a `CGMManager`. The CGM screens only pair, start, stop and monitor the
   pump's sensor session.
-- **Reconnect.** An automatic reconnect restores the session but does not sync or report to the
-  host; the next report waits for `ensureCurrentPumpData` (#351).
 - **Pairing.**
   - `JpakeRound1Framing` is unit-tested and pairs against faketandem, whose JPAKE is pumpX2's,
     but has not been confirmed against pump firmware.

@@ -9,6 +9,8 @@ import XCTest
 @available(macOS 13.0, iOS 14.0, *) final class TandemPumpManagerConnectionTests: XCTestCase {
     private var bluetooth: StubPumpBluetooth!
     private var manager: TandemPumpManager!
+    // Held here: the manager's reference to its delegate is weak.
+    private var delegate: MockPumpManagerDelegate?
 
     override func setUp() {
         super.setUp()
@@ -19,6 +21,7 @@ import XCTest
     override func tearDown() {
         manager = nil
         bluetooth = nil
+        delegate = nil
         super.tearDown()
     }
 
@@ -196,6 +199,37 @@ import XCTest
         XCTAssertEqual(bluetooth.ensureConnectedCount, 1, "The poll must not queue a second sync")
     }
 
+    /// Trio loops as soon as its poll completes, on whatever pump data it then holds.
+    func testAPollThatStandsDownIsHandedTheRunningSyncsResult() {
+        let stale = Date().addingTimeInterval(-60 * 60)
+        manager.state.lastReconciliation = stale
+        stubSyncResponses()
+
+        var events: [String] = []
+        var polledLastSync: Date??
+        bluetooth.onWrite = { [weak self] _ in
+            guard !events.contains("poll"), let self else { return }
+            events.append("poll")
+            self.manager.ensureCurrentPumpData { lastSync in
+                events.append("poll completed")
+                polledLastSync = lastSync
+            }
+        }
+
+        let synced = expectation(description: "syncPumpData completes")
+        manager.syncPumpData { _ in
+            events.append("sync completed")
+            synced.fulfill()
+        }
+        wait(for: [synced], timeout: 5.0)
+
+        XCTAssertEqual(events, ["poll", "sync completed", "poll completed"])
+        XCTAssertEqual(bluetooth.ensureConnectedCount, 1)
+        let fresh = try? XCTUnwrap(manager.state.lastReconciliation)
+        XCTAssertNotEqual(fresh, stale)
+        XCTAssertEqual(polledLastSync, .some(fresh), "the running sync's result, not the stale one")
+    }
+
     /// Only the automatic poll stands down. A sync the user asked for is not a duplicate of one
     /// already grinding through timeouts.
     func testAUserRequestedSyncRunsEvenWhileOneIsAlreadyRunning() {
@@ -262,6 +296,87 @@ import XCTest
         wait(for: [expectation], timeout: 5.0)
 
         XCTAssertEqual(bluetooth.ensureConnectedCount, 1)
+    }
+
+    // MARK: - Automatic reconnect
+
+    @discardableResult
+    private func attachDelegate() -> (MockPumpManagerDelegate, DispatchQueue) {
+        let delegate = MockPumpManagerDelegate()
+        let queue = DispatchQueue(label: "connection-test-delegate")
+        manager.pumpManagerDelegate = delegate
+        manager.delegateQueue = queue
+        queue.sync {}
+        self.delegate = delegate
+        return (delegate, queue)
+    }
+
+    /// The pump's qualifying events go nowhere while the link is down (#351).
+    func testAnAutomaticReconnectSyncsAndReportsAFreshBoundary() {
+        let (delegate, queue) = attachDelegate()
+        stubSyncResponses()
+        // Inside the poll's throttle, which the reconnect does not wait out.
+        let beforeTheDrop = Date().addingTimeInterval(-60)
+        manager.state.lastReconciliation = beforeTheDrop
+        manager.state.isConnected = true
+
+        manager.didReconnectAutomatically()
+        queue.sync {}
+
+        XCTAssertEqual(bluetooth.ensureConnectedCount, 1)
+        XCTAssertTrue(bluetooth.didSend(InsulinStatusRequest.self))
+        let boundary = try? XCTUnwrap(manager.state.lastReconciliation)
+        XCTAssertGreaterThan(boundary ?? .distantPast, beforeTheDrop)
+        XCTAssertEqual(delegate.pumpEventBatches.last?.lastReconciliation, boundary)
+    }
+
+    func testAnAutomaticReconnectBeforeTheHostAdoptsThePumpLeavesTheSyncToItsFirstPoll() {
+        stubSyncResponses()
+
+        manager.didReconnectAutomatically()
+
+        XCTAssertEqual(bluetooth.ensureConnectedCount, 0)
+        XCTAssertTrue(bluetooth.sentMessages.isEmpty)
+    }
+
+    func testAnAutomaticReconnectDuringASyncDoesNotQueueAnother() {
+        attachDelegate()
+        stubSyncResponses()
+
+        var reconnected = false
+        bluetooth.onWrite = { [weak self] _ in
+            guard !reconnected, let self else { return }
+            reconnected = true
+            self.manager.didReconnectAutomatically()
+        }
+
+        let synced = expectation(description: "syncPumpData completes")
+        manager.syncPumpData { _ in synced.fulfill() }
+        wait(for: [synced], timeout: 5.0)
+
+        XCTAssertTrue(reconnected)
+        XCTAssertEqual(bluetooth.ensureConnectedCount, 1)
+    }
+
+    /// A host poll that lands while the reconnect's sync runs doses on what that sync read.
+    func testAPollDuringAReconnectsSyncIsHandedItsResult() {
+        attachDelegate()
+        stubSyncResponses()
+        let stale = Date().addingTimeInterval(-60 * 60)
+        manager.state.lastReconciliation = stale
+
+        var polledLastSync: Date??
+        bluetooth.onWrite = { [weak self] _ in
+            guard polledLastSync == nil, let self else { return }
+            polledLastSync = .some(nil)
+            self.manager.ensureCurrentPumpData { polledLastSync = $0 }
+        }
+
+        manager.didReconnectAutomatically()
+
+        XCTAssertEqual(bluetooth.ensureConnectedCount, 1)
+        XCTAssertNotEqual(manager.state.lastReconciliation, stale)
+        XCTAssertEqual(polledLastSync, .some(manager.state.lastReconciliation))
     }
 
     // MARK: - Teardown

@@ -775,8 +775,7 @@ final class CancelConformanceTests: ConformanceTestCase {
         try clock.advanceBoth(seconds: driver.manager.estimatedDuration(toBolus: Self.bolusUnits) + .minutes(3))
         _ = try harness.client.armFault(FaketandemFaultSpec(.radioOn))
         let detectedAfter = clock.now
-        // The sync reconnects (`ensureConnected`) rather than waiting on auto-reconnect, which
-        // does not re-sync or report on its own (#351).
+        // The sync reconnects at once rather than waiting out the reconnect retry's backoff.
         _ = try sync()
         XCTAssertTrue(try harness.client.snapshot().connection.connected, "the driver reconnected once the radio came back")
 

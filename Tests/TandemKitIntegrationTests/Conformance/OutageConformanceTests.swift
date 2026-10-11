@@ -90,7 +90,7 @@ final class OutageConformanceTests: ConformanceTestCase {
         try IntegrationWait.until("the driver to notice the link is gone", timeout: 30) { !driver.manager.state.isConnected }
     }
 
-    /// Back in range; the sync reconnects rather than waiting on auto-reconnect (#351).
+    /// Back in range; the sync reconnects at once rather than waiting out the reconnect retry's backoff.
     private func radioOnAndSync() throws {
         try harness.client.armFault(FaketandemFaultSpec(.radioOn))
         _ = try sync()
@@ -278,5 +278,41 @@ final class OutageConformanceTests: ConformanceTestCase {
         let pumpTemp = try XCTUnwrap(timeline.tempRates.first, "timeline: \(timeline)")
         XCTAssertTrue(pumpTemp.isFinished)
         timeline.assertMatches(loop)
+    }
+
+    // MARK: - F5
+
+    /// The pump stops while out of range, and the host makes no call when the phone is back: the
+    /// driver's own reconnect syncs and reports the stop, at the pump's time (#351).
+    func testF5_aReconnectWithNoHostSyncReportsAStopDuringTheOutage() throws {
+        let driver = try stageDriver()
+        let batchesBefore = allPumpEventBatches.count
+        let reconciliationBefore = try XCTUnwrap(driver.manager.state.lastReconciliation)
+
+        try radioOff(driver)
+        try clock.advanceBoth(seconds: .minutes(5), ticks: 5)
+        let stoppedAt = clock.now
+        _ = try harness.client.suspend(reason: "occlusion")
+        try clock.advanceBoth(seconds: Self.outage, ticks: 20)
+        try harness.client.armFault(FaketandemFaultSpec(.radioOn))
+
+        // Real time: the reconnect retry is the driver's own timer, not the modelled clock.
+        let retryBudget = TandemBluetoothManager.reconnectRetryDelays.reduce(0, +) + 30
+        let suspend = try waitForEvent("the suspend, with no sync from the host", since: batchesBefore, timeout: retryBudget) {
+            $0.type == .suspend
+        }
+        XCTAssertEqual(suspend.date.timeIntervalSince(stoppedAt), 0, accuracy: 1, "dated at the pump's stop")
+        XCTAssertEqual(suspend.dose?.isMutable, false)
+        XCTAssertEqual(driver.manager.state.basalDose.type, .suspend)
+        XCTAssertGreaterThan(try XCTUnwrap(driver.manager.state.lastReconciliation), reconciliationBefore)
+        let boundary = allPumpEventBatches.dropFirst(batchesBefore).last?.lastReconciliation
+        XCTAssertGreaterThan(boundary ?? .distantPast, reconciliationBefore, "the host is handed a fresh boundary")
+
+        let (loop, trio) = feedOracles()
+        loop.assertNoDuplicates()
+        trio.assertNoDuplicates()
+        XCTAssertEqual(eventsSince(batchesBefore).filter { $0.type == .suspend }.count, 1, "one suspend for one stop: \(eventsSince(batchesBefore))")
+        XCTAssertEqual(trio.suspends.map(\.timestamp), [suspend.date])
+        try timeline().assertMatches(loop)
     }
 }

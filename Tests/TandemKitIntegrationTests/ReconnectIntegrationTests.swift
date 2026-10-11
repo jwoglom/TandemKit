@@ -64,6 +64,34 @@ final class ReconnectIntegrationTests: FaketandemIntegrationTestCase {
         XCTAssertNotNil(try harness.sync(driver), "the new session must serve commands")
     }
 
+    /// Whatever the pump did out of range reaches the host only through a sync, and the host's next
+    /// poll can be minutes off (#351).
+    func testAReconnectRetryThatLandsSyncsAndReportsToTheHost() throws {
+        let driver = makeDriver()
+        try harness.pair(driver)
+        addTeardownBlock { try self.harness.client.armFault(FaketandemFaultSpec(.radioOn)) }
+        let reconciliationBefore = try XCTUnwrap(try harness.sync(driver))
+        let batchesBefore = driver.delegate.pumpEventBatches.count
+
+        try harness.client.armFault(FaketandemFaultSpec(.radioOff))
+        try IntegrationWait.until("the driver to notice the link is gone", timeout: 30) { !driver.manager.state.isConnected }
+        let logStart = try harness.client.snapshot().requestLog.lastSeq
+        // So the reconnect's boundary is strictly newer than the sync's.
+        try XCTUnwrap(driver.clock as? ManualClock).advance(by: .minutes(1))
+        try harness.client.armFault(FaketandemFaultSpec(.radioOn))
+
+        let retryBudget = TandemBluetoothManager.reconnectRetryDelays.prefix(3).reduce(0, +) + 30
+        try IntegrationWait.until("the driver to sync on its own", timeout: retryBudget) {
+            driver.delegate.pumpEventBatches.count > batchesBefore
+        }
+        let boundary = try XCTUnwrap(driver.manager.state.lastReconciliation)
+        XCTAssertGreaterThan(boundary, reconciliationBefore)
+        XCTAssertEqual(driver.delegate.pumpEventBatches.last?.lastReconciliation, boundary)
+        let reads = try harness.requestsSeen(since: logStart).map(\.message)
+        XCTAssertTrue(reads.contains("CurrentBasalStatusRequest"), "\(reads)")
+        XCTAssertTrue(driver.delegate.errors.isEmpty, "\(driver.delegate.errors)")
+    }
+
     /// A command job queued before the pump was deleted, such as a backfill tick's follow-up, must
     /// not bring the session back and hold the pump's one link.
     func testADeletedPumpIsNotReconnectedByALaterCommand() throws {

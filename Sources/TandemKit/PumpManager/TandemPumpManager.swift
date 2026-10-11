@@ -173,6 +173,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
     // user command sharing that queue. Guarded because syncs start and finish on different queues.
     private let syncStateLock = NSLock()
     private var inFlightSyncs = 0
+    // A poll that stands down takes this sync's result: Trio loops on whatever it is handed, and
+    // the in-flight sync may be the one after a reconnect, the first to read the pump since an outage.
+    private var latestSyncResult: SyncResult?
 
     /// The temp `maintainPumpClockSkewCompensation` has running. Only touched from command queue jobs.
     var skewCompensationTemp: (percent: Int, endsAt: Date)?
@@ -492,16 +495,20 @@ public class TandemPumpManager: PumpManager, Pluggable {
         syncPumpData(onlyIfIdle: true, completion: completion)
     }
 
-    /// Registers a sync as in flight. Returns false only when `onlyIfIdle` and one already is.
-    private func beginSync(onlyIfIdle: Bool) -> Bool {
+    /// Registers a sync as in flight and returns where its result goes. Nil only when `onlyIfIdle`
+    /// and one already is, in which case `completion` is handed that sync's result.
+    private func beginSync(onlyIfIdle: Bool, completion: ((_ lastSync: Date?) -> Void)?) -> SyncResult? {
         syncStateLock.lock()
-        defer { syncStateLock.unlock() }
-
-        if onlyIfIdle, inFlightSyncs > 0 {
-            return false
+        if onlyIfIdle, inFlightSyncs > 0, let running = latestSyncResult {
+            syncStateLock.unlock()
+            running.whenSet { completion?($0) }
+            return nil
         }
         inFlightSyncs += 1
-        return true
+        let result = SyncResult()
+        latestSyncResult = result
+        syncStateLock.unlock()
+        return result
     }
 
     private func endSync() {
@@ -510,12 +517,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
         syncStateLock.unlock()
     }
 
-    /// - Parameter onlyIfIdle: stand down when a sync is already queued or running. Set by the
-    ///   automatic poll; a sync the user asked for runs regardless.
+    /// - Parameter onlyIfIdle: when a sync is already queued or running, queue nothing and complete
+    ///   with its result. Set by the automatic poll; a sync the user asked for runs regardless.
     func syncPumpData(onlyIfIdle: Bool = false, completion: ((_ lastSync: Date?) -> Void)?) {
-        guard beginSync(onlyIfIdle: onlyIfIdle) else {
-            logger.warning("A sync is already in flight; not queueing another")
-            completion?(state.lastReconciliation)
+        guard let result = beginSync(onlyIfIdle: onlyIfIdle, completion: completion) else {
+            logger.warning("A sync is already in flight; waiting for its result instead of queueing another")
             return
         }
 
@@ -524,7 +530,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
         // `self` — `self.state` here gets stripped by the Swiftformat build phase (redundantSelf),
         // which then fails to compile because the autoclosure escapes.
         let lastReconciliation = state.lastReconciliation
-        let completion = watchdogged(timeoutResult: lastReconciliation) { completion?($0) }
+        let completion = watchdogged(timeoutResult: lastReconciliation) { lastSync in
+            completion?(lastSync)
+            result.set(lastSync)
+        }
         bluetooth.ensureConnected { error in
             // Cleared when the job ends, not when `completion` fires: the watchdog hands Loop a
             // result at 180s while these blocking reads are still holding the queue.
@@ -1603,6 +1612,16 @@ public class TandemPumpManager: PumpManager, Pluggable {
         notifyDelegateOfDeactivation {
             completion(nil)
         }
+    }
+
+    /// The pump's qualifying events are lost while the link is down, so whatever it did meanwhile
+    /// reaches the host only through a sync. Before the host adopts the manager, its first poll syncs.
+    func didReconnectAutomatically() {
+        guard canNotifyDelegate else {
+            return
+        }
+        logger.info("Reconnected on its own; syncing")
+        syncPumpData(onlyIfIdle: true, completion: nil)
     }
 
     /// Forces a fresh connect and full status sync, skipping the freshness short-circuit in
@@ -2815,6 +2834,37 @@ final class CommandWatchdog<Outcome> {
 
         item?.cancel()
         onResult(result)
+    }
+}
+
+/// One sync's `lastSync`, for the polls that found it in flight. Only the first `set` counts.
+final class SyncResult {
+    private let lock = NSLock()
+    private var lastSync: Date??
+    private var waiters: [(Date?) -> Void] = []
+
+    func whenSet(_ waiter: @escaping (Date?) -> Void) {
+        lock.lock()
+        guard let lastSync else {
+            waiters.append(waiter)
+            lock.unlock()
+            return
+        }
+        lock.unlock()
+        waiter(lastSync)
+    }
+
+    func set(_ value: Date?) {
+        lock.lock()
+        guard lastSync == nil else {
+            lock.unlock()
+            return
+        }
+        lastSync = .some(value)
+        let waiters = waiters
+        self.waiters = []
+        lock.unlock()
+        waiters.forEach { $0(value) }
     }
 }
 
