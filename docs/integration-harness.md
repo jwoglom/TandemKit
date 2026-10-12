@@ -554,12 +554,12 @@ shape of it explains what the harness is for:
 - **An `error_response` fault named the replaced response's opcode as `requestCodeId`**, where
   a real pump names the refused request, so the driver could not match it to its pending write
   and D3 waited out the response timeout. It names the request now (jwoglom/faketandem#35).
-- **There was no basal cycle.** faketandem delivered basal continuously and wrote no
-  `BasalDelivery` (279), `DailyBasal`, `ControlIQPcmChange` or `SetTempRateResponse` records, ran
-  no Control-IQ basal, ended a temp at every suspend, and `ChangeControlIQSettingsRequest` did not
-  switch Control-IQ, so group H appended the pump's records itself and H9, H6's segment change
-  and skew compensation were unit tests only. With `basal_cycle_enabled` the emulator writes a 279
-  every five minutes at the rate and source in force, with the pump's resume rules, Control-IQ at a
+- **There was no basal cycle.** faketandem delivered basal continuously and wrote no `BasalDelivery`
+  (279), `DailyBasal`, `ControlIQPcmChangeHistoryLog` or `SetTempRateResponse` records, ran no
+  Control-IQ basal, ended a temp at every suspend, and `ChangeControlIQSettingsRequest` did not
+  switch Control-IQ, so group H appended the pump's records itself and H9, H6's segment change and
+  skew compensation were unit tests only. With `basal_cycle_enabled` the emulator writes a 279 every
+  five minutes at the rate and source in force, with the pump's resume rules, Control-IQ at a
   scripted rate (`controliq_algorithm_rate`, `cgm_available`) and an alarm suspend that keeps the
   temp (`keep_temp`); `TempRateCompleted.timeLeft` is in milliseconds, as a pump writes it.
 

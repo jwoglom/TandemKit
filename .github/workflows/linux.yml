@@ -54,6 +54,23 @@ jobs:
           externals: |
             jwoglom/faketandem ${{ github.head_ref }}
 
+  # Not gated on plan: a documentation-only change is the likeliest to name code that is not there.
+  docs:
+    name: doc references
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout TandemKit
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Test the checker
+        run: python3 -m unittest discover -s scripts -p 'test_*.py'
+
+      - name: Check that the docs name only what the repository has
+        run: python3 scripts/check_doc_references.py
+
   plain:
     name: plain build + tests
     needs: plan

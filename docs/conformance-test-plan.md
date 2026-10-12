@@ -185,12 +185,12 @@ The pump delivers basal in 5-minute cycles, one `BasalDelivery` (279) record eac
 reports a correction where they differ (AGENTS.md "History backfill and dose reporting"). Each
 scenario runs faketandem's own basal cycle (`basal_cycle_enabled`), started once the driver is
 paired: a 279 every five minutes at the rate and source in force, `DailyBasal` totals,
-`ControlIQPcmChange` records, and Control-IQ switched on the pump (`closed_loop_enabled`) or by the
-app (`ChangeControlIQSettingsRequest`) at a scripted rate. History backfill and basal reporting are
-on. Every scenario that corrects also checks, over its 279s and over each, that Loop's and Trio's
-net basal equals the pump's (`PumpTimeline.basalCycles`). Loop's may be 0.025 U off for a cycle a
-suspend cuts short: Loop rebuilds the temp basal before a suspend without its `deliveredUnits` and
-counts it in 0.05 U steps. `BasalHistoryConformanceTests`.
+`ControlIQPcmChangeHistoryLog` records, and Control-IQ switched on the pump (`closed_loop_enabled`)
+or by the app (`ChangeControlIQSettingsRequest`) at a scripted rate. History backfill and basal
+reporting are on. Every scenario that corrects also checks, over its 279s and over each, that Loop's
+and Trio's net basal equals the pump's (`PumpTimeline.basalCycles`). Loop's may be 0.025 U off for a
+cycle a suspend cuts short: Loop rebuilds the temp basal before a suspend without its
+`deliveredUnits` and counts it in 0.05 U steps. `BasalHistoryConformanceTests`.
 
 | ID | Scenario | Assert |
 |---|---|---|
