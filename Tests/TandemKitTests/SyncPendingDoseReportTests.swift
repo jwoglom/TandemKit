@@ -134,12 +134,14 @@ import XCTest
 
     private func feedLoop() -> LoopDoseStoreOracle {
         let loop = LoopDoseStoreOracle()
+        delegateQueue.sync {}
         delegate.feed(loop)
         return loop
     }
 
     private func feedTrio() -> TrioDoseStoreOracle {
         let trio = TrioDoseStoreOracle()
+        delegateQueue.sync {}
         delegate.feed(trio)
         return trio
     }
