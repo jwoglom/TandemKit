@@ -239,7 +239,7 @@ inbound messages since the last reset; each test attaches the whole log to its r
 | `CartridgeProcedureIntegrationTests` | The emulator's `workflow_mode` refuses `EnterChangeCartridgeMode` while fill-tubing (or change mode) is open, and the exit that would back out; `recoverAndReenterChangeCartridgeMode` unwinds it (fill-tubing exit, change-cartridge exit, enter) and re-enters. The refusal rule is inferred from a field report, not confirmed on firmware. |
 | `Conformance/` | The dose-reporting conformance groups A–D and F–I (`docs/conformance-test-plan.md`): interrupts, cancels, idempotency, pump-side failures, outages, time changes, basal read back from the pump's history and the pump's IOB against the boluses reported, A–D, F and G each ending in a diff of the host's stored doses against `PumpTimeline`. |
 | `BasalScheduleSyncIntegrationTests` | `syncBasalRateSchedule` from a pump with no profile (host schedule of 0, 1, 2, 16 and 17 entries) and from a two-segment profile (1, 2 and 3 entries): the profile the pump ends up holding, `CreateIDPRequest` only when it had none, and nothing written for an empty or 17-entry schedule. `enactTempBasal` is refused, with no `SetTempRateRequest` reaching the pump, until a sync first succeeds, including after setup refuses a 17-entry schedule (#443); on a pump holding a different profile the refusal starts an update that writes the schedule, and the next temp basal goes out. |
-| `DeliveryLimitIntegrationTests` | `syncDeliveryLimits` writes both limits and the pump reads them back on its `globalPumpSettings` event; a bolus above the synced max never reaches the pump; one above the pump's own max is refused there and reported nowhere; a temp basal is refused while an app bolus runs; Control-IQ turned on at the pump blocks automatic boluses and temp basals but not a manual bolus; a refused max-bolus write after an accepted max-basal write fails the sync and leaves the driver on the pump's max bolus. |
+| `DeliveryLimitIntegrationTests` | `syncDeliveryLimits` writes both limits and the pump reads them back on its `globalPumpSettings` event; a bolus above the synced max never reaches the pump; one above the pump's own max is refused there and reported nowhere; a temp basal is refused while an app bolus runs; a second bolus is refused, with nothing sent to the pump, while one the app started is being initiated or delivering, past its estimated end too while the pump still delivers it, and goes out once that one is cancelled or, after a relaunch, once the pump says it finished (#504); Control-IQ turned on at the pump blocks automatic boluses and temp basals but not a manual bolus; a refused max-bolus write after an accepted max-basal write fails the sync and leaves the driver on the pump's max bolus. |
 | `HistoryBackfillIntegrationTests` | History backfill over logs thousands of records long, measured from the pump's request log: with the flag off no `HistoryLog*` request is ever sent; a pump first seen with two days of history has none of it read or reported; after a relaunch the walk re-reads the seven-hour lookback in 255-record slices across more than one tick, and stops within a slice of it; a bolus during the walk waits for the slice in flight at most; a record lost from a stream is asked for again in the same fetch; a relaunch reports no history bolus twice; an erased log is read from its new start. |
 | `OnboardingIntegrationTests` | `applyOnboardingSettings` on a freshly paired pump with no profile and a clock an hour fast: limits, basal profile, sounds and clock reach the pump in that order and the pump holds them afterwards. A refused profile or max-basal write fails setup, and with no profile written a temp basal is refused (#443); a refused clock write does not fail setup and leaves the time-sync warning showing. Sounds chosen before pairing survive a pump-globals read triggered before they are written. |
 | `Conformance/BasalScheduleChangeTests` | The pump's rate against the app's schedule: a profile off the schedule is written over after the first reading that sees it; a rate off a profile that already matches leaves the update open until it outlasts `basalProfileUpdateTimeout` and fails, refusing temp basals with `failedUpdatePumpProfile`, then ends once the pump runs the schedule again; never while suspended. Under Control-IQ the pump's profile, rather than the rate it runs, is checked and written over. A zero-rate profile is written over by the next sync. A schedule change that alters the rate in force stops a running temp basal after the profile write and restarts the scheduled basal at the new rate, and Loop ends the temp basal at the stop (Trio marked for #329). A `profileChange` event runs the check without a sync. |
@@ -405,13 +405,19 @@ A manual `workflow_dispatch` and a re-run always run, and a plan step that canno
 
 ## Known emulator gaps
 
-None open. One behaviour is opt-in: faketandem runs the pump's 5-minute basal cycle, and follows
+- **A bolus permission is granted while a bolus runs** (the `TODO` in faketandem's
+  `BolusPermissionHandler`), and the `InitiateBolusRequest` that follows replaces the running
+  bolus. A pump refuses the permission (#504). No test is bent by it: the driver never asks while
+  a bolus it started runs, but if that broke, `DeliveryLimitIntegrationTests` L8–L11 would show a
+  second bolus replacing the first rather than the pump's refusal.
+
+One behaviour is opt-in: faketandem runs the pump's 5-minute basal cycle, and follows
 profile segment boundaries, only with `basal_cycle_enabled` (faketandem README "Basal cycle").
 Conformance group H (`BasalHistoryConformanceTests`) turns it on and `FaketandemHarness.reset()`
 turns it off; every other scenario runs with basal delivered continuously and no 279s, and stages
 the rate in force with `basal_rate`.
 
-Everything the harness found has been fixed in faketandem. What was fixed, because the
+Everything else the harness found has been fixed in faketandem. What was fixed, because the
 shape of it explains what the harness is for:
 
 - **A driver-commanded temp-rate stop wrote no `TempRateCompleted` record.** The handler

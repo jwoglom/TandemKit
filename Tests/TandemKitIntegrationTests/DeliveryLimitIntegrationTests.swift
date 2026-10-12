@@ -258,4 +258,119 @@ final class DeliveryLimitIntegrationTests: ConformanceTestCase {
         XCTAssertFalse(response.isStatusOK)
         XCTAssertFalse(try harness.client.snapshot().basal.tempActive)
     }
+
+    // MARK: - L8
+
+    /// A host's automatic bolus enacted while a manual one is still being initiated (#504).
+    func testABolusEnactedWhileAnotherIsBeingInitiatedNeverReachesThePump() throws {
+        let driver = try startPairedDriver()
+        // Held so the automatic bolus is enacted while the manual one's command job runs.
+        var hold = FaketandemFaultSpec(.delayResponse, message: "BolusPermissionRequest")
+        hold.delayMilliseconds = 2000
+        XCTAssertNotNil(try harness.client.armFault(hold))
+        let mark = try logMark()
+        let batchesBefore = allPumpEventBatches.count
+
+        let manual = ResultBox<PumpManagerError?>()
+        driver.manager.enactBolus(units: 1, activationType: .manualNoRecommendation) { manual.set($0) }
+        try IntegrationWait.until("the pump to be asked to permit the manual bolus", timeout: 30) {
+            try requestsSince(mark).contains("BolusPermissionRequest")
+        }
+        let automatic = ResultBox<PumpManagerError?>()
+        driver.manager.enactBolus(units: 0.5, activationType: .automatic) { automatic.set($0) }
+
+        XCTAssertNil(try manual.wait("manual enactBolus completion", timeout: commandTimeout))
+        let error = try automatic.wait("automatic enactBolus completion", timeout: commandTimeout)
+        drainDelegate()
+
+        XCTAssertEqual(validationError(error), .bolusIsRunning, "\(String(describing: error))")
+        let sent = try requestsSince(mark)
+        XCTAssertEqual(sent.filter { $0 == "BolusPermissionRequest" }.count, 1, "\(sent)")
+        XCTAssertEqual(sent.filter { $0 == "InitiateBolusRequest" }.count, 1, "\(sent)")
+        let pumpBolus = try harness.client.snapshot().bolus
+        XCTAssertTrue(pumpBolus.active)
+        XCTAssertEqual(pumpBolus.unitsTotal, 1)
+        XCTAssertEqual(pumpBolus.bolusId, driver.manager.state.bolusDose?.bolusId)
+        let reported = eventsSince(batchesBefore).filter { $0.dose?.type == .bolus }
+        XCTAssertEqual(Set(reported.map(\.raw)).count, 1, "\(reported)")
+        XCTAssertEqual(Set(reported.compactMap(\.dose?.programmedUnits)), [1], "\(reported)")
+        let (loop, trio) = feedOracles()
+        XCTAssertEqual(loop.doses.filter { $0.dose.type == .bolus }.count, 1)
+        XCTAssertEqual(trio.boluses.count, 1)
+    }
+
+    // MARK: - L9
+
+    func testABolusIsRefusedWhileAnotherDeliversAndGoesOutOnceThatOneIsCancelled() throws {
+        let driver = try startPairedDriver()
+        XCTAssertNil(try enactBolus(units: 1))
+        try clock.advanceBoth(seconds: 10, ticks: 2)
+        XCTAssertTrue(try harness.client.snapshot().bolus.active)
+        let mark = try logMark()
+
+        let error = try enactBolus(units: 0.5, activationType: .automatic)
+
+        XCTAssertEqual(validationError(error), .bolusIsRunning, "\(String(describing: error))")
+        XCTAssertFalse(try requestsSince(mark).contains("BolusPermissionRequest"))
+
+        guard case .success = try cancelBolus() else {
+            return XCTFail("the pump must stop the first bolus")
+        }
+        XCTAssertFalse(try harness.client.snapshot().bolus.active)
+        XCTAssertEqual(driver.manager.status.bolusState, .noBolus)
+
+        XCTAssertNil(try enactBolus(units: 0.5, activationType: .automatic))
+        let pumpBolus = try harness.client.snapshot().bolus
+        XCTAssertTrue(pumpBolus.active)
+        XCTAssertEqual(pumpBolus.unitsTotal, 0.5)
+    }
+
+    // MARK: - L10
+
+    /// The app is not running while the pump finishes the bolus, so the relaunched driver still
+    /// holds it as running.
+    func testPastItsEstimatedEndABolusThatFinishedOutOfContactDoesNotHoldUpTheNext() throws {
+        let driver = try startPairedDriver()
+        let batchesBefore = allPumpEventBatches.count
+        XCTAssertNil(try enactBolus(units: 1))
+        let firstBolusId = try XCTUnwrap(driver.manager.state.bolusDose?.bolusId)
+        let firstRaw = try XCTUnwrap(eventsSince(batchesBefore).first { $0.dose?.type == .bolus }?.raw)
+        let persisted = driver.manager.state.rawValue
+        try shutDownDriver()
+        try advanceUntilBolusFinishes(bolusId: firstBolusId)
+        try clock.advanceBoth(seconds: driver.manager.estimatedDuration(toBolus: 1) + .minutes(2))
+        let mark = try logMark()
+        startDriver(state: TandemPumpManagerState(rawValue: persisted))
+
+        XCTAssertNil(try enactBolus(units: 0.5, activationType: .automatic))
+
+        let sent = try requestsSince(mark)
+        let statusRead = try XCTUnwrap(sent.firstIndex(of: "CurrentBolusStatusRequest"), "\(sent)")
+        let permission = try XCTUnwrap(sent.firstIndex(of: "BolusPermissionRequest"), "\(sent)")
+        XCTAssertLessThan(statusRead, permission, "the pump is asked whether the first bolus finished: \(sent)")
+        let snapshot = try harness.client.snapshot()
+        XCTAssertTrue(snapshot.bolus.active)
+        XCTAssertEqual(snapshot.bolus.unitsTotal, 0.5)
+        XCTAssertEqual(snapshot.lastBolus?.bolusId, firstBolusId)
+        let finalized = try syncUntilFinalized(raw: firstRaw)
+        XCTAssertEqual(finalized.dose?.deliveredUnits, 1, "the first bolus still reaches the host")
+    }
+
+    // MARK: - L11
+
+    func testPastItsEstimatedEndABolusThePumpStillDeliversHoldsUpTheNext() throws {
+        let driver = try startPairedDriver()
+        XCTAssertNil(try enactBolus(units: 1))
+        try harness.client.stallBolus()
+        try clock.advanceBoth(seconds: driver.manager.estimatedDuration(toBolus: 1) + .minutes(2))
+        XCTAssertTrue(try harness.client.snapshot().bolus.active)
+        let mark = try logMark()
+
+        let error = try enactBolus(units: 0.5, activationType: .automatic)
+
+        XCTAssertEqual(validationError(error), .bolusIsRunning, "\(String(describing: error))")
+        let sent = try requestsSince(mark)
+        XCTAssertTrue(sent.contains("CurrentBolusStatusRequest"), "\(sent)")
+        XCTAssertFalse(sent.contains("BolusPermissionRequest"), "\(sent)")
+    }
 }
