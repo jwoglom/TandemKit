@@ -296,8 +296,8 @@ Nothing in Trio changes for it:
   no entitlements and Trio stops when the keychain refuses its first write; `CI=true` to skip its
   SwiftFormat and Crashlytics phases; bundle id `org.nightscout.$TRIO_TEAM.trio`;
   `-enableThreadSanitizer NO`, see below) and the test bundle.
-- `scripts/trio-test.sh test` starts faketandem and `scripts/trio-launcher.py`, and hands the
-  launcher's address to the bundle. The tests run in the simulator and cannot reach `simctl`, so
+- `scripts/trio-test.sh test` starts faketandem and `scripts/app-launcher.py --host trio`, and hands
+  the launcher's address to the bundle. The tests run in the simulator and cannot reach `simctl`, so
   before each test `TrioTestCase` asks the launcher to install Trio anew (`/install`) and launch it
   (`/launch`, with any launch arguments), and a test can stop and start it again on the same data
   and arguments (`/relaunch`). The launcher seeds the data container with what a set-up install
@@ -339,11 +339,71 @@ limits reach the pump; an app suspend that stops a temp and its resume, and a su
 on the pump; a basal profile edit while a temp runs; a cartridge and site change; pairing on the
 pump's code with Trio's settings applied; and Trio's closed loop.
 
-`trio.log` (the simulator's log stream, every launch) and `trio-launcher.log` land in `LOG_DIR`, and
-each test's Trio `Documents/logs` and store in `LOG_DIR/<test>`. A failed test also leaves
+`trio.log` (the simulator's log stream, every launch) and `app-launcher.log` land in `LOG_DIR`, and
+each test's Trio `Documents/logs`, TandemKit log and store in `LOG_DIR/<test>`. A failed test also leaves
 `trio-sample.txt` there, a few seconds of Trio's stacks that the launcher takes with `sample` before
 stopping it, since a Trio that stops answering logs nothing about why. The `trio` job in
 `.github/workflows/macos.yml` runs it on the self-hosted runners.
+
+## Loop in the simulator
+
+`LoopIntegrationTests` run Loop the same way, built from `LoopKit/LoopWorkspace`
+`feat/tandem-closed-beta` with this TandemKit as its `TandemKitPlugin` and `VirtualPump.xcconfig`
+applied to the whole workspace. They cover what Trio cannot: upstream LoopKit, the plugin build, and
+LoopKit's `DoseStore`, the store `LoopDoseStoreOracle` models, so they check the oracle against the
+real thing as well as the driver against the oracle.
+
+- `scripts/loop-test.sh build` builds the `LoopWorkspace` scheme signed ad hoc with no team, as Trio
+  is. Loop derives its bundle id and app group from the team, so the script sets
+  `MAIN_APP_BUNDLE_IDENTIFIER` to `com.$LOOP_TEAM.loopkit.Loop` (app group
+  `group.com.$LOOP_TEAM.loopkit.LoopGroup`).
+- `scripts/loop-test.sh test` runs `scripts/app-launcher.py --host loop`. Loop keeps its store
+  (`com.loopkit.LoopKit/Model.sqlite`) and its settings and onboarding state (the UserDefaults suite
+  named by `AppGroupIdentifier`) in its app group container, which the simulator keeps across
+  reinstalls. On each install the launcher empties it, keeping the container's metadata, writes the
+  suite, and restarts the simulator's `cfprefsd`, which would otherwise answer from memory. It seeds
+  `Documents/PumpManagerState.plist` with an unpaired Tandem pump and sets
+  `com.loopkit.Loop.OnboardingManager.IsComplete`; the test adds Loop's therapy settings as the legacy
+  keys its `SettingsManager` migrates at launch (`LoopTestCase.groupDefaults()`), closed loop off
+  unless a scenario turns it on.
+- Loop asks for notification and Health access when it completes onboarding, and the prompts wait
+  for a tap no test makes. Only the home screen waits behind them: Loop creates its pump manager,
+  `DoseStore` and loop before onboarding, so the control channel, the store and Loop's own loop run.
+- `assertLoopStoredWhatTheOracleExpects` reads both of `DoseStore`'s tables read-only in place
+  (`LoopStore`): every `PumpEvent` row, and every `CachedInsulinDeliveryObject`, live or soft-deleted,
+  row for row against `LoopDoseStoreOracle` fed the same batches. TandemKit records no basal profile
+  starts, so `DoseStore` fills each gap before a basal dose with Loop's schedule
+  (`BasalRateSchedule …` identifiers). The oracle models the fill when given the schedule
+  (`basalSchedule:`), since it moves `lastImmutableBasalEndDate`. A fill's first piece starts a day
+  before the save, on Loop's clock where the oracle has the driver's, so it is compared to a minute;
+  no piece may overlap a basal dose the driver reported.
+
+Journeys covered, each checked against the oracle: an app bolus, an automatic one, one cancelled
+part-way, one running across a relaunch of Loop, one through a dropped link, and one programmed on the
+pump; a temp basal and its cancel, one replaced by another, one above Loop's maximum basal rate (Loop
+counts what the pump ran, where Trio drops it), and one across a relaunch; an app suspend that stops a
+temp and its resume, and a suspend and resume on the pump; a basal profile edit while a temp runs; a
+cartridge and site change; pairing on the pump's code with Loop's settings applied; and Loop's own
+closed loop under each dosing strategy, on its CGM simulator (`MockCGMManager`, restored from
+`Documents/CGMManagerState.plist`, held at 250 mg/dL with a reading a minute): a temp basal with
+temp-basal-only dosing, and an automatic bolus with automatic-bolus dosing. Loop does not sync its
+delivery limits to the pump at launch, as Trio does. A scenario that resumes waits a second after the
+suspend, as its Trio twin does, for Loop's own reason: the driver dates a resume at least a second
+after its suspend, ahead of Loop's clock inside that second, and `DoseStore` caches no finished dose
+that ends ahead of its clock, so a suspend resumed sooner stays open in `CachedInsulinDeliveryObject`
+until the next batch that is not empty. The other waits in Trio's scenarios are for its own
+same-second ordering, which Loop does not have.
+
+`loop.log`, `app-launcher.log` and each test's TandemKit log and Loop store land in `LOG_DIR` as for
+Trio, with `loop-sample.txt` for a failed test. The `loop` job in `.github/workflows/macos.yml` runs it
+on the self-hosted runners.
+
+The first `loop` job confirmed what was written from Loop's and LoopKit's source alone: Loop
+restoring the seeded pump manager, CGM and settings; the app group suite and the `cfprefsd` restart;
+ad hoc signing with no team giving Loop its app group; and the oracle's fill matching `DoseStore`'s.
+It found the oracle keeping a basal with no duration, the driver's scheduled-basal marker before a
+suspend, where `DoseStore` makes no `CachedInsulinDeliveryObject` (`HKQuantitySample(dose:)` is nil,
+so `addDoseEntries` skips it), and the suspend scenarios missing the second's wait above.
 
 ## What the harness found
 

@@ -3,7 +3,7 @@
 # against faketandem.
 #
 # Builds Trio from a checkout whose TandemKit is this revision (CI's checkout-trio action makes
-# one), then starts faketandem and scripts/trio-launcher.py, which installs Trio fresh for each
+# one), then starts faketandem and scripts/app-launcher.py, which installs Trio fresh for each
 # test, seeded to start set up with an unpaired Tandem pump, and launches it with faketandem's
 # address and a control-channel port (VirtualPumpControl). TrioIntegrationTests drive the driver
 # inside Trio through that channel and read what Trio stored from its data container. Logs land in
@@ -97,7 +97,7 @@ cleanup() {
   fi
   stop_faketandem
   grep -h -E 'Fatal error|Terminating app|EXC_[A-Z]+' "$LOG_DIR/trio.log" 2>/dev/null | tail -n 5 | sed 's/^/Trio stopped: /' >&2 || true
-  echo "Trio log: $LOG_DIR/trio.log; launcher log: $LOG_DIR/trio-launcher.log"
+  echo "Trio log: $LOG_DIR/trio.log; launcher log: $LOG_DIR/app-launcher.log"
   echo "test log: $TEST_LOG"
 }
 trap cleanup EXIT
@@ -109,17 +109,17 @@ xcrun simctl spawn "$UDID" log stream --style compact --level debug \
   > "$LOG_DIR/trio.log" 2>&1 &
 LOG_STREAM_PID=$!
 
-port_file="$LOG_DIR/trio-launcher.port"
+port_file="$LOG_DIR/app-launcher.port"
 rm -f "$port_file"
-python3 "$ROOT/scripts/trio-launcher.py" --udid "$UDID" --app "$TRIO_APP" --bundle-id "$BUNDLE_ID" \
-  --gatt "$GATT_ADDR" --log-dir "$LOG_DIR" --port-file "$port_file" > "$LOG_DIR/trio-launcher.log" 2>&1 &
+python3 "$ROOT/scripts/app-launcher.py" --host trio --udid "$UDID" --app "$TRIO_APP" \
+  --gatt "$GATT_ADDR" --log-dir "$LOG_DIR" --port-file "$port_file" > "$LOG_DIR/app-launcher.log" 2>&1 &
 LAUNCHER_PID=$!
 for _ in $(seq 1 100); do
   [[ -s "$port_file" ]] && break
-  kill -0 "$LAUNCHER_PID" 2>/dev/null || { cat "$LOG_DIR/trio-launcher.log" >&2; exit 1; }
+  kill -0 "$LAUNCHER_PID" 2>/dev/null || { cat "$LOG_DIR/app-launcher.log" >&2; exit 1; }
   sleep 0.1
 done
-[[ -s "$port_file" ]] || { echo "trio-launcher.py never listened" >&2; exit 1; }
+[[ -s "$port_file" ]] || { echo "app-launcher.py never listened" >&2; exit 1; }
 
 # xcodebuild strips the TEST_RUNNER_ prefix and hands the rest to the test process.
 export TEST_RUNNER_FAKETANDEM_GATT="$GATT_ADDR"

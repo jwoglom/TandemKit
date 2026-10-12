@@ -1,4 +1,5 @@
 import Foundation
+import HealthKit
 import LoopKit
 @testable import TandemKit
 import XCTest
@@ -14,15 +15,20 @@ import XCTest
 ///
 /// The file references below are to Trio's LoopKit fork, the one TandemKit links:
 /// `LoopKit/LoopKit/InsulinKit/DoseStore.swift` (DS), `InsulinDeliveryStore.swift` (IDS),
-/// `CachedInsulinDeliveryObject+CoreDataClass.swift` (CIDO), `InsulinMath.swift` (IM),
-/// `LoopKit/LoopKit/Persistence/Model.xcdatamodeld/Model.xcdatamodel/contents` (Model) and
-/// `PersistenceController.swift` (PC), in the Trio workspace's `LoopKit` submodule when written.
+/// `CachedInsulinDeliveryObject+CoreDataClass.swift` (CIDO), `HKQuantitySample+InsulinKit.swift` (HKQS),
+/// `InsulinMath.swift` (IM), `LoopKit/LoopKit/Persistence/Model.xcdatamodeld/Model.xcdatamodel/contents`
+/// (Model) and `PersistenceController.swift` (PC), in the Trio workspace's `LoopKit` submodule when
+/// written. Upstream LoopKit, which Loop builds, has the same code in each.
 ///
 /// What is deliberately not modelled, and why:
-/// - The basal-schedule overlay (DS:999 `overlayBasalSchedule`). It splits basal doses at schedule
-///   boundaries; a conformance test cares whether a dose exists once with the right identity and
-///   amounts, which the overlay does not change for boluses and temp basals.
+/// - The basal-schedule overlay (DS:992-999), unless `basalSchedule` is given. For a pump that does
+///   not record basal profile starts, TandemKit among them, DoseStore fills every gap between basal
+///   doses with the schedule's rate. Those entries move `lastImmutableBasalEndDate`, so Loop in the
+///   simulator needs them; the conformance groups leave them out.
 /// - The cache window purge (DS:714). Tests run over minutes, not days.
+/// - IDS skipping a temp basal with no duration or a 0 U bolus, as it does a basal (HKQS:56-77). On a
+///   conformance run's manual clock a temp can end where it started, and `PumpTimeline` wants a dose
+///   for it, as for group B's 0 U bolus.
 /// - Core Data itself. The two uniqueness constraints that matter are modelled explicitly (see
 ///   `insertPumpEventRow` and `insertCachedDose`) because they decide whether a re-report updates or
 ///   is dropped.
@@ -64,6 +70,8 @@ final class LoopDoseStoreOracle: DoseOracle {
     let cacheLength: TimeInterval
     /// Duration of the linear-decay IOB curve in `iob(at:)`.
     let insulinActionDuration: TimeInterval
+    /// The host's basal schedule, for the overlay.
+    let basalSchedule: BasalRateSchedule?
 
     private(set) var pumpEvents: [PumpEventRow] = []
     private(set) var cachedDoses: [StoredDose] = []
@@ -79,11 +87,13 @@ final class LoopDoseStoreOracle: DoseOracle {
     init(
         provenanceIdentifier: String = "org.nightscoutfoundation.tandemkit.conformance",
         cacheLength: TimeInterval = .hours(24),
-        insulinActionDuration: TimeInterval = .hours(5)
+        insulinActionDuration: TimeInterval = .hours(5),
+        basalSchedule: BasalRateSchedule? = nil
     ) {
         self.provenanceIdentifier = provenanceIdentifier
         self.cacheLength = cacheLength
         self.insulinActionDuration = insulinActionDuration
+        self.basalSchedule = basalSchedule
     }
 
     // MARK: - Views
@@ -199,8 +209,95 @@ final class LoopDoseStoreOracle: DoseOracle {
         // DS:935 — guard doses.count > 0.
         guard !doses.isEmpty else { return }
 
-        // DS:999 basal overlay: not modelled. DS:944 —
-        addDoseEntries(doses, resolveMutable: true, now: now)
+        // DS:992-999, then DS:944 —
+        let overlaid = basalSchedule.map { Self.overlaying(doses, with: $0, startingAt: start) } ?? doses
+        addDoseEntries(overlaid, resolveMutable: true, now: now)
+    }
+
+    /// IM:888-951 `overlayBasalSchedule(_:startingAt:insertingBasalEntries: true)`: the schedule's rate in
+    /// each gap before a basal, temp basal or suspend, from `start`, each piece keyed on its own dates.
+    static func overlaying(_ doses: [DoseEntry], with schedule: BasalRateSchedule, startingAt start: Date) -> [DoseEntry] {
+        let formatter = ISO8601DateFormatter()
+        let unitsPerHour = HKUnit.internationalUnit().unitDivided(by: .hour())
+        var entries: [DoseEntry] = []
+        var lastBasal = DoseEntry(resumeDate: start, automatic: true)
+        for dose in doses {
+            switch dose.type {
+            case .basal, .tempBasal, .suspend:
+                for scheduled in scheduledRates(schedule, from: lastBasal.endDate, to: dose.startDate) {
+                    let pieceStart = max(lastBasal.endDate, scheduled.start)
+                    let pieceEnd = min(dose.startDate, scheduled.end)
+                    guard pieceEnd.timeIntervalSince(pieceStart) > .ulpOfOne else { continue }
+                    entries.append(DoseEntry(
+                        type: .basal,
+                        startDate: pieceStart,
+                        endDate: pieceEnd,
+                        value: scheduled.rate,
+                        unit: .unitsPerHour,
+                        syncIdentifier: "BasalRateSchedule \(formatter.string(from: pieceStart)) \(formatter.string(from: pieceEnd))",
+                        scheduledBasalRate: HKQuantity(unit: unitsPerHour, doubleValue: scheduled.rate),
+                        insulinType: lastBasal.insulinType,
+                        automatic: lastBasal.automatic
+                    ))
+                }
+                lastBasal = dose
+                entries.append(dose)
+            case .bolus:
+                entries.append(dose)
+            case .resume:
+                break
+            }
+        }
+        return entries
+    }
+
+    /// DailyValueSchedule.swift:126-187 `between(start:end:)`: every item that overlaps `start...end`, on
+    /// the dates it covers in the schedule's own time zone.
+    static func scheduledRates(
+        _ schedule: BasalRateSchedule,
+        from startDate: Date,
+        to endDate: Date
+    ) -> [(start: Date, end: Date, rate: Double)] {
+        let items = schedule.items
+        guard startDate <= endDate, endDate.timeIntervalSince(startDate).isFinite, let first = items.first else {
+            return []
+        }
+        let repeatInterval = TimeInterval.hours(24)
+        let referenceTime = first.startTime
+        let maxTime = referenceTime + repeatInterval
+        func offset(of date: Date) -> TimeInterval {
+            let interval = date.timeIntervalSinceReferenceDate + TimeInterval(schedule.timeZone.secondsFromGMT(for: date))
+            return (interval - referenceTime).truncatingRemainder(dividingBy: repeatInterval) + referenceTime
+        }
+        func within(_ start: Date, from startOffset: TimeInterval, to endOffset: TimeInterval) -> [(start: Date, end: Date, rate: Double)] {
+            var startIndex = 0
+            var endIndex = items.count
+            for (index, item) in items.enumerated() {
+                if startOffset >= item.startTime {
+                    startIndex = index
+                }
+                if endOffset < item.startTime {
+                    endIndex = index
+                    break
+                }
+            }
+            let reference = start.addingTimeInterval(-startOffset)
+            return (startIndex ..< endIndex).map { index in
+                let endTime = index + 1 < items.count ? items[index + 1].startTime : maxTime
+                return (reference.addingTimeInterval(items[index].startTime), reference.addingTimeInterval(endTime), items[index].value)
+            }
+        }
+        var values: [(start: Date, end: Date, rate: Double)] = []
+        var start = startDate
+        while true {
+            let startOffset = offset(of: start)
+            let endOffset = startOffset + endDate.timeIntervalSince(start)
+            guard endOffset > maxTime else {
+                return values + within(start, from: startOffset, to: endOffset)
+            }
+            values += within(start, from: startOffset, to: maxTime)
+            start = start.addingTimeInterval(maxTime - startOffset)
+        }
     }
 
     /// `Array<DoseEntry>.reconciled()` (IM:396-522), applied to the pump-event doses in chronological
@@ -382,6 +479,9 @@ final class LoopDoseStoreOracle: DoseOracle {
         for entry in entries {
             // IDS:438-441 — entries without a syncIdentifier are ignored.
             guard let syncIdentifier = entry.syncIdentifier else { continue }
+            // IDS:443-452 — nor is one that makes no HealthKit sample: a basal with no duration (HKQS:56-60),
+            // such as the driver's scheduled-basal marker before a suspend.
+            if entry.type == .basal, entry.endDate.timeIntervalSince(entry.startDate) <= .ulpOfOne { continue }
 
             // IDS:455-459 — a mutable object with the same provenance + syncIdentifier is updated,
             // which also un-deletes it (CIDO:245 `deletedAt = nil`).

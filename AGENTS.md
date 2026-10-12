@@ -60,9 +60,12 @@ the driver's own screens make (pair, onboarding settings, sync, bolus and cancel
 temp basal, suspend, resume, cartridge and site changes, feature flags), and logs every batch it
 hands the host's delegate with the host's completion. `TrioIntegrationTests` (macOS only;
 `scripts/trio-test.sh`, the `trio` job) use it to run Trio itself in the simulator, a new install
-per test from `scripts/trio-launcher.py`, through each dosing journey and Trio's own closed loop,
+per test from `scripts/app-launcher.py`, through each dosing journey and Trio's own closed loop,
 and compare its stored pump history with `TrioDoseStoreOracle`
 ([docs/integration-harness.md](docs/integration-harness.md#trio-in-the-simulator)).
+`LoopIntegrationTests` (`scripts/loop-test.sh`, the `loop` job) do the same with Loop, built from
+LoopWorkspace with TandemKit as its plugin, and compare both of LoopKit `DoseStore`'s tables with
+`LoopDoseStoreOracle` ([docs/integration-harness.md](docs/integration-harness.md#loop-in-the-simulator)).
 
 Coverage that was dropped along with the code it tested (`PumpComm` fault taxonomy and retry
 policy, the `TandemBLE` packet layer, `HistoryDeduplicator`/`HistoryReconciler`/
