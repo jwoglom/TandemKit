@@ -475,6 +475,8 @@ struct FaketandemFaultSpec {
         case rejectQuickPair = "reject_quick_pair"
         case radioOff = "radio_off"
         case radioOn = "radio_on"
+        /// Scoped by `characteristic` and `everyNth` only: a fragment carries no message identity.
+        case dropFragment = "drop_fragment"
     }
 
     var kind: Kind
@@ -488,6 +490,8 @@ struct FaketandemFaultSpec {
     /// `request` or `partial_response`, for `.disconnect`.
     var after: String?
     var fragmentsSent: Int?
+    /// For `.dropFragment`: every Nth fragment on the characteristic, so 1 drops them all.
+    var everyNth: Int?
 
     init(_ kind: Kind, message: String? = nil) {
         self.kind = kind
@@ -505,6 +509,7 @@ struct FaketandemFaultSpec {
         if let errorCode { body["error_code"] = errorCode }
         if let after { body["after"] = after }
         if let fragmentsSent { body["fragments_sent"] = fragmentsSent }
+        if let everyNth { body["every_nth"] = everyNth }
         return body
     }
 }

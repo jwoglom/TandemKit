@@ -285,8 +285,9 @@ the longest real command, because a false failure on a bolus could prompt the ho
 
 `handleQualifyingEvents` maps each event to status fetches through
 `QualifyingEventFetch.fetches(for:context:)`. That function is derived from
-`QualifyingEvent.groupSuggestedHandlers`, pumpX2's suggested-handler table, and adds two things:
-a basal read on suspend/resume and on profile changes. Requests the driver has no consumer for
+`QualifyingEvent.groupSuggestedHandlers`, pumpX2's suggested-handler table, and adds a basal read
+on suspend/resume, on alarms and malfunctions (which stop delivery whether or not the pump also
+raises a suspend event) and on profile changes. Requests the driver has no consumer for
 are not sent. A `.bolusChange` event also starts a history backfill tick, so a bolus given from the
 pump screen is found without waiting for the next sync.
 

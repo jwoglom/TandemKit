@@ -179,10 +179,12 @@ so `bg`, `cgmChange`, `basalIQ`, `basalIQStatus`, `controlIQSleep`, `extendedBol
 `pumpingStatus` and `bolusPermissionRevoked` currently fetch nothing.
 Control-IQ support in the context is whether the pump has answered a Control-IQ info read
 (`controlIQEnabled != nil`), so a pump with Control-IQ off is still asked for IOB under the
-Control-IQ opcode. Two deliberate additions to pumpX2's table: `pumpSuspend`/`pumpResume` refresh
-the basal status, since that is what emits the suspend/resume dose to LoopKit, and
-`profileChange`/`activeProfileSegmentChange` refresh it so the basal rate check runs on a profile
-edit instead of at the next sync.
+Control-IQ opcode. Three deliberate additions to pumpX2's table: `pumpSuspend`/`pumpResume` refresh
+the basal status, since that is what emits the suspend/resume dose to LoopKit; `alarm`/`malfunction`
+refresh it, so a stop the pump makes on an occlusion, empty cartridge, auto-off or malfunction is
+seen at its alarm, not at the next sync, whether or not the pump also raises `pumpSuspend`
+(unconfirmed on hardware); and `profileChange`/`activeProfileSegmentChange` refresh it so the basal
+rate check runs on a profile edit instead of at the next sync.
 
 ### Pairing
 - Only `pairPump` starts a first pairing. `connectIfNeeded` refuses a pump with no derived secret: the

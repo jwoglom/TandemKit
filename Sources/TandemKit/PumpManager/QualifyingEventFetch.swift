@@ -87,6 +87,12 @@ enum QualifyingEventFetch: CaseIterable {
             needed.insert(.basalStatus)
         }
 
+        // Also not in PumpX2's table: an occlusion, empty cartridge, auto-off or malfunction stops
+        // delivery, and whether the pump raises pumpSuspend with it is unconfirmed on hardware.
+        if !events.isDisjoint(with: [.alarm, .malfunction]) {
+            needed.insert(.basalStatus)
+        }
+
         // Also not in PumpX2's table: after a profile change on the pump, read basal status now so
         // `verifyDeliveredBasalRate` catches a mismatch without waiting for the next sync.
         if !events.isDisjoint(with: [.profileChange, .activeProfileSegmentChange]) {

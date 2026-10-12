@@ -160,6 +160,19 @@ import XCTest
         }
     }
 
+    func testAlarmsAndMalfunctionsAlsoFetchBasalStatus() {
+        for event in [QualifyingEvent.alarm, .malfunction] {
+            bluetooth = StubPumpBluetooth()
+            XCTAssertTrue(handle([event]).contains("CurrentBasalStatusRequest"), "\(event)")
+        }
+    }
+
+    func testAlertsRemindersAndCGMAlertsDoNotFetchBasalStatus() {
+        for event in [QualifyingEvent.alert, .reminder, .cgmAlert] {
+            XCTAssertEqual(QualifyingEventFetch.fetches(for: [event], context: legacyContext), [.notifications], "\(event)")
+        }
+    }
+
     // MARK: - Deduplication
 
     /// Regression guard: co-firing notification events used to be handled one at a time, so a
@@ -215,14 +228,14 @@ import XCTest
     func testNotificationFetchSurvivesApiVersionFiltering() {
         XCTAssertEqual(
             QualifyingEventFetch.fetches(for: [.alarm], context: legacyContext),
-            [.notifications]
+            [.notifications, .basalStatus]
         )
         XCTAssertEqual(
             QualifyingEventFetch.fetches(
                 for: [.alarm],
                 context: QualifyingEventContext(apiVersion: KnownApiVersion.mobiApiV3_5.value)
             ),
-            [.notifications]
+            [.notifications, .basalStatus]
         )
     }
 
