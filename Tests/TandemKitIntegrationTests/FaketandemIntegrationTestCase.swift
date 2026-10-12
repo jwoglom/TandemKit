@@ -56,10 +56,18 @@ class FaketandemIntegrationTestCase: XCTestCase {
     }
     #endif
 
-    /// Ends the current driver so a second one (a relaunch) can attach to the pump.
+    /// Ends the current driver as the app going away does, so a second one (a relaunch) can attach to
+    /// the pump.
     func shutDownDriver() throws {
         guard let driver else { return }
         try harness.shutDown(driver)
+        self.driver = nil
+    }
+
+    /// The host deletes the pump manager.
+    func deactivateDriver() throws {
+        guard let driver else { return }
+        try harness.deactivate(driver)
         self.driver = nil
     }
 

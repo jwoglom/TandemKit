@@ -576,11 +576,12 @@ final class PumpSideConformanceTests: ConformanceTestCase {
 
     // MARK: - D7
 
-    /// The host deletes the pump manager while a bolus and a temp basal are running. The teardown
-    /// path Loop and Trio call is `prepareForDeactivation`, which is what the harness's shutdown
-    /// drives; the host must be left with finalized (or at least resolved) doses and told it is
-    /// happening. A Tandem pump keeps delivering after the app forgets it, so no `.suspend` is due.
-    func testD7DeactivatingWithLiveDosesResolvesThemAndNotifiesTheHost() throws {
+    /// The host deletes the pump manager while a bolus and a temp basal are running, through the
+    /// `prepareForDeactivation` Loop and Trio call. A Tandem pump keeps delivering both after the app
+    /// forgets it, so no `.suspend` is due: the host is given both finalized as the pump will deliver
+    /// them, before it is told of the deletion. Loop stores a finalized dose only once it has ended, so
+    /// the temp basal is cut at the deletion and what remains of it is a dose of its own.
+    func testD7DeactivatingWithLiveDosesFinalizesThemAndNotifiesTheHost() throws {
         let driver = try startPairedDriver(scheduledRate: Self.profileRate)
         // Slow enough that 2 U is still running minutes later.
         try harness.client.setState(["bolus_rate_units_per_second": 0.005])
@@ -608,52 +609,86 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         let batchesBeforeDeactivation = allPumpEventBatches.count
         let deactivatedAt = clock.now
 
-        // Loop's teardown: prepareForDeactivation (bluetooth.deactivate + notifyDelegateOfDeactivation).
-        try shutDownDriver()
+        try deactivateDriver()
         driver.drainDelegate()
 
         XCTAssertEqual(driver.delegate.willDeactivateCount, 1, "pumpManagerWillDeactivate fires once")
         let journal = driver.delegate.journal
-        XCTAssertTrue(journal.contains { if case .willDeactivate = $0.kind { return true } else { return false } })
+        let willDeactivate = try XCTUnwrap(journal.first { if case .willDeactivate = $0.kind { true } else { false } }?.index)
+        let lastBatch = try XCTUnwrap(journal.last { $0.pumpEventBatch != nil }?.index)
+        XCTAssertLessThan(lastBatch, willDeactivate, "the final batch reaches the host while it still has the pump manager")
 
         // The pump keeps delivering both; the driver must not invent a stop.
         let afterDeactivation = try harness.client.snapshot()
         XCTAssertTrue(afterDeactivation.bolus.active, "a Tandem pump finishes the bolus after the app is gone")
         XCTAssertTrue(afterDeactivation.basal.tempActive, "and runs the temp rate to its end")
         let finalBatches = Array(allPumpEventBatches.dropFirst(batchesBeforeDeactivation))
-        let finalEvents = finalBatches.flatMap(\.events)
-        XCTAssertFalse(finalEvents.contains { $0.type == .suspend }, "no phantom suspend: delivery did not stop: \(finalEvents)")
+        XCTAssertEqual(finalBatches.count, 1, "\(finalBatches)")
+        let finalBatch = try XCTUnwrap(finalBatches.last)
+        XCTAssertTrue(finalBatch.replacePendingEvents, "the final batch is a complete, replacing one")
+        XCTAssertEqual(finalBatch.lastReconciliation, deactivatedAt)
+        XCTAssertFalse(finalBatch.events.contains { $0.type == .suspend }, "no phantom suspend: delivery did not stop: \(finalBatch.events)")
 
-        try expectDefect("jwoglom/TandemKit#350 (G06): prepareForDeactivation tears down the transport without a final batch, so the host's mutable temp basal and bolus rows can never be finalized, reach HealthKit or advance the boundary") {
-            XCTAssertFalse(finalBatches.isEmpty, "a final hasNewPumpEvents before deactivation")
-            XCTAssertEqual(finalBatches.last?.replacePendingEvents, true, "the final batch is a complete, replacing one")
-            let finalTBR = finalEvents.last { $0.raw == tbrRaw }
-            XCTAssertNotNil(finalTBR, "the temp basal is in the final batch")
-            XCTAssertEqual(finalTBR?.dose?.isMutable, false, "finalized")
-            XCTAssertNotNil(finalTBR?.dose?.deliveredUnits)
-            XCTAssertEqual(finalTBR?.dose?.endDate.timeIntervalSince(deactivatedAt) ?? .infinity, 0, accuracy: 2, "at the real end of what the host can vouch for")
-            let finalBolus = finalEvents.last { $0.raw == bolusRaw }
-            XCTAssertNotNil(finalBolus, "the bolus is resolved or marked in the final batch")
-            if let finalTBR { assertFieldSemantics(finalTBR, programmed: nil, automatic: true) }
+        let temps = finalBatch.events.filter { $0.dose?.type == .tempBasal }
+        XCTAssertEqual(temps.count, 2, "what ran so far and the remainder: \(temps)")
+        let ranSoFar = try XCTUnwrap(temps.first { $0.raw == tbrRaw }?.dose)
+        XCTAssertEqual(ranSoFar.endDate.timeIntervalSince(deactivatedAt), 0, accuracy: 1, "at the real end of what the host can vouch for")
+        let remainderEvent = try XCTUnwrap(temps.first { $0.raw != tbrRaw })
+        let remainderRaw = remainderEvent.raw
+        let remainder = try XCTUnwrap(remainderEvent.dose)
+        XCTAssertEqual(remainder.startDate, ranSoFar.endDate)
+        XCTAssertEqual(remainder.endDate.timeIntervalSince(tbrStart), .minutes(30), accuracy: 1, "the pump runs it to its scheduled end")
+        for temp in temps {
+            assertFieldSemantics(temp, programmed: 1.5, automatic: true)
         }
+        let finalBolus = try XCTUnwrap(finalBatch.events.first { $0.raw == bolusRaw })
+        assertFieldSemantics(finalBolus, programmed: bolusUnits, automatic: false)
+        XCTAssertEqual(finalBolus.dose?.deliveredUnits, bolusUnits, "the pump finishes it")
+        XCTAssertLessThanOrEqual(try XCTUnwrap(finalBolus.dose?.endDate), deactivatedAt, "Loop stores a finalized dose only once it has ended")
 
-        // What the host does hold: one identity each, no duplicates, mutable rows that agree with a
-        // pump that is still running both.
+        // What the host holds: one identity each, nothing mutable, the remainder counted by Loop from its
+        // pump event until it has ended.
         let (loop, trio) = feedOracles()
         loop.assertNoDuplicates()
         trio.assertNoDuplicates()
-        let storedTBR = try XCTUnwrap(loop.assertSingleDose(raw: tbrRaw))
-        let storedBolus = try XCTUnwrap(loop.assertSingleDose(raw: bolusRaw))
-        XCTAssertEqual(storedTBR.dose.endDate.timeIntervalSince(tbrStart), .minutes(30), accuracy: 1, "a running TBR ends at its scheduled end")
-        XCTAssertEqual(storedBolus.dose.programmedUnits, bolusUnits)
-        XCTAssertEqual(trio.boluses.count, 1)
-        XCTAssertEqual(trio.tempBasals.count, 1)
+        XCTAssertNotNil(loop.assertPermanent(raw: tbrRaw))
+        XCTAssertNotNil(loop.assertPermanent(raw: bolusRaw))
+        XCTAssertNil(loop.dose(raw: remainderRaw), "stored only once it has ended")
+        let counted = loop.normalizedDoses().filter { $0.type == .tempBasal }.compactMap(\.syncIdentifier)
+        XCTAssertEqual(Set(counted), [tbrRaw.hexadecimalString, remainderRaw.hexadecimalString])
+        XCTAssertEqual(counted.count, 2, "each once: \(counted)")
+        XCTAssertTrue(loop.mutableDoses.isEmpty, "\(loop.mutableDoses.map(LoopDoseStoreOracle.describe))")
+        XCTAssertEqual(trio.boluses.map(\.isMutable), [false])
+        XCTAssertEqual(trio.tempBasals.map(\.isMutable), [false, false])
         for event in eventsSince(batchesBefore) where event.dose != nil {
             XCTAssertEqual(event.dose?.manuallyEntered, false, "pump-delivered doses are not manually entered: \(event)")
             XCTAssertNotNil(event.dose?.insulinType, "insulinType is set: \(event)")
             XCTAssertEqual(event.dose?.syncIdentifier, event.raw.hexadecimalString, "syncIdentifier derives from raw")
         }
-        try timeline().assertMatches(loop)
+
+        // The pump finishes both. Loop stores the remainder at its first save behind a later boundary,
+        // which only the next pump manager gives it.
+        let pumpBolus = try advanceUntilBolusFinishes(bolusId: bolusId)
+        XCTAssertEqual(pumpBolus.deliveredUnits, bolusUnits, accuracy: 0.0005)
+        try clock.advanceBoth(seconds: tbrStart.addingTimeInterval(.minutes(31)).timeIntervalSince(clock.now), ticks: 30)
+        let next = clock.now
+        let nextManagersReport = NewPumpEvent.basal(
+            dose: UnfinalizedDose(basalRate: Self.profileRate, insulinType: .novolog, startDate: next).toDoseEntry(),
+            date: next
+        )
+        loop.addPumpEvents([nextManagersReport], lastReconciliation: next, replacePendingEvents: true, now: next)
+        XCTAssertNotNil(loop.assertPermanent(raw: remainderRaw))
+
+        let timeline = try timeline()
+        let pumpTemp = try XCTUnwrap(timeline.tempRates.first { abs($0.start.timeIntervalSince(tbrStart)) <= 2 }, "\(timeline.tempRates)")
+        XCTAssertEqual(try XCTUnwrap(pumpTemp.end).timeIntervalSince(remainder.endDate), 0, accuracy: 2, "the remainder ends where the pump ended it")
+        let reported = (ranSoFar.deliveredUnits ?? 0) + (remainder.deliveredUnits ?? 0)
+        XCTAssertEqual(reported, try XCTUnwrap(pumpTemp.deliveredUnits), accuracy: 0.002, "the two parts deliver what the pump did")
+        // Matched by start, the pump's one temp rate takes the part that ran so far, and the bolus the
+        // driver dated at its estimate: both ends differ by design, and the remainder is the extra dose.
+        let diff = timeline.diff(against: loop)
+        XCTAssertTrue(diff.missing.isEmpty && diff.duplicated.isEmpty, "\(diff)")
+        XCTAssertEqual(diff.extra.count, 1, "\(diff)")
     }
 
     // MARK: - D8

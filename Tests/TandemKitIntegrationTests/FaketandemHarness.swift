@@ -218,15 +218,30 @@ final class FaketandemHarness {
         )
     }
 
-    /// Stops the driver's auto-reconnect, drops the link and waits for the pump to see it go, so the
-    /// next test's driver is not refused as `busy`.
+    /// The app goes away with the pump still its own, as on a relaunch: stops the driver's
+    /// auto-reconnect, drops the link and waits for the pump to see it go, so the next test's driver is
+    /// not refused as `busy`. The host is told nothing.
     func shutDown(_ driver: Driver, timeout: TimeInterval = 40) throws {
-        let done = ResultBox<Bool>()
-        // prepareForDeactivation writes DisconnectPumpRequest synchronously on the caller's thread.
-        DispatchQueue.global().async {
-            driver.manager.prepareForDeactivation { _ in done.set(true) }
+        try tearDown(timeout: timeout) { done in
+            driver.bluetooth.deactivate()
+            done()
         }
-        _ = try done.wait("driver deactivation", timeout: timeout)
+    }
+
+    /// The host deletes the pump manager: `prepareForDeactivation`, as Loop and Trio call it.
+    func deactivate(_ driver: Driver, timeout: TimeInterval = 40) throws {
+        try tearDown(timeout: timeout) { done in
+            driver.manager.prepareForDeactivation { _ in done() }
+        }
+    }
+
+    private func tearDown(timeout: TimeInterval, _ body: @escaping (@escaping () -> Void) -> Void) throws {
+        let done = ResultBox<Bool>()
+        // Both write DisconnectPumpRequest synchronously on the caller's thread.
+        DispatchQueue.global().async {
+            body { done.set(true) }
+        }
+        _ = try done.wait("driver teardown", timeout: timeout)
         try IntegrationWait.until("emulator to see the driver disconnect", timeout: 10) {
             try !client.snapshot().connection.connected
         }

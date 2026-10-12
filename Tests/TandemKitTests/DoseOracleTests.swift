@@ -222,6 +222,26 @@ final class DoseOracleTests: XCTestCase {
         XCTAssertNotNil(oracle.assertPermanent(raw: first.raw))
     }
 
+    func testAFinalizedDoseThatHasNotEndedIsCountedFromItsPumpEventUntilItIsStored() {
+        let oracle = LoopDoseStoreOracle()
+        let now = t0.addingTimeInterval(.minutes(1))
+        let ended = tempBasal(rate: 1.5, start: t0, duration: .minutes(1), mutable: false)
+        let remainder = tempBasal(rate: 1.5, start: now, duration: .minutes(29), mutable: false)
+        oracle.addPumpEvents([ended, remainder], lastReconciliation: now, replacePendingEvents: true, now: now)
+
+        XCTAssertNotNil(oracle.assertPermanent(raw: ended.raw))
+        XCTAssertNil(oracle.dose(raw: remainder.raw))
+        XCTAssertEqual(oracle.normalizedDoses().compactMap(\.syncIdentifier), [ended.raw.hexadecimalString, remainder.raw.hexadecimalString])
+
+        // A boundary past its end with no save since leaves it uncounted.
+        let afterEnd = t0.addingTimeInterval(.minutes(35))
+        oracle.addPumpEvents([], lastReconciliation: afterEnd, replacePendingEvents: false, now: afterEnd)
+        XCTAssertEqual(oracle.normalizedDoses().compactMap(\.syncIdentifier), [ended.raw.hexadecimalString])
+
+        oracle.syncPumpEventsToInsulinDeliveryStore(now: afterEnd)
+        XCTAssertNotNil(oracle.assertPermanent(raw: remainder.raw))
+    }
+
     func testTempBasalReplacementTrimsThePredecessor() {
         let oracle = LoopDoseStoreOracle()
         let a = tempBasal(rate: 1.0, start: t0, duration: .minutes(30), mutable: true)

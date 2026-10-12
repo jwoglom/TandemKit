@@ -185,7 +185,9 @@ final class LoopDoseStoreOracle: DoseOracle {
 
     // MARK: - DoseStore.syncPumpEventsToInsulinDeliveryStore (DS:911-1002, 1123-1143)
 
-    private func syncPumpEventsToInsulinDeliveryStore(now: Date) {
+    /// Every non-empty `addPumpEvents`, from whichever pump manager, runs it, as does `addDoses`
+    /// (DS:857); a test calls it directly for the host's next one.
+    func syncPumpEventsToInsulinDeliveryStore(now: Date) {
         // DS:912-917 — start at the IDS's last immutable basal end date, but no earlier than 24 h ago.
         let start = max(lastImmutableBasalEndDate, now.addingTimeInterval(-cacheLength))
 
@@ -528,6 +530,21 @@ final class LoopDoseStoreOracle: DoseOracle {
     private func insertCachedDose(_ dose: StoredDose) {
         guard !cachedDoses.contains(where: { $0.syncIdentifier == dose.syncIdentifier }) else { return }
         cachedDoses.append(dose)
+    }
+
+    // MARK: - DoseStore.getNormalizedDoseEntries (DS:1198-1240)
+
+    /// What Loop's IOB reads: the stored doses, then those of `PumpEvent` rows reaching `lastReconciliation`
+    /// (DS:1086-1096) under an identifier not stored (IM:957-972), so a finalized dose counts before it ends
+    /// and can be stored. Reservoir doses (DS:1217) are not modelled.
+    func normalizedDoses(from start: Date = .distantPast) -> [DoseEntry] {
+        let filteredStart = max(lastReconciliation ?? start, start)
+        let pumpEventDoses = Self.reconciled(pumpEvents.compactMap(\.dose).sorted { $0.startDate < $1.startDate })
+            .filter { $0.endDate >= filteredStart }
+        var identifiers = Set<String>()
+        return (doses.map(\.dose) + pumpEventDoses).filter { dose in
+            dose.syncIdentifier.map { identifiers.insert($0).inserted } ?? true
+        }
     }
 
     // MARK: - IOB

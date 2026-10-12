@@ -274,6 +274,9 @@ and a few seconds per pairing.
    `IntegrationWait.value` or `ResultBox` rather than sleeping.
 4. Assert on `driver.delegate` / `driver.manager.state` and on
    `harness.client.snapshot()` / `harness.requestsSeen()`.
+   `shutDownDriver()` ends a driver as the app going away does, for a relaunch: the host is told
+   nothing. `deactivateDriver()` is the host deleting the pump manager (`prepareForDeactivation`),
+   which finalizes every dose the host holds as mutable, so it is no relaunch.
 5. If the assertion fails because of the emulator, do not bend the driver: wrap the
    assertion in a strict `XCTExpectFailure` whose message names the emulator gap, list the
    gap under "Known emulator gaps", and keep the pump-side evidence in the test. Strict is
