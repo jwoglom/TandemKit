@@ -29,6 +29,29 @@ final class PairingIntegrationTests: FaketandemIntegrationTestCase {
         )
     }
 
+    /// Trio syncs its delivery limits as it adopts the manager, so its command can connect the pump with
+    /// the key a re-pair starts from before pairing's own connect runs.
+    func testPairingQueuedBehindACommandThatConnectedRunsOnThatSession() throws {
+        let driver = makeDriver()
+        driver.bluetooth.pairingTimeout = .seconds(15)
+        let scan = try harness.discover(driver)
+        _ = try harness.seedLongTermKey(driver, peripheralId: scan.peripheral.identifier)
+        let command = ResultBox<Error?>()
+        let paired = ResultBox<Error?>()
+
+        driver.bluetooth.ensureConnected { command.set($0) }
+        driver.manager.pairPump(code: FaketandemHarness.pairingCode, peripheral: scan.peripheral) { paired.set($0) }
+
+        XCTAssertNil(try command.wait("the command", timeout: 60))
+        XCTAssertNil(try paired.wait("pairPump completion", timeout: 60), "pairing waited for a connect the live session never answers")
+        XCTAssertTrue(driver.manager.state.isConnected)
+        XCTAssertEqual(
+            try authRequests.map(\.opcode),
+            [Int(Jpake3SessionKeyRequest.props.opCode), Int(Jpake4KeyConfirmationRequest.props.opCode)],
+            "one session, authenticated once"
+        )
+    }
+
     /// testPairingWithTheWrongCodeIsRefused's dropped link, where Linux can run it: a first pairing needs SwiftECC.
     func testARePairingCutOffAtKeyConfirmationFailsAsAnUnansweredRound() throws {
         let driver = makeDriver()

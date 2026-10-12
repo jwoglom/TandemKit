@@ -223,6 +223,14 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
                 completion(PumpCommError.pumpNotConnected)
                 return
             }
+            // A job queued first may have connected a pump that already holds a key; a connect to a
+            // peripheral already connected is never answered, so pairing would wait out its timeout.
+            if self.hasLiveSession, self.peripheral?.identifier == peripheral.identifier {
+                self.logger.info("Pump already connected; pairing uses that session")
+                self.stopScan()
+                completion(nil)
+                return
+            }
             // A dropped link leaves the attempt to the setup, which knows the round it lost: a Mobi
             // refuses a wrong code by dropping the link at key confirmation.
             completion(self.awaitConnect(on: manager, timeout: self.pairingTimeout, endsOnLinkLoss: false) { onConnect in

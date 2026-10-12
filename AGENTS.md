@@ -186,7 +186,8 @@ edit instead of at the next sync.
 - `pairPump`'s connect is a command job, bounded at `pairingTimeout` (120 s). Its setup writes bypass the
   command queue, and a command that connected meanwhile took over its completion, so pairing never ended.
   A command queued during pairing waits, then runs on the session pairing opened or is refused as unpaired.
-  A lost link ends a reconnect's wait at once, but not pairing's, so the setup reports the round it lost:
+  One queued before it can connect a pump that already holds a key (a re-pair), and pairing then completes
+  on that session: a second connect to a connected peripheral is never answered. A lost link ends a reconnect's wait at once, but not pairing's, so the setup reports the round it lost:
   only then does a link dropped at key confirmation reach `pairPump` as `pairingCodeRejected`.
 
 ### Onboarding and the basal schedule
