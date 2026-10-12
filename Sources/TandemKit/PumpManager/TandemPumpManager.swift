@@ -1286,14 +1286,39 @@ public class TandemPumpManager: PumpManager, Pluggable {
         let completion = watchdogged(timeoutResult: PumpCommError.pumpNotConnected as Error?, completion)
         logger.info("Resume Insulin Delivery...")
 
+        resumeAfterReportingDeliveryChanges(completion: completion) { self.sendResumePumping() }
+    }
+
+    /// A stop the pump made out of the driver's hearing has to reach the host first: the resume's
+    /// batch finishes the dose the host holds, and Loop counts no non-bolus dose older than that.
+    private func resumeAfterReportingDeliveryChanges(
+        readingThePump: Bool = true,
+        completion: @escaping (Error?) -> Void,
+        resume: @escaping () -> Error?
+    ) {
         bluetooth.ensureConnected { error in
             if let error {
                 self.logger.error("Failed to connect to pump: \(error.localizedDescription)")
                 completion(error)
                 return
             }
-
-            completion(self.sendResumePumping())
+            guard readingThePump else {
+                completion(resume())
+                return
+            }
+            guard let status = self.bluetooth.write(CurrentBasalStatusRequest()) else {
+                self.logger.warning("No basal status before resuming; resuming on the delivery last reported")
+                completion(resume())
+                return
+            }
+            guard self.observeDeliveryState(status.basalType) else {
+                completion(resume())
+                return
+            }
+            self.afterHistoryIsReported {
+                self.resumeAfterReportingDeliveryChanges(readingThePump: false, completion: completion, resume: resume)
+            }
+            self.historyBackfillCoordinator.runTick()
         }
     }
 
@@ -1315,14 +1340,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
         let completion = watchdogged(timeoutResult: PumpCommError.pumpNotConnected as Error?, completion)
         logger.info("Resume Insulin Delivery (clearing resume-pump alarms if needed)...")
 
-        bluetooth.ensureConnected { error in
-            if let error {
-                self.logger.error("Failed to connect to pump: \(error.localizedDescription)")
-                completion(error)
-                return
-            }
-
-            let sequence = ResumeWithAlarmAcknowledgement(
+        resumeAfterReportingDeliveryChanges(completion: completion) {
+            ResumeWithAlarmAcknowledgement(
                 sendResume: { self.sendResumePumping() },
                 reloadNotifications: { self.fetchNotifications() },
                 activeResumeAlarms: { self.notificationBundle.activeResumePumpAlarms() },
@@ -1330,9 +1349,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     _ = self.acknowledgeNotification(type: .alarm, id: UInt32(alarm.rawValue))
                 },
                 log: { self.logger.info($0) }
-            )
-
-            completion(sequence.run())
+            ).run()
         }
     }
 

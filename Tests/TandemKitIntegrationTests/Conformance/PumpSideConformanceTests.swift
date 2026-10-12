@@ -767,7 +767,8 @@ final class PumpSideConformanceTests: ConformanceTestCase {
     // MARK: - D11
 
     /// The pump stops on its own under a running temp basal, out of the driver's hearing, and the app
-    /// resumes as a fill wizard does: the resume's replacing batch has to account for that temp basal.
+    /// resumes as a fill wizard does, but without its check: the resume's replacing batch has to
+    /// account for that temp basal, and the stop has to reach the host before it.
     func testD11AResumeOverATempBasalTheDriverStillHoldsFinalizesIt() throws {
         let driver = try startPairedDriver(scheduledRate: Self.profileRate)
         let batchesBefore = allPumpEventBatches.count
@@ -800,11 +801,18 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         XCTAssertTrue(omissions.isEmpty, "nothing live may be dropped by silence:\n" + omissions.joined(separator: "\n"))
         let finished = loop.permanentDoses.first { $0.dose.type == .tempBasal && abs($0.dose.startDate.timeIntervalSince(tempStart)) <= 1 }
         XCTAssertNotNil(finished, "the host holds the temp basal, finalized: \(loop.doses.map(LoopDoseStoreOracle.describe)); deleted: \(loop.deletedDoses.map(LoopDoseStoreOracle.describe))")
-        XCTAssertLessThanOrEqual(finished?.dose.endDate ?? .distantFuture, resumedAt, "it ended no later than the resume")
+        XCTAssertEqual(finished?.dose.endDate.timeIntervalSince(suspendedAt) ?? .infinity, 0, accuracy: 1, "it ended at the pump's stop, not at the resume")
         XCTAssertGreaterThan(finished?.dose.deliveredUnits ?? 0, 0, "with what it delivered")
-        expectDefect("jwoglom/TandemKit#348: resumeDelivery does not read the pump first, so the temp basal its stop ended is finished at the resume, and Loop does not count the stop history reports after it (#354)") {
-            timeline.assertMatches(loop)
-        }
+
+        let events = eventsSince(batchesBefore)
+        let suspend = events.first { $0.type == .suspend }
+        XCTAssertEqual(suspend?.date.timeIntervalSince(suspendedAt) ?? .infinity, 0, accuracy: 1, "a .suspend dated at the pump's stop: \(events)")
+        XCTAssertLessThan(
+            events.firstIndex { $0.type == .suspend } ?? .max,
+            events.firstIndex { $0.type == .resume } ?? .min,
+            "reported before the resume: Loop counts no non-bolus dose older than the temp basal the resume finishes (#354)"
+        )
+        timeline.assertMatches(loop)
     }
 
     // MARK: - D12

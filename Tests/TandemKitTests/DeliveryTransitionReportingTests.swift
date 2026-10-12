@@ -166,14 +166,19 @@ import XCTest
         delegateQueue.sync {}
     }
 
-    private func appResume() {
+    private func appResume(acknowledgingAlarms: Bool = false) {
         bluetooth.stub(ResumePumpingRequest.self, with: ResumePumpingResponse(status: 0))
         let done = expectation(description: "resumeDelivery")
-        manager.resumeDelivery { error in
+        let completion: (Error?) -> Void = { error in
             XCTAssertNil(error)
             done.fulfill()
         }
-        wait(for: [done], timeout: 5)
+        if acknowledgingAlarms {
+            manager.resumeDeliveryAcknowledgingResumeAlarms(completion: completion)
+        } else {
+            manager.resumeDelivery(completion: completion)
+        }
+        wait(for: [done], timeout: 60)
         delegateQueue.sync {}
     }
 
@@ -891,6 +896,97 @@ import XCTest
         XCTAssertEqual(fetchSuspendStatus(), true)
 
         XCTAssertEqual(events(.suspend).map(\.date), [minutes(30)])
+    }
+
+    // MARK: - A resume reads the pump first
+
+    func testAStopAResumeFindsIsReportedFromHistoryBeforeTheResume() {
+        stubPump(serving: [resumed(at: start.addingTimeInterval(-60)), suspended(at: minutes(10))])
+        advance(to: minutes(30))
+        stubBasalStatus(1)
+
+        appResume()
+
+        XCTAssertEqual(transitions, [.suspend, .resume], "Trio takes a resume with no suspend before it as suspended since its history began")
+        XCTAssertEqual(events(.suspend).map(\.date), [minutes(10)])
+        XCTAssertEqual(events(.resume).map(\.date), [minutes(30)])
+        XCTAssertEqual(manager.state.basalDose.type, .resume)
+        XCTAssertNil(manager.state.deliveryTransitions.pending)
+    }
+
+    func testAResumeOverATempBasalThePumpStoppedEndsItAtThePumpsStop() {
+        runningTempBasal(1.5)
+        stubPump(serving: [
+            resumed(at: start.addingTimeInterval(-60)),
+            tempRateCompleted(7, at: minutes(10), timeLeft: 1200),
+            suspended(at: minutes(10))
+        ])
+        advance(to: minutes(30))
+        stubBasalStatus(1)
+
+        appResume()
+
+        let finished = events(.tempBasal).filter { $0.dose?.isMutable == false }
+        XCTAssertEqual(finished.map(\.dose?.endDate), [minutes(10)], "finished once, at the pump's stop, and not again by the resume")
+        XCTAssertEqual(transitions, [.suspend, .resume])
+        XCTAssertEqual(events(.suspend).map(\.date), [minutes(10)])
+        XCTAssertEqual(events(.resume).map(\.date), [minutes(30)])
+    }
+
+    func testTheSettingsScreensResumeReportsTheStopFromHistoryFirst() {
+        stubPump(serving: [resumed(at: start.addingTimeInterval(-60)), suspended(at: minutes(10))])
+        advance(to: minutes(30))
+        stubBasalStatus(1)
+
+        appResume(acknowledgingAlarms: true)
+
+        XCTAssertEqual(transitions, [.suspend, .resume])
+        XCTAssertEqual(events(.suspend).map(\.date), [minutes(10)])
+    }
+
+    func testWithTheFlagOffAStopAResumeFindsIsReportedAtDetectionFirst() {
+        manager.state.featureFlags[.historyBackfill] = false
+        advance(to: minutes(30))
+        stubBasalStatus(1)
+
+        appResume()
+
+        XCTAssertEqual(transitions, [.suspend, .resume])
+        XCTAssertEqual(events(.suspend).map(\.date), [minutes(30)])
+        XCTAssertEqual(events(.resume).map(\.date), [minutes(30).addingTimeInterval(1)], "Trio's IOB throws on a suspend and resume in one second")
+    }
+
+    func testAResumeWhoseHistoryIsSlowReportsTheStopAtDetectionOnceTheWaitIsOver() {
+        manager.transitionHistoryWait = .milliseconds(300)
+        stubPump(serving: [suspended(at: minutes(10))], streams: false)
+        advance(to: minutes(30))
+        stubBasalStatus(1)
+
+        appResume()
+
+        XCTAssertEqual(transitions, [.suspend, .resume])
+        XCTAssertEqual(events(.suspend).map(\.date), [minutes(30)])
+    }
+
+    func testAResumeOverTheSuspendTheHostHoldsDoesNotWaitForHistory() {
+        appSuspend()
+        advance(to: minutes(30))
+        stubBasalStatus(1)
+
+        appResume()
+
+        XCTAssertEqual(transitions, [.suspend, .resume])
+        XCTAssertFalse(bluetooth.didSend(HistoryLogStatusRequest.self), "the pump reads as the host was told")
+    }
+
+    func testAResumeWhoseBasalStatusReadFailsStillResumes() {
+        advance(to: minutes(30))
+
+        appResume()
+
+        XCTAssertEqual(bluetooth.sent(CurrentBasalStatusRequest.self).count, 1)
+        XCTAssertTrue(bluetooth.didSend(ResumePumpingRequest.self))
+        XCTAssertEqual(events(.resume).map(\.date), [minutes(30)])
     }
 
     func testEnsureCurrentPumpDataSyncsWhileAChangeIsPending() {
