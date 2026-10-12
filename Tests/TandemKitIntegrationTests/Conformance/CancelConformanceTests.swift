@@ -817,16 +817,13 @@ final class CancelConformanceTests: ConformanceTestCase {
         )
 
         // The occlusion itself, as an alarm the host can show and act on (audit P14).
-        XCTExpectFailure(
-            "jwoglom/TandemKit#349: pump faults are never reported as a NewPumpEvent of type .alarm with an alarmType",
-            strict: true
-        ) {
-            let alarms = self.allPumpEventBatches.dropFirst(start).flatMap(\.events).filter { $0.type == .alarm }
-            XCTAssertFalse(
-                alarms.isEmpty,
-                "the pump raised an occlusion alarm (\(suspended.alerts)) and no .alarm event reached the host"
-            )
-        }
+        let alarms = allPumpEventBatches.dropFirst(start).flatMap(\.events).filter { $0.type == .alarm }
+        XCTAssertEqual(
+            alarms.map(\.alarmType),
+            [.occlusion],
+            "the pump raised an occlusion alarm (\(suspended.alerts)), and one .alarm event names it"
+        )
+        XCTAssertGreaterThanOrEqual(alarms.first?.date ?? .distantPast, detectedAfter, "dated when the driver read it: the alarm status gives no time")
 
         // Hosts.
         let (loop, trio) = feedOracles()

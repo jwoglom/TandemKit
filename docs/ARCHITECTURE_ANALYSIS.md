@@ -299,6 +299,11 @@ reminders stay in the app. When the host acknowledges an alert, `DismissNotifica
 clears it on the pump. Basal min/max alerts are acknowledged automatically, because oref sets
 zero temp basals routinely and the pump would otherwise alert on each one.
 
+The same pass reports alarms and malfunctions to the host's pump event log (`reportPumpAlarms`):
+an `.alarm` event with its `alarmType` when one appears, and an `.alarmClear` when it is gone,
+diffed by `TandemAlertReconciler` against `reportedPumpAlarmIdentifiers`. Alerts are not reported
+there.
+
 ### History
 
 - Every `HistoryLogStreamResponse` goes through `historyLogStream` into `historyLogStore`, an

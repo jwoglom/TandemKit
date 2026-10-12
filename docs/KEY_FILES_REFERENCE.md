@@ -11,7 +11,7 @@ pieces fit together. Paths are relative to the repository root.
 | `TandemPumpManager+StateSync.swift` | The `fetch…` status reads applied to state on every sync, bolus finalization, and the basal rate check (`verifyDeliveredBasalRate`). |
 | `TandemPumpManager+SyncBasal.swift` | Writes the basal schedule to the pump's IDP profile through `IDPManager` and reads it back, for the host's sync and for the update a mismatch starts (`updatePumpBasalProfile`). |
 | `TandemPumpManager+Onboarding.swift` | `applyOnboardingSettings`: delivery limits, basal schedule and clock for a newly paired pump (#206). |
-| `TandemPumpManager+Alerts.swift` | Maps pump notifications to LoopKit `Alert`s and reconciles them. |
+| `TandemPumpManager+Alerts.swift` | Maps pump notifications to LoopKit `Alert`s and reconciles them, and reports alarms and malfunctions as `.alarm` / `.alarmClear` pump events. |
 | `TandemPumpManager+HistoryStore.swift` | Stores and prunes streamed history logs in the session store. |
 | `TandemPumpManager+HistoryDoseReporting.swift` | Reports boluses found in pump history that the live path missed. |
 | `TandemPumpManager+BasalReconciliation.swift` | Compares the basal in pump history with what the host was told, and logs the differences. |

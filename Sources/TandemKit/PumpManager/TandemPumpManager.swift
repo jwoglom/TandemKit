@@ -1540,7 +1540,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     /// Records a cannula / infusion-set change. Call after the user successfully fills the cannula.
     /// Tracks the date in state and reports a site-change pump event to the host app via the delegate.
     /// `primeAmount`, when given, is the prime volume in units that was just delivered; it is
-    /// remembered so the fill cannula wizard can pre-fill it next time.
+    /// remembered so the fill cannula wizard can pre-fill it next time, and reported as a `.prime`.
     func recordSiteChange(at date: Date? = nil, primeAmount: Double? = nil) {
         let date = date ?? now
         logger.info("Recording site change (cannula fill) at \(date)")
@@ -1549,7 +1549,15 @@ public class TandemPumpManager: PumpManager, Pluggable {
             state.lastCannulaFillAmount = primeAmount
         }
         notifyDelegateStateUpdated()
-        emitPumpEvents([NewPumpEvent.siteChange(date: date)], replacePendingEvents: false)
+        let prime = primeAmount.map { [NewPumpEvent.cannulaPrime(units: $0, date: date)] } ?? []
+        emitPumpEvents(prime + [NewPumpEvent.siteChange(date: date)], replacePendingEvents: false)
+    }
+
+    /// Call once the pump has left fill tubing mode after insulin flowed.
+    func recordTubingFill(at date: Date? = nil) {
+        let date = date ?? now
+        logger.info("Recording tubing fill at \(date)")
+        emitPumpEvents([NewPumpEvent.tubingPrime(date: date)], replacePendingEvents: false)
     }
 
     /// Records a cartridge / reservoir change. Call after the user successfully changes the cartridge.
@@ -1664,6 +1672,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
     public func deleteSavedPumpState() {
         logger.debug("Deleting saved pump state for re-setup")
         state.pumpState = PumpState()
+        // The pump paired next may be another, whose serial and settings would otherwise wait a day.
+        state.lastSettingsCheckedAt = nil
         state.hasSyncedBasalRateSchedule = false
         state.basalRateMismatchDetectedAt = nil
         state.basalProfileUpdateFailed = false

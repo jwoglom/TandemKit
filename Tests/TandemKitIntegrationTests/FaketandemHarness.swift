@@ -72,6 +72,8 @@ final class FaketandemHarness {
     static let defaultBasalRate = 0.85
     /// `SetPumpSoundsRequest` writes the sounds into the pump globals the emulator launched with.
     private static var launchPumpGlobals: [String: Any]?
+    /// D15 gives the pump another serial.
+    private static var launchPumpVersion: [String: Any]?
 
     func reset() throws {
         try client.clearFaults()
@@ -101,11 +103,17 @@ final class FaketandemHarness {
         }
         // Tests stage the rate in force, and a profile write sets it too. An earlier test's bolus
         // is dated on that test's clock, which may be ahead of this one's, and would count in full.
-        try client.setState(["closed_loop_enabled": false, "basal_rate": Self.defaultBasalRate, "iob": 0])
+        // A standing alarm would reach the next driver as an `.alarm` event.
+        try client.setState(["closed_loop_enabled": false, "basal_rate": Self.defaultBasalRate, "iob": 0, "clear_alerts": true])
         if let globals = Self.launchPumpGlobals {
             try client.setSettingsConfig(globals, for: "PumpGlobalsRequest")
         } else {
             Self.launchPumpGlobals = try client.settingsConfig(for: "PumpGlobalsRequest")
+        }
+        if let version = Self.launchPumpVersion {
+            try client.setSettingsConfig(version, for: "PumpVersionBRequest")
+        } else {
+            Self.launchPumpVersion = try client.settingsConfig(for: "PumpVersionBRequest")
         }
         if snapshot.limits != nil {
             try client.setState(["max_bolus_milliunits": Self.defaultMaxBolusMilliunits, "max_basal_milliunits": Self.defaultMaxBasalMilliunits])

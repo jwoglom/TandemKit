@@ -85,4 +85,43 @@ public extension NewPumpEvent {
             type: .rewind
         )
     }
+
+    /// Loop derives no doses from reservoir drops within an insulin duration of a `.prime`. The pump
+    /// reports no volume for a tubing fill.
+    static func tubingPrime(date: Date = Date.now) -> NewPumpEvent {
+        let dateFormatter = ISO8601DateFormatter()
+        return NewPumpEvent(
+            date: date,
+            dose: nil,
+            raw: "prime tubing \(dateFormatter.string(from: date))".data(using: .utf8) ?? Data([]),
+            title: String(localized: "Tubing Fill", comment: "Pump Event title for filling the tubing"),
+            type: .prime
+        )
+    }
+
+    static func cannulaPrime(units: Double, date: Date = Date.now) -> NewPumpEvent {
+        let dateFormatter = ISO8601DateFormatter()
+        return NewPumpEvent(
+            date: date,
+            dose: nil,
+            raw: "prime cannula \(dateFormatter.string(from: date))".data(using: .utf8) ?? Data([]),
+            title: String(
+                format: String(localized: "Cannula Fill %@ U", comment: "Pump Event title for filling the cannula; the placeholder is the units primed"),
+                String(format: "%g", units)
+            ),
+            type: .prime
+        )
+    }
+
+    /// Trio stores it as a site change, as it does a pod's.
+    static func pumpReplacement(date: Date = Date.now) -> NewPumpEvent {
+        let dateFormatter = ISO8601DateFormatter()
+        return NewPumpEvent(
+            date: date,
+            dose: nil,
+            raw: "replacePump \(dateFormatter.string(from: date))".data(using: .utf8) ?? Data([]),
+            title: String(localized: "Pump Replaced", comment: "Pump Event title for a different pump paired in place of the last one"),
+            type: .replaceComponent(componentType: .pump)
+        )
+    }
 }

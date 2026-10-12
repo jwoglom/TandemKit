@@ -107,7 +107,14 @@ extension TandemPumpManager {
             return
         }
 
-        state.pumpState.pumpSerial = pumpVersionResponse.serialNumber
+        let serial = pumpVersionResponse.serialNumber
+        if let previous = state.lastPumpSerial, previous != serial {
+            logger.warning("A different pump is paired; reporting a pump replacement")
+            emitPumpEvents([NewPumpEvent.pumpReplacement(date: now)], replacePendingEvents: false)
+            pumpDelegate.notify { $0?.pumpManagerPumpWasReplaced(self) }
+        }
+        state.lastPumpSerial = serial
+        state.pumpState.pumpSerial = serial
         state.pumpState.modelNumber = pumpVersionResponse.modelNumber
         state.pumpState.softwareName = pumpVersionResponse.softwareName
         state.pumpState.controlBitsA = pumpVersionResponse.configurationBitsA
@@ -411,6 +418,7 @@ extension TandemPumpManager {
         state.lastNotificationUpdate = now
         notifyDelegateStateUpdated()
 
+        reportPumpAlarms(from: notificationBundle)
         reconcileLoopKitAlerts()
     }
 
