@@ -152,10 +152,12 @@ extension TandemPumpManager {
         }
     }
 
-    func fetchBasalStatus() {
+    /// Returns whether the pump answered.
+    @discardableResult
+    func fetchBasalStatus() -> Bool {
         guard let response = bluetooth.write(CurrentBasalStatusRequest()) else {
             logger.error("Failed to fetch basal status: \(String(describing: CurrentBasalStatusRequest.self))")
-            return
+            return false
         }
 
         verifyDeliveredBasalRate(response)
@@ -169,6 +171,7 @@ extension TandemPumpManager {
         }
 
         maintainPumpClockSkewCompensation(response)
+        return true
     }
 
     /// A temp is a percent of the pump's profile, so on one that differs from the schedule it runs

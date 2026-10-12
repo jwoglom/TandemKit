@@ -104,18 +104,14 @@ final class IdempotencyConformanceTests: ConformanceTestCase {
                 )
             }
 
-            XCTExpectFailure(
-                "jwoglom/TandemKit#330: the running bolus is never re-reported — the driver reports it once at "
-                    + "enact and then keeps the host's copy alive only by never sending a complete batch"
-            ) {
-                XCTAssertTrue(
-                    batches.contains { batch in
-                        batch.events.contains { $0.raw == raw && $0.dose?.isMutable == true }
-                    },
-                    "round \(round): guide §9 item 4 — an in-progress dose is re-reported on every sync until it "
-                        + "finalizes; batches were \(batches.map(describe))"
-                )
-            }
+            XCTAssertTrue(
+                batches.contains { batch in
+                    batch.replacePendingEvents && batch.events.contains { $0.raw == raw && $0.dose?.isMutable == true }
+                },
+                "round \(round): guide §9 item 4 — an in-progress dose is re-reported on every sync until it "
+                    + "finalizes, in a complete batch, since Loop keeps its row over a non-replacing one; batches were "
+                    + "\(batches.map(describe))"
+            )
 
             // Host side: one dose, still mutable, not deleted, in both hosts.
             let (loop, trio) = feedOracles()
@@ -188,17 +184,12 @@ final class IdempotencyConformanceTests: ConformanceTestCase {
                 )
             }
 
-            XCTExpectFailure(
-                "jwoglom/TandemKit#450 (the temp-basal sibling of #330): a running temp basal is not re-reported on "
-                    + "routine syncs — fetchBasalStatus emits only on a basal-type change"
-            ) {
-                XCTAssertTrue(
-                    batches.contains { batch in
-                        batch.events.contains { $0.raw == raw && $0.dose?.isMutable == true }
-                    },
-                    "round \(round): guide §9 item 4 — the live temp basal is re-reported on every sync"
-                )
-            }
+            XCTAssertTrue(
+                batches.contains { batch in
+                    batch.replacePendingEvents && batch.events.contains { $0.raw == raw && $0.dose?.isMutable == true }
+                },
+                "round \(round): guide §9 item 4 — the live temp basal is re-reported on every sync, in a complete batch"
+            )
 
             let (loop, trio) = feedOracles()
             loop.assertNoDuplicates("round \(round)")

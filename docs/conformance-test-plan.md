@@ -106,8 +106,8 @@ oracle one rule at a time.
 
 | ID | Scenario | Stage | Assert |
 |---|---|---|---|
-| C1 | Re-report a running bolus many times | enact 5 U at 0.02 U/s; sync 8× while running | every `replacePendingEvents: true` batch contains the bolus, byte-identical `raw`; oracle holds exactly one dose; `iob(at:)` at a fixed instant stays the same across syncs |
-| C2 | Running TBR across many syncs | enact 60 min TBR; sync every 5 min ×6 | same `raw` in every batch; `endDate` stays the scheduled end while mutable; one dose in the oracle |
+| C1 | Re-report a running bolus many times | enact 5 U at 0.02 U/s; sync 8× while running | each sync re-reports the bolus, mutable, in a `replacePendingEvents: true` batch; every such batch contains it, byte-identical `raw`; oracle holds exactly one dose; `iob(at:)` at a fixed instant stays the same across syncs |
+| C2 | Running TBR across many syncs | enact 60 min TBR; sync every 5 min ×6 | each sync re-reports the TBR, mutable, in a `replacePendingEvents: true` batch; same `raw` in every batch; `endDate` stays the scheduled end while mutable; one dose in the oracle |
 | C3 | Complete batches with several live doses | bolus running + TBR running; pump `suspend` then `resume` | every `replacePendingEvents: true` batch up to the resume includes both mutable doses; the suspend is appended without purging them; nothing live is dropped by silence |
 | C4 | Empty sync advances the trust boundary | no doses; sync twice with the clock advanced 5 min | `hasNewPumpEvents` called each time with an empty batch that does not claim to be complete (`replacePendingEvents: false`), `lastReconciliation` strictly increases |
 | C5 | Sync with no answer does not advance | fault `drop_response every` on `CurrentBasalStatusRequest` and friends; sync | `hasNewPumpEvents` not called, or called with unchanged `lastReconciliation` |

@@ -75,7 +75,7 @@ import XCTest
         )
     }
 
-    /// A batch that replaced the host's pending events would purge a running bolus.
+    /// An empty replacing batch purges every mutable row Trio holds.
     func testQuietSyncCarriesNoEventsAndDoesNotReplacePendingOnes() {
         let delegate = MockPumpManagerDelegate()
         let queue = attachDelegate(delegate)
