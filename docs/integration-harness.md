@@ -470,6 +470,11 @@ A manual `workflow_dispatch` and a re-run always run, and a plan step that canno
   bolus. A pump refuses the permission (#504). No test is bent by it: the driver never asks while
   a bolus it started runs, but if that broke, `DeliveryLimitIntegrationTests` L8–L11 would show a
   second bolus replacing the first rather than the pump's refusal.
+- **A bolus writes no `BolusDelivery` (280) records.** The source given to
+  `/api/state/bolus/start` reaches only `BolusActivated`'s `extra` and the bolus status. A pump
+  writes one of these records when a bolus starts and another when it completes, and they carry
+  the source the driver takes a history bolus's `automatic` from. Conformance D16 appends them
+  itself.
 
 One behaviour is opt-in: faketandem runs the pump's 5-minute basal cycle, and follows
 profile segment boundaries, only with `basal_cycle_enabled` (faketandem README "Basal cycle").

@@ -51,9 +51,8 @@ import XCTest
         XCTAssertEqual(handle([.bolusChange]), ["CurrentBolusStatusRequest"])
     }
 
-    /// A bolus changing on the pump is exactly when a bolus delivered from the pump's own UI is
-    /// written to history, and the pump is already awake. Reading history now puts it in the
-    /// store within seconds instead of leaving it out of IOB until the next sync.
+    /// The pump announces a bolus change when a pump-UI bolus completes, so with History Dose
+    /// Reporting on, reading history now reports it within seconds instead of at the next sync.
     func testBolusChangeAlsoReadsHistory() {
         var state = TandemPumpManagerState(rawValue: [:])
         state.pumpState.apiVersion = KnownApiVersion.apiV2_1.value

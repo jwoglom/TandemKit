@@ -1,6 +1,7 @@
 ## Reference material
 - See [docs/ARCHITECTURE_ANALYSIS.md](docs/ARCHITECTURE_ANALYSIS.md) and [docs/KEY_FILES_REFERENCE.md](docs/KEY_FILES_REFERENCE.md) for deeper implementation notes and file-level pointers.
 - [docs/integration-harness.md](docs/integration-harness.md): the `TandemKitIntegrationTests` target, which runs the real driver against the faketandem emulator (`scripts/integration-test.sh`), and the emulator gaps it currently works around.
+- [docs/hardware-test-plan.md](docs/hardware-test-plan.md): the manual procedure on a real pump, including the quick bolus and Control-IQ configurations, and the firmware behaviour only a pump can confirm.
 
 ## Comments
 **Default to no comment.** Most code needs none. Before writing one, ask what a reader who has the
@@ -643,6 +644,6 @@ integration scenarios.
   general `TandemUICoordinator`; there is no dedicated recovery screen.
 - **Response validation.** `BTResponseParser` does not check the CRC, HMAC or `txId` of received
   packets; it only rejects cargo shorter than the message's declared size.
-- **Hardware validation.** There is no written manual test procedure for pairing, bolus, temp
-  basal and suspend/resume on the t:slim X2 and the Mobi, and no record of which pump firmware
-  versions are supported.
+- **Hardware validation.** [docs/hardware-test-plan.md](docs/hardware-test-plan.md) is the manual
+  procedure for the t:slim X2 and the Mobi, but no run of it is recorded, so which pump firmware
+  versions work is unknown.
