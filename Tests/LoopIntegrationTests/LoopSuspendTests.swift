@@ -10,7 +10,7 @@ final class LoopSuspendTests: LoopTestCase {
         try control.send(.init(command: .tempBasal, unitsPerHour: 0.5, duration: .minutes(30)))
 
         try control.send(.init(command: .suspend))
-        try loopStored("the suspend", until: Self.hasSuspend)
+        try waitForASecondToPass(since: suspendDate(in: loopStored("the suspend", until: Self.hasSuspend)))
         try control.send(.init(command: .resume))
 
         try loopStored("the resume", until: Self.hasResume)
@@ -27,7 +27,7 @@ final class LoopSuspendTests: LoopTestCase {
         try waitForTheDriversFirstHistoryRead()
 
         try harness.client.suspend(reason: "user")
-        try loopStored("the pump's suspend", syncing: true, until: Self.hasSuspend)
+        try waitForASecondToPass(since: suspendDate(in: loopStored("the pump's suspend", syncing: true, until: Self.hasSuspend)))
         try harness.client.resume()
 
         try loopStored("the pump's resume", syncing: true, until: Self.hasResume)
@@ -51,6 +51,10 @@ final class LoopSuspendTests: LoopTestCase {
         let resume = try XCTUnwrap(resumes.first, file: file, line: line)
         XCTAssertFalse(suspend.isMutable, "\(suspend)", file: file, line: line)
         XCTAssertEqual(suspend.endDate.timeIntervalSince(resume.date), 0, accuracy: 1e-3, "\(suspend) \(resume)", file: file, line: line)
+    }
+
+    private func suspendDate(in batches: [VirtualPumpControl.Batch]) throws -> Date {
+        try XCTUnwrap(batches.flatMap(\.pumpEvents).last { $0.type == .suspend }?.date)
     }
 
     private static func hasSuspend(_ events: [NewPumpEvent]) -> Bool {

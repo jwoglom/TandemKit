@@ -10,12 +10,13 @@ final class LoopCartridgeTests: LoopTestCase {
         try pairLoop()
         try syncBasalSchedule()
         try control.send(.init(command: .suspend))
-        try loopStored("the suspend") { events in
+        let suspended = try loopStored("the suspend") { events in
             events.contains { $0.type == .suspend }
         }
 
         try control.send(.init(command: .recordCartridgeChange))
         try control.send(.init(command: .recordSiteChange, units: 0.3))
+        try waitForASecondToPass(since: XCTUnwrap(suspended.flatMap(\.pumpEvents).last { $0.type == .suspend }?.date))
         try control.send(.init(command: .resume))
 
         try loopStored("the resume") { events in

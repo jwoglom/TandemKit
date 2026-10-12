@@ -239,6 +239,22 @@ final class DoseOracleTests: XCTestCase {
         XCTAssertEqual(oracle.assertSingleDose(raw: b.raw)?.isMutable, true)
     }
 
+    func testABasalMarkerBeforeASuspendIsStoredAsAPumpEventButNeverAsADose() {
+        let oracle = LoopDoseStoreOracle()
+        let marker = scheduledBasal(rate: 1.0, at: t0)
+        let resumedAt = t0.addingTimeInterval(.minutes(5))
+        oracle.addPumpEvents(
+            [marker, suspend(at: t0.addingTimeInterval(1)), resume(at: resumedAt)],
+            lastReconciliation: resumedAt,
+            replacePendingEvents: true,
+            now: resumedAt
+        )
+
+        XCTAssertNotNil(oracle.pumpEventRow(raw: marker.raw))
+        XCTAssertEqual(oracle.cachedDoses(raw: marker.raw), [], "HKQS:56-60 makes no sample for a basal with no duration")
+        XCTAssertEqual(oracle.doses.map(\.dose.type), [.suspend])
+    }
+
     func testIOBDoesNotDriftAcrossIdenticalReReports() {
         let oracle = LoopDoseStoreOracle()
         let first = bolus(units: 5, start: t0, mutable: true)

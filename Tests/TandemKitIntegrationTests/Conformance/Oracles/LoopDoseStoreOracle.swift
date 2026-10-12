@@ -15,9 +15,10 @@ import XCTest
 ///
 /// The file references below are to Trio's LoopKit fork, the one TandemKit links:
 /// `LoopKit/LoopKit/InsulinKit/DoseStore.swift` (DS), `InsulinDeliveryStore.swift` (IDS),
-/// `CachedInsulinDeliveryObject+CoreDataClass.swift` (CIDO), `InsulinMath.swift` (IM),
-/// `LoopKit/LoopKit/Persistence/Model.xcdatamodeld/Model.xcdatamodel/contents` (Model) and
-/// `PersistenceController.swift` (PC), in the Trio workspace's `LoopKit` submodule when written.
+/// `CachedInsulinDeliveryObject+CoreDataClass.swift` (CIDO), `HKQuantitySample+InsulinKit.swift` (HKQS),
+/// `InsulinMath.swift` (IM), `LoopKit/LoopKit/Persistence/Model.xcdatamodeld/Model.xcdatamodel/contents`
+/// (Model) and `PersistenceController.swift` (PC), in the Trio workspace's `LoopKit` submodule when
+/// written. Upstream LoopKit, which Loop builds, has the same code in each.
 ///
 /// What is deliberately not modelled, and why:
 /// - The basal-schedule overlay (DS:992-999), unless `basalSchedule` is given. For a pump that does
@@ -25,6 +26,9 @@ import XCTest
 ///   doses with the schedule's rate. Those entries move `lastImmutableBasalEndDate`, so Loop in the
 ///   simulator needs them; the conformance groups leave them out.
 /// - The cache window purge (DS:714). Tests run over minutes, not days.
+/// - IDS skipping a temp basal with no duration or a 0 U bolus, as it does a basal (HKQS:56-77). On a
+///   conformance run's manual clock a temp can end where it started, and `PumpTimeline` wants a dose
+///   for it, as for group B's 0 U bolus.
 /// - Core Data itself. The two uniqueness constraints that matter are modelled explicitly (see
 ///   `insertPumpEventRow` and `insertCachedDose`) because they decide whether a re-report updates or
 ///   is dropped.
@@ -475,6 +479,9 @@ final class LoopDoseStoreOracle: DoseOracle {
         for entry in entries {
             // IDS:438-441 — entries without a syncIdentifier are ignored.
             guard let syncIdentifier = entry.syncIdentifier else { continue }
+            // IDS:443-452 — nor is one that makes no HealthKit sample: a basal with no duration (HKQS:56-60),
+            // such as the driver's scheduled-basal marker before a suspend.
+            if entry.type == .basal, entry.endDate.timeIntervalSince(entry.startDate) <= .ulpOfOne { continue }
 
             // IDS:455-459 — a mutable object with the same provenance + syncIdentifier is updated,
             // which also un-deletes it (CIDO:245 `deletedAt = nil`).

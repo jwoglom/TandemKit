@@ -387,17 +387,23 @@ cartridge and site change; pairing on the pump's code with Loop's settings appli
 closed loop under each dosing strategy, on its CGM simulator (`MockCGMManager`, restored from
 `Documents/CGMManagerState.plist`, held at 250 mg/dL with a reading a minute): a temp basal with
 temp-basal-only dosing, and an automatic bolus with automatic-bolus dosing. Loop does not sync its
-delivery limits to the pump at launch, as Trio does, and has none of Trio's same-second quirks, so no
-scenario waits a second between commands.
+delivery limits to the pump at launch, as Trio does. A scenario that resumes waits a second after the
+suspend, as its Trio twin does, for Loop's own reason: the driver dates a resume at least a second
+after its suspend, ahead of Loop's clock inside that second, and `DoseStore` caches no finished dose
+that ends ahead of its clock, so a suspend resumed sooner stays open in `CachedInsulinDeliveryObject`
+until the next batch that is not empty. The other waits in Trio's scenarios are for its own
+same-second ordering, which Loop does not have.
 
 `loop.log`, `app-launcher.log` and each test's TandemKit log and Loop store land in `LOG_DIR` as for
 Trio, with `loop-sample.txt` for a failed test. The `loop` job in `.github/workflows/macos.yml` runs it
 on the self-hosted runners.
 
-Not yet run on a Mac, written from Loop's and LoopKit's source: Loop restoring the seeded pump
-manager, CGM and settings; the app group suite and the `cfprefsd` restart; ad hoc signing with no
-team giving Loop its app group; and the oracle's fill matching `DoseStore`'s. The first `loop` job
-confirms them, or says which to fix.
+The first `loop` job confirmed what was written from Loop's and LoopKit's source alone: Loop
+restoring the seeded pump manager, CGM and settings; the app group suite and the `cfprefsd` restart;
+ad hoc signing with no team giving Loop its app group; and the oracle's fill matching `DoseStore`'s.
+It found the oracle keeping a basal with no duration, the driver's scheduled-basal marker before a
+suspend, where `DoseStore` makes no `CachedInsulinDeliveryObject` (`HKQuantitySample(dose:)` is nil,
+so `addDoseEntries` skips it), and the suspend scenarios missing the second's wait above.
 
 ## What the harness found
 

@@ -190,6 +190,14 @@ class LoopTestCase: FaketandemIntegrationTestCase {
         return batches
     }
 
+    /// The driver dates a resume at least a second after its suspend, ahead of Loop's clock inside that
+    /// second, and DoseStore caches no finished dose that ends ahead of its clock.
+    func waitForASecondToPass(since date: Date) throws {
+        try IntegrationWait.until("a second to pass since \(date)", timeout: 10) {
+            Date() >= date.addingTimeInterval(1)
+        }
+    }
+
     /// Feeds the oracle every batch Loop was given and checks Loop stored the rows it predicts. The store
     /// is read between two reads of the batches that agree, so nothing sent meanwhile is missing.
     @discardableResult
