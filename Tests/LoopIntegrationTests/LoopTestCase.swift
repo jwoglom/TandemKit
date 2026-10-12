@@ -231,11 +231,16 @@ class LoopTestCase: FaketandemIntegrationTestCase {
         let predicted = oracle.cachedDoses.map(LoopCachedDose.init)
         assertSameDoses(doses.filter { !$0.isScheduleFill }, predicted.filter { !$0.isScheduleFill }, file: file, line: line)
         assertSameScheduleFill(in: doses, predicted.filter(\.isScheduleFill), file: file, line: line)
-        return (events, doses.sorted { $0.startDate < $1.startDate }, oracle)
+        return (events.sorted(by: Self.rowOrder), doses.sorted { $0.startDate < $1.startDate }, oracle)
     }
 
     private func allBatches() throws -> [VirtualPumpControl.Batch] {
         try earlierLaunchesBatches + XCTUnwrap(control.send(.init(command: .pumpEventBatches)).batches)
+    }
+
+    /// Core Data numbers rows saved together, such as a site change and its prime, in no fixed order.
+    private static func rowOrder(_ a: LoopStoredPumpEvent, _ b: LoopStoredPumpEvent) -> Bool {
+        (a.date, a.raw.hexadecimalString) < (b.date, b.raw.hexadecimalString)
     }
 
     /// Row for row in date order. Both sides take every field from the driver's events, so they agree
@@ -246,11 +251,8 @@ class LoopTestCase: FaketandemIntegrationTestCase {
         file: StaticString,
         line: UInt
     ) {
-        let order: (LoopStoredPumpEvent, LoopStoredPumpEvent) -> Bool = {
-            ($0.date, $0.raw.hexadecimalString) < ($1.date, $1.raw.hexadecimalString)
-        }
-        let stored = stored.sorted(by: order)
-        let predicted = predicted.sorted(by: order)
+        let stored = stored.sorted(by: Self.rowOrder)
+        let predicted = predicted.sorted(by: Self.rowOrder)
         let report = "Loop stored PumpEvent rows:\n\(stored.map { "  \($0)" }.joined(separator: "\n"))\noracle predicted:\n\(predicted.map { "  \($0)" }.joined(separator: "\n"))"
         guard stored.count == predicted.count else {
             return XCTFail("PumpEvent row counts differ\n\(report)", file: file, line: line)
