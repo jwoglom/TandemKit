@@ -40,7 +40,7 @@ import XCTest
     /// detection that is meaningfully later than the start within a test.
     @discardableResult
     private func trackBolusStarted(secondsAgo: TimeInterval, units: Double) -> Date {
-        let startDate = Date.now.addingTimeInterval(-secondsAgo)
+        let startDate = manager.now.addingTimeInterval(-secondsAgo)
         let dose = UnfinalizedDose(rawValue: [
             "type": DoseType.bolus.rawValue,
             "value": units,
@@ -59,6 +59,12 @@ import XCTest
             activationType: .manualNoRecommendation
         )
         return startDate
+    }
+
+    private func setPumpClockAhead(by offset: TimeInterval) {
+        let checkedAt = manager.now
+        manager.state.currentPumpTime = checkedAt.addingTimeInterval(offset)
+        manager.state.lastPumpTimeCheckDate = checkedAt
     }
 
     private func stubLastBolus(deliveredVolume: UInt32, timestamp: Date?) {
@@ -98,6 +104,24 @@ import XCTest
         ))
     }
 
+    private func cancelTrackedBolus() {
+        bluetooth.stub(CancelBolusRequest.self, with: CancelBolusResponse(
+            statusId: 0,
+            bolusId: Self.bolusId,
+            reasonId: 0
+        ))
+
+        let cancelled = expectation(description: "cancelBolus")
+        manager.cancelBolus { result in
+            if case .failure(let error) = result {
+                XCTFail("cancelBolus failed: \(error)")
+            }
+            cancelled.fulfill()
+        }
+        // The cancel path sleeps ~2s to let the pump store the bolus before reading it back.
+        wait(for: [cancelled], timeout: 15.0)
+    }
+
     private func lastFinalizedBolusEvent() -> NewPumpEvent? {
         delegateQueue.sync {}
         return delegate.pumpEvents.last { $0.dose?.type == .bolus && $0.dose?.isMutable == false }
@@ -134,9 +158,7 @@ import XCTest
 
     func testPumpClockOffsetIsRemovedFromBothEndsOfTheWindow() throws {
         let offset: TimeInterval = .minutes(15)
-        let checkedAt = Date.now
-        manager.state.currentPumpTime = checkedAt.addingTimeInterval(offset)
-        manager.state.lastPumpTimeCheckDate = checkedAt
+        setPumpClockAhead(by: offset)
 
         let startDate = trackBolusStarted(secondsAgo: 300, units: 2.0)
         let deliveryStart = startDate.addingTimeInterval(15)
@@ -306,6 +328,24 @@ import XCTest
         XCTAssertEqual(manager.state.pendingBolusFinalization?.bolusId, Self.bolusId)
     }
 
+    func testAHeldBolusIsFinalizedOnThePhonesClockUnderPumpClockSkew() throws {
+        let offset: TimeInterval = .minutes(15)
+        setPumpClockAhead(by: offset)
+        let startDate = trackBolusStarted(secondsAgo: 300, units: 2.0)
+        bluetooth.stub(LastBolusStatusRequest.self) { _ in nil }
+        stubBolusFinished()
+        manager.fetchBolusStatus(fromSync: true)
+        XCTAssertNotNil(manager.state.pendingBolusFinalization)
+
+        let pumpEnd = startDate.addingTimeInterval(73)
+        stubLastBolus(deliveredVolume: 2000, timestamp: pumpEnd.addingTimeInterval(offset))
+        manager.finalizePendingBolus()
+
+        let dose = try XCTUnwrap(lastFinalizedBolus())
+        XCTAssertEqual(dose.endDate.timeIntervalSince(pumpEnd), 0, accuracy: 1.0)
+        XCTAssertNil(manager.state.pendingBolusFinalization)
+    }
+
     /// A pump clock ahead of the phone's must not date delivery into the future.
     func testCompletionNeverEndsAfterTheDetection() throws {
         trackBolusStarted(secondsAgo: 300, units: 2.0)
@@ -327,21 +367,8 @@ import XCTest
         manager.fetchBolusStatus(fromSync: false)
         let pumpEnd = deliveryStart.addingTimeInterval(31)
         stubLastBolus(deliveredVolume: 1041, timestamp: pumpEnd)
-        bluetooth.stub(CancelBolusRequest.self, with: CancelBolusResponse(
-            statusId: 0,
-            bolusId: Self.bolusId,
-            reasonId: 0
-        ))
 
-        let cancelled = expectation(description: "cancelBolus")
-        manager.cancelBolus { result in
-            if case .failure(let error) = result {
-                XCTFail("cancelBolus failed: \(error)")
-            }
-            cancelled.fulfill()
-        }
-        // The cancel path sleeps ~2s to let the pump store the bolus before reading it back.
-        wait(for: [cancelled], timeout: 15.0)
+        cancelTrackedBolus()
 
         let event = try XCTUnwrap(lastFinalizedBolusEvent())
         let dose = try XCTUnwrap(event.dose)
@@ -358,15 +385,8 @@ import XCTest
     func testCancelledBolusWithoutAPumpTimestampUsesTheDeliveredVolume() throws {
         let startDate = trackBolusStarted(secondsAgo: 300, units: 2.0)
         stubLastBolus(deliveredVolume: 1041, timestamp: nil)
-        bluetooth.stub(CancelBolusRequest.self, with: CancelBolusResponse(
-            statusId: 0,
-            bolusId: Self.bolusId,
-            reasonId: 0
-        ))
 
-        let cancelled = expectation(description: "cancelBolus")
-        manager.cancelBolus { _ in cancelled.fulfill() }
-        wait(for: [cancelled], timeout: 15.0)
+        cancelTrackedBolus()
 
         let dose = try XCTUnwrap(lastFinalizedBolus())
         XCTAssertEqual(
@@ -378,5 +398,35 @@ import XCTest
             dose.endDate.timeIntervalSince(startDate),
             TandemPumpCapabilities.bolusInitiationDelay + TandemPumpCapabilities.estimatedBolusDuration(toDeliver: 2.0)
         )
+    }
+
+    func testCancelledBolusIsDatedOnThePhonesClockUnderPumpClockSkew() throws {
+        let offset: TimeInterval = .minutes(15)
+        setPumpClockAhead(by: offset)
+        let startDate = trackBolusStarted(secondsAgo: 300, units: 2.0)
+        let deliveryStart = startDate.addingTimeInterval(15)
+        stubDelivering(at: deliveryStart.addingTimeInterval(offset))
+        manager.fetchBolusStatus(fromSync: false)
+        let pumpEnd = deliveryStart.addingTimeInterval(31)
+        stubLastBolus(deliveredVolume: 1041, timestamp: pumpEnd.addingTimeInterval(offset))
+
+        cancelTrackedBolus()
+
+        let dose = try XCTUnwrap(lastFinalizedBolus())
+        XCTAssertEqual(dose.startDate.timeIntervalSince(deliveryStart), 0, accuracy: 1.0)
+        XCTAssertEqual(dose.endDate.timeIntervalSince(pumpEnd), 0, accuracy: 1.0)
+    }
+
+    func testCancelledBolusNeverEndsAfterThePumpConfirmedTheCancelOnTheDriversClock() throws {
+        // An hour behind the wall clock, so a clamp to Date.now would let the pump's stamp through.
+        let clock = ManualClock(Date.now.addingTimeInterval(-.hours(1)))
+        manager.clock = clock
+        trackBolusStarted(secondsAgo: 300, units: 2.0)
+        stubLastBolus(deliveredVolume: 1041, timestamp: clock.now.addingTimeInterval(120))
+
+        cancelTrackedBolus()
+
+        let dose = try XCTUnwrap(lastFinalizedBolus())
+        XCTAssertEqual(dose.endDate, clock.now)
     }
 }

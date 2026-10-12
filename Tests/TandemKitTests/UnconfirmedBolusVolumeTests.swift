@@ -279,6 +279,25 @@ import XCTest
         XCTAssertNil(manager.state.pendingBolusFinalization)
     }
 
+    func testTheHistoryRecordIsDatedOnThePhonesClockUnderPumpClockSkew() throws {
+        let offset: TimeInterval = .minutes(15)
+        manager.state.currentPumpTime = clock.now.addingTimeInterval(offset)
+        manager.state.lastPumpTimeCheckDate = clock.now
+        startBolus()
+        stubNoLastBolus()
+        advancePastTheBolus()
+        stubCurrentBolus(statusId: 0, bolusId: 0)
+        manager.fetchBolusStatus(fromSync: false)
+
+        let pumpEnd = Self.t0.addingTimeInterval(120)
+        storeCompletion(delivered: 1.234, at: pumpEnd.addingTimeInterval(offset))
+        manager.finalizePendingBolus()
+
+        let dose = try XCTUnwrap(finalizedBoluses.last)
+        XCTAssertEqual(dose.deliveredUnits, 1.234)
+        XCTAssertEqual(dose.endDate.timeIntervalSince(pumpEnd), 0, accuracy: 1.0)
+    }
+
     func testCancelledBolusIsFinalizedFromItsHistoryRecord() throws {
         startBolus()
         clock.advance(by: 30)
