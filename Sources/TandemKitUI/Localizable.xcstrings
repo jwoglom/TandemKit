@@ -434,6 +434,17 @@
     "Bolus" : {
 
     },
+    "Bolus Not Confirmed" : {
+      "comment" : "Status highlight that the pump never answered a bolus command, so whether it is delivering that bolus is not yet known.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bolus Not Confirmed"
+          }
+        }
+      }
+    },
     "BTLE" : {
 
     },

@@ -577,6 +577,27 @@ edit instead of at the next sync.
   only ceiling. (`maximumTempBasalRateExceeded` was never wired up in any revision and has
   been removed rather than left as a dead enum case.)
 
+### Unanswered bolus command
+- `write` gives nil whether `InitiateBolus` never left the phone, the pump refused it or its answer
+  was lost, so `enactBolus` then asks the pump (`settleUnansweredBolus`, #327). Its bolus id running
+  in `CurrentBolusStatus`, or in `LastBolusStatus`, is reported as an acknowledged bolus would be,
+  and the enact succeeds. Nothing running and a last bolus whose id precedes it on the pump's 16-bit
+  counter (`bolusId(_:precedes:)`) means it never started: the permission is released and the enact
+  fails as `noResponse`, with nothing reported.
+- Otherwise the enact fails with `.uncertainDelivery`, and the bolus is registered as an
+  acknowledged one is (ledger entry, `bolusDose`, a mutable event at the programmed amount, dated
+  when `InitiateBolus` was sent) but with `isUnconfirmed` (persisted) set and no progress reporter.
+  `deliveryIsUncertain` reads it, and the status highlight says so, since Trio does not act on the
+  flag. The permission is kept: a release could reach a bolus the pump is running.
+- Every bolus status read settles it (`confirmUnansweredBolus`): `shouldDeferBolusSync` never
+  defers for it, `ensureCurrentPumpData` is not throttled while it stands, and the next
+  `enactBolus` reads the pump before refusing with `bolusIsRunning`.
+  Running, or in `LastBolusStatus`: tracked as any app bolus. Never started: the permission is
+  released and the bolus finalized at 0 U, as a zero-delivery cancel is (#455). A later bolus in
+  `LastBolusStatus`: only history can tell, so it is held in `pendingBolusFinalization` at its
+  programmed amount. No answer: it stays unconfirmed. History that reads its `BolusCompleted`
+  finalizes it under the live `raw`, through its ledger entry.
+
 ### Unconfirmed bolus volume
 - A bolus whose `LastBolusStatus` can't be read is held mutable in `pendingBolusFinalization` and
   retried every sync. The retry also takes its `BolusCompleted` record from the session
@@ -630,8 +651,9 @@ integration scenarios.
     but has not been confirmed against pump firmware.
   - The legacy 16-character pump-challenge pairing is not implemented; only the 6-digit JPAKE
     code is.
-- **Delivery-uncertainty recovery.** `deliveryUncertaintyRecoveryViewController` returns the
-  general `TandemUICoordinator`; there is no dedicated recovery screen.
+- **Delivery-uncertainty recovery.** `deliveryIsUncertain` is set only for an unconfirmed bolus,
+  which the next read of the pump settles on its own; `deliveryUncertaintyRecoveryViewController`
+  returns the general `TandemUICoordinator`, and there is no dedicated recovery screen.
 - **Response validation.** `BTResponseParser` does not check the CRC, HMAC or `txId` of received
   packets; it only rejects cargo shorter than the message's declared size.
 - **Hardware validation.** There is no written manual test procedure for pairing, bolus, temp
