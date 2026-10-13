@@ -206,7 +206,7 @@ extension TandemPumpManager {
         guard response.status == .delivering || response.status == .requesting,
               response.bolusId != state.bolusDose?.bolusId,
               let serial = historyLogStoreSerial?.rawValue,
-              state.bolusReportLedger.entry(bolusId: response.bolusId, pumpSerial: serial) == nil
+              !state.bolusReportLedger.hasEntry(bolusId: response.bolusId, pumpSerial: serial)
         else {
             return
         }

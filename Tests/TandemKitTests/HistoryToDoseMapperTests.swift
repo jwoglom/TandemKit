@@ -199,6 +199,162 @@ final class HistoryToDoseMapperTests: XCTestCase {
         XCTAssertTrue(events.isEmpty)
     }
 
+    // MARK: - Extended boluses (#424)
+
+    private func bolexActivation(bolusId: Int, units: Float, at pumpTimeSec: UInt32, sequenceNum: UInt32) -> BolexActivatedHistoryLog {
+        BolexActivatedHistoryLog(pumpTimeSec: pumpTimeSec, sequenceNum: sequenceNum, bolusId: bolusId, iob: 0, bolexSize: units)
+    }
+
+    private func bolexCompletion(
+        bolusId: Int,
+        delivered: Float,
+        requested: Float,
+        stoppedEarly: Bool = false,
+        at pumpTimeSec: UInt32,
+        sequenceNum: UInt32
+    ) -> BolexCompletedHistoryLog {
+        BolexCompletedHistoryLog(
+            pumpTimeSec: pumpTimeSec,
+            sequenceNum: sequenceNum,
+            completionStatus: stoppedEarly ? 0 : 3,
+            bolusId: bolusId,
+            iob: delivered,
+            insulinDelivered: delivered,
+            insulinRequested: requested
+        )
+    }
+
+    private func bolusDelivery(bolusId: Int, extendedMinutes: Int, at pumpTimeSec: UInt32, sequenceNum: UInt32) -> BolusDeliveryHistoryLog {
+        BolusDeliveryHistoryLog(
+            pumpTimeSec: pumpTimeSec,
+            sequenceNum: sequenceNum,
+            bolusID: bolusId,
+            bolusDeliveryStatus: 1,
+            bolusTypeBitmask: 3,
+            bolusSource: BolusDeliveryHistoryLog.BolusSource.gui.rawValue,
+            remoteId: bolusId & 0xFF,
+            requestedNow: 1000,
+            requestedLater: 2000,
+            correction: 0,
+            extendedDurationRequested: extendedMinutes,
+            deliveredTotal: 0
+        )
+    }
+
+    func testAnExtendedBolusWithAnUpFrontPartIsTwoDoses() throws {
+        let events = map([
+            bolusDelivery(bolusId: 12, extendedMinutes: 120, at: 1000, sequenceNum: 1),
+            BolusActivatedHistoryLog(pumpTimeSec: 1000, sequenceNum: 2, bolusId: 12, selectedIob: 0, iob: 0, bolusSize: 1.0),
+            BolusCompletedHistoryLog(
+                pumpTimeSec: 1040,
+                sequenceNum: 3,
+                completionStatusId: 3,
+                bolusId: 12,
+                iob: 1,
+                insulinDelivered: 1,
+                insulinRequested: 1
+            ),
+            bolexActivation(bolusId: 12, units: 2.0, at: 1041, sequenceNum: 4),
+            bolexCompletion(bolusId: 12, delivered: 2.0, requested: 2.0, at: 1041 + 7200, sequenceNum: 5)
+        ])
+
+        XCTAssertEqual(events.map(\.raw), [
+            HistoryLogSyncIdentifier.bolus(pumpSerial: serial, bolusId: 12),
+            HistoryLogSyncIdentifier.extendedBolus(pumpSerial: serial, bolusId: 12)
+        ])
+        XCTAssertEqual(events[0].dose?.deliveredUnits, 1.0, "BolusCompleted counts the up-front part alone")
+
+        let extended = try XCTUnwrap(events[1].dose)
+        XCTAssertEqual(events[1].type, .bolus)
+        XCTAssertEqual(events[1].date, pumpDate(1041))
+        XCTAssertEqual(extended.type, .bolus)
+        XCTAssertEqual(extended.startDate, pumpDate(1041))
+        XCTAssertEqual(extended.endDate, pumpDate(1041 + 7200))
+        XCTAssertEqual(extended.programmedUnits, 2.0)
+        XCTAssertEqual(extended.deliveredUnits, 2.0)
+        XCTAssertFalse(extended.isMutable)
+        XCTAssertEqual(extended.syncIdentifier, events[1].raw.hexadecimalString)
+        XCTAssertTrue(extended.wasProgrammedByPumpUI)
+        XCTAssertEqual(extended.automatic, false)
+    }
+
+    func testAFullyExtendedBolusIsOneExtendedDose() throws {
+        let events = map([
+            bolexActivation(bolusId: 13, units: 2.0, at: 1000, sequenceNum: 1),
+            bolexCompletion(bolusId: 13, delivered: 2.0, requested: 2.0, at: 1000 + 1800, sequenceNum: 2)
+        ])
+
+        XCTAssertEqual(events.map(\.raw), [HistoryLogSyncIdentifier.extendedBolus(pumpSerial: serial, bolusId: 13)])
+        let dose = try XCTUnwrap(events.first?.dose)
+        XCTAssertEqual(dose.startDate, pumpDate(1000))
+        XCTAssertEqual(dose.endDate, pumpDate(1000 + 1800))
+        XCTAssertEqual(dose.deliveredUnits, 2.0)
+        XCTAssertFalse(dose.isMutable)
+    }
+
+    func testAnExtendedPartStoppedEarlyEndsAtItsCompletionWithWhatItDelivered() throws {
+        let events = map([
+            bolusDelivery(bolusId: 14, extendedMinutes: 120, at: 1000, sequenceNum: 1),
+            bolexActivation(bolusId: 14, units: 2.0, at: 1000, sequenceNum: 2),
+            bolexCompletion(bolusId: 14, delivered: 0.75, requested: 2.0, stoppedEarly: true, at: 1000 + 2700, sequenceNum: 3)
+        ])
+
+        let dose = try XCTUnwrap(events.first?.dose)
+        XCTAssertEqual(dose.endDate, pumpDate(1000 + 2700), "at the stop, not the programmed end")
+        XCTAssertEqual(dose.programmedUnits, 2.0)
+        XCTAssertEqual(dose.deliveredUnits, 0.75)
+        XCTAssertFalse(dose.isMutable)
+    }
+
+    func testAnExtendedPartInFlightIsMutableOverItsProgrammedDuration() throws {
+        let events = map([
+            bolusDelivery(bolusId: 15, extendedMinutes: 90, at: 1000, sequenceNum: 1),
+            bolexActivation(bolusId: 15, units: 3.0, at: 1001, sequenceNum: 2)
+        ])
+
+        XCTAssertEqual(events.map(\.raw), [HistoryLogSyncIdentifier.extendedBolus(pumpSerial: serial, bolusId: 15)])
+        let dose = try XCTUnwrap(events.first?.dose)
+        XCTAssertTrue(dose.isMutable)
+        XCTAssertEqual(dose.startDate, pumpDate(1001))
+        XCTAssertEqual(dose.endDate, pumpDate(1001 + 90 * 60))
+        XCTAssertEqual(dose.programmedUnits, 3.0)
+        XCTAssertNil(dose.deliveredUnits)
+    }
+
+    func testAnExtendedPartInFlightWithoutItsDurationCountsAtItsStart() throws {
+        let events = map([bolexActivation(bolusId: 16, units: 3.0, at: 1000, sequenceNum: 1)])
+
+        let dose = try XCTUnwrap(events.first?.dose)
+        XCTAssertTrue(dose.isMutable)
+        XCTAssertEqual(dose.endDate, dose.startDate)
+    }
+
+    func testABolexCompletionWithoutItsActivationIsNotMapped() {
+        let events = map([bolexCompletion(bolusId: 17, delivered: 2.0, requested: 2.0, at: 5000, sequenceNum: 9)])
+
+        XCTAssertTrue(events.isEmpty, "\(events)")
+    }
+
+    func testAnExtendedPartStartingInItsUpFrontPartsSecondStartsASecondLater() throws {
+        let events = map([
+            BolusActivatedHistoryLog(pumpTimeSec: 1000, sequenceNum: 1, bolusId: 18, selectedIob: 0, iob: 0, bolusSize: 0.05),
+            BolusCompletedHistoryLog(
+                pumpTimeSec: 1000,
+                sequenceNum: 2,
+                completionStatusId: 3,
+                bolusId: 18,
+                iob: 0.05,
+                insulinDelivered: 0.05,
+                insulinRequested: 0.05
+            ),
+            bolexActivation(bolusId: 18, units: 1.0, at: 1000, sequenceNum: 3),
+            bolexCompletion(bolusId: 18, delivered: 1.0, requested: 1.0, at: 1600, sequenceNum: 4)
+        ])
+
+        XCTAssertEqual(events.map(\.date), [pumpDate(1000), pumpDate(1001)])
+        XCTAssertEqual(events.last?.dose?.startDate, pumpDate(1001))
+    }
+
     // MARK: - Cross-cutting behaviour
 
     func testClockChangeInWindowAdjustsEarlierRecords() throws {

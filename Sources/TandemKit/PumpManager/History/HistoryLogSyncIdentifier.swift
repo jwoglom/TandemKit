@@ -14,7 +14,8 @@ import Foundation
 /// * **Boluses** — `bolusId`, carried by `BolusActivatedHistoryLog`, `BolusCompletedHistoryLog`,
 ///   `BolexActivatedHistoryLog`/`BolexCompletedHistoryLog` and `BolusDeliveryHistoryLog`, and known
 ///   at command time from `BolusPermissionResponse`. Available in both phases, so an optimistically
-///   reported bolus finalizes in place.
+///   reported bolus finalizes in place. The extended part of a bolus is a dose of its own under
+///   `extendedBolus`, since it shares its up-front part's `bolusId`.
 /// * **Temp rates** — `tempRateId`, carried by `TempRateActivatedHistoryLog` and
 ///   `TempRateCompletedHistoryLog`.
 /// * **Everything else** — the pump assigns no id, so the log's own `sequenceNum` is the only
@@ -44,12 +45,15 @@ public enum HistoryLogSyncIdentifier {
     /// Which pump-assigned counter the identifier is built from. Values are persisted indirectly by
     /// the host app; never renumber them.
     public enum Scheme: UInt8 {
-        /// `bolusId`, shared by every record of one bolus (standard, extended, quick, Control-IQ).
+        /// `bolusId`, shared by every record of one bolus (standard, quick, Control-IQ, or the
+        /// up-front part of an extended one).
         case bolus = 1
         /// `tempRateId`, shared by a temp rate's activation and completion.
         case tempRate = 2
         /// The history log's own `sequenceNum`, for events the pump assigns no id to.
         case logSequence = 3
+        /// `bolusId` of the extended part (`BolexActivated`/`BolexCompleted`) of a bolus.
+        case extendedBolus = 4
     }
 
     /// A pump serial known to be real, which is the only kind that may enter an identifier.
@@ -96,6 +100,11 @@ public enum HistoryLogSyncIdentifier {
     /// Identity of a bolus, from the pump-assigned `bolusId`.
     public static func bolus(pumpSerial: PumpSerial, bolusId: Int) -> Data {
         data(scheme: .bolus, pumpSerial: pumpSerial, identifier: UInt32(clamping: bolusId))
+    }
+
+    /// Identity of the extended part of a bolus, from the `bolusId` it shares with the up-front part.
+    public static func extendedBolus(pumpSerial: PumpSerial, bolusId: Int) -> Data {
+        data(scheme: .extendedBolus, pumpSerial: pumpSerial, identifier: UInt32(clamping: bolusId))
     }
 
     /// Identity of a temp rate, from the pump-assigned `tempRateId`.

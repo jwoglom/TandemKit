@@ -145,6 +145,9 @@ struct PumpTimeline {
     static let basalCycle: TimeInterval = 300
 
     let boluses: [Bolus]
+    /// The extended parts of extended boluses (BolexActivated to BolexCompleted), each a dose of its
+    /// own beside its up-front part in `boluses`, which shares its `bolusId`.
+    let extendedParts: [Bolus]
     let tempRates: [TempRate]
     let suspends: [Suspend]
     let basalCycles: [BasalCycle]
@@ -181,6 +184,8 @@ struct PumpTimeline {
 
         var boluses: [Int: Bolus] = [:]
         var bolusOrder: [Int] = []
+        var extendedParts: [Int: Bolus] = [:]
+        var extendedPartOrder: [Int] = []
         var tempRates: [TempRate] = []
         var suspends: [Suspend] = []
         var alarms: [Alarm] = []
@@ -237,6 +242,43 @@ struct PumpTimeline {
                     deliveredUnits: data["insulinDelivered"]?.doubleValue,
                     endReason: BolusEndReason(id: data["completionStatusId"]?.intValue),
                     sourceId: existing?.sourceId
+                )
+
+            case "BolexActivated":
+                // Wire fields: bolusId, selectedIob, iob, bolexSize.
+                guard let id = data["bolusId"]?.intValue else {
+                    unplaced.append(Unplaced(sequence: entry.sequence, type: entry.type, note: "no bolusId"))
+                    continue
+                }
+                extendedPartOrder.append(id)
+                extendedParts[id] = Bolus(
+                    bolusId: id,
+                    programmedUnits: data["bolexSize"]?.doubleValue,
+                    start: instant(entry),
+                    startPumpSeconds: entry.pumpSeconds,
+                    end: nil,
+                    endPumpSeconds: nil,
+                    deliveredUnits: nil,
+                    endReason: nil,
+                    sourceId: nil
+                )
+
+            case "BolexCompleted":
+                // Wire fields: completionStatus, bolusId, iob, insulinDelivered, insulinRequested.
+                guard let id = data["bolusId"]?.intValue, let existing = extendedParts[id] else {
+                    unplaced.append(Unplaced(sequence: entry.sequence, type: entry.type, note: "no BolexActivated before it"))
+                    continue
+                }
+                extendedParts[id] = Bolus(
+                    bolusId: id,
+                    programmedUnits: existing.programmedUnits ?? data["insulinRequested"]?.doubleValue,
+                    start: existing.start,
+                    startPumpSeconds: existing.startPumpSeconds,
+                    end: instant(entry),
+                    endPumpSeconds: entry.pumpSeconds,
+                    deliveredUnits: data["insulinDelivered"]?.doubleValue,
+                    endReason: BolusEndReason(id: data["completionStatus"]?.intValue),
+                    sourceId: nil
                 )
 
             case "TempRateActivated":
@@ -446,6 +488,7 @@ struct PumpTimeline {
         let sequences = entries.map(\.sequence)
         return PumpTimeline(
             boluses: bolusOrder.compactMap { boluses[$0] },
+            extendedParts: extendedPartOrder.compactMap { extendedParts[$0] },
             tempRates: tempRates,
             suspends: suspends,
             basalCycles: basalCycles,
@@ -543,8 +586,8 @@ struct PumpTimeline {
             return abs(a.timeIntervalSince(b)) <= tolerance.time
         }
 
-        for bolus in boluses {
-            let label = "bolus \(bolus.bolusId) (\(bolus.programmedUnits.map { "\($0) U" } ?? "? U"))"
+        for (bolus, kind) in boluses.map({ ($0, "bolus") }) + extendedParts.map({ ($0, "extended part of bolus") }) {
+            let label = "\(kind) \(bolus.bolusId) (\(bolus.programmedUnits.map { "\($0) U" } ?? "? U"))"
             let matches = doses.filter { $0.dose.type == .bolus && near($0.dose.startDate, bolus.start) }
             guard let match = matches.first else {
                 diff.missing.append(label)

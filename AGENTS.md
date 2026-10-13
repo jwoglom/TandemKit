@@ -252,8 +252,9 @@ rate check runs on a profile edit instead of at the next sync.
 ### Pump event batches
 - A `replacePendingEvents: true` batch makes both hosts delete every mutable dose it leaves out,
   and Loop never revives a deleted one. `emitPumpEvents` appends the boluses the host holds as
-  mutable, `bolusDose` and `pendingBolusFinalization`, to each one (#330). The temp basal is still
-  each call site's job, via `getActivePumpEvents`.
+  mutable, `bolusDose`, `pendingBolusFinalization` and the extended parts history holds
+  (`heldExtendedPartEvents`), to each one (#330). The temp basal is still each call site's job, via
+  `getActivePumpEvents`.
 - Loop's `DoseStore` keeps a stored `PumpEvent` row over a non-replacing report with the same
   `raw`, so finalizing a dose the host holds as mutable takes a replacing batch (#452).
 - A temp basal keeps one `raw` from its first report to its last, however it ends (#344):
@@ -301,7 +302,8 @@ rate check runs on a profile edit instead of at the next sync.
   manager gives it.
 - A held bolus is finalized with its `BolusCompleted` record if backfill has read one; otherwise a
   running bolus at its programmed amount, ended no later than the deletion so Loop stores it at
-  once, and one with an unconfirmed volume at the fallback it was held with.
+  once, and one with an unconfirmed volume at the fallback it was held with. A held extended part
+  is finalized at its programmed amount to its programmed end, which the pump runs on to.
 - Still open: Loop leaves the remainder out of IOB from a boundary past its end that came with no
   save (the next pump manager's empty batch) until that manager's next non-empty batch.
 - The integration harness's `shutDownDriver()` is the app going away (a relaunch), which tells the
@@ -401,6 +403,28 @@ rate check runs on a profile edit instead of at the next sync.
   `trackingSince` is stamped on the first decode by a build that has the ledger; nothing older
   is reported, because it cannot be told apart from an app bolus reported live without an
   entry.
+- An extended bolus programmed off the app (the pump's screen, Tandem's app; TandemKit and
+  Control-IQ never give one) is two doses under one `bolusId` (#424). The up-front part,
+  BolusActivated (55) to BolusCompleted (20), whose 20 counts that part alone, is reported as any
+  pump bolus; a 100% extended bolus has none. The extended part, BolexActivated (59) to
+  BolexCompleted (21), is a dose of its own under `HistoryLogSyncIdentifier.extendedBolus`, with its
+  own ledger entry (`BolusReportLedger.Part.extended`), so neither part reads as the other already
+  reported.
+  - Unlike a pump bolus it is reported as soon as history reads its 59, mutable, at 59's
+    `bolexSize` from 59 over the duration its 280s program (`extendedDurationRequested`, minutes),
+    or at once without a 280: it can run for hours, too long to leave out of IOB. Loop spreads it
+    over that span; Trio counts it all at its start. It rides every replacing batch, under its
+    first report's date, until its 21 is read, which finalizes it in a replacing batch at 21's
+    `insulinDelivered` and date, a stop part-way included.
+  - A 21 whose 59 is not in the store is not reported, since only the 59 places it in time. A
+    held part whose 21 is still unread `extendedPartFinalizationWindow` (1 h) past its programmed
+    end is finalized at its programmed amount, what the host counted, as the next replacing batch
+    goes out: history may never show it (another pump, the flags turned off), and the ledger would
+    otherwise drop it still mutable.
+  - A 59 in its up-front part's second is moved a second on, since Trio matches a new row on its
+    timestamp. Reporting either part releases a `reconciliationBoundary` hold on the bolus.
+  - Scenarios: conformance D13, D13b and D13c; unit tests in `ExtendedBolusReportingTests` and
+    `HistoryToDoseMapperTests`.
 - A bolus the app did not start that the live bolus status sees running is recorded, with
   `historyDoseReporting` on, as `BolusReportLedger.unreported` (#353). Until the batch that
   reports it from history, the `lastReconciliation` the host is given (`reconciliationBoundary`)
@@ -468,9 +492,8 @@ rate check runs on a profile edit instead of at the next sync.
   `DoseStore` stores nothing while the boundary is at or behind the end of the newest finalized
   basal it holds, and leaves out of IOB a dose that ended before the boundary and was not stored, so
   a boundary held behind the app's own finalized temp basals and then advanced by an empty batch
-  drops doses from IOB. Also open: extended boluses (Bolex records are only logged; #424). A temp
-  rate the app did not set reaches the host only through basal reconciliation, after the fact; the
-  live path still ignores it.
+  drops doses from IOB. A temp rate the app did not set reaches the host only through basal
+  reconciliation, after the fact; the live path still ignores it.
 
 ### Therapy command validation
 - The pump delivers basal in 5-minute cycles: at each it writes a `BasalDelivery` (279) record and
