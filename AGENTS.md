@@ -571,6 +571,10 @@ rate check runs on a profile edit instead of at the next sync.
   Suspended after a nil, where the driver held no suspend, is the app's suspend, reported at the
   reading; any other reading goes to `observeDeliveryState`, which ends a temp the stop ended. The
   command succeeds whenever the pump reads suspended, so a cartridge wizard can go on.
+- `ResumePumping` is read back the same way, from `resumeDelivery` and the settings screen's resume
+  alike. Delivering after a nil, where the driver held a suspend, is the app's resume, reported at
+  the send, the earliest the pump could have resumed. The command succeeds whenever the pump reads
+  delivering, so the settings screen acknowledges no alarm for a resume that went through.
 - A pump clock more than `pumpClockSkewThreshold` (5 min) off the phone's (`isPumpClockSkewed`)
   raises a LoopKit alert, retracted once the clock agrees (`pumpClockSkewAlertIssued`, persisted),
   and a status highlight; the settings screen syncs the clock. While skewed, wherever the host

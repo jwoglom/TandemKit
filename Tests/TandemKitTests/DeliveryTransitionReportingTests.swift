@@ -1135,6 +1135,31 @@ import XCTest
         XCTAssertEqual(events.count, reported)
     }
 
+    func testAnAppResumeWhoseAnswerWasLostIsNotReportedAgainFromHistory() {
+        appSuspend()
+        let suspendRecord = suspended(at: start.addingTimeInterval(1))
+        advance(to: minutes(10))
+        stubBasalStatus(1)
+        bluetooth.stub(ResumePumpingRequest.self) { [unowned self] _ in
+            self.stubBasalStatus(0)
+            self.clock.advance(by: 30)
+            return nil
+        }
+        let done = expectation(description: "resumeDelivery")
+        manager.resumeDelivery { error in
+            XCTAssertNil(error)
+            done.fulfill()
+        }
+        wait(for: [done], timeout: 5)
+        delegateQueue.sync {}
+        XCTAssertEqual(events(.resume).map(\.date), [minutes(10)])
+        let reported = events.count
+
+        pass([suspendRecord, resumed(at: minutes(10).addingTimeInterval(2))])
+
+        XCTAssertEqual(events.count, reported)
+    }
+
     func testAPassRunTwiceReportsNothingTheSecondTime() {
         advance(to: minutes(30))
         pass([suspended(at: minutes(5)), resumed(at: minutes(15))])
