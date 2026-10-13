@@ -226,7 +226,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             basalDeliveryState: state.basalDeliveryState,
             bolusState: state.bolusState,
             insulinType: state.insulinType,
-            deliveryIsUncertain: false
+            deliveryIsUncertain: state.bolusDose?.isUnconfirmed == true
         )
     }
 
@@ -484,8 +484,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
         logger.info("Sync pump data...")
 
         // Not while the link is down: this sync is the host's one periodic chance to reconnect.
+        // Nor while a bolus is unconfirmed, which only a read of the pump settles.
         if let lastSync = state.lastReconciliation, now.timeIntervalSince(lastSync) < .minutes(4.5),
-           !isAwaitingHistory, state.isConnected
+           !isAwaitingHistory, state.isConnected, state.bolusDose?.isUnconfirmed != true
         {
             logger.warning("State already in sync: \(now.timeIntervalSince(lastSync)) sec")
             completion?(lastSync)
@@ -760,10 +761,14 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 bolusBG: 0,
                 bolusIOB: 0
             )
+            let sentAt = self.now
             guard let initiateResponse = self.bluetooth.write(bolusRequest) else {
-                self.logger.error("Failed to initiate bolus")
-                self.releaseBolusPermission(bolusId: permissionResponse.bolusId)
-                completion(.communication(PumpCommError.noResponse))
+                completion(self.settleUnansweredBolus(
+                    units: units,
+                    activationType: activationType,
+                    bolusId: permissionResponse.bolusId,
+                    sentAt: sentAt
+                ))
                 return
             }
 
@@ -774,44 +779,90 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            let dose = UnfinalizedDose(
+            self.registerCommandedBolus(
                 units: units,
-                // The pump spends ~15s accepting the request before insulin moves.
-                duration: self.estimatedDuration(toBolus: units) + TandemPumpCapabilities.bolusInitiationDelay,
                 activationType: activationType,
-                insulinType: self.state.insulinType,
                 bolusId: permissionResponse.bolusId,
-                now: self.now
+                startDate: sentAt,
+                isUnconfirmed: false
             )
+            completion(nil)
+        }
+    }
 
-            let doseEntry = dose.toDoseEntry(isMutable: true)
-            self.bolusProgressReport = TandemDoseProgressReporter(
+    /// An `InitiateBolus` whose answer was lost may still have started the bolus, and a write gives
+    /// nil whether the request never left the phone, the pump refused it or its answer was lost.
+    private func settleUnansweredBolus(
+        units: Double,
+        activationType: BolusActivationType,
+        bolusId: Int,
+        sentAt: Date
+    ) -> PumpManagerError? {
+        let finding = bluetooth.write(CurrentBolusStatusRequest()).map { findUnansweredBolus(bolusId, status: $0) } ?? .unanswered
+        switch finding {
+        case .started:
+            logger.warning("No answer to InitiateBolus, but the pump took bolus \(bolusId); reporting it")
+            registerCommandedBolus(units: units, activationType: activationType, bolusId: bolusId, startDate: sentAt, isUnconfirmed: false)
+            return nil
+        case .notStarted:
+            logger.error("No answer to InitiateBolus, and the pump did not start bolus \(bolusId)")
+            releaseBolusPermission(bolusId: bolusId)
+            return .communication(PumpCommError.noResponse)
+        case .unanswered, .hiddenByLaterBolus:
+            logger.error("No answer to InitiateBolus, and the pump can't say whether it started bolus \(bolusId); reporting it as delivering")
+            registerCommandedBolus(units: units, activationType: activationType, bolusId: bolusId, startDate: sentAt, isUnconfirmed: true)
+            return .uncertainDelivery
+        }
+    }
+
+    /// Reported mutable at its programmed amount from the moment the pump may have it, so neither
+    /// host can dose without counting it.
+    private func registerCommandedBolus(
+        units: Double,
+        activationType: BolusActivationType,
+        bolusId: Int,
+        startDate: Date,
+        isUnconfirmed: Bool
+    ) {
+        let dose = UnfinalizedDose(
+            units: units,
+            // The pump spends ~15s accepting the request before insulin moves.
+            duration: estimatedDuration(toBolus: units) + TandemPumpCapabilities.bolusInitiationDelay,
+            activationType: activationType,
+            insulinType: state.insulinType,
+            bolusId: bolusId,
+            now: startDate
+        )
+        dose.isUnconfirmed = isUnconfirmed
+
+        let doseEntry = dose.toDoseEntry(isMutable: true)
+        // An unconfirmed bolus gets one once the pump is seen delivering it.
+        if !isUnconfirmed {
+            bolusProgressReport = TandemDoseProgressReporter(
                 pumpManager: self,
                 dose: doseEntry,
                 activationType: activationType
             )
-
-            let event = NewPumpEvent.bolus(dose: doseEntry, date: dose.startDate)
-            self.state.bolusReportLedger.prune(now: self.now)
-            self.state.bolusReportLedger.record(BolusReportLedger.Entry(
-                bolusId: permissionResponse.bolusId,
-                pumpSerial: HistoryLogSyncIdentifier.PumpSerial(self.state.pumpState.pumpSerial)?.rawValue,
-                origin: .commanded,
-                raw: event.raw,
-                eventDate: event.date,
-                automatic: activationType.isAutomatic,
-                isFinalized: false,
-                units: doseEntry.programmedUnits
-            ))
-
-            self.state.bolusDose = dose
-            self.state.bolusState = .initiating
-            self.state.lastReconciliation = self.now
-            self.notifyDelegateStateUpdated()
-            self.emitPumpEvents([event], replacePendingEvents: false)
-
-            completion(nil)
         }
+
+        let event = NewPumpEvent.bolus(dose: doseEntry, date: dose.startDate)
+        state.bolusReportLedger.prune(now: now)
+        state.bolusReportLedger.record(BolusReportLedger.Entry(
+            bolusId: bolusId,
+            pumpSerial: HistoryLogSyncIdentifier.PumpSerial(state.pumpState.pumpSerial)?.rawValue,
+            origin: .commanded,
+            raw: event.raw,
+            eventDate: event.date,
+            automatic: activationType.isAutomatic,
+            isFinalized: false,
+            units: doseEntry.programmedUnits
+        ))
+
+        state.bolusDose = dose
+        state.bolusState = .initiating
+        state.lastReconciliation = now
+        notifyDelegateStateUpdated()
+        emitPumpEvents([event], replacePendingEvents: false)
     }
 
     private var isBolusInFlight: Bool {
@@ -897,7 +948,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 startDate: bolusDose.startDate,
                 deliveryStartDate: bolusDose.deliveryStartDate,
                 deliveredUnits: bolusDose.deliveredUnits,
-                pumpTimestamp: self.hostDate(forPumpDate: lastBolus.pumpTimestamp)
+                pumpTimestamp: self.hostDate(forPumpDate: lastBolus.pumpTimestamp),
+                detectedAt: stoppedAt
             ))
 
             var events = self.getActivePumpEvents()
@@ -2695,7 +2747,7 @@ extension TandemPumpManager {
     }
 }
 
-private extension TandemPumpManager {
+extension TandemPumpManager {
     func releaseBolusPermission(bolusId: Int) {
         guard let response = bluetooth.write(BolusPermissionReleaseRequest(bolusID: bolusId)) else {
             logger.error("Error releasing bolus permission for id \(bolusId)")

@@ -37,7 +37,7 @@ enum BolusEndDate {
         deliveryStartDate: Date? = nil,
         deliveredUnits: Double?,
         pumpTimestamp: Date?,
-        detectedAt: Date = .now
+        detectedAt: Date
     ) -> Date {
         let deliveryStart = deliveryStartDate
             ?? startDate.addingTimeInterval(TandemPumpCapabilities.bolusInitiationDelay)

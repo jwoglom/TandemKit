@@ -24,6 +24,8 @@ public class UnfinalizedDose: Equatable {
     public var deliveredUnits: Double = 0
     public let insulinType: InsulinType?
     public let automatic: Bool
+    /// A bolus whose `InitiateBolus` went unanswered, until the pump says whether it started it.
+    public var isUnconfirmed = false
 
     public static func == (lhs: UnfinalizedDose, rhs: UnfinalizedDose) -> Bool {
         lhs.bolusId == rhs.bolusId &&
@@ -37,7 +39,8 @@ public class UnfinalizedDose: Equatable {
             lhs.value == rhs.value &&
             lhs.deliveredUnits == rhs.deliveredUnits &&
             lhs.insulinType == rhs.insulinType &&
-            lhs.automatic == rhs.automatic
+            lhs.automatic == rhs.automatic &&
+            lhs.isUnconfirmed == rhs.isUnconfirmed
     }
 
     public init(
@@ -115,7 +118,7 @@ public class UnfinalizedDose: Equatable {
     ///
     /// Clamped into `startDate...now`: residual clock-measurement error cannot move delivery
     /// before the command or into the future.
-    public func recordDeliveryStart(_ date: Date, now: Date = Date.now) {
+    public func recordDeliveryStart(_ date: Date, now: Date) {
         deliveryStartDate = min(max(date, startDate), max(now, startDate))
     }
 
@@ -181,6 +184,7 @@ public class UnfinalizedDose: Equatable {
         tempRateId = rawValue["tempRateId"] as? Int
         tempPercent = rawValue["tempPercent"] as? Int
         eventRaw = rawValue["eventRaw"] as? Data
+        isUnconfirmed = rawValue["isUnconfirmed"] as? Bool ?? false
     }
 
     public var rawValue: RawValue {
@@ -198,6 +202,7 @@ public class UnfinalizedDose: Equatable {
         raw["tempRateId"] = tempRateId
         raw["tempPercent"] = tempPercent
         raw["eventRaw"] = eventRaw
+        raw["isUnconfirmed"] = isUnconfirmed
 
         return raw
     }

@@ -69,7 +69,9 @@ oracle one rule at a time.
 | ID | Scenario | Stage | Assert |
 |---|---|---|---|
 | A1 | BLE drop mid-bolus, pump keeps delivering | enact 2 U; after `InitiateBolus` ack, fault `disconnect` on next `CurrentBolusStatus`; pump completes; reconnect; sync | mutable dose registered before the drop; after reconnect exactly one dose with the same `raw`, `isMutable false`, `deliveredUnits` == pump's `last_bolus.delivered`, `endDate` == pump completion time; oracle has one dose; no 0 U guess |
-| A2 | Lost `InitiateBolus` acknowledgement (#327) | fault `drop_response` scoped to `InitiateBolusRequest` (state applied, response lost); enact 1 U | enact reports a communication error; a mutable "uncertain" bolus is still reported (register up front); next sync sees the pump's running bolus and confirms it; never two doses, never dropped while the pump delivers |
+| A2 | Lost `InitiateBolus` acknowledgement (#327) | fault `drop_response` scoped to `InitiateBolusRequest` (state applied, response lost); enact 1 U | the driver reads `CurrentBolusStatus`, finds its bolus id running and reports the enact as succeeded; a mutable bolus registered up front, `deliveryIsUncertain` false; finalized once at the pump's amount; never two doses, never dropped while the pump delivers |
+| A2b | The link drops in place of the `InitiateBolus` acknowledgement (#327) | fault `disconnect` scoped to `InitiateBolusRequest` (state applied); enact 1 U; reconnect; sync | enact reports `.uncertainDelivery`; a mutable bolus at the programmed amount is reported and `deliveryIsUncertain` is true until the sync after the reconnect sees the pump running the bolus id; finalized once at the pump's amount |
+| A2c | `InitiateBolus` not applied, and the status read after it lost (#327) | fault `error_response` scoped to `InitiateBolusRequest`, `drop_response` on the next `CurrentBolusStatusRequest`; enact 1 U; sync | enact reports `.uncertainDelivery` and the bolus is counted mutable at its programmed amount; the sync finds nothing running and a last bolus older than its id, releases the permission and finalizes it at 0 U (as a zero-delivery cancel is, #455); `deliveryIsUncertain` clears |
 | A3 | Relaunch mid-bolus (#326) | enact 2 U with slow rate; persist `rawValue`; discard manager; construct `TandemPumpManager(rawState:)` with new delegate; pump completes; sync | first batch after relaunch contains the bolus with the original `raw` and `startDate`; finalized from `LastBolusStatus`, not from the estimate |
 | A3b | Relaunch mid-bolus with delayed delivered volume (#326) | history backfill off; relaunch while delivering; drop every `LastBolusStatus` response, armed before the pump completes (its `bolusChange` triggers the read); sync; persist and relaunch again; restore responses; sync | bolus remains mutable under its original `raw` while delivery is unknown; the pending finalization survives another relaunch and is finalized once from the pump's delivered volume |
 | A3c | Relaunch mid-bolus, delivered volume never readable (#448) | history backfill off; relaunch while delivering; drop every `LastBolusStatus`; pump completes; sync; advance past `bolusFinalizationWindow`; sync | held mutable through the window, then finalized under the original `raw` at the programmed amount, never the persisted 0 U |
@@ -90,7 +92,7 @@ oracle one rule at a time.
 
 | ID | Scenario | Stage | Assert |
 |---|---|---|---|
-| B1 | Cancel bolus at three points | enact 3 U; `cancelBolus` immediately / after 1 U / after 2.9 U (advance clock between) | finalized dose `deliveredUnits` == pump's `last_bolus.delivered` (0.0 / ~1.0 / ~2.9), `raw` identical to the mutable report, `value` == 3 U programmed |
+| B1 | Cancel bolus at three points | enact 3 U; `cancelBolus` immediately / after 1 U / after 2.9 U (advance clock between); after 1 U again with `pump_offset_seconds: 900` | finalized dose `deliveredUnits` == pump's `last_bolus.delivered` (0.0 / ~1.0 / ~2.9), `raw` identical to the mutable report, `value` == 3 U programmed; `endDate` == the pump's stop in phone time, skewed or not (#339) |
 | B2 | Cancel with zero delivery | cancel before any delivery (pump `delivered == 0`) | the dose disappears: next `replacePendingEvents: true` batch omits it; oracle shows it deleted; no 0 U immutable dose (P23). B1's first case expects the opposite; #455 decides |
 | B3 | Cancel temp basal early | enact 60 min TBR; advance 12 min; `enactTempBasal(duration: 0)` | one dose, same `raw`, `isMutable false`, `endDate` == cancel time on the pump, `deliveredUnits` == rate × 12 min rounded; Trio oracle shows a truncation record (#329) |
 | B4 | Replace temp basal early | enact TBR A; advance 7 min; enact TBR B | A finalized with real end and delivered units in the same batch that introduces mutable B; B has a new `raw`; no `replacePendingEvents: true` batch omits B while it runs |
@@ -115,7 +117,7 @@ oracle one rule at a time.
 | C9 | Two markers in one second (#352) | enact TBR; step both clocks to 0.4 s short of its end, the driver's alone 0.5 s on; neutral temp | no batch carries two events under one `raw`; the neutral temp's marker is the only one, so Trio holds no two basal rows in one second |
 | C10 | Two markers in one second, across batches (#352) | neutral temp; the driver's clock alone 0.2 s on, TBR; 0.3 s on, cancel | the two markers have their own `raw`, and Loop and Trio store both |
 
-## D. Pump-side failures and events (§7, §10 suspend/resume and faults; P10, P13, P14, G04, G06; #331, #333, #338, #348, #349, #350, #351, #424, #452)
+## D. Pump-side failures and events (§7, §10 suspend/resume and faults; P10, P13, P14, P20, G04, G06; #331, #333, #338, #348, #349, #350, #351, #355, #424, #452)
 
 | ID | Scenario | Stage | Assert |
 |---|---|---|---|
@@ -135,6 +137,7 @@ oracle one rule at a time.
 | D13 | A 100% extended bolus programmed on the pump (#424) | history flags on; append `BolexActivated`, 30 min, `BolexCompleted`; sync until the backfill has read them | a dose for the extended bolus at `BolexCompleted`'s delivered amount, spanning the two records. faketandem encodes the two records' payloads from jwoglom/faketandem#39 on; before that they decode as zeros, and the marker fires either way |
 | D14 | The fill wizards' primes (#349 P10-5) | `recordTubingFill`; 2 min; `recordSiteChange(primeAmount: 0.3)` | a dose-less `.prime` each, the cannula's with its `.replaceComponent(.infusionSet)`, non-replacing, dated when reported; no dose in Loop; Trio stores two `Prime` rows and one `SiteChange` |
 | D15 | A pump with another serial (#349 P14-5) | pair; give `PumpVersionBRequest` another `serialNumber`; `deleteSavedPumpState`; re-pair; sync twice | one `.replaceComponent(.pump)` and one `pumpManagerPumpWasReplaced`, none for the first pump; Trio stores it as a `SiteChange` |
+| D16 | A bolus Control-IQ gives (§7, §11 external doses; #355 P20-7) | history flags on; Control-IQ on the pump; a bolus with Control-IQ's source, and its `BolusDelivery` (280) records at start and completion, which carry the source; pump completes; sync | reported once from history, finalized at the pump's amount and dated at its start, `automatic` and `wasProgrammedByPumpUI`; Loop holds it permanent and Trio stores it as an SMB |
 
 ## E. Rounding and field semantics (§2, §9 item 7; P07, P19, P22) — folded into A–D
 
@@ -185,12 +188,12 @@ The pump delivers basal in 5-minute cycles, one `BasalDelivery` (279) record eac
 reports a correction where they differ (AGENTS.md "History backfill and dose reporting"). Each
 scenario runs faketandem's own basal cycle (`basal_cycle_enabled`), started once the driver is
 paired: a 279 every five minutes at the rate and source in force, `DailyBasal` totals,
-`ControlIQPcmChange` records, and Control-IQ switched on the pump (`closed_loop_enabled`) or by the
-app (`ChangeControlIQSettingsRequest`) at a scripted rate. History backfill and basal reporting are
-on. Every scenario that corrects also checks, over its 279s and over each, that Loop's and Trio's
-net basal equals the pump's (`PumpTimeline.basalCycles`). Loop's may be 0.025 U off for a cycle a
-suspend cuts short: Loop rebuilds the temp basal before a suspend without its `deliveredUnits` and
-counts it in 0.05 U steps. `BasalHistoryConformanceTests`.
+`ControlIQPcmChangeHistoryLog` records, and Control-IQ switched on the pump (`closed_loop_enabled`)
+or by the app (`ChangeControlIQSettingsRequest`) at a scripted rate. History backfill and basal
+reporting are on. Every scenario that corrects also checks, over its 279s and over each, that Loop's
+and Trio's net basal equals the pump's (`PumpTimeline.basalCycles`). Loop's may be 0.025 U off for a
+cycle a suspend cuts short: Loop rebuilds the temp basal before a suspend without its
+`deliveredUnits` and counts it in 0.05 U steps. `BasalHistoryConformanceTests`.
 
 | ID | Scenario | Assert |
 |---|---|---|

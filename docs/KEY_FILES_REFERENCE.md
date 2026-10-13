@@ -14,8 +14,14 @@ pieces fit together. Paths are relative to the repository root.
 | `TandemPumpManager+Alerts.swift` | Maps pump notifications to LoopKit `Alert`s and reconciles them, and reports alarms and malfunctions as `.alarm` / `.alarmClear` pump events. |
 | `TandemPumpManager+HistoryStore.swift` | Stores and prunes streamed history logs in the session store. |
 | `TandemPumpManager+HistoryDoseReporting.swift` | Reports boluses found in pump history that the live path missed. |
-| `TandemPumpManager+BasalReconciliation.swift` | Compares the basal in pump history with what the host was told, and logs the differences. |
+| `TandemPumpManager+BasalReconciliation.swift` | Compares the basal in pump history with what the host was told, logs the differences and, with `basalHistoryReporting`, reports corrections. |
+| `TandemPumpManager+DeliveryTransitions.swift` | Suspends, resumes and temp basal ends the pump made on its own, dated from its history (`observeDeliveryState`). |
+| `TandemPumpManager+InsulinOnBoard.swift` | `UnreportedInsulinOnBoardMonitor`, which holds the pump's IOB against the boluses reported, and the active profile's insulin duration. |
 | `QualifyingEventFetch.swift` | Maps pumpX2's suggested handlers for each qualifying event onto the manager's fetches. |
+| `PumpRefusal.swift` | Words a command the pump refused, from what the driver can read off the command. |
+| `CartridgeModeRecovery.swift` | Backs the pump out of a cartridge procedure left open and enters change-cartridge mode again. |
+| `PumpProfileReadout.swift` | Every request and response of one read of the pump's profiles, for the debug Pump Profile Viewer. |
+| `HostApp.swift` | Names the host app (Trio, Loop) in user-facing text. |
 | `PumpBluetoothConnection.swift` | The protocol everything above the BLE layer talks through. |
 | `TandemBluetoothManager.swift` | `CBCentralManager`, the serial command queue (`ensureConnected`), connect, reconnect and scan. |
 | `TandemPeripheralManager.swift` | `CBPeripheral`: session setup (`performInitialSetup`), the write/response path, and routing notifications by characteristic. |
@@ -44,6 +50,7 @@ pieces fit together. Paths are relative to the repository root.
 | `HistoryTimestampReconciler.swift` | Pump timestamps → UTC, corrected for clock changes recorded in the log; `HistoryRecordDates` adds the pump clock offset, for every date a history pass takes. |
 | `HistoryLogSyncIdentifier.swift` | Stable `raw` identifiers for history-derived doses and the temp basals the app sets (#344). |
 | `BolusReportLedger.swift` | Persisted record of recent boluses, so history does not report app boluses a second time. |
+| `DeliveryTransitionLedger.swift` | Persisted record of every suspend and resume reported, and the delivery change waiting for history to date it. |
 
 ## State — `Sources/TandemKit/State/`
 
@@ -52,7 +59,7 @@ pieces fit together. Paths are relative to the repository root.
 | `TandemPumpManagerState.swift` | The host-persisted `rawState`. |
 | `PumpState.swift` | Pairing artifacts (`derivedSecret`, `serverNonce`, `pincode`, `peripheralUuid`), `timeSinceReset`, API version, serial number and `pumpModel`. `getAuthKey()` derives the signing key. |
 | `TandemPumpManagerSettings.swift` | Max bolus, max temp basal and max schedule entry. |
-| `TandemFeatureFlags.swift` | `controlIQSupport`, `quickBolusButtonSupport`, `historyBackfill`, `historyDoseReporting`. |
+| `TandemFeatureFlags.swift` | `controlIQSupport`, `quickBolusButtonSupport`, `historyBackfill`, `historyDoseReporting`, `basalHistoryReporting`. |
 
 ## Protocol — `Sources/TandemCore/`
 
@@ -67,7 +74,7 @@ pieces fit together. Paths are relative to the repository root.
 | `Messages/Models/` | Shared message models: `KnownApiVersion`, `SupportedDevices`, `MessageSupport` (`isSupported(pumpModel:apiVersion:)`), `PumpFaultCode` and others. |
 | `CharacteristicUUID.swift`, `ServiceUUID.swift` | BLE UUIDs and the list of characteristics subscribed for notifications. |
 | `Builders/JpakeAuthBuilder.swift`, `JpakeStep.swift` | The JPAKE state machine: full pairing, or confirmation only from a stored secret. |
-| `Builders/JpakeRound1Framing.swift` | Splits round 1 on the real group boundary and pads each frame. |
+| `Builders/JpakeRound1Framing.swift` | Cuts round 1 into two 165-byte frames, zero-padded at the end, and rejoins the pump's. |
 | `Builders/EcJpake.swift`, `SwiftECCJpakeProvider.swift` | EC-JPAKE on SwiftECC. Apple platforms only; a trapping stub on Linux. |
 | `Builders/Hkdf.swift`, `HmacSha256.swift`, `Common/HmacSha1.swift`, `Common/SHA1.swift`, `Common/SHA256.swift`, `Common/CRC16.swift` | Crypto and checksum primitives. |
 | `Builders/IDPManager.swift` | Reads and edits insulin delivery profiles (pumpX2's `IDPManager`). |
@@ -109,5 +116,7 @@ pieces fit together. Paths are relative to the repository root.
 | `VirtualPump.xcconfig` | Sets `TANDEMKIT_VIRTUAL_PUMP`. |
 | `scripts/test-local.sh`, `scripts/integration-test.sh` | Local unit and integration test runs. |
 | `scripts/check_xcodeproj_source_membership.rb` | Checks that every test file is in `TandemKitTests` (`--check`, `--fix`). |
+| `scripts/check_doc_references.py` | Checks that the docs name only code, paths and headings the repository has. |
 | `scripts/claude-web-setup.sh` | Toolchain setup for Linux agent sessions. |
-| `.github/workflows/linux.yml`, `macos.yml` | CI: Linux plain, virtual-pump, faketandem and two integration jobs; macOS unit, integration (the classes that need macOS) and Trio jobs. |
+| `HarmonizeRules/` | Lint rules that parse `Sources/` and `Tests/`; a separate SwiftPM package. |
+| `.github/workflows/linux.yml`, `macos.yml` | CI: Linux doc references, plain, Harmonize, virtual-pump, faketandem and two integration jobs; macOS unit, integration (the classes that need macOS), Trio and Loop jobs. |

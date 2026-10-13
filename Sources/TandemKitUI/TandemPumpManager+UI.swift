@@ -118,6 +118,18 @@ extension TandemPumpManager {
             )
         }
 
+        // Trio does not act on `deliveryIsUncertain`, so this is where its user learns of it.
+        if status.deliveryIsUncertain {
+            return PumpStatusHighlight(
+                localizedMessage: String(
+                    localized: "Bolus Not Confirmed",
+                    comment: "Status highlight that the pump never answered a bolus command, so whether it is delivering that bolus is not yet known."
+                ),
+                imageName: "exclamationmark.circle.fill",
+                state: .critical
+            )
+        }
+
         // Before the suspend, reservoir and Control-IQ highlights, because it means the basal rates
         // the app shows are not what the pump is running.
         if state.basalProfileUpdateStatus == .failed {

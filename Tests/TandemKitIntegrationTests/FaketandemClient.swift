@@ -619,20 +619,23 @@ final class FaketandemClient {
 
     // MARK: - Pump-initiated actions (each returns the resulting snapshot)
 
-    /// `source` is `pump` (default, source id 0) or `remote` (the app, source id 8).
+    /// `source` is `pump` (default, source id 0) or `remote` (the app, source id 8); `sourceId`, any
+    /// pumpX2 `BolusSource`, overrides it.
     @discardableResult
     func startBolus(
         units: Double,
         durationSeconds: Double? = nil,
         rate: Double? = nil,
         bolusId: Int? = nil,
-        source: String? = nil
+        source: String? = nil,
+        sourceId: Int? = nil
     ) throws -> FaketandemSnapshot {
         var body: [String: Any] = ["units": units]
         if let durationSeconds { body["duration_seconds"] = durationSeconds }
         if let rate { body["rate"] = rate }
         if let bolusId { body["bolus_id"] = bolusId }
         if let source { body["source"] = source }
+        if let sourceId { body["source_id"] = sourceId }
         return try action("/api/state/bolus/start", body)
     }
 
@@ -814,6 +817,22 @@ final class FaketandemClient {
 
     func setSettingsConfig(_ config: [String: Any], for messageType: String) throws {
         _ = try send("PUT", "/api/settings/\(messageType)", json: config)
+    }
+
+    /// The quick bolus button as `PumpGlobalsRequest` answers it, which a `SetQuickBolusSettingsRequest` writes.
+    func quickBolusEnabled() throws -> Bool? {
+        (try settingsValue(for: "PumpGlobalsRequest")["quickBolusEnabledRaw"] as? NSNumber).map { $0.intValue != 0 }
+    }
+
+    /// As if turned on or off on the pump.
+    func setQuickBolusEnabled(_ enabled: Bool) throws {
+        var config = try settingsConfig(for: "PumpGlobalsRequest")
+        guard var value = config["value"] as? [String: Any] else {
+            throw FaketandemClientError.decoding("PumpGlobalsRequest settings carry no value")
+        }
+        value["quickBolusEnabledRaw"] = enabled ? 1 : 0
+        config["value"] = value
+        try setSettingsConfig(config, for: "PumpGlobalsRequest")
     }
 
     // MARK: - Plumbing

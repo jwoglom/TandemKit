@@ -1,6 +1,7 @@
 ## Reference material
 - See [docs/ARCHITECTURE_ANALYSIS.md](docs/ARCHITECTURE_ANALYSIS.md) and [docs/KEY_FILES_REFERENCE.md](docs/KEY_FILES_REFERENCE.md) for deeper implementation notes and file-level pointers.
 - [docs/integration-harness.md](docs/integration-harness.md): the `TandemKitIntegrationTests` target, which runs the real driver against the faketandem emulator (`scripts/integration-test.sh`), and the emulator gaps it currently works around.
+- [docs/hardware-test-plan.md](docs/hardware-test-plan.md): the manual procedure on a real pump, including the quick bolus and Control-IQ configurations, and the firmware behaviour only a pump can confirm.
 
 ## Comments
 **Default to no comment.** Most code needs none. Before writing one, ask what a reader who has the
@@ -67,12 +68,21 @@ and compare its stored pump history with `TrioDoseStoreOracle`
 LoopWorkspace with TandemKit as its plugin, and compare both of LoopKit `DoseStore`'s tables with
 `LoopDoseStoreOracle` ([docs/integration-harness.md](docs/integration-harness.md#loop-in-the-simulator)).
 
-Coverage that was dropped along with the code it tested (`PumpComm` fault taxonomy and retry
-policy, the `TandemBLE` packet layer, `HistoryDeduplicator`/`HistoryReconciler`/
-`HistoryToDoseMapper`/`HistoryTimestampReconciler`, `PumpStateSupplier`,
-`PumpChallengeRequestBuilder` and the V1 16-character pairing path) is not represented
-anywhere now. If any of those behaviours come back, they need tests written against the
-current architecture, not restored from git history.
+Coverage that was dropped along with the code it tested (the `PumpComm` fault taxonomy and retry
+policy, `HistoryDeduplicator`/`HistoryReconciler`, `PumpChallengeRequestBuilder` and the V1
+16-character pairing path) is not represented anywhere now. If any of those behaviours come back,
+they need tests written against the current architecture, not restored from git history. Some have
+come back, with tests of their own: the packet layer `TandemBLE` held is `Packetize` and
+`BTResponseParser` in TandemCore, pumpX2's `PumpStateSupplier` is `QualifyingEventContext`,
+`HistoryToDoseMapper` and `HistoryTimestampReconciler` are back, and `BolusReportLedger`,
+`DeliveryTransitionLedger` and `BasalReconciler` match history against what the host was told.
+
+### Doc references
+`scripts/check_doc_references.py` fails when a markdown doc names a code identifier, a path or a
+`.swift` file the repository does not have, or links to a file or heading that is not there. The
+Linux workflow's `docs` job runs it, and its tests, on every change, documentation-only ones
+included. A name from another codebase goes in its `EXTERNAL`; a name a doc cites as gone goes in
+`REMOVED`, which fails once the code has it again. Both fail on an entry that is no longer needed.
 
 ### Message serialization tests
 Serialization tests go in `Tests/TandemCoreTests/Messages/<Category>/<Type>Tests.swift`, and
@@ -599,6 +609,27 @@ edit instead of at the next sync.
   only ceiling. (`maximumTempBasalRateExceeded` was never wired up in any revision and has
   been removed rather than left as a dead enum case.)
 
+### Unanswered bolus command
+- `write` gives nil whether `InitiateBolus` never left the phone, the pump refused it or its answer
+  was lost, so `enactBolus` then asks the pump (`settleUnansweredBolus`, #327). Its bolus id running
+  in `CurrentBolusStatus`, or in `LastBolusStatus`, is reported as an acknowledged bolus would be,
+  and the enact succeeds. Nothing running and a last bolus whose id precedes it on the pump's 16-bit
+  counter (`bolusId(_:precedes:)`) means it never started: the permission is released and the enact
+  fails as `noResponse`, with nothing reported.
+- Otherwise the enact fails with `.uncertainDelivery`, and the bolus is registered as an
+  acknowledged one is (ledger entry, `bolusDose`, a mutable event at the programmed amount, dated
+  when `InitiateBolus` was sent) but with `isUnconfirmed` (persisted) set and no progress reporter.
+  `deliveryIsUncertain` reads it, and the status highlight says so, since Trio does not act on the
+  flag. The permission is kept: a release could reach a bolus the pump is running.
+- Every bolus status read settles it (`confirmUnansweredBolus`): `shouldDeferBolusSync` never
+  defers for it, `ensureCurrentPumpData` is not throttled while it stands, and the next
+  `enactBolus` reads the pump before refusing with `bolusIsRunning`.
+  Running, or in `LastBolusStatus`: tracked as any app bolus. Never started: the permission is
+  released and the bolus finalized at 0 U, as a zero-delivery cancel is (#455). A later bolus in
+  `LastBolusStatus`: only history can tell, so it is held in `pendingBolusFinalization` at its
+  programmed amount. No answer: it stays unconfirmed. History that reads its `BolusCompleted`
+  finalizes it under the live `raw`, through its ledger entry.
+
 ### Unconfirmed bolus volume
 - A bolus whose `LastBolusStatus` can't be read is held mutable in `pendingBolusFinalization` and
   retried every sync. The retry also takes its `BolusCompleted` record from the session
@@ -648,14 +679,16 @@ integration scenarios.
   host; TandemKit is not a `CGMManager`. The CGM screens only pair, start, stop and monitor the
   pump's sensor session.
 - **Pairing.**
-  - `JpakeRound1Framing` is unit-tested and pairs against faketandem, whose JPAKE is pumpX2's,
-    but has not been confirmed against pump firmware.
+  - `JpakeRound1Framing` frames round 1 as pumpX2's client and server do (one stream cut at byte
+    165, zero-padded at its end) and pairs against faketandem, whose JPAKE is pumpX2's, but has
+    not been confirmed against pump firmware.
   - The legacy 16-character pump-challenge pairing is not implemented; only the 6-digit JPAKE
     code is.
-- **Delivery-uncertainty recovery.** `deliveryUncertaintyRecoveryViewController` returns the
-  general `TandemUICoordinator`; there is no dedicated recovery screen.
+- **Delivery-uncertainty recovery.** `deliveryIsUncertain` is set only for an unconfirmed bolus,
+  which the next read of the pump settles on its own; `deliveryUncertaintyRecoveryViewController`
+  returns the general `TandemUICoordinator`, and there is no dedicated recovery screen.
 - **Response validation.** `BTResponseParser` does not check the CRC, HMAC or `txId` of received
   packets; it only rejects cargo shorter than the message's declared size.
-- **Hardware validation.** There is no written manual test procedure for pairing, bolus, temp
-  basal and suspend/resume on the t:slim X2 and the Mobi, and no record of which pump firmware
-  versions are supported.
+- **Hardware validation.** [docs/hardware-test-plan.md](docs/hardware-test-plan.md) is the manual
+  procedure for the t:slim X2 and the Mobi, but no run of it is recorded, so which pump firmware
+  versions work is unknown.

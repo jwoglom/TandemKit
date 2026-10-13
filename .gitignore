@@ -78,3 +78,4 @@ build
 /Package.resolved
 .derived-data/
 .derived-data-virtual-pump/
+__pycache__/

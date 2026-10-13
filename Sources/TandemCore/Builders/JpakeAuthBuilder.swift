@@ -9,8 +9,6 @@ public class JpakeAuthBuilder {
     public private(set) var receivedMessages: [Message]
     var step: JpakeStep
     private var clientRound1: Data?
-    /// The two frames `clientRound1` is sent as, split on the real group boundary rather than at a
-    /// fixed offset — see `JpakeRound1Framing`.
     private var clientRound1Frames: (first: Data, second: Data)?
     private var serverRound1: Data?
     private var clientRound2: Data?
@@ -77,8 +75,6 @@ public class JpakeAuthBuilder {
         case .BOOTSTRAP_INITIAL:
             let round1 = cryptoProvider.makeRound1()
             clientRound1 = round1
-            // Split on the group boundary, not at byte 165: a ZKP scalar drops its leading zero
-            // bytes, so round 1 is 330 bytes only ~99.2% of the time.
             if let frames = JpakeRound1Framing.splitRound1(round1) {
                 clientRound1Frames = frames
                 request = Jpake1aRequest(appInstanceId: 0, centralChallenge: frames.first)
@@ -167,9 +163,6 @@ public class JpakeAuthBuilder {
             step = .ROUND_1A_RECEIVED
         } else if let m = response as? Jpake1bResponse {
             if let sr1 = serverRound1 {
-                // The pump's halves are fixed-size frames too, so its first half carries trailing
-                // padding whenever its own scalar came up short. Concatenating them raw would put
-                // that padding in the middle of the stream and misalign the second group.
                 let full = JpakeRound1Framing.joinRound1(first: sr1, second: m.centralChallengeHash)
                 serverRound1 = full
                 cryptoProvider.readRound1(full)
