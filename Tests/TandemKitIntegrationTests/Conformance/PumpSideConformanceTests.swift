@@ -1051,6 +1051,77 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         try timeline().assertMatches(loop)
     }
 
+    // MARK: - D17
+
+    /// An occlusion stops the pump under a running temp basal and only its alarm event reaches the
+    /// driver: whether a pump raises pumpSuspend with an alarm is unconfirmed. The alarm alone brings
+    /// the stop to the host, with no sync, dated at the pump's records rather than at the alarm (#333).
+    func testD17AStopSeenOnlyThroughItsAlarmIsReportedWithoutASync() throws {
+        let driver = try startPairedDriver(scheduledRate: Self.profileRate)
+        try IntegrationWait.until("the driver to start tracking the pump's history", timeout: 60) {
+            driver.manager.state.deliveryTransitions.trackedAfter != nil
+        }
+        let batchesBefore = allPumpEventBatches.count
+
+        let rate = 1.5
+        XCTAssertNil(try enactTempBasal(unitsPerHour: rate, duration: .minutes(60)))
+        let tempStart = try XCTUnwrap(eventsSince(batchesBefore).first { $0.dose?.type == .tempBasal }?.dose?.startDate)
+        try clock.advanceBoth(seconds: .minutes(5), ticks: 5)
+
+        var lost = FaketandemFaultSpec(.dropFragment)
+        lost.characteristic = "QualifyingEvents"
+        lost.everyNth = 1
+        lost.every = true
+        let fault = try XCTUnwrap(try harness.client.armFault(lost))
+        let stoppedAt = clock.now
+        let stopped = try harness.client.suspend(reason: "occlusion")
+        XCTAssertFalse(stopped.basal.tempActive, "the stop ended the temp rate")
+        try clock.advanceBoth(seconds: .minutes(3), ticks: 3)
+        try harness.client.clearFault(id: fault.id)
+        drainDelegate()
+        XCTAssertEqual(driver.manager.state.basalDose.type, .tempBasal, "none of the stop's own events reached the driver")
+        XCTAssertFalse(eventsSince(batchesBefore).contains { $0.type == .suspend })
+
+        let alarmedAt = clock.now
+        try harness.client.raiseQualifyingEvent(bitmask: QualifyingEvent.alarm.id)
+
+        let suspend = try IntegrationWait.value("the suspend, with no sync from the host", timeout: 60) {
+            self.eventsSince(batchesBefore).first { $0.type == .suspend }
+        }
+        XCTAssertEqual(suspend.date.timeIntervalSince(stoppedAt), 0, accuracy: 1, "dated at the pump's stop, not at the alarm (\(alarmedAt))")
+        XCTAssertEqual(suspend.dose?.isMutable, false)
+        let finished = try XCTUnwrap(
+            eventsSince(batchesBefore).first { $0.dose?.type == .tempBasal && $0.dose?.isMutable == false },
+            "the temp basal is finished with the stop: \(eventsSince(batchesBefore))"
+        )
+        XCTAssertEqual(finished.dose?.startDate, tempStart)
+        XCTAssertEqual(try XCTUnwrap(finished.dose?.endDate).timeIntervalSince(stoppedAt), 0, accuracy: 1, "ended at the occlusion")
+        XCTAssertEqual(try XCTUnwrap(finished.dose?.deliveredUnits), rate * stoppedAt.timeIntervalSince(tempStart) / .hours(1), accuracy: 0.001)
+        XCTAssertEqual(eventsSince(batchesBefore).filter { $0.type == .alarm }.map(\.alarmType), [.occlusion], "the alarm itself")
+        XCTAssertEqual(driver.manager.state.basalDose.type, .suspend)
+
+        try clock.advanceBoth(seconds: .minutes(2), ticks: 2)
+        let resumedAt = clock.now
+        try harness.client.resume(clearAlarms: true)
+        _ = try sync()
+
+        let events = eventsSince(batchesBefore)
+        XCTAssertEqual(events.filter { $0.type == .suspend }.count, 1, "one suspend for one stop: \(events)")
+        XCTAssertEqual(events.first { $0.type == .resume }?.date.timeIntervalSince(resumedAt) ?? .infinity, 0, accuracy: 1)
+
+        let (loop, trio) = feedOracles()
+        loop.assertNoDuplicates()
+        trio.assertNoDuplicates()
+        let stored = try XCTUnwrap(loop.doses.first { $0.dose.type == .suspend }, "Loop: \(loop.doses.map(LoopDoseStoreOracle.describe))")
+        XCTAssertFalse(stored.isMutable, "the resume closes the suspend")
+        XCTAssertEqual(stored.dose.endDate.timeIntervalSince(stoppedAt), resumedAt.timeIntervalSince(stoppedAt), accuracy: 2)
+        XCTAssertEqual(trio.tempBasals.count, 1, "one temp basal row: \(trio.tempBasals)")
+        XCTAssertEqual(trio.suspends.map(\.timestamp), [suspend.date])
+        // At Loop's resolution: `reconciled` rebuilds a temp basal a suspend truncated without the
+        // delivered volume reported, and re-derives it on the 0.05 U grid, as in C3.
+        try timeline().assertMatches(loop, tolerance: PumpTimeline.Tolerance(units: 0.05))
+    }
+
     // MARK: - Helpers
 
     private func appendBolusDelivery(

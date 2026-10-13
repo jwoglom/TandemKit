@@ -907,6 +907,66 @@ import XCTest
         XCTAssertNil(manager.state.deliveryTransitions.pending)
     }
 
+    // MARK: - Seen at an alarm
+
+    private func handleQualifyingEvents(_ events: Set<QualifyingEvent>) {
+        let acknowledged = expectation(description: "qualifying events acknowledged")
+        manager.handleQualifyingEvents(events: events) { acknowledged.fulfill() }
+        wait(for: [acknowledged], timeout: 60)
+        delegateQueue.sync {}
+    }
+
+    /// The history tick an event kicks runs on after the event is acknowledged, and its fetch
+    /// completes on the main queue.
+    private func waitUntilReported(_ type: DoseType, timeout: TimeInterval = 10) {
+        let deadline = Date().addingTimeInterval(timeout)
+        while delegateQueue.sync(execute: { events(type).isEmpty }), Date() < deadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.01))
+        }
+    }
+
+    func testAStopSeenAtAnAlarmIsDatedFromHistoryWithoutASync() {
+        stubPump(serving: [resumed(at: start.addingTimeInterval(-60)), suspended(at: minutes(10))])
+        advance(to: minutes(12))
+        stubBasalStatus(1)
+
+        handleQualifyingEvents([.alarm])
+        waitUntilReported(.suspend)
+
+        XCTAssertEqual(events(.suspend).map(\.date), [minutes(10)])
+        XCTAssertEqual(manager.state.basalDose.startDate, minutes(10))
+        XCTAssertNil(manager.state.deliveryTransitions.pending)
+    }
+
+    func testATempBasalAnAlarmStoppedEndsAtItsCompletionWithoutASync() throws {
+        runningTempBasal(2.0)
+        stubPump(serving: [
+            resumed(at: start.addingTimeInterval(-60)),
+            tempRateCompleted(7, at: minutes(8), timeLeft: 22 * 60),
+            suspended(at: minutes(8))
+        ])
+        advance(to: minutes(11))
+        stubBasalStatus(1)
+
+        handleQualifyingEvents([.alarm])
+        waitUntilReported(.suspend)
+
+        let temp = try XCTUnwrap(events(.tempBasal).last)
+        XCTAssertEqual(temp.dose?.isMutable, false)
+        XCTAssertEqual(temp.dose?.endDate, minutes(8))
+        XCTAssertEqual(events(.suspend).map(\.date), [minutes(8)])
+    }
+
+    func testWithTheFlagOffAStopSeenAtAMalfunctionIsReportedAtTheMalfunction() {
+        manager.state.featureFlags[.historyBackfill] = false
+        advance(to: minutes(12))
+        stubBasalStatus(1)
+
+        handleQualifyingEvents([.malfunction])
+
+        XCTAssertEqual(events(.suspend).map(\.date), [minutes(12)])
+    }
+
     // MARK: - What history never reports
 
     func testAResumeWithNoSuspendBeforeItIsNotReported() {
