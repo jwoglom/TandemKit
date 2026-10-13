@@ -70,4 +70,36 @@ final class SyncIntegrationTests: FaketandemIntegrationTestCase {
         }
         XCTAssertEqual(batches.last?.lastReconciliation, second)
     }
+
+    func testSyncTurnsOffAQuickBolusButtonTheFlagDoesNotAllow() throws {
+        let driver = makeDriver()
+        try harness.pair(driver)
+        XCTAssertEqual(try harness.client.quickBolusEnabled(), true, "faketandem's pump starts with the quick bolus button on")
+
+        _ = try harness.sync(driver)
+
+        XCTAssertEqual(try harness.client.quickBolusEnabled(), false)
+        XCTAssertEqual(driver.manager.state.quickBolusEnabled, false)
+
+        try harness.client.setQuickBolusEnabled(true)
+        let mark = try harness.client.snapshot().requestLog.lastSeq
+        _ = try harness.sync(driver)
+
+        XCTAssertEqual(try harness.client.quickBolusEnabled(), false, "turned back on at the pump, it is off again after the next sync")
+        XCTAssertEqual(try harness.requestsSeen(since: mark).filter { $0.message == "SetQuickBolusSettingsRequest" }.count, 1)
+    }
+
+    func testSyncLeavesTheQuickBolusButtonOnWhileTheFlagAllowsIt() throws {
+        var state = TandemPumpManagerState(rawValue: [:])
+        state.featureFlags[.quickBolusButtonSupport] = true
+        let driver = makeDriver(state: state)
+        try harness.pair(driver)
+
+        _ = try harness.sync(driver)
+        _ = try harness.sync(driver)
+
+        XCTAssertEqual(try harness.client.quickBolusEnabled(), true)
+        XCTAssertEqual(driver.manager.state.quickBolusEnabled, true)
+        XCTAssertFalse(try harness.requestsSeen().contains { $0.message == "SetQuickBolusSettingsRequest" })
+    }
 }

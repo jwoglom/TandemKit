@@ -1,6 +1,7 @@
 ## Reference material
 - See [docs/ARCHITECTURE_ANALYSIS.md](docs/ARCHITECTURE_ANALYSIS.md) and [docs/KEY_FILES_REFERENCE.md](docs/KEY_FILES_REFERENCE.md) for deeper implementation notes and file-level pointers.
 - [docs/integration-harness.md](docs/integration-harness.md): the `TandemKitIntegrationTests` target, which runs the real driver against the faketandem emulator (`scripts/integration-test.sh`), and the emulator gaps it currently works around.
+- [docs/hardware-test-plan.md](docs/hardware-test-plan.md): the manual procedure on a real pump, including the quick bolus and Control-IQ configurations, and the firmware behaviour only a pump can confirm.
 
 ## Comments
 **Default to no comment.** Most code needs none. Before writing one, ask what a reader who has the
@@ -67,12 +68,21 @@ and compare its stored pump history with `TrioDoseStoreOracle`
 LoopWorkspace with TandemKit as its plugin, and compare both of LoopKit `DoseStore`'s tables with
 `LoopDoseStoreOracle` ([docs/integration-harness.md](docs/integration-harness.md#loop-in-the-simulator)).
 
-Coverage that was dropped along with the code it tested (`PumpComm` fault taxonomy and retry
-policy, the `TandemBLE` packet layer, `HistoryDeduplicator`/`HistoryReconciler`/
-`HistoryToDoseMapper`/`HistoryTimestampReconciler`, `PumpStateSupplier`,
-`PumpChallengeRequestBuilder` and the V1 16-character pairing path) is not represented
-anywhere now. If any of those behaviours come back, they need tests written against the
-current architecture, not restored from git history.
+Coverage that was dropped along with the code it tested (the `PumpComm` fault taxonomy and retry
+policy, `HistoryDeduplicator`/`HistoryReconciler`, `PumpChallengeRequestBuilder` and the V1
+16-character pairing path) is not represented anywhere now. If any of those behaviours come back,
+they need tests written against the current architecture, not restored from git history. Some have
+come back, with tests of their own: the packet layer `TandemBLE` held is `Packetize` and
+`BTResponseParser` in TandemCore, pumpX2's `PumpStateSupplier` is `QualifyingEventContext`,
+`HistoryToDoseMapper` and `HistoryTimestampReconciler` are back, and `BolusReportLedger`,
+`DeliveryTransitionLedger` and `BasalReconciler` match history against what the host was told.
+
+### Doc references
+`scripts/check_doc_references.py` fails when a markdown doc names a code identifier, a path or a
+`.swift` file the repository does not have, or links to a file or heading that is not there. The
+Linux workflow's `docs` job runs it, and its tests, on every change, documentation-only ones
+included. A name from another codebase goes in its `EXTERNAL`; a name a doc cites as gone goes in
+`REMOVED`, which fails once the code has it again. Both fail on an entry that is no longer needed.
 
 ### Message serialization tests
 Serialization tests go in `Tests/TandemCoreTests/Messages/<Category>/<Type>Tests.swift`, and
@@ -635,6 +645,6 @@ integration scenarios.
   general `TandemUICoordinator`; there is no dedicated recovery screen.
 - **Response validation.** `BTResponseParser` does not check the CRC, HMAC or `txId` of received
   packets; it only rejects cargo shorter than the message's declared size.
-- **Hardware validation.** There is no written manual test procedure for pairing, bolus, temp
-  basal and suspend/resume on the t:slim X2 and the Mobi, and no record of which pump firmware
-  versions are supported.
+- **Hardware validation.** [docs/hardware-test-plan.md](docs/hardware-test-plan.md) is the manual
+  procedure for the t:slim X2 and the Mobi, but no run of it is recorded, so which pump firmware
+  versions work is unknown.

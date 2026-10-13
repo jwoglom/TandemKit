@@ -115,7 +115,7 @@ oracle one rule at a time.
 | C9 | Two markers in one second (#352) | enact TBR; step both clocks to 0.4 s short of its end, the driver's alone 0.5 s on; neutral temp | no batch carries two events under one `raw`; the neutral temp's marker is the only one, so Trio holds no two basal rows in one second |
 | C10 | Two markers in one second, across batches (#352) | neutral temp; the driver's clock alone 0.2 s on, TBR; 0.3 s on, cancel | the two markers have their own `raw`, and Loop and Trio store both |
 
-## D. Pump-side failures and events (§7, §10 suspend/resume and faults; P10, P13, P14, G04, G06; #331, #333, #338, #348, #349, #350, #351, #424, #452)
+## D. Pump-side failures and events (§7, §10 suspend/resume and faults; P10, P13, P14, P20, G04, G06; #331, #333, #338, #348, #349, #350, #351, #355, #424, #452)
 
 | ID | Scenario | Stage | Assert |
 |---|---|---|---|
@@ -135,6 +135,7 @@ oracle one rule at a time.
 | D13 | A 100% extended bolus programmed on the pump (#424) | history flags on; append `BolexActivated`, 30 min, `BolexCompleted`; sync until the backfill has read them | a dose for the extended bolus at `BolexCompleted`'s delivered amount, spanning the two records. faketandem encodes the two records' payloads from jwoglom/faketandem#39 on; before that they decode as zeros, and the marker fires either way |
 | D14 | The fill wizards' primes (#349 P10-5) | `recordTubingFill`; 2 min; `recordSiteChange(primeAmount: 0.3)` | a dose-less `.prime` each, the cannula's with its `.replaceComponent(.infusionSet)`, non-replacing, dated when reported; no dose in Loop; Trio stores two `Prime` rows and one `SiteChange` |
 | D15 | A pump with another serial (#349 P14-5) | pair; give `PumpVersionBRequest` another `serialNumber`; `deleteSavedPumpState`; re-pair; sync twice | one `.replaceComponent(.pump)` and one `pumpManagerPumpWasReplaced`, none for the first pump; Trio stores it as a `SiteChange` |
+| D16 | A bolus Control-IQ gives (§7, §11 external doses; #355 P20-7) | history flags on; Control-IQ on the pump; a bolus with Control-IQ's source, and its `BolusDelivery` (280) records at start and completion, which carry the source; pump completes; sync | reported once from history, finalized at the pump's amount and dated at its start, `automatic` and `wasProgrammedByPumpUI`; Loop holds it permanent and Trio stores it as an SMB |
 
 ## E. Rounding and field semantics (§2, §9 item 7; P07, P19, P22) — folded into A–D
 
@@ -185,12 +186,12 @@ The pump delivers basal in 5-minute cycles, one `BasalDelivery` (279) record eac
 reports a correction where they differ (AGENTS.md "History backfill and dose reporting"). Each
 scenario runs faketandem's own basal cycle (`basal_cycle_enabled`), started once the driver is
 paired: a 279 every five minutes at the rate and source in force, `DailyBasal` totals,
-`ControlIQPcmChange` records, and Control-IQ switched on the pump (`closed_loop_enabled`) or by the
-app (`ChangeControlIQSettingsRequest`) at a scripted rate. History backfill and basal reporting are
-on. Every scenario that corrects also checks, over its 279s and over each, that Loop's and Trio's
-net basal equals the pump's (`PumpTimeline.basalCycles`). Loop's may be 0.025 U off for a cycle a
-suspend cuts short: Loop rebuilds the temp basal before a suspend without its `deliveredUnits` and
-counts it in 0.05 U steps. `BasalHistoryConformanceTests`.
+`ControlIQPcmChangeHistoryLog` records, and Control-IQ switched on the pump (`closed_loop_enabled`)
+or by the app (`ChangeControlIQSettingsRequest`) at a scripted rate. History backfill and basal
+reporting are on. Every scenario that corrects also checks, over its 279s and over each, that Loop's
+and Trio's net basal equals the pump's (`PumpTimeline.basalCycles`). Loop's may be 0.025 U off for a
+cycle a suspend cuts short: Loop rebuilds the temp basal before a suspend without its
+`deliveredUnits` and counts it in 0.05 U steps. `BasalHistoryConformanceTests`.
 
 | ID | Scenario | Assert |
 |---|---|---|

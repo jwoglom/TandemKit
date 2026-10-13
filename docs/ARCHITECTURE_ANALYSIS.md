@@ -208,9 +208,9 @@ order:
 ## Messages
 
 `Message` is the base protocol: `static props`, `cargo`, `init(cargo:)`. `PumpRequest` adds an
-associated `Response` type, so `bluetooth.write(SomeRequest())` returns a typed response. The
-`Nonexistent*StreamRequest` placeholders stand in for unsolicited streams and deliberately do not
-conform to `PumpRequest`.
+associated `Response` type, so `bluetooth.write(CurrentBasalStatusRequest())` returns a
+`CurrentBasalStatusResponse`. The `Nonexistent*StreamRequest` placeholders stand in for
+unsolicited streams and deliberately do not conform to `PumpRequest`.
 
 `MessageProps` carries the opcode, size, characteristic, and the `signed`, `variableSize`,
 `stream` and `modifiesInsulinDelivery` flags. It also carries `minApi` and `supportedDevices`.

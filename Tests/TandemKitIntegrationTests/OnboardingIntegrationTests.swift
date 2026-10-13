@@ -193,4 +193,17 @@ final class OnboardingIntegrationTests: FaketandemIntegrationTestCase {
         XCTAssertNil(try applyOnboardingSettings(driver))
         try assertPumpHoldsTheSounds()
     }
+
+    // MARK: - O6
+
+    func testOnboardingTurnsTheQuickBolusButtonOffBeforeTheFirstSync() throws {
+        let driver = try pairedForOnboarding()
+        XCTAssertEqual(try harness.client.quickBolusEnabled(), true, "faketandem's pump starts with the quick bolus button on")
+
+        XCTAssertNil(try applyOnboardingSettings(driver))
+
+        XCTAssertEqual(try harness.client.quickBolusEnabled(), false)
+        XCTAssertEqual(driver.manager.state.quickBolusEnabled, false)
+        try assertPumpHoldsTheSounds()
+    }
 }

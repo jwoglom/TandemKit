@@ -976,7 +976,63 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         XCTAssertEqual(trio.events.filter { $0.type == .siteChange }.count, 1, "Trio stores a pump replacement as a site change: \(trio.events)")
     }
 
+    // MARK: - D16
+
+    func testD16ABolusControlIQGivesIsReportedFromItsHistoryAsAutomatic() throws {
+        try harness.client.setState(["closed_loop_enabled": true])
+        let driver = try startPairedDriverReportingHistory()
+        XCTAssertTrue(driver.manager.state.useControlIQ, "the first sync follows the pump into Control-IQ")
+        try harness.client.setState(["bolus_rate_units_per_second": 0.01])
+        let batchesBefore = allPumpEventBatches.count
+
+        let startedAt = clock.now
+        let controlIQ = BolusDeliveryHistoryLog.BolusSource.controlIQAutoBolus
+        try harness.client.startBolus(units: Self.bolusUnits, sourceId: controlIQ.rawValue)
+        let bolusId = try harness.client.snapshot().bolus.bolusId
+        // faketandem writes no BolusDelivery records (integration-harness.md "Known emulator gaps").
+        try appendBolusDelivery(bolusId: bolusId, status: .started, source: controlIQ, deliveredUnits: 0)
+        let lastBolus = try advanceUntilBolusFinishes(bolusId: bolusId)
+        try appendBolusDelivery(bolusId: bolusId, status: .completed, source: controlIQ, deliveredUnits: lastBolus.deliveredUnits)
+        try clock.advanceBoth(seconds: 30, ticks: 3)
+        _ = try sync()
+
+        let reported = try IntegrationWait.value("Control-IQ's bolus reported from its history", timeout: 120) {
+            self.eventsSince(batchesBefore).first { $0.dose?.type == .bolus }
+        }
+        XCTAssertEqual(reported.dose?.automatic, true, "Control-IQ gave it")
+        XCTAssertEqual(reported.dose?.wasProgrammedByPumpUI, true, "the app did not command it")
+        XCTAssertEqual(reported.dose?.isMutable, false, "reported finished")
+        XCTAssertEqual(reported.dose?.deliveredUnits ?? -1, lastBolus.deliveredUnits, accuracy: 0.0005)
+        XCTAssertEqual(reported.dose?.startDate.timeIntervalSince(startedAt) ?? .infinity, 0, accuracy: 2, "dated when the pump started it")
+
+        _ = try sync()
+        XCTAssertEqual(eventsSince(batchesBefore).filter { $0.raw == reported.raw }.count, 1, "reported once")
+
+        let (loop, trio) = feedOracles()
+        loop.assertNoDuplicates()
+        trio.assertNoDuplicates()
+        loop.assertPermanent(raw: reported.raw, "Control-IQ's bolus once it finished")
+        XCTAssertEqual(trio.events.filter { $0.type == .bolus }.map(\.isSMB), [true])
+        try timeline().assertMatches(loop)
+    }
+
     // MARK: - Helpers
+
+    private func appendBolusDelivery(
+        bolusId: Int,
+        status: BolusDeliveryHistoryLog.BolusDeliveryStatus,
+        source: BolusDeliveryHistoryLog.BolusSource,
+        deliveredUnits: Double
+    ) throws {
+        try harness.client.appendHistory(type: "BolusDelivery", secondsAgo: 0, data: [
+            "bolusId": bolusId,
+            "bolusDeliveryStatus": status.rawValue,
+            "bolusTypeBitmask": BolusDeliveryHistoryLog.BolusType.correction.rawValue,
+            "bolusSource": source.rawValue,
+            "requestedNow": Int((Self.bolusUnits * 1000).rounded()),
+            "deliveredTotal": Int((deliveredUnits * 1000).rounded()),
+        ])
+    }
 
     /// Waits out the first backfill tick, so anything the pump logs from here on is newer than the
     /// floor it reports from.
