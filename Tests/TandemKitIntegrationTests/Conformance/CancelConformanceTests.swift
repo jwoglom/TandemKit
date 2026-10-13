@@ -246,7 +246,7 @@ final class CancelConformanceTests: ConformanceTestCase {
         loop.assertNoDuplicates(what, file: file, line: line)
         let stored = try XCTUnwrap(loop.assertPermanent(raw: finalized.raw, what, file: file, line: line), file: file, line: line)
         XCTAssertEqual(stored.dose.deliveredUnits ?? -1, lastBolus.deliveredUnits, accuracy: Self.reportingIncrement, "\(what): Loop stored the pump's amount", file: file, line: line)
-        XCTAssertEqual(loop.callCount, allPumpEventBatches.count, "\(what): every batch reached the oracle", file: file, line: line)
+        XCTAssertEqual(loop.callCount, batchesFedToOracles, "\(what): every batch reached the oracle", file: file, line: line)
         if lastBolus.deliveredUnits > 0 {
             XCTAssertGreaterThan(loop.iob(at: clock.now), 0, "\(what): the partial delivery counts towards IOB", file: file, line: line)
         }
@@ -352,7 +352,7 @@ final class CancelConformanceTests: ConformanceTestCase {
         // Whatever the driver reports, it must not report it twice or under two identities.
         loop.assertNoDuplicates("zero-delivery cancel")
         trio.assertNoDuplicates("zero-delivery cancel")
-        XCTAssertEqual(loop.callCount, allPumpEventBatches.count)
+        XCTAssertEqual(loop.callCount, batchesFedToOracles)
 
         // The pump's own ledger: a 3 U bolus that stopped with nothing delivered.
         let timeline = try timeline()
@@ -643,6 +643,12 @@ final class CancelConformanceTests: ConformanceTestCase {
         fault.message = "CancelBolusRequest"
         fault.after = "request"
         _ = try harness.client.armFault(fault)
+        // The pump raises BOLUS_CHANGE before it drops the link, and the driver reconnects to read the
+        // bolus status, which settles the bolus, often before the checks below. Held off until they run.
+        var refusal = FaketandemFaultSpec(.errorResponse, message: "CurrentBolusStatusRequest")
+        refusal.every = true
+        refusal.errorCode = 3
+        let statusRefusal = try XCTUnwrap(harness.client.armFault(refusal))
 
         let result = try cancelBolus()
         switch result {
@@ -667,6 +673,7 @@ final class CancelConformanceTests: ConformanceTestCase {
             events(ofType: .bolus, after: start).allSatisfy { $0.dose?.isMutable == true },
             "nothing may be finalized while the cancel's outcome is unknown: \(describe(batches(after: start)))"
         )
+        try harness.client.clearFault(id: statusRefusal.id)
 
         // The link comes back and the pump's state decides. The emulator applies a command's state
         // change before the fault fires (README "Fault injection"), so the cancel did land even

@@ -311,6 +311,8 @@ final class HistoryBackfillIntegrationTests: ConformanceTestCase {
 
         let stoppedAt = clock.now
         _ = try harness.client.suspend(reason: "user")
+        // The driver dates what it sees on its own clock, so the clock waits for it.
+        try IntegrationWait.until("the driver to see the suspend", timeout: 30) { driver.manager.state.basalDose.type == .suspend }
         try clock.advanceBoth(seconds: .minutes(5), ticks: 5)
         let resumedAt = clock.now
         _ = try harness.client.resume(clearAlarms: true)

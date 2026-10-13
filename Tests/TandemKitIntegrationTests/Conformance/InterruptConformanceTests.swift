@@ -285,6 +285,12 @@ final class InterruptConformanceTests: ConformanceTestCase {
         var fault = FaketandemFaultSpec(.disconnect, message: "InitiateBolusRequest")
         fault.after = "request"
         try harness.client.armFault(fault)
+        // The driver reconnects and syncs on its own, often before the checks below run. Only a bolus
+        // status answer can confirm the bolus, so refusing every one holds it unconfirmed until lifted.
+        var refusal = FaketandemFaultSpec(.errorResponse, message: "CurrentBolusStatusRequest")
+        refusal.every = true
+        refusal.errorCode = 3
+        let statusRefusal = try XCTUnwrap(harness.client.armFault(refusal))
 
         let error = try enactBolus(units: 1.0, timeout: 90)
         guard case .uncertainDelivery? = error else {
@@ -314,6 +320,7 @@ final class InterruptConformanceTests: ConformanceTestCase {
         )
         XCTAssertEqual(whileUncertain.trio.boluses.count, 1, "and so does Trio")
 
+        try harness.client.clearFault(id: statusRefusal.id)
         try waitForReconnect()
         _ = try sync()
         XCTAssertFalse(driver.manager.status.deliveryIsUncertain, "the pump, reached again, runs the driver's bolus id")
@@ -481,8 +488,9 @@ final class InterruptConformanceTests: ConformanceTestCase {
 
         let secondRelaunch = try relaunch()
         XCTAssertEqual(secondRelaunch.manager.state.pendingBolusFinalization?.bolusId, bolusId)
-        try harness.client.clearFaults()
+        // Before the faults clear: the relaunched driver's own sync may make the retry first.
         let logBeforeRetry = try harness.client.snapshot().requestLog.lastSeq
+        try harness.client.clearFaults()
 
         _ = try sync()
 
@@ -608,12 +616,13 @@ final class InterruptConformanceTests: ConformanceTestCase {
         XCTAssertTrue(pumpBasal.tempActive)
         XCTAssertEqual(pumpBasal.tempRate, rate, accuracy: 0.0001)
 
-        // The link drops with the temp rate running; ten minutes pass before the driver is back.
-        // (The pump's log, not `disconnectFromPump()`'s poll of the live flag: the driver's
-        // auto-reconnect can bring the link back between two polls.)
-        try harness.control.disconnectPump()
+        // The link drops with the temp rate running; ten minutes pass before the driver is back. The
+        // radio stays off across the step: a sync reading the pump's clock mid-step measures a skew.
+        addTeardownBlock { try self.harness.client.armFault(FaketandemFaultSpec(.radioOn)) }
+        try harness.client.armFault(FaketandemFaultSpec(.radioOff))
         try waitForLinkDown(since: logStart)
         try clock.advanceBoth(seconds: .minutes(10), ticks: 10)
+        try harness.client.armFault(FaketandemFaultSpec(.radioOn))
         try waitForReconnect()
         _ = try sync()
 

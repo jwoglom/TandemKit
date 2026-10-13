@@ -122,11 +122,19 @@ final class VirtualPumpControlIntegrationTests: FaketandemIntegrationTestCase {
         file: StaticString = #filePath,
         line: UInt = #line
     ) throws -> TrioDoseStoreOracle {
-        driver.drainDelegate()
-        let batches = try XCTUnwrap(send(.init(command: .pumpEventBatches)).batches)
-        XCTAssertEqual(batches.map(\.pumpEvents), driver.delegate.pumpEventBatches.map(\.events), file: file, line: line)
-        XCTAssertEqual(batches.map(\.replacePendingEvents), driver.delegate.pumpEventBatches.map(\.replacePendingEvents), file: file, line: line)
-        XCTAssertEqual(batches.map(\.lastReconciliation), driver.delegate.pumpEventBatches.map(\.lastReconciliation), file: file, line: line)
+        // The driver may still be reporting, from a qualifying event the last command raised, and the
+        // channel logs a batch just before the delegate gets it: compared once both logs hold the same.
+        var batches: [VirtualPumpControl.Batch] = []
+        var received: [MockPumpManagerDelegate.PumpEventBatch] = []
+        try? IntegrationWait.until("the channel and the delegate to log the same batches", timeout: 30) {
+            driver.drainDelegate()
+            batches = try XCTUnwrap(send(.init(command: .pumpEventBatches)).batches)
+            received = driver.delegate.pumpEventBatches
+            return batches.map(\.pumpEvents) == received.map(\.events) && batches.allSatisfy(\.completed)
+        }
+        XCTAssertEqual(batches.map(\.pumpEvents), received.map(\.events), file: file, line: line)
+        XCTAssertEqual(batches.map(\.replacePendingEvents), received.map(\.replacePendingEvents), file: file, line: line)
+        XCTAssertEqual(batches.map(\.lastReconciliation), received.map(\.lastReconciliation), file: file, line: line)
         XCTAssertTrue(batches.allSatisfy { $0.completed && $0.delegateError == nil }, file: file, line: line)
 
         let oracle = TrioDoseStoreOracle()

@@ -45,7 +45,9 @@ final class OnboardingIntegrationTests: FaketandemIntegrationTestCase {
         state.alertAnnun = .audioHigh
         state.alarmAnnun = .audioMedium
         state.pumpSoundsAwaitingWrite = true
-        let driver = makeDriver(state: state, stageBasalScheduleSync: false)
+        // The pump's clock runs in real time here; a frozen driver clock set it behind by however
+        // long pairing and the onboarding writes took.
+        let driver = makeDriver(state: state, clock: SystemClock(), stageBasalScheduleSync: false)
         try harness.pair(driver)
         return driver
     }
