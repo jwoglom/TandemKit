@@ -258,8 +258,8 @@ The host calls `ensureCurrentPumpData` about every 5 minutes. It returns immedia
    (`responseCount` rose). The boundary is reported even when there are no doses, held at a pump
    bolus history has yet to report (`reconciliationBoundary`). If the basal read was answered, the
    batch carrying it re-sends every dose the host holds as mutable, replacing
-   (`reportPendingDoses`); with none, or while a delivery change waits for history, it is empty
-   and non-replacing.
+   (`reportPendingDoses`), the temp basal a delivery change waiting for history ended among them;
+   with none, it is empty and non-replacing.
 5. `historyBackfillCoordinator.runTick()` is started. The sync completes without waiting for it
    unless a delivery change is pending, Control-IQ has handed back, or the pump may bolus on its
    own (`isAwaitingHistory`, `awaitsHistoryBoluses`); then it waits for the pass, at most
