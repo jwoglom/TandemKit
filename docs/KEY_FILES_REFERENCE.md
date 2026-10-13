@@ -67,7 +67,7 @@ pieces fit together. Paths are relative to the repository root.
 | `Messages/Models/` | Shared message models: `KnownApiVersion`, `SupportedDevices`, `MessageSupport` (`isSupported(pumpModel:apiVersion:)`), `PumpFaultCode` and others. |
 | `CharacteristicUUID.swift`, `ServiceUUID.swift` | BLE UUIDs and the list of characteristics subscribed for notifications. |
 | `Builders/JpakeAuthBuilder.swift`, `JpakeStep.swift` | The JPAKE state machine: full pairing, or confirmation only from a stored secret. |
-| `Builders/JpakeRound1Framing.swift` | Splits round 1 on the real group boundary and pads each frame. |
+| `Builders/JpakeRound1Framing.swift` | Cuts round 1 into two 165-byte frames, zero-padded at the end, and rejoins the pump's. |
 | `Builders/EcJpake.swift`, `SwiftECCJpakeProvider.swift` | EC-JPAKE on SwiftECC. Apple platforms only; a trapping stub on Linux. |
 | `Builders/Hkdf.swift`, `HmacSha256.swift`, `Common/HmacSha1.swift`, `Common/SHA1.swift`, `Common/SHA256.swift`, `Common/CRC16.swift` | Crypto and checksum primitives. |
 | `Builders/IDPManager.swift` | Reads and edits insulin delivery profiles (pumpX2's `IDPManager`). |

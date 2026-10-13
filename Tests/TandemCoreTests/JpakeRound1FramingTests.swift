@@ -4,8 +4,7 @@ import XCTest
 
 /// A JPAKE round-1 payload is two length-prefixed `(point, ZKP)` groups. The ZKP's scalar is
 /// written without its leading zero bytes, so a group is 165 bytes only ~255/256 of the time and
-/// the payload is 330 bytes only ~99.2% of the time. These tests pin the framing that keeps the
-/// short cases working.
+/// the payload is 330 bytes only ~99.2% of the time.
 final class JpakeRound1FramingTests: XCTestCase {
     private let pointLength = 65
 
@@ -53,9 +52,15 @@ final class JpakeRound1FramingTests: XCTestCase {
 
     // MARK: - splitRound1
 
-    /// Regression guard: in the overwhelmingly common case the split must produce exactly what the
-    /// old fixed-offset slicing produced, or every existing pairing changes behaviour.
-    func testSplitOfFullLengthPayloadMatchesFixedOffsetSlicing() throws {
+    /// The group lengths the peer parses, reading round 1 as both frames concatenated, as pumpX2
+    /// does (`Bytes.combine(1a, 1b)`).
+    private func peerParsedGroupLengths(_ frames: (first: Data, second: Data)) -> [Int?] {
+        let stream = Bytes.combine(frames.first, frames.second)
+        let first = JpakeRound1Framing.groupLength(in: stream, at: 0)
+        return [first, first.flatMap { JpakeRound1Framing.groupLength(in: stream, at: $0) }]
+    }
+
+    func testSplitOfFullLengthPayloadIsCutAtByte165() throws {
         let round1 = makeGroup(scalarLength: 32, seed: 0x10) + makeGroup(scalarLength: 32, seed: 0x40)
         XCTAssertEqual(round1.count, 330)
 
@@ -65,50 +70,37 @@ final class JpakeRound1FramingTests: XCTestCase {
         XCTAssertEqual(frames.second, round1.subdata(in: 165 ..< 330))
     }
 
-    /// The case fixed-offset slicing gets wrong: the second frame must start at 164, not 165.
-    func testSplitWithShortFirstScalarKeepsSecondGroupAligned() throws {
-        let first = makeGroup(scalarLength: 31, seed: 0x10)
-        let second = makeGroup(scalarLength: 32, seed: 0x40)
-        let round1 = first + second
+    func testAShortFirstGroupRunsOnIntoTheFirstFrameAndThePaddingGoesAtTheEnd() throws {
+        let round1 = makeGroup(scalarLength: 31, seed: 0x10) + makeGroup(scalarLength: 32, seed: 0x40)
         XCTAssertEqual(round1.count, 329)
 
         let frames = try XCTUnwrap(JpakeRound1Framing.splitRound1(round1))
 
-        XCTAssertEqual(frames.first.count, 165)
-        XCTAssertEqual(frames.first.prefix(164), first, "First frame should carry the whole first group")
-        XCTAssertEqual(frames.first.last, 0, "and be right-padded with a zero byte")
-        XCTAssertEqual(frames.second, second, "Second frame must start at the real group boundary")
+        XCTAssertEqual(frames.first, round1.subdata(in: 0 ..< 165))
+        XCTAssertEqual(frames.second, round1.subdata(in: 165 ..< 329) + Data([0]))
+        XCTAssertEqual(peerParsedGroupLengths(frames), [164, 165])
     }
 
-    /// The case fixed-offset slicing runs off the end of the buffer on.
-    func testSplitWithShortSecondScalarPadsSecondFrame() throws {
+    func testAShortSecondGroupIsPaddedAtTheEnd() throws {
         let first = makeGroup(scalarLength: 32, seed: 0x10)
         let second = makeGroup(scalarLength: 31, seed: 0x40)
-        let round1 = first + second
-        XCTAssertEqual(round1.count, 329)
 
-        let frames = try XCTUnwrap(JpakeRound1Framing.splitRound1(round1))
+        let frames = try XCTUnwrap(JpakeRound1Framing.splitRound1(first + second))
 
         XCTAssertEqual(frames.first, first)
-        XCTAssertEqual(frames.second.count, 165)
-        XCTAssertEqual(frames.second.prefix(164), second)
-        XCTAssertEqual(frames.second.last, 0)
+        XCTAssertEqual(frames.second, second + Data([0]))
+        XCTAssertEqual(peerParsedGroupLengths(frames), [165, 164])
     }
 
-    func testSplitWithBothScalarsShortPadsBothFrames() throws {
-        let first = makeGroup(scalarLength: 30, seed: 0x10)
-        let second = makeGroup(scalarLength: 29, seed: 0x40)
-        let round1 = first + second
+    func testTwoShortGroupsArePaddedOnlyAtTheEnd() throws {
+        let round1 = makeGroup(scalarLength: 30, seed: 0x10) + makeGroup(scalarLength: 29, seed: 0x40)
         XCTAssertEqual(round1.count, 163 + 162)
 
         let frames = try XCTUnwrap(JpakeRound1Framing.splitRound1(round1))
 
-        XCTAssertEqual(frames.first.count, 165)
-        XCTAssertEqual(frames.second.count, 165)
-        XCTAssertEqual(frames.first.prefix(163), first)
-        XCTAssertEqual(frames.second.prefix(162), second)
-        XCTAssertEqual(Array(frames.first.suffix(2)), [0, 0])
-        XCTAssertEqual(Array(frames.second.suffix(3)), [0, 0, 0])
+        XCTAssertEqual(frames.first, round1.subdata(in: 0 ..< 165))
+        XCTAssertEqual(frames.second, round1.subdata(in: 165 ..< 325) + Data(repeating: 0, count: 5))
+        XCTAssertEqual(peerParsedGroupLengths(frames), [163, 162])
     }
 
     func testSplitRejectsMalformedPayload() {
@@ -120,29 +112,18 @@ final class JpakeRound1FramingTests: XCTestCase {
 
     // MARK: - joinRound1
 
-    func testJoinStripsPaddingFromTheFirstFrame() throws {
-        let first = makeGroup(scalarLength: 31, seed: 0x10)
-        let second = makeGroup(scalarLength: 32, seed: 0x40)
-        let round1 = first + second
-        let frames = try XCTUnwrap(JpakeRound1Framing.splitRound1(round1))
+    /// The pump's first frame carries the start of its second group whenever its own first scalar
+    /// is short, as pumpX2's server cuts it.
+    func testJoinKeepsTheSecondGroupWhenThePumpsFirstScalarIsShort() {
+        let round1 = makeGroup(scalarLength: 31, seed: 0x10) + makeGroup(scalarLength: 32, seed: 0x40)
 
-        let rejoined = JpakeRound1Framing.joinRound1(first: frames.first, second: frames.second)
+        let joined = JpakeRound1Framing.joinRound1(
+            first: round1.subdata(in: 0 ..< 165),
+            second: round1.subdata(in: 165 ..< 329) + Data([0])
+        )
 
-        XCTAssertEqual(rejoined, round1)
-    }
-
-    /// Trailing padding on the *second* frame is harmless — the parser stops before it — so join
-    /// leaves it in place rather than guessing at the payload's true end.
-    func testJoinParsesAsTwoGroupsWhenSecondFrameIsPadded() throws {
-        let first = makeGroup(scalarLength: 32, seed: 0x10)
-        let second = makeGroup(scalarLength: 31, seed: 0x40)
-        let frames = try XCTUnwrap(JpakeRound1Framing.splitRound1(first + second))
-
-        let rejoined = JpakeRound1Framing.joinRound1(first: frames.first, second: frames.second)
-
-        let firstLength = try XCTUnwrap(JpakeRound1Framing.groupLength(in: rejoined, at: 0))
-        XCTAssertEqual(firstLength, 165)
-        XCTAssertEqual(JpakeRound1Framing.groupLength(in: rejoined, at: firstLength), 164)
+        XCTAssertEqual(joined.prefix(329), round1)
+        XCTAssertEqual(JpakeRound1Framing.groupLength(in: joined, at: 164), 165)
     }
 
     func testSplitJoinRoundTripsForEveryScalarLengthCombination() throws {
@@ -150,22 +131,20 @@ final class JpakeRound1FramingTests: XCTestCase {
             for secondScalar in 28 ... 32 {
                 let first = makeGroup(scalarLength: firstScalar, seed: 0x10)
                 let second = makeGroup(scalarLength: secondScalar, seed: 0x40)
+                let round1 = first + second
                 let frames = try XCTUnwrap(
-                    JpakeRound1Framing.splitRound1(first + second),
+                    JpakeRound1Framing.splitRound1(round1),
                     "split failed for \(firstScalar)/\(secondScalar)"
                 )
 
                 XCTAssertEqual(frames.first.count, 165)
                 XCTAssertEqual(frames.second.count, 165)
-
-                let rejoined = JpakeRound1Framing.joinRound1(first: frames.first, second: frames.second)
-                let firstLength = try XCTUnwrap(JpakeRound1Framing.groupLength(in: rejoined, at: 0))
-                XCTAssertEqual(firstLength, first.count)
                 XCTAssertEqual(
-                    JpakeRound1Framing.groupLength(in: rejoined, at: firstLength),
-                    second.count,
-                    "second group misaligned for \(firstScalar)/\(secondScalar)"
+                    JpakeRound1Framing.joinRound1(first: frames.first, second: frames.second).prefix(round1.count),
+                    round1,
+                    "\(firstScalar)/\(secondScalar)"
                 )
+                XCTAssertEqual(peerParsedGroupLengths(frames), [first.count, second.count], "\(firstScalar)/\(secondScalar)")
             }
         }
     }

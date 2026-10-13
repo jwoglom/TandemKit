@@ -128,10 +128,11 @@ Pairing uses the 6-digit code shown on the pump. `JpakeAuthBuilder` has two star
 
 Round 1 is two length-prefixed `(point, ZKP)` groups sent as the `1a` and `1b` frames. Each ZKP
 scalar drops its leading zero bytes, so a group is 165 bytes only about 255/256 of the time.
-`JpakeRound1Framing` splits on the real group boundary and right-pads each frame to 165 bytes,
-which is safe because the pump's parser is length-prefixed. The receive side strips the pump's
-padding before reassembling. pumpX2 slices at fixed offsets and still misaligns its `1b` frame
-when the first scalar is short.
+`JpakeRound1Framing` sends round 1 as pumpX2's client and server both do: one stream cut at byte
+165 and zero-padded at its end to 330, which the peer reads by concatenating the frames. The
+receive side concatenates the pump's frames the same way. Padding each group to its own frame,
+as the driver once did, put a zero mid-stream whenever the first scalar was short, and pumpX2
+read it as an empty point.
 
 A successful exchange yields `derivedSecret` and `serverNonce`, which are stored in `PumpState`
 along with `peripheralUuid` and the pairing code. The signing key is

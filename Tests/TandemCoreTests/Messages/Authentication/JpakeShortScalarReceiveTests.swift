@@ -130,17 +130,24 @@ final class JpakeShortScalarReceiveTests: XCTestCase {
 
     // MARK: - Round 1
 
-    /// The pump's two round-1 frames must rejoin into exactly the payload it generated, whether it
-    /// pads a short group out to the frame size or sends the group short.
+    /// The pump's round 1 is one stream cut at byte 165, as pumpX2's server sends it, so a short first
+    /// group runs on into the first frame; the second frame is zero-padded at its end or sent short.
     func testRound1FramesWithAShortFirstGroupRejoinExactly() throws {
         for firstScalar in 29 ... 32 {
             for padded in [true, false] {
                 let first = group(scalarLength: firstScalar, seed: 0x10)
                 let second = group(scalarLength: 32, seed: 0x40)
-                let firstFrame = padded ? JpakeRound1Framing.padToFrame(first) : first
+                let stream = first + second
+                let secondFrame = stream.subdata(in: JpakeRound1Framing.frameSize ..< stream.count)
 
-                let a = try XCTUnwrap(receiveJpake1a(payload: firstFrame), "1a dropped for \(firstScalar)/\(padded)")
-                let b = try XCTUnwrap(receiveJpake1b(payload: second), "1b dropped for \(firstScalar)/\(padded)")
+                let a = try XCTUnwrap(
+                    receiveJpake1a(payload: stream.subdata(in: 0 ..< JpakeRound1Framing.frameSize)),
+                    "1a dropped for \(firstScalar)/\(padded)"
+                )
+                let b = try XCTUnwrap(
+                    receiveJpake1b(payload: padded ? JpakeRound1Framing.padToFrame(secondFrame) : secondFrame),
+                    "1b dropped for \(firstScalar)/\(padded)"
+                )
 
                 let rejoined = JpakeRound1Framing.joinRound1(
                     first: a.centralChallengeHash,
