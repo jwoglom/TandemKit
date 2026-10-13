@@ -766,9 +766,8 @@ final class PumpSideConformanceTests: ConformanceTestCase {
 
     // MARK: - D11
 
-    /// The pump stops on its own under a running temp basal, out of the driver's hearing, and the app
-    /// resumes as a fill wizard does, but without its check: the resume's replacing batch has to
-    /// account for that temp basal, and the stop has to reach the host before it.
+    /// The pump stops itself under a running temp basal while out of range, and the app resumes it
+    /// without checking first. The stop has to reach the host before the resume, ending the temp basal.
     func testD11AResumeOverATempBasalTheDriverStillHoldsFinalizesIt() throws {
         let driver = try startPairedDriver(scheduledRate: Self.profileRate)
         let batchesBefore = allPumpEventBatches.count
@@ -810,7 +809,7 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         XCTAssertLessThan(
             events.firstIndex { $0.type == .suspend } ?? .max,
             events.firstIndex { $0.type == .resume } ?? .min,
-            "reported before the resume: Loop counts no non-bolus dose older than the temp basal the resume finishes (#354)"
+            "reported before the resume, or Loop ignores it (#354)"
         )
         timeline.assertMatches(loop)
     }

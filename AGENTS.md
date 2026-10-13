@@ -302,7 +302,7 @@ edit instead of at the next sync.
   its last finished basal (#354). So the first report carries the pump's date, and reaches the
   host before anything the app commands after it.
   - Every `CurrentBasalStatus` reading goes through `observeDeliveryState` (sync, qualifying
-    events, `enactTempBasal`'s own read, `fetchSuspendStatus`, a resume's). With
+    events, `enactTempBasal`'s own read, `fetchSuspendStatus`, `resumeDelivery`). With
     `historyBackfill` on, a change the app did not command is left as a `PendingTransition` in
     `DeliveryTransitionLedger`, with a placeholder in `basalDose` for status, until a history
     pass dates it from `PumpingSuspended`/`PumpingResumed`/`TempRateCompleted`. The first tick
@@ -311,10 +311,9 @@ edit instead of at the next sync.
   - A sync, or a wizard's `fetchSuspendStatus`, that leaves a change pending completes once it
     is reported, or after `transitionHistoryWait` (30 s) at detection; `ensureCurrentPumpData`
     is not throttled while one is pending, so the host doses on a sync that has reported it.
-    `resumeDelivery` and the settings screen's resume read the pump before `ResumePumping` and
-    wait the same way, since the resume's batch finishes the dose the host holds: a stop the
-    pump made out of hearing, reported after it, loses its temp basal's end to the resume and
-    Loop never counts it. A failed read resumes regardless. Before an app command emits (temp
+    `resumeDelivery` and the settings screen's resume read the pump first and wait the same way:
+    the resume ends the temp basal the host holds, so a stop the driver missed must be reported
+    before it, or Loop ignores it. A failed read still resumes. Before an app command emits (temp
     basal, cancel, suspend, resume) a pending change is reported at detection first. A second
     change before history dates the first reports the first at detection.
   - At detection each end is dated the way that counts more insulin: a stop at detection, a

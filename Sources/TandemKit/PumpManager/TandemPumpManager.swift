@@ -1286,37 +1286,33 @@ public class TandemPumpManager: PumpManager, Pluggable {
         let completion = watchdogged(timeoutResult: PumpCommError.pumpNotConnected as Error?, completion)
         logger.info("Resume Insulin Delivery...")
 
-        resumeAfterReportingDeliveryChanges(completion: completion) { self.sendResumePumping() }
+        resumeAfterReadingPump(completion: completion) { self.sendResumePumping() }
     }
 
-    /// A stop the pump made out of the driver's hearing has to reach the host first: the resume's
-    /// batch finishes the dose the host holds, and Loop counts no non-bolus dose older than that.
-    private func resumeAfterReportingDeliveryChanges(
-        readingThePump: Bool = true,
-        completion: @escaping (Error?) -> Void,
-        resume: @escaping () -> Error?
-    ) {
+    /// A stop the driver missed has to reach the host before the resume, or the host counts its temp
+    /// basal as running until the resume and Loop ignores the suspend that arrives after it.
+    private func resumeAfterReadingPump(completion: @escaping (Error?) -> Void, resume: @escaping () -> Error?) {
         bluetooth.ensureConnected { error in
             if let error {
                 self.logger.error("Failed to connect to pump: \(error.localizedDescription)")
                 completion(error)
                 return
             }
-            guard readingThePump else {
-                completion(resume())
-                return
-            }
-            guard let status = self.bluetooth.write(CurrentBasalStatusRequest()) else {
-                self.logger.warning("No basal status before resuming; resuming on the delivery last reported")
-                completion(resume())
-                return
-            }
-            guard self.observeDeliveryState(status.basalType) else {
+            // A failed read still resumes: withholding insulin the user asked for is the worse error.
+            guard let status = self.bluetooth.write(CurrentBasalStatusRequest()),
+                  self.observeDeliveryState(status.basalType)
+            else {
                 completion(resume())
                 return
             }
             self.afterHistoryIsReported {
-                self.resumeAfterReportingDeliveryChanges(readingThePump: false, completion: completion, resume: resume)
+                self.bluetooth.ensureConnected { error in
+                    if let error {
+                        completion(error)
+                        return
+                    }
+                    completion(resume())
+                }
             }
             self.historyBackfillCoordinator.runTick()
         }
@@ -1340,7 +1336,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         let completion = watchdogged(timeoutResult: PumpCommError.pumpNotConnected as Error?, completion)
         logger.info("Resume Insulin Delivery (clearing resume-pump alarms if needed)...")
 
-        resumeAfterReportingDeliveryChanges(completion: completion) {
+        resumeAfterReadingPump(completion: completion) {
             ResumeWithAlarmAcknowledgement(
                 sendResume: { self.sendResumePumping() },
                 reloadNotifications: { self.fetchNotifications() },

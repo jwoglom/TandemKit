@@ -264,9 +264,8 @@ class ConformanceTestCase: FaketandemIntegrationTestCase {
         return delegates.flatMap { $0.pumpEventJournal.compactMap(\.pumpEventBatch) }
     }
 
-    /// Replays every batch the host has received, in order, and reports each live mutable dose whose
-    /// mutable `PumpEvent` row a `replacePendingEvents: true` batch arrived without carrying — the
-    /// doses LoopKit's report-or-delete rule (guide §3, §5) deletes.
+    /// Replays every batch the host has received, in order, and reports each mutable dose that a
+    /// `replacePendingEvents: true` batch deletes by leaving it out (LoopKit guide §3, §5).
     func completeBatchOmissions() -> [String] {
         drainDelegate()
         let oracle = LoopDoseStoreOracle()
@@ -276,7 +275,7 @@ class ConformanceTestCase: FaketandemIntegrationTestCase {
                 guard let batch = entry.pumpEventBatch else { continue }
                 if batch.replacePendingEvents {
                     let carried = Set(batch.events.map(\.raw))
-                    // An open suspend is mutable only in the IDS; its row is not purged, and the re-sync closes it.
+                    // A suspend awaiting its resume is mutable as a dose but not as a pump event, so it survives.
                     for dose in oracle.doses where dose.isMutable && !carried.contains(dose.raw ?? Data())
                         && oracle.pumpEventRow(raw: dose.raw ?? Data())?.mutable != false
                     {
