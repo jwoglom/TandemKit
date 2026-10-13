@@ -355,6 +355,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     internal func notifyDelegateStateUpdated() {
+        notifyDelegate(includingState: true)
+    }
+
+    private func notifyDelegate(includingState: Bool) {
         publishLock.lock()
         let current = state
         let status = TandemPumpManager.makeStatus(from: current)
@@ -362,12 +366,14 @@ public class TandemPumpManager: PumpManager, Pluggable {
         oldState = TandemPumpManagerState(rawValue: current.rawValue)
         publishLock.unlock()
 
-        // Until the host sets its queue this would land on `.main`; the queue setter replays it.
+        // Until the host sets its queue this would land on `.main`; attaching sends the status then.
         if canNotifyDelegate, let delegate = pumpManagerDelegate {
             pumpDelegate.queue.async { [weak self] in
                 guard let self = self else { return }
 
-                delegate.pumpManagerDidUpdateState(self)
+                if includingState {
+                    delegate.pumpManagerDidUpdateState(self)
+                }
                 delegate.pumpManager(self, didUpdate: status, oldStatus: oldStatus)
             }
         }
@@ -442,7 +448,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
     private func deliverStateMissedByTheDelegate() {
         guard pumpDelegate.delegate != nil, hasDelegateQueue else { return }
 
-        notifyDelegateStateUpdated()
+        // Not pumpManagerDidUpdateState: Loop and Trio save rawValue on the main thread right after
+        // attaching, and its save from their delegate queue races that one.
+        notifyDelegate(includingState: false)
         flushPendingReservoirReading()
         flushPendingPumpEvents()
         flushPendingPumpClockAdjustments()
@@ -1342,14 +1350,35 @@ public class TandemPumpManager: PumpManager, Pluggable {
         let completion = watchdogged(timeoutResult: PumpCommError.pumpNotConnected as Error?, completion)
         logger.info("Resume Insulin Delivery...")
 
+        resumeAfterReadingPump(completion: completion) { self.sendResumePumping() }
+    }
+
+    /// A stop the driver missed has to reach the host before the resume, or the host counts its temp
+    /// basal as running until the resume and Loop ignores the suspend that arrives after it.
+    private func resumeAfterReadingPump(completion: @escaping (Error?) -> Void, resume: @escaping () -> Error?) {
         bluetooth.ensureConnected { error in
             if let error {
                 self.logger.error("Failed to connect to pump: \(error.localizedDescription)")
                 completion(error)
                 return
             }
-
-            completion(self.sendResumePumping())
+            // A failed read still resumes: withholding insulin the user asked for is the worse error.
+            guard let status = self.bluetooth.write(CurrentBasalStatusRequest()),
+                  self.observeDeliveryState(status.basalType)
+            else {
+                completion(resume())
+                return
+            }
+            self.afterHistoryIsReported {
+                self.bluetooth.ensureConnected { error in
+                    if let error {
+                        completion(error)
+                        return
+                    }
+                    completion(resume())
+                }
+            }
+            self.historyBackfillCoordinator.runTick()
         }
     }
 
@@ -1371,14 +1400,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
         let completion = watchdogged(timeoutResult: PumpCommError.pumpNotConnected as Error?, completion)
         logger.info("Resume Insulin Delivery (clearing resume-pump alarms if needed)...")
 
-        bluetooth.ensureConnected { error in
-            if let error {
-                self.logger.error("Failed to connect to pump: \(error.localizedDescription)")
-                completion(error)
-                return
-            }
-
-            let sequence = ResumeWithAlarmAcknowledgement(
+        resumeAfterReadingPump(completion: completion) {
+            ResumeWithAlarmAcknowledgement(
                 sendResume: { self.sendResumePumping() },
                 reloadNotifications: { self.fetchNotifications() },
                 activeResumeAlarms: { self.notificationBundle.activeResumePumpAlarms() },
@@ -1386,9 +1409,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     _ = self.acknowledgeNotification(type: .alarm, id: UInt32(alarm.rawValue))
                 },
                 log: { self.logger.info($0) }
-            )
-
-            completion(sequence.run())
+            ).run()
         }
     }
 

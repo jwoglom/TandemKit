@@ -18,7 +18,7 @@ import XCTest
         super.tearDown()
     }
 
-    func testAStateUpdateBetweenAttachingTheDelegateAndItsQueueArrivesOnTheQueue() {
+    func testAStateUpdateBetweenAttachingTheDelegateAndItsQueueArrivesOnTheQueueAsAStatus() {
         let delegate = MockPumpManagerDelegate()
 
         // Trio's order, with the Bluetooth power-on update landing between the two setters.
@@ -29,8 +29,22 @@ import XCTest
         drainMainQueue()
         delegateQueue.sync {}
 
-        XCTAssertEqual(delegate.didUpdateStateCount, 1)
         XCTAssertEqual(delegate.statusUpdates.count, 1)
+    }
+
+    func testAttachingLeavesSavingTheStateToTheHost() {
+        let delegate = MockPumpManagerDelegate()
+
+        manager.pumpManagerDelegate = delegate
+        manager.delegateQueue = delegateQueue
+        delegateQueue.sync {}
+
+        XCTAssertEqual(delegate.didUpdateStateCount, 0, "Loop and Trio save rawValue as they attach; a second save from the delegate queue races theirs")
+
+        manager.notifyDelegateStateUpdated()
+        delegateQueue.sync {}
+
+        XCTAssertEqual(delegate.didUpdateStateCount, 1, "a change after attaching is saved as usual")
     }
 
     private func drainMainQueue() {

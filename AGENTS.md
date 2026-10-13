@@ -128,9 +128,11 @@ a direct call from a driver queue crashes it, as a backfill tick reading
 `queue.sync`, which deadlocks a caller already on the delegate queue. Nothing goes out until the
 host has set both the delegate and its queue (`canNotifyDelegate`): `pumpDelegate.queue` reads
 `.main` until then, and Trio sets the delegate first. `deliverStateMissedByTheDelegate` replays
-what was held once the second one lands. `MockPumpManagerDelegate`
-fails the test on any call that carries the manager and arrives off its `delegateQueue`; a test
-attaches one queue for the manager's life, as hosts do.
+what was held once the second one lands, with the status but not `pumpManagerDidUpdateState`: Loop
+and Trio save `rawValue` on the main thread right after attaching, and a second save from their
+delegate queue races it (Trio's launch hung in a Thread Sanitizer report of it).
+`MockPumpManagerDelegate` fails the test on any call that carries the manager and arrives off its
+`delegateQueue`; a test attaches one queue for the manager's life, as hosts do.
 
 Bolus progress observers are called on the queue the host passed
 `createBolusProgressReporter(reportingOn:)`, which Trio relies on to serialize its own reporter
@@ -342,8 +344,8 @@ rate check runs on a profile edit instead of at the next sync.
   its last finished basal (#354). So the first report carries the pump's date, and reaches the
   host before anything the app commands after it.
   - Every `CurrentBasalStatus` reading goes through `observeDeliveryState` (sync, qualifying
-    events, `enactTempBasal`'s own read, `fetchSuspendStatus`). With `historyBackfill` on, a
-    change the app did not command is left as a `PendingTransition` in
+    events, `enactTempBasal`'s own read, `fetchSuspendStatus`, `resumeDelivery`). With
+    `historyBackfill` on, a change the app did not command is left as a `PendingTransition` in
     `DeliveryTransitionLedger`, with a placeholder in `basalDose` for status, until a history
     pass dates it from `PumpingSuspended`/`PumpingResumed`/`TempRateCompleted`. The first tick
     that starts after the change dates it if it read the log to its end and reaches back to
@@ -351,9 +353,11 @@ rate check runs on a profile edit instead of at the next sync.
   - A sync, or a wizard's `fetchSuspendStatus`, that leaves a change pending completes once it
     is reported, or after `transitionHistoryWait` (30 s) at detection; `ensureCurrentPumpData`
     is not throttled while one is pending, so the host doses on a sync that has reported it.
-    Before an app command emits (temp basal, cancel, suspend, resume) a pending change is
-    reported at detection first. A second change before history dates the first reports the
-    first at detection.
+    `resumeDelivery` and the settings screen's resume read the pump first and wait the same way:
+    the resume ends the temp basal the host holds, so a stop the driver missed must be reported
+    before it, or Loop ignores it. A failed read still resumes. Before an app command emits (temp
+    basal, cancel, suspend, resume) a pending change is reported at detection first. A second
+    change before history dates the first reports the first at detection.
   - At detection each end is dated the way that counts more insulin: a stop at detection, a
     resume at the last reading that saw the pump suspended, a temp basal below the schedule
     ended at that reading and one above it at detection, against the host's schedule on the
