@@ -726,7 +726,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
 
         if shouldDeferBolusSync() {
-            refuseWhileABolusRuns("enactBolus", completion)
+            refuseWhileABolusRuns(.enactBolus, completion)
             return
         }
 
@@ -739,7 +739,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
             // Again here: a second enact queues behind the first's job and runs right after its InitiateBolus.
             guard !self.bolusIsStillRunning() else {
-                self.refuseWhileABolusRuns("enactBolus", completion)
+                self.refuseWhileABolusRuns(.enactBolus, completion)
                 return
             }
 
@@ -886,8 +886,13 @@ public class TandemPumpManager: PumpManager, Pluggable {
         return isBolusInFlight
     }
 
-    private func refuseWhileABolusRuns(_ command: String, _ completion: (PumpManagerError?) -> Void) {
-        logger.warning("[\(command)] Blocked: bolus \(state.bolusDose?.bolusId ?? -1) is still running")
+    private enum DosingCommand: String {
+        case enactBolus
+        case enactTempBasal
+    }
+
+    private func refuseWhileABolusRuns(_ command: DosingCommand, _ completion: (PumpManagerError?) -> Void) {
+        logger.warning("[\(command.rawValue)] Blocked: bolus \(state.bolusDose?.bolusId ?? -1) is still running")
         completion(.deviceState(TandemPumpManagerValidationError.bolusIsRunning))
     }
 
@@ -1000,7 +1005,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
 
         if shouldDeferBolusSync() {
-            refuseWhileABolusRuns("enactTempBasal", completion)
+            refuseWhileABolusRuns(.enactTempBasal, completion)
             return
         }
 
@@ -1038,7 +1043,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             }
 
             guard !self.bolusIsStillRunning() else {
-                self.refuseWhileABolusRuns("enactTempBasal", completion)
+                self.refuseWhileABolusRuns(.enactTempBasal, completion)
                 return
             }
 
