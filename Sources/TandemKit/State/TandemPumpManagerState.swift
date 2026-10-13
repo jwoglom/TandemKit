@@ -49,8 +49,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
     public var latestInsulinOnBoard: Double?
     public var pumpInsulinDuration: PumpInsulinDuration?
     public var lastReservoirReading: ReservoirValue?
-    /// Cleared once `lastReservoirReading` has reached the delegate. Persisted so a reading taken
-    /// while none was attached survives a relaunch.
+    /// Cleared once `lastReservoirReading` has reached the delegate, which waits for one to attach and
+    /// for `lastReconciliation` to cover the reading. Persisted so a held reading survives a relaunch.
     public var lastReservoirReadingNeedsReport: Bool = false
     public var lastBatteryReading: BatteryReading?
     public var lastBasalStatusDate: Date?

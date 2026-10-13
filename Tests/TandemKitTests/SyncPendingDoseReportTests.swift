@@ -104,6 +104,17 @@ import XCTest
         return try XCTUnwrap(reported.first?.raw)
     }
 
+    private func stubNoBolusRunning() {
+        bluetooth.stub(CurrentBolusStatusRequest.self, with: CurrentBolusStatusResponse(
+            statusId: 0,
+            bolusId: 0,
+            timestamp: 0,
+            requestedVolume: 0,
+            bolusSourceId: 0,
+            bolusTypeBitmask: 0
+        ))
+    }
+
     /// bolusId 0 with no delivery in progress is how the pump says the bolus is over.
     private func finishBolus(deliveredMilliunits: UInt32?) {
         bluetooth.stub(CurrentBolusStatusRequest.self, with: CurrentBolusStatusResponse(
@@ -168,6 +179,7 @@ import XCTest
         let start = clock.now
         let raw = try startTempBasal(unitsPerHour: 1.5)
         clock.advance(by: .minutes(5))
+        stubNoBolusRunning()
 
         let before = batches.count
         sync()
@@ -274,6 +286,7 @@ import XCTest
     // MARK: - Boundary only
 
     func testASyncWithNothingRunningSendsOnlyTheBoundary() throws {
+        stubNoBolusRunning()
         sync()
 
         let batch = try XCTUnwrap(batches.last)
@@ -282,19 +295,30 @@ import XCTest
         XCTAssertEqual(batch.lastReconciliation, manager.state.lastReconciliation)
     }
 
-    func testASyncWhoseBasalReadGoesUnansweredDoesNotReplace() throws {
+    func testASyncWhoseBasalReadGoesUnansweredReportsNothing() throws {
         _ = try startBolus()
+        let boundary = manager.state.lastReconciliation
         bluetooth.stub(CurrentBasalStatusRequest.self) { _ in nil }
-        // Answered, so the sync still moves the boundary.
         bluetooth.stub(InsulinStatusRequest.self, with: InsulinStatusResponse(currentInsulinAmount: 150, isEstimate: 0, insulinLowAmount: 20))
         clock.advance(by: 5)
 
         let before = batches.count
         sync()
 
-        let synced = batches(since: before)
-        XCTAssertFalse(synced.isEmpty)
-        XCTAssertTrue(synced.allSatisfy { !$0.replacePendingEvents && $0.events.isEmpty }, "\(synced)")
+        XCTAssertTrue(batches(since: before).isEmpty, "\(batches(since: before))")
+        XCTAssertEqual(manager.state.lastReconciliation, boundary)
+    }
+
+    /// The sync defers to the bolus it tracks rather than read it, and the host counts it already.
+    func testASyncThatDefersToARunningBolusMovesTheBoundary() throws {
+        _ = try startBolus()
+        clock.advance(by: 5)
+        bluetooth.resetRecordedTraffic()
+
+        sync()
+
+        XCTAssertFalse(bluetooth.didSend(CurrentBolusStatusRequest.self))
+        XCTAssertEqual(manager.state.lastReconciliation, clock.now)
     }
 
     func testADeliveryChangeWaitingForHistoryKeepsTheTempTheHostHolds() throws {

@@ -36,6 +36,18 @@ import XCTest
             CurrentBatteryV1Request.self,
             with: CurrentBatteryV1Response(currentBatteryAbc: 20, currentBatteryIbc: 80)
         )
+        bluetooth.stubIdleDelivery()
+    }
+
+    private func syncAndWait() -> Date? {
+        let synced = expectation(description: "syncPumpData completes")
+        var reportedLastSync: Date?
+        manager.syncPumpData { lastSync in
+            reportedLastSync = lastSync
+            synced.fulfill()
+        }
+        wait(for: [synced], timeout: 5.0)
+        return reportedLastSync
     }
 
     // MARK: - Connect failures
@@ -155,22 +167,72 @@ import XCTest
         XCTAssertNil(manager.state.lastSettingsCheckedAt)
     }
 
-    /// One answer is enough: a partially responsive pump has still been reconciled with.
-    func testSyncAdvancesLastSyncOnASingleResponse() {
+    func testSyncAdvancesLastSyncOnTheBolusAndBasalReadsAlone() {
         let previousSync = Date().addingTimeInterval(-2 * 60 * 60)
         manager.state.lastReconciliation = previousSync
-        bluetooth.stub(InsulinStatusRequest.self, with: InsulinStatusResponse(
-            currentInsulinAmount: 150,
-            isEstimate: 0,
-            insulinLowAmount: 0
-        ))
+        bluetooth.stubIdleDelivery()
 
-        let expectation = expectation(description: "syncPumpData completes")
-        manager.syncPumpData { _ in expectation.fulfill() }
-
-        wait(for: [expectation], timeout: 5.0)
+        let lastSync = syncAndWait()
 
         XCTAssertNotEqual(manager.state.lastReconciliation, previousSync)
+        XCTAssertEqual(lastSync, manager.state.lastReconciliation)
+    }
+
+    /// #449: the pump answered, but said nothing about what it delivered.
+    func testSyncWhoseDeliveryReadsGoUnansweredDoesNotAdvanceLastSync() {
+        let previousSync = Date().addingTimeInterval(-2 * 60 * 60)
+        manager.state.lastReconciliation = previousSync
+        stubSyncResponses()
+        bluetooth.stub(CurrentBolusStatusRequest.self) { _ in nil }
+        bluetooth.stub(CurrentBasalStatusRequest.self) { _ in nil }
+
+        let lastSync = syncAndWait()
+
+        XCTAssertTrue(bluetooth.didSend(CurrentBolusStatusRequest.self))
+        XCTAssertTrue(bluetooth.didSend(CurrentBasalStatusRequest.self))
+        XCTAssertGreaterThan(bluetooth.responseCount, 0, "The rest of the sync was answered")
+        XCTAssertEqual(manager.state.lastReconciliation, previousSync)
+        XCTAssertEqual(lastSync, previousSync)
+    }
+
+    func testSyncWhoseBolusReadGoesUnansweredDoesNotAdvanceLastSync() {
+        let previousSync = Date().addingTimeInterval(-2 * 60 * 60)
+        manager.state.lastReconciliation = previousSync
+        stubSyncResponses()
+        bluetooth.stub(CurrentBolusStatusRequest.self) { _ in nil }
+
+        let lastSync = syncAndWait()
+
+        XCTAssertTrue(bluetooth.didSend(CurrentBasalStatusRequest.self))
+        XCTAssertEqual(manager.state.lastReconciliation, previousSync)
+        XCTAssertEqual(lastSync, previousSync)
+    }
+
+    func testSyncWhoseBasalReadGoesUnansweredDoesNotAdvanceLastSync() {
+        let previousSync = Date().addingTimeInterval(-2 * 60 * 60)
+        manager.state.lastReconciliation = previousSync
+        stubSyncResponses()
+        bluetooth.stub(CurrentBasalStatusRequest.self) { _ in nil }
+
+        let lastSync = syncAndWait()
+
+        XCTAssertTrue(bluetooth.didSend(CurrentBolusStatusRequest.self))
+        XCTAssertEqual(manager.state.lastReconciliation, previousSync)
+        XCTAssertEqual(lastSync, previousSync)
+    }
+
+    func testAPollAfterAnUnreconciledSyncReadsThePumpAgain() {
+        manager.state.lastReconciliation = Date().addingTimeInterval(-60 * 60)
+        manager.state.isConnected = true
+        stubSyncResponses()
+        bluetooth.stub(CurrentBasalStatusRequest.self) { _ in nil }
+        _ = syncAndWait()
+
+        let polled = expectation(description: "ensureCurrentPumpData completes")
+        manager.ensureCurrentPumpData { _ in polled.fulfill() }
+        wait(for: [polled], timeout: 5.0)
+
+        XCTAssertEqual(bluetooth.ensureConnectedCount, 2)
     }
 
     // MARK: - Not stacking up

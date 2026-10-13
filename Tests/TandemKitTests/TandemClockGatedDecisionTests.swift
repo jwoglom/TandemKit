@@ -450,20 +450,32 @@ import XCTest
         XCTAssertEqual(try XCTUnwrap(manager.state.lastBatteryReading).date, t1)
     }
 
-    func testFetchReservoirStatusDatesTheReadingAndTheReconciliationByTheClock() throws {
+    func testFetchReservoirStatusDatesTheReadingByTheClockAndLeavesTheBoundary() throws {
         bluetooth.stub(InsulinStatusRequest.self, with: InsulinStatusResponse(
             currentInsulinAmount: 150,
             isEstimate: 0,
             insulinLowAmount: 0
         ))
+        let boundary = manager.state.lastReconciliation
         advance()
 
         manager.fetchReservoirStatus()
         settle()
 
         XCTAssertEqual(try XCTUnwrap(manager.state.lastReservoirReading).startDate, t1)
+        XCTAssertEqual(manager.state.lastReconciliation, boundary)
+        XCTAssertTrue(delegate.reservoirReadings.isEmpty)
+
+        // A boundary stamped at the reading's own instant covers it.
+        bluetooth.stub(InsulinStatusRequest.self) { _ in nil }
+        bluetooth.stubIdleDelivery()
+        let synced = expectation(description: "sync")
+        manager.syncPumpData { _ in synced.fulfill() }
+        wait(for: [synced], timeout: 10.0)
+        settle()
+
         XCTAssertEqual(manager.state.lastReconciliation, t1)
-        XCTAssertEqual(delegate.reservoirReadings.last?.date, t1)
+        XCTAssertEqual(delegate.reservoirReadings.map(\.date), [t1])
     }
 
     func testFetchBasalStatusDatesASuspendDoseByTheClock() {
@@ -695,6 +707,7 @@ import XCTest
             basalLimit: 3000,
             basalLimitDefault: 3000
         ))
+        bluetooth.stubIdleDelivery()
         manager.state.lastSettingsCheckedAt = Self.t0
         clock.advance(by: .hours(23))
 

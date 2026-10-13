@@ -236,10 +236,13 @@ extension TandemPumpManager {
         notifyDelegateStateUpdated()
     }
 
-    func fetchBolusStatus(fromSync: Bool) {
+    /// Returns whether the pump's bolus state is known: it answered, or the sync deferred to the
+    /// bolus being tracked, which the host already counts at its programmed amount.
+    @discardableResult
+    func fetchBolusStatus(fromSync: Bool) -> Bool {
         if fromSync, shouldDeferBolusSync() {
             logger.warning("Skip bolus sync during bolus...")
-            return
+            return true
         }
 
         if fromSync, let bolusDose = state.bolusDose, !bolusDose.isUnconfirmed {
@@ -248,9 +251,14 @@ extension TandemPumpManager {
 
         guard let response = bluetooth.write(CurrentBolusStatusRequest()) else {
             logger.error("Failed to fetch bolus status: \(type(of: CurrentBolusStatusRequest.self))")
-            return
+            return false
         }
 
+        applyBolusStatus(response)
+        return true
+    }
+
+    private func applyBolusStatus(_ response: CurrentBolusStatusResponse) {
         noteUntrackedBolus(response)
 
         if let dose = state.bolusDose, dose.isUnconfirmed, let bolusId = dose.bolusId,
@@ -599,22 +607,15 @@ extension TandemPumpManager {
             return nil
         }
 
-        let timestamp = now
         let units = Double(response.currentInsulinAmount)
-        let reservoirValue = SimpleReservoirValue(startDate: timestamp, unitVolume: units)
 
         logger.debug("Reservoir updated: \(String(format: "%.2f", units)) U remaining")
 
-        state.lastReconciliation = timestamp
-        state.lastReservoirReading = reservoirValue
+        // A reservoir level says nothing about bolus or basal state, so the boundary stays and the
+        // reading waits for one that covers it.
+        state.lastReservoirReading = SimpleReservoirValue(startDate: now, unitVolume: units)
         state.lastReservoirReadingNeedsReport = true
         notifyDelegateStateUpdated()
-
-        reportReservoirReading(reservoirValue)
-
-        // Also runs outside a sync, and a reservoir value newer than the host's event boundary
-        // arbitrates back to whole-unit reservoir doses.
-        reportReconciliationBoundary()
 
         return units
     }
@@ -622,8 +623,7 @@ extension TandemPumpManager {
     /// `didReadReservoirValue` is the reservoir's only channel to the host and nothing re-derives
     /// it, so a call made with no delegate attached — the pairing sync runs before the host adopts
     /// the manager — would strand the host on a stale value. Hold the reading for the flush below
-    /// instead. The pending flag is read and written inside `notify`, serialized on the delegate
-    /// queue, so a flush racing a fresh read cannot report twice.
+    /// instead.
     func reportReservoirReading(_ reading: ReservoirValue) {
         pumpDelegate.notify { delegate in
             guard let delegate = delegate else {
@@ -640,18 +640,23 @@ extension TandemPumpManager {
                 completion: { _ in }
             )
 
-            self.state.lastReservoirReadingNeedsReport = false
+            // A reading taken since stays held for its own flush.
+            if self.state.lastReservoirReading?.startDate == reading.startDate {
+                self.state.lastReservoirReadingNeedsReport = false
+            }
             self.notifyDelegateStateUpdated()
         }
     }
 
-    /// Sends the last reading if it never reached a delegate. A no-op in the normal case.
+    /// Sends the last reading once `lastReconciliation` covers it: Loop counts whole-unit reservoir drops
+    /// in place of pump events after its boundary. A pump bolus holds the host's boundary back for exactly that.
     func flushPendingReservoirReading() {
-        guard state.lastReservoirReadingNeedsReport, let reading = state.lastReservoirReading else {
+        guard state.lastReservoirReadingNeedsReport, let reading = state.lastReservoirReading,
+              let boundary = state.lastReconciliation, reading.startDate <= boundary
+        else {
             return
         }
 
-        logger.info("Delegate attached; reporting the reservoir reading it missed")
         reportReservoirReading(reading)
     }
 

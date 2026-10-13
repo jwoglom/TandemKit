@@ -158,6 +158,24 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
         journal.filter { $0.pumpEventBatch != nil }
     }
 
+    /// Readings that arrived newer than the boundary the host then held. Loop's `DoseStore` counts
+    /// whole-unit reservoir drops in place of pump events past its boundary while it holds one.
+    var reservoirReadingsAheadOfTheBoundary: [ReservoirReading] {
+        var boundary: Date?
+        var ahead: [ReservoirReading] = []
+        for entry in journal {
+            switch entry.kind {
+            case let .pumpEvents(batch):
+                boundary = batch.lastReconciliation
+            case let .reservoirReading(reading) where reading.date > boundary ?? .distantPast:
+                ahead.append(reading)
+            default:
+                break
+            }
+        }
+        return ahead
+    }
+
     /// Replays every `hasNewPumpEvents` batch recorded so far into each oracle, in order, dating each
     /// with the driver clock's time at the call (or the wall time without a clock). Returns the
     /// number of batches fed. Pass `after` to continue from a previous feed's last journal index.

@@ -1056,11 +1056,9 @@ final class InterruptConformanceTests: ConformanceTestCase {
         XCTAssertTrue(interrupted.loop.doses.isEmpty)
 
         // The trust boundary must not move: bolus and basal status were never read.
-        XCTExpectFailure("jwoglom/TandemKit#449: syncPumpData stamps lastReconciliation whenever any response arrived (responseCount > responsesBefore), so a sync whose link dropped before the bolus and basal reads still advances the boundary") {
-            XCTAssertEqual(lastSync, boundaryBefore, "the sync completed without reconciling; lastSync stays where it was")
-            XCTAssertEqual(driver.manager.state.lastReconciliation, boundaryBefore)
-            XCTAssertEqual(interrupted.loop.lastReconciliation, boundaryBefore, "the host's boundary did not advance")
-        }
+        XCTAssertEqual(lastSync, boundaryBefore, "the sync completed without reconciling; lastSync stays where it was")
+        XCTAssertEqual(driver.manager.state.lastReconciliation, boundaryBefore)
+        XCTAssertEqual(interrupted.loop.lastReconciliation, boundaryBefore, "the host's boundary did not advance")
 
         // The next sync, on a fresh session, succeeds and moves the boundary.
         try waitForReconnect()
