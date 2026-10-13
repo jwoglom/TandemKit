@@ -626,8 +626,9 @@ integration scenarios.
   host; TandemKit is not a `CGMManager`. The CGM screens only pair, start, stop and monitor the
   pump's sensor session.
 - **Pairing.**
-  - `JpakeRound1Framing` is unit-tested and pairs against faketandem, whose JPAKE is pumpX2's,
-    but has not been confirmed against pump firmware.
+  - `JpakeRound1Framing` frames round 1 as pumpX2's client and server do (one stream cut at byte
+    165, zero-padded at its end) and pairs against faketandem, whose JPAKE is pumpX2's, but has
+    not been confirmed against pump firmware.
   - The legacy 16-character pump-challenge pairing is not implemented; only the 6-digit JPAKE
     code is.
 - **Delivery-uncertainty recovery.** `deliveryUncertaintyRecoveryViewController` returns the
