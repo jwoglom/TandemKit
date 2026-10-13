@@ -897,7 +897,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 startDate: bolusDose.startDate,
                 deliveryStartDate: bolusDose.deliveryStartDate,
                 deliveredUnits: bolusDose.deliveredUnits,
-                pumpTimestamp: self.hostDate(forPumpDate: lastBolus.pumpTimestamp)
+                pumpTimestamp: self.hostDate(forPumpDate: lastBolus.pumpTimestamp),
+                detectedAt: stoppedAt
             ))
 
             var events = self.getActivePumpEvents()

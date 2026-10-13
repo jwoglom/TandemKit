@@ -421,9 +421,7 @@ final class PumpSideConformanceTests: ConformanceTestCase {
     /// never reported, and setting the pump's clock must tell the host through `didAdjustPumpClockBy`.
     func testD5PumpClockSkewIsMeasuredAndDosesFollowThePumpsLedger() throws {
         let skew: Double = 900
-        // A minute behind the wall clock: #339's start-date clamp is to Date.now, so its error is
-        // this lag, and a fast emulator would otherwise shrink it inside the tolerance.
-        try clock.start(at: Date().addingTimeInterval(-60), skewSeconds: skew)
+        try clock.setSkew(seconds: skew)
 
         // The phone's schedule: the current segment at 1.0 U/h, the next (in 5 minutes of phone
         // time) at 2.0 U/h. On its own clock the pump is already 15 minutes on, i.e. in that next
@@ -514,7 +512,7 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         loop.assertPermanent(raw: tbrRaw)
         XCTAssertEqual(trio.boluses.count, 1)
         XCTAssertEqual(trio.tempBasals.count, 1)
-        try expectDefect("the clock skew temp the pump runs while the phone's segment lags is on its record and, by design, not the host's; and #339's end-date clamp above") {
+        try expectDefect("the clock skew temp the pump runs while the phone's segment lags is on its record and, by design, not the host's") {
             timeline.assertMatches(loop)
         }
 

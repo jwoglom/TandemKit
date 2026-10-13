@@ -168,17 +168,28 @@ final class CancelConformanceTests: ConformanceTestCase {
         try runCancelBolus(deliverUnits: 2.9)
     }
 
+    /// The pump's clock 15 minutes ahead of the phone's: both ends of the cancelled dose are its
+    /// stamps moved back by the offset the first sync measured.
+    func testB1CancelBolusUnderPumpClockSkewIsDatedOnThePhonesClock() throws {
+        try runCancelBolus(deliverUnits: 1.0, pumpClockSkew: .minutes(15))
+    }
+
     /// Plan B1: enact 3 U, let `deliverUnits` go in, cancel. The finalized dose must carry the
     /// pump's delivered volume, the programmed 3 U as `value`, and the `raw` the mutable report
     /// was made under.
     private func runCancelBolus(
         deliverUnits: Double,
+        pumpClockSkew: TimeInterval = 0,
         file: StaticString = #filePath,
         line: UInt = #line
     ) throws {
+        if pumpClockSkew != 0 {
+            try clock.setSkew(seconds: pumpClockSkew)
+        }
         let driver = try startCancelDriver()
         let start = allPumpEventBatches.count
-        let what = "cancel after \(deliverUnits) U of \(Self.bolusUnits) U"
+        let what = "cancel after \(deliverUnits) U of \(Self.bolusUnits) U" + (pumpClockSkew == 0 ? "" : ", pump clock \(Int(pumpClockSkew)) s ahead")
+        XCTAssertEqual(driver.manager.state.pumpClockOffset, pumpClockSkew, accuracy: 5, "\(what): the sync measured the skew", file: file, line: line)
 
         // Register up front (guide §10): a mutable dose before anything can go wrong.
         XCTAssertNil(try enactBolus(units: Self.bolusUnits), "\(what): enact", file: file, line: line)
@@ -198,12 +209,7 @@ final class CancelConformanceTests: ConformanceTestCase {
         XCTAssertTrue(running.bolus.active, "\(what): the pump should still be delivering", file: file, line: line)
         XCTAssertEqual(running.bolus.unitsDelivered, deliverUnits, accuracy: 0.02, "\(what): pump-side delivered", file: file, line: line)
 
-        // Cancel. The phone's wall clock at the moment the driver resolves the end is captured
-        // because `BolusEndDate.resolve` clamps to `Date.now` rather than to the injected clock;
-        // whether that clamp actually moves the answer depends on where the pump's frozen clock
-        // stands relative to it (see the expected failure below).
         let result = try cancelBolus()
-        let wallClockAtFinalization = Date()
         switch result {
         case let .failure(error):
             XCTFail("\(what): cancelBolus failed: \(error)", file: file, line: line)
@@ -259,8 +265,7 @@ final class CancelConformanceTests: ConformanceTestCase {
 
         // The pump's volume is a continuous simulation and the driver reports on the 0.001 U grid,
         // so the ledgers are compared at that resolution rather than at the diff's default 0.0005.
-        let tolerance = PumpTimeline.Tolerance(time: 2, units: Self.reportingIncrement, rate: 0.005)
-        let endAndTimeline = {
+        if deliverUnits > 0 {
             XCTAssertEqual(
                 (finalized.dose?.endDate).map { $0.timeIntervalSince(pumpEnd) } ?? .nan,
                 0,
@@ -269,27 +274,13 @@ final class CancelConformanceTests: ConformanceTestCase {
                 file: file,
                 line: line
             )
-            timeline.assertMatches(loop, tolerance: tolerance, what, file: file, line: line)
-        }
-        // The defect is only observable when the clamp actually bites: `resolve` returns
-        // `min(candidate, detectedAt)`, so a pump stop that already lies behind the phone's wall
-        // clock survives the clamp unchanged and the reported end is right by luck. This scenario
-        // freezes the pump and steps it, so which side of the wall clock the pump's stop lands on
-        // is decided by how much pump time the step bought against how much real time the BLE
-        // exchange cost — and the wrapper has to follow it, or it is strict about a defect that
-        // did not show.
-        let clampBites = pumpEnd.timeIntervalSince(wallClockAtFinalization) > tolerance.time
-        if deliverUnits > 0, clampBites {
-            XCTExpectFailure(
-                "jwoglom/TandemKit#339: a pump stop that lies ahead of the phone's clock is clamped to it. Here the "
-                    + "clock is the wall clock: TandemPumpManager.cancelBolus calls BolusEndDate.resolve(...) without "
-                    + "detectedAt, so the clamp uses Date.now instead of the driver's injected clock and the reported "
-                    + "end lands on the phone's wall clock rather than on the pump's stop (the emulator's missing "
-                    + "bolusInitiationDelay lead-in moves it too, but the other way)",
-                strict: true
-            ) { endAndTimeline() }
-        } else if deliverUnits > 0 {
-            endAndTimeline()
+            timeline.assertMatches(
+                loop,
+                tolerance: PumpTimeline.Tolerance(time: 2, units: Self.reportingIncrement, rate: 0.005),
+                what,
+                file: file,
+                line: line
+            )
         } else {
             // Nothing was delivered, so `BolusEndDate` has only the start and the 15 s initiation
             // lead-in to work with; the ledgers can differ by no more than that window.

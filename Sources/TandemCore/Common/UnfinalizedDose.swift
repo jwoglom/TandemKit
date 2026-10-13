@@ -115,7 +115,7 @@ public class UnfinalizedDose: Equatable {
     ///
     /// Clamped into `startDate...now`: residual clock-measurement error cannot move delivery
     /// before the command or into the future.
-    public func recordDeliveryStart(_ date: Date, now: Date = Date.now) {
+    public func recordDeliveryStart(_ date: Date, now: Date) {
         deliveryStartDate = min(max(date, startDate), max(now, startDate))
     }
 
