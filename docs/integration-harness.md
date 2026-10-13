@@ -297,8 +297,8 @@ Nothing in Trio changes for it:
 
 - `scripts/trio-test.sh build` builds Trio (signed ad hoc, since an unsigned simulator build has
   no entitlements and Trio stops when the keychain refuses its first write; `CI=true` to skip its
-  SwiftFormat and Crashlytics phases; bundle id `org.nightscout.$TRIO_TEAM.trio`;
-  `-enableThreadSanitizer NO`, see below) and the test bundle.
+  SwiftFormat and Crashlytics phases; bundle id `org.nightscout.$TRIO_TEAM.trio`; without
+  ThreadSanitizer, see below) and the test bundle.
 - `scripts/trio-test.sh test` starts faketandem and `scripts/app-launcher.py --host trio`, and hands
   the launcher's address to the bundle. The tests run in the simulator and cannot reach `simctl`, so
   before each test `TrioTestCase` asks the launcher to install Trio anew (`/install`) and launch it
@@ -441,10 +441,12 @@ And three things in Trio that the scenarios step around:
   calls once both are set. Now and then the runtime deadlocked symbolizing that report: the main
   thread, inside the report, waited on libc's `localeconv_l` lock, held by a thread that was
   itself waiting on TSan. Trio, its control server included, stopped answering, and the test failed
-  on `timedOut` 300 s later, whichever scenario it was. `trio-test.sh` builds Trio with
-  `-enableThreadSanitizer NO`. The reports went to Trio's stderr, which the launcher discards, so
-  the lane loses nothing. tandemkit-stress is the lane that runs Trio under TSan and reads its
-  reports.
+  on `timedOut` 300 s later, whichever scenario it was. `-enableThreadSanitizer NO` left
+  `xcodebuild build` instrumenting it all the same, so `trio-test.sh` builds Trio from a copy of its
+  scheme with the sanitizer off (`TrioWithoutThreadSanitizer`, in `Trio.xcodeproj/xcuserdata`,
+  which Trio's git ignores), and refuses, at build and before testing, an app that links the TSan
+  runtime. The reports went to Trio's stderr, which the launcher discards, so the lane loses
+  nothing. tandemkit-stress is the lane that runs Trio under TSan and reads its reports.
 
 - Trio rounds the boluses it stores to the bolus increment it loaded at launch. `DeviceDataManager`
   writes the pump's 0.05 U to `preferences.json` when it sets up the pump manager, but not to the
