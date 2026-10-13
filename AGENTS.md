@@ -118,9 +118,11 @@ a direct call from a driver queue crashes it, as a backfill tick reading
 `queue.sync`, which deadlocks a caller already on the delegate queue. Nothing goes out until the
 host has set both the delegate and its queue (`canNotifyDelegate`): `pumpDelegate.queue` reads
 `.main` until then, and Trio sets the delegate first. `deliverStateMissedByTheDelegate` replays
-what was held once the second one lands. `MockPumpManagerDelegate`
-fails the test on any call that carries the manager and arrives off its `delegateQueue`; a test
-attaches one queue for the manager's life, as hosts do.
+what was held once the second one lands, with the status but not `pumpManagerDidUpdateState`: Loop
+and Trio save `rawValue` on the main thread right after attaching, and a second save from their
+delegate queue races it (Trio's launch hung in a Thread Sanitizer report of it).
+`MockPumpManagerDelegate` fails the test on any call that carries the manager and arrives off its
+`delegateQueue`; a test attaches one queue for the manager's life, as hosts do.
 
 Bolus progress observers are called on the queue the host passed
 `createBolusProgressReporter(reportingOn:)`, which Trio relies on to serialize its own reporter

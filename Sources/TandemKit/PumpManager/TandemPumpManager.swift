@@ -355,6 +355,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     internal func notifyDelegateStateUpdated() {
+        notifyDelegate(includingState: true)
+    }
+
+    private func notifyDelegate(includingState: Bool) {
         publishLock.lock()
         let current = state
         let status = TandemPumpManager.makeStatus(from: current)
@@ -362,12 +366,14 @@ public class TandemPumpManager: PumpManager, Pluggable {
         oldState = TandemPumpManagerState(rawValue: current.rawValue)
         publishLock.unlock()
 
-        // Until the host sets its queue this would land on `.main`; the queue setter replays it.
+        // Until the host sets its queue this would land on `.main`; attaching sends the status then.
         if canNotifyDelegate, let delegate = pumpManagerDelegate {
             pumpDelegate.queue.async { [weak self] in
                 guard let self = self else { return }
 
-                delegate.pumpManagerDidUpdateState(self)
+                if includingState {
+                    delegate.pumpManagerDidUpdateState(self)
+                }
                 delegate.pumpManager(self, didUpdate: status, oldStatus: oldStatus)
             }
         }
@@ -442,7 +448,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
     private func deliverStateMissedByTheDelegate() {
         guard pumpDelegate.delegate != nil, hasDelegateQueue else { return }
 
-        notifyDelegateStateUpdated()
+        // Not pumpManagerDidUpdateState: Loop and Trio save rawValue on the main thread right after
+        // attaching, and its save from their delegate queue races that one.
+        notifyDelegate(includingState: false)
         flushPendingReservoirReading()
         flushPendingPumpEvents()
         flushPendingPumpClockAdjustments()
