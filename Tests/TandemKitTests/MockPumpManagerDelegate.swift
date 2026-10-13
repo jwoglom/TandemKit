@@ -158,20 +158,23 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
         journal.filter { $0.pumpEventBatch != nil }
     }
 
-    /// Replays every `hasNewPumpEvents` batch recorded so far into `oracle`, in order, dating each
+    /// Replays every `hasNewPumpEvents` batch recorded so far into each oracle, in order, dating each
     /// with the driver clock's time at the call (or the wall time without a clock). Returns the
     /// number of batches fed. Pass `after` to continue from a previous feed's last journal index.
     @discardableResult
-    func feed(_ oracle: DoseOracle, after lastIndex: Int? = nil) -> Int {
+    func feed(_ oracles: DoseOracle..., after lastIndex: Int? = nil) -> Int {
+        // One read of the journal, so a batch the driver sends meanwhile reaches every oracle or none.
         var fed = 0
         for entry in journal where entry.index > (lastIndex ?? -1) {
             guard let batch = entry.pumpEventBatch else { continue }
-            oracle.addPumpEvents(
-                batch.events,
-                lastReconciliation: batch.lastReconciliation,
-                replacePendingEvents: batch.replacePendingEvents,
-                now: entry.hostNow
-            )
+            for oracle in oracles {
+                oracle.addPumpEvents(
+                    batch.events,
+                    lastReconciliation: batch.lastReconciliation,
+                    replacePendingEvents: batch.replacePendingEvents,
+                    now: entry.hostNow
+                )
+            }
             fed += 1
         }
         return fed

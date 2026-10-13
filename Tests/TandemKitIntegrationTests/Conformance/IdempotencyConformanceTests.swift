@@ -360,7 +360,7 @@ final class IdempotencyConformanceTests: ConformanceTestCase {
 
             let (loop, trio) = feedOracles()
             XCTAssertEqual(loop.lastReconciliation, reported, "round \(round): the host's boundary follows every call")
-            XCTAssertEqual(loop.callCount, allPumpEventBatches.count, "round \(round): every batch reached the host")
+            XCTAssertEqual(loop.callCount, batchesFedToOracles, "round \(round): every batch reached the host")
             XCTAssertTrue(loop.doses.isEmpty, "round \(round): no dose was ever delivered: \(loop.doses.map(LoopDoseStoreOracle.describe))")
             XCTAssertTrue(trio.events.isEmpty, "round \(round): \(trio.events)")
         }

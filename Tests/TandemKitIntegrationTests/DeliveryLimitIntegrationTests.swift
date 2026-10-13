@@ -218,9 +218,8 @@ final class DeliveryLimitIntegrationTests: ConformanceTestCase {
 
         try pumpAnnounces(.globalPumpSettings)
         try IntegrationWait.until("the driver to read the pump's limits", timeout: 30) {
-            driver.manager.state.maxBasalLimitMilliunits == 2000
+            driver.manager.state.maxBasalLimitMilliunits == 2000 && driver.manager.state.maxBolusLimitMilliunits == 8000
         }
-        XCTAssertEqual(driver.manager.state.maxBolusLimitMilliunits, 8000)
     }
 
     // MARK: - L7

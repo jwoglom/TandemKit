@@ -57,7 +57,7 @@ final class ConformanceSmokeTests: ConformanceTestCase {
         loop.assertNoDuplicates()
         let stored = try XCTUnwrap(loop.assertPermanent(raw: raw))
         XCTAssertEqual(stored.dose.deliveredUnits, Self.units)
-        XCTAssertEqual(loop.callCount, allPumpEventBatches.count, "every batch reaches the oracle")
+        XCTAssertEqual(loop.callCount, batchesFedToOracles, "every batch reaches the oracle")
         XCTAssertNotNil(loop.lastReconciliation)
         XCTAssertEqual(loop.lastReconciliation, driver.manager.state.lastReconciliation)
         XCTAssertGreaterThan(loop.iob(at: clock.now), 0)
@@ -96,7 +96,7 @@ final class ConformanceSmokeTests: ConformanceTestCase {
 
         XCTAssertGreaterThan(allPumpEventBatches.count, before, "the relaunched driver's batches are journaled too")
         let (loop, _) = feedOracles()
-        XCTAssertEqual(loop.callCount, allPumpEventBatches.count)
+        XCTAssertEqual(loop.callCount, batchesFedToOracles)
         XCTAssertEqual(loop.lastReconciliation, relaunched.manager.state.lastReconciliation)
         XCTAssertTrue(loop.doses.isEmpty, "no dose was ever delivered: \(loop.doses)")
         try timeline().assertMatches(loop)

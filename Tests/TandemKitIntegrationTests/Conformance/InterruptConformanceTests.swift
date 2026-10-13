@@ -488,8 +488,9 @@ final class InterruptConformanceTests: ConformanceTestCase {
 
         let secondRelaunch = try relaunch()
         XCTAssertEqual(secondRelaunch.manager.state.pendingBolusFinalization?.bolusId, bolusId)
-        try harness.client.clearFaults()
+        // Before the faults clear: the relaunched driver's own sync may make the retry first.
         let logBeforeRetry = try harness.client.snapshot().requestLog.lastSeq
+        try harness.client.clearFaults()
 
         _ = try sync()
 
@@ -615,12 +616,13 @@ final class InterruptConformanceTests: ConformanceTestCase {
         XCTAssertTrue(pumpBasal.tempActive)
         XCTAssertEqual(pumpBasal.tempRate, rate, accuracy: 0.0001)
 
-        // The link drops with the temp rate running; ten minutes pass before the driver is back.
-        // (The pump's log, not `disconnectFromPump()`'s poll of the live flag: the driver's
-        // auto-reconnect can bring the link back between two polls.)
-        try harness.control.disconnectPump()
+        // The link drops with the temp rate running; ten minutes pass before the driver is back. The
+        // radio stays off across the step: a sync reading the pump's clock mid-step measures a skew.
+        addTeardownBlock { try self.harness.client.armFault(FaketandemFaultSpec(.radioOn)) }
+        try harness.client.armFault(FaketandemFaultSpec(.radioOff))
         try waitForLinkDown(since: logStart)
         try clock.advanceBoth(seconds: .minutes(10), ticks: 10)
+        try harness.client.armFault(FaketandemFaultSpec(.radioOn))
         try waitForReconnect()
         _ = try sync()
 

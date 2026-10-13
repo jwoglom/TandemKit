@@ -232,8 +232,13 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         fault.errorCode = 3
         XCTAssertNotNil(try harness.client.armFault(fault))
 
+        // The enact can wait seconds behind the first history walk, so the harness's 5 s timeout is too
+        // close to tell a prompt refusal from one that waited it out.
+        let responseTimeout: TimeInterval = 60
+        VirtualPump.responseTimeout = .seconds(Int(responseTimeout))
+        addTeardownBlock { VirtualPump.responseTimeout = .milliseconds(Int(FaketandemHarness.responseTimeout * 1000)) }
         let started = Date()
-        let error = try enactBolus(units: Self.bolusUnits)
+        let error = try enactBolus(units: Self.bolusUnits, timeout: responseTimeout * 2)
         let elapsed = Date().timeIntervalSince(started)
 
         XCTAssertNotNil(error, "an ErrorResponse must fail the enact")
@@ -253,7 +258,7 @@ final class PumpSideConformanceTests: ConformanceTestCase {
 
         XCTAssertLessThan(
             elapsed,
-            FaketandemHarness.responseTimeout / 2,
+            responseTimeout / 2,
             "the refusal should be reported promptly, not after the response timeout; took \(elapsed)s"
         )
 
@@ -421,18 +426,20 @@ final class PumpSideConformanceTests: ConformanceTestCase {
     /// never reported, and setting the pump's clock must tell the host through `didAdjustPumpClockBy`.
     func testD5PumpClockSkewIsMeasuredAndDosesFollowThePumpsLedger() throws {
         let skew: Double = 900
-        try clock.setSkew(seconds: skew)
+        // At noon, so the pump's clock stays inside the second segment for the whole scenario. The
+        // time of day otherwise follows earlier tests, and near midnight it crossed into the next day.
+        let noon = try XCTUnwrap(Calendar.current.nextDate(after: clock.now, matching: DateComponents(hour: 12), matchingPolicy: .nextTime))
+        try clock.start(at: noon, skewSeconds: skew)
 
         // The phone's schedule: the current segment at 1.0 U/h, the next (in 5 minutes of phone
         // time) at 2.0 U/h. On its own clock the pump is already 15 minutes on, i.e. in that next
         // segment, so its profile rate is 2.0 U/h.
         let pumpSegmentRate = 2.0
         let secondsIntoDay = clock.now.timeIntervalSince(Calendar.current.startOfDay(for: clock.now))
-        var items = [RepeatingScheduleValue(startTime: 0, value: Self.profileRate)]
-        if secondsIntoDay + .minutes(10) < .hours(24) {
-            items.append(RepeatingScheduleValue(startTime: secondsIntoDay + .minutes(5), value: pumpSegmentRate))
-        }
-        let schedule = try XCTUnwrap(BasalRateSchedule(dailyItems: items))
+        let schedule = try XCTUnwrap(BasalRateSchedule(dailyItems: [
+            RepeatingScheduleValue(startTime: 0, value: Self.profileRate),
+            RepeatingScheduleValue(startTime: secondsIntoDay + .minutes(5), value: pumpSegmentRate),
+        ]))
         let driver = try startPairedDriver(scheduledRate: Self.profileRate, pumpProfileRate: pumpSegmentRate, schedule: schedule)
         try harness.client.setState(["bolus_rate_units_per_second": Self.deliveryRate])
         XCTAssertEqual(driver.manager.getScheduledBasalRate(), Self.profileRate, "the phone is still in the 1.0 U/h segment")

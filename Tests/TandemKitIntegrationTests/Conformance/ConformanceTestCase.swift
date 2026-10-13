@@ -251,12 +251,13 @@ class ConformanceTestCase: FaketandemIntegrationTestCase {
         trio: TrioDoseStoreOracle = TrioDoseStoreOracle()
     ) -> (loop: LoopDoseStoreOracle, trio: TrioDoseStoreOracle) {
         drainDelegate()
-        for delegate in delegates {
-            delegate.feed(loop)
-            delegate.feed(trio)
-        }
+        batchesFedToOracles = delegates.reduce(0) { $0 + $1.feed(loop, trio) }
         return (loop, trio)
     }
+
+    /// How many batches the last `feedOracles()` fed. `allPumpEventBatches.count` read later can be
+    /// higher: the driver's own reconnects, syncs and qualifying-event reads keep reporting.
+    private(set) var batchesFedToOracles = 0
 
     /// Every `hasNewPumpEvents` batch across all delegates, oldest first.
     var allPumpEventBatches: [MockPumpManagerDelegate.PumpEventBatch] {
