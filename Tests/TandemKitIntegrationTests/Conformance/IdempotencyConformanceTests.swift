@@ -719,19 +719,399 @@ final class IdempotencyConformanceTests: ConformanceTestCase {
         trio.assertNoDuplicates()
     }
 
+    // MARK: - C11 (§4, §11 idempotency; #330)
+
+    func testIdenticalBolusesInARowAreEachCountedOnce() throws {
+        try identicalBolusesInARow(historyDoseReporting: false)
+    }
+
+    /// The history pass reads each bolus's `BolusCompleted` too, and must find it already reported.
+    func testIdenticalBolusesInARowAreEachCountedOnceWithHistoryDoseReporting() throws {
+        try identicalBolusesInARow(historyDoseReporting: true)
+    }
+
+    /// Three boluses of one amount a few minutes apart, as SMBs go out, each re-sent while it runs.
+    private func identicalBolusesInARow(historyDoseReporting: Bool) throws {
+        let driver = try startPairedDriver(scheduledBasalRate: Self.scheduledBasalRate, historyDoseReporting: historyDoseReporting)
+        // 1 U takes 50 s of pump time: a sync 20 s in finds it delivering, inside the driver's estimate.
+        _ = try harness.client.setState(["bolus_rate_units_per_second": 0.02])
+        let units = 1.0
+        var raws: [Data] = []
+        var bolusIds: [Int] = []
+
+        for round in 1 ... 3 {
+            let beforeEnact = allPumpEventBatches.count
+            XCTAssertNil(try enactBolus(units: units), "round \(round)")
+            let bolusId = try XCTUnwrap(driver.manager.state.bolusDose?.bolusId, "round \(round)")
+            let raw = try XCTUnwrap(newBatches(since: beforeEnact).flatMap(\.events).first { $0.dose?.type == .bolus }, "round \(round)").raw
+            XCTAssertFalse(raws.contains(raw), "round \(round): the same amount again is a dose of its own: \(LoopDoseStoreOracle.describe(raw))")
+            raws.append(raw)
+            bolusIds.append(bolusId)
+
+            try clock.advanceBoth(seconds: 20, ticks: 4)
+            let beforeSync = allPumpEventBatches.count
+            _ = try sync()
+            XCTAssertTrue(try harness.client.snapshot().bolus.active, "round \(round): the pump is still delivering")
+            assertReSent(raw, in: newBatches(since: beforeSync), "round \(round)")
+            try assertEachDeliveryCountedOnce(boluses: raws, "round \(round), delivering")
+
+            try advanceUntilBolusFinishes(bolusId: bolusId)
+            try clock.advanceBoth(seconds: driver.manager.estimatedDuration(toBolus: units) + .minutes(1))
+            _ = try syncUntilFinalized(raw: raw)
+            try assertEachDeliveryCountedOnce(boluses: raws, "round \(round), finished")
+
+            try clock.advanceBoth(seconds: .minutes(3), ticks: 3)
+            _ = try sync()
+        }
+        if historyDoseReporting {
+            try waitForHistoryPass(driver)
+        }
+
+        let reports = allPumpEventBatches.flatMap(\.events).filter { $0.dose?.type == .bolus }
+        XCTAssertEqual(Set(reports.map(\.raw)), Set(raws), "every bolus report is of the app's three: \(reports.map { LoopDoseStoreOracle.describe($0.raw) })")
+        for raw in raws {
+            XCTAssertEqual(finalizedReports(of: raw), 1, "finalized once: \(LoopDoseStoreOracle.describe(raw))")
+        }
+        try assertEachDeliveryCountedOnce(boluses: raws, "after three boluses")
+
+        let timeline = try timeline()
+        let delivered = timeline.boluses.filter { bolusIds.contains($0.bolusId) }.compactMap(\.deliveredUnits)
+        XCTAssertEqual(delivered.count, 3, "\(timeline.boluses)")
+        try assertHostsCountTheBoluses(delivered.reduce(0, +), "three identical boluses")
+        timeline.assertMatches(feedOracles().loop, tolerance: .exact, "three identical boluses")
+    }
+
+    // MARK: - C12 (§4, §11 idempotency; #450, #344)
+
+    /// Enacted again every cycle, as hosts keep a temp running, with a sync between.
+    func testTheSameTempBasalEveryCycleIsCountedOncePerEnactment() throws {
+        try startPairedDriver(scheduledBasalRate: Self.scheduledBasalRate)
+        let firstStart = clock.now
+        var raws: [Data] = []
+
+        for round in 1 ... 4 {
+            let beforeEnact = allPumpEventBatches.count
+            XCTAssertNil(try enactTempBasal(unitsPerHour: Self.tempBasalRate, duration: .minutes(30)), "round \(round)")
+            let enacted = newBatches(since: beforeEnact).flatMap(\.events)
+            let started = try XCTUnwrap(enacted.first { $0.dose?.type == .tempBasal && $0.dose?.isMutable == true }, "round \(round)")
+            XCTAssertFalse(raws.contains(started.raw), "round \(round): the same rate again is a temp basal of its own: \(LoopDoseStoreOracle.describe(started.raw))")
+            if let replaced = raws.last {
+                XCTAssertEqual(enacted.filter { $0.raw == replaced }.map(\.dose?.isMutable), [false], "round \(round): the temp it replaced is finalized")
+            }
+            raws.append(started.raw)
+
+            try clock.advanceBoth(seconds: .minutes(5), ticks: 5)
+            let beforeSync = allPumpEventBatches.count
+            _ = try sync()
+            let synced = newBatches(since: beforeSync)
+            assertReSent(started.raw, in: synced, "round \(round)")
+            XCTAssertFalse(
+                synced.flatMap(\.events).contains { raws.dropLast().contains($0.raw) },
+                "round \(round): a finished temp basal is not reported again: \(synced.map(describe))"
+            )
+            try assertEachDeliveryCountedOnce(temps: raws, "round \(round)")
+            let (loop, trio) = feedOracles()
+            XCTAssertEqual(loop.mutableDoses.compactMap(\.raw), [started.raw], "round \(round): only the latest runs")
+            trio.assertNoSameSecondBasalRows("round \(round)")
+        }
+
+        for raw in raws {
+            XCTAssertEqual(finalizedReports(of: raw), raw == raws.last ? 0 : 1, LoopDoseStoreOracle.describe(raw))
+        }
+        let loop = feedOracles().loop
+        let temps = loop.doses.filter { $0.dose.type == .tempBasal }.sorted { $0.dose.startDate < $1.dose.startDate }
+        for (finished, next) in zip(temps, temps.dropFirst()) {
+            XCTAssertEqual(
+                finished.dose.endDate, next.dose.startDate,
+                "back to back: \(LoopDoseStoreOracle.describe(finished)) then \(LoopDoseStoreOracle.describe(next))"
+            )
+        }
+        try assertHostsCountTheTempBasals(from: firstStart, "the same temp basal every cycle")
+        try timeline().assertMatches(loop, tolerance: .exact, "the same temp basal every cycle")
+    }
+
+    // MARK: - C13 (§3, §11 idempotency; #450)
+
+    func testATempBasalReSentUntilItRunsOutIsCountedOnce() throws {
+        try startPairedDriver(scheduledBasalRate: Self.scheduledBasalRate)
+        let duration: TimeInterval = .minutes(30)
+        let beforeEnact = allPumpEventBatches.count
+        XCTAssertNil(try enactTempBasal(unitsPerHour: Self.tempBasalRate, duration: duration))
+        let started = try XCTUnwrap(newBatches(since: beforeEnact).flatMap(\.events).first { $0.dose?.type == .tempBasal })
+        let raw = started.raw
+        let start = try XCTUnwrap(started.dose?.startDate)
+        let scheduledEnd = try XCTUnwrap(started.dose?.endDate)
+
+        for round in 1 ... 5 {
+            try clock.advanceBoth(seconds: .minutes(5), ticks: 5)
+            let before = allPumpEventBatches.count
+            _ = try sync()
+            XCTAssertTrue(try harness.client.snapshot().basal.tempActive, "round \(round): the pump's temp rate still runs")
+            assertReSent(raw, in: newBatches(since: before), "round \(round)")
+            try assertEachDeliveryCountedOnce(temps: [raw], "round \(round)")
+            XCTAssertEqual(feedOracles().loop.dose(raw: raw)?.dose.endDate, scheduledEnd, "round \(round): it runs to its scheduled end")
+        }
+
+        try clock.advanceBoth(seconds: .minutes(6), ticks: 6)
+        XCTAssertFalse(try harness.client.snapshot().basal.tempActive, "the temp rate ran out")
+        let finalized = try syncUntilFinalized(raw: raw)
+        XCTAssertEqual(try XCTUnwrap(finalized.dose?.endDate).timeIntervalSince(scheduledEnd), 0, accuracy: 1, "it ran its whole duration")
+        XCTAssertEqual(finalized.dose?.deliveredUnits ?? -1, Self.tempBasalRate * duration / .hours(1), accuracy: 0.001)
+
+        try clock.advanceBoth(seconds: .minutes(5), ticks: 5)
+        let afterEnd = allPumpEventBatches.count
+        _ = try sync()
+        XCTAssertFalse(newBatches(since: afterEnd).flatMap(\.events).contains { $0.raw == raw }, "a finished temp basal is not reported again")
+        XCTAssertEqual(finalizedReports(of: raw), 1)
+        try assertEachDeliveryCountedOnce(temps: [raw], "after it ran out")
+
+        let (loop, trio) = feedOracles()
+        XCTAssertNotNil(loop.assertPermanent(raw: raw, "after it ran out"))
+        XCTAssertEqual(trio.tempBasals.map(\.isMutable), [false], "\(trio.tempBasals)")
+        XCTAssertEqual(trio.tempBasals.first?.tempBasalDurationMinutes, 30)
+        try assertHostsCountTheTempBasals(from: start, "a temp basal that ran out")
+        try timeline().assertMatches(loop, tolerance: .exact, "a temp basal re-sent until it ran out")
+    }
+
+    // MARK: - C14 (§3, §11 idempotency; #330)
+
+    func testABolusReSentThroughManySyncsAndARelaunchIsCountedOnce() throws {
+        let driver = try startPairedDriver(scheduledBasalRate: Self.scheduledBasalRate)
+        // 2 U takes 200 s of pump time, past the driver's estimate: the later syncs read the bolus
+        // status, and find it still delivering.
+        _ = try harness.client.setState(["bolus_rate_units_per_second": 0.01])
+        let units = 2.0
+        let beforeEnact = allPumpEventBatches.count
+        XCTAssertNil(try enactBolus(units: units))
+        let bolusId = try XCTUnwrap(driver.manager.state.bolusDose?.bolusId)
+        let raw = try XCTUnwrap(newBatches(since: beforeEnact).flatMap(\.events).first { $0.dose?.type == .bolus }).raw
+
+        for round in 1 ... 8 {
+            try clock.advanceBoth(seconds: 15, ticks: 3)
+            if round == 4 {
+                _ = try relaunch()
+            }
+            let before = allPumpEventBatches.count
+            _ = try sync()
+            XCTAssertTrue(try harness.client.snapshot().bolus.active, "round \(round): the pump is still delivering")
+            assertReSent(raw, in: newBatches(since: before), "round \(round)")
+            try assertEachDeliveryCountedOnce(boluses: [raw], "round \(round)")
+            XCTAssertEqual(feedOracles().loop.dose(raw: raw)?.isMutable, true, "round \(round)")
+        }
+
+        let lastBolus = try advanceUntilBolusFinishes(bolusId: bolusId)
+        try clock.advanceBoth(seconds: .minutes(1))
+        let finalized = try syncUntilFinalized(raw: raw)
+        XCTAssertEqual(finalized.dose?.deliveredUnits ?? -1, lastBolus.deliveredUnits, accuracy: 0.0005)
+        try clock.advanceBoth(seconds: .minutes(5), ticks: 5)
+        let afterEnd = allPumpEventBatches.count
+        _ = try sync()
+        XCTAssertFalse(newBatches(since: afterEnd).flatMap(\.events).contains { $0.raw == raw }, "a finished bolus is not reported again")
+        XCTAssertEqual(finalizedReports(of: raw), 1)
+        try assertEachDeliveryCountedOnce(boluses: [raw], "finished")
+
+        let loop = feedOracles().loop
+        XCTAssertEqual(loop.assertPermanent(raw: raw, "finished")?.dose.deliveredUnits ?? -1, lastBolus.deliveredUnits, accuracy: 0.0005)
+        try assertHostsCountTheBoluses(lastBolus.deliveredUnits, "one bolus through a relaunch")
+        try timeline().assertMatches(loop, tolerance: .exact, "a bolus re-sent through a relaunch")
+    }
+
+    // MARK: - C15 (§3, §5, §11 idempotency; #330, #448)
+
+    func testTwoIdenticalBolusesMutableAtOnceAreEachCountedOnce() throws {
+        let driver = try startPairedDriver(scheduledBasalRate: Self.scheduledBasalRate)
+        // With no history to read the first one's volume from, it stays held while the second runs.
+        turnOffHistoryBackfill(driver)
+        let client = harness.client
+        addTeardownBlock { _ = try? client.clearFaults() }
+        try dropEveryLastBolusStatus()
+        let units = 2.0
+        // The driver's own model of the pump's speed, which dates the first one's end without the
+        // pump's timestamp. 2 U takes about a minute, so the second still runs at the third sync.
+        _ = try harness.client.setState(["bolus_rate_units_per_second": units / TandemPumpCapabilities.estimatedBolusDuration(toDeliver: units)])
+
+        let beforeFirst = allPumpEventBatches.count
+        XCTAssertNil(try enactBolus(units: units))
+        let firstId = try XCTUnwrap(driver.manager.state.bolusDose?.bolusId)
+        let first = try XCTUnwrap(newBatches(since: beforeFirst).flatMap(\.events).first { $0.dose?.type == .bolus }).raw
+        try advanceUntilBolusFinishes(bolusId: firstId)
+        try clock.advanceBoth(seconds: driver.manager.estimatedDuration(toBolus: units) + .minutes(1))
+        _ = try sync()
+        XCTAssertEqual(driver.manager.state.pendingBolusFinalization?.bolusId, firstId, "held for its delivered volume")
+
+        let beforeSecond = allPumpEventBatches.count
+        XCTAssertNil(try enactBolus(units: units))
+        let secondId = try XCTUnwrap(driver.manager.state.bolusDose?.bolusId)
+        let second = try XCTUnwrap(newBatches(since: beforeSecond).flatMap(\.events).first { $0.dose?.type == .bolus && $0.raw != first }).raw
+
+        for round in 1 ... 3 {
+            try clock.advanceBoth(seconds: 10, ticks: 2)
+            let before = allPumpEventBatches.count
+            _ = try sync()
+            XCTAssertTrue(try harness.client.snapshot().bolus.active, "round \(round): the second is still delivering")
+            let batches = newBatches(since: before)
+            XCTAssertTrue(
+                batches.contains { batch in
+                    batch.replacePendingEvents && [first, second].allSatisfy { raw in
+                        batch.events.contains { $0.raw == raw && $0.dose?.isMutable == true }
+                    }
+                },
+                "round \(round): both re-sent in one complete batch: \(batches.map(describe))"
+            )
+            try assertEachDeliveryCountedOnce(boluses: [first, second], "round \(round), both mutable")
+            XCTAssertEqual(feedOracles().loop.mutableDoses.count, 2, "round \(round)")
+        }
+
+        // The second is held in the first's place, and the first, whose volume `LastBolusStatus` can
+        // no longer give, is finalized at its programmed amount.
+        try advanceUntilBolusFinishes(bolusId: secondId)
+        try clock.advanceBoth(seconds: driver.manager.estimatedDuration(toBolus: units) + .minutes(1))
+        _ = try sync()
+        XCTAssertEqual(driver.manager.state.pendingBolusFinalization?.bolusId, secondId)
+        try assertEachDeliveryCountedOnce(boluses: [first, second], "the first finalized, the second held")
+        XCTAssertEqual(feedOracles().loop.dose(raw: first)?.isMutable, false)
+        XCTAssertEqual(feedOracles().loop.dose(raw: second)?.isMutable, true)
+
+        try harness.client.clearFaults()
+        _ = try syncUntilFinalized(raw: second)
+        for raw in [first, second] {
+            XCTAssertEqual(finalizedReports(of: raw), 1, "finalized once: \(LoopDoseStoreOracle.describe(raw))")
+        }
+        try assertEachDeliveryCountedOnce(boluses: [first, second], "both finished")
+
+        let timeline = try timeline()
+        let delivered = timeline.boluses.filter { [firstId, secondId].contains($0.bolusId) }.compactMap(\.deliveredUnits)
+        XCTAssertEqual(delivered.count, 2, "\(timeline.boluses)")
+        try assertHostsCountTheBoluses(delivered.reduce(0, +), "two identical boluses mutable at once")
+        // The first one's end is the driver's model, which counts the 15 s lead-in the emulator does not.
+        timeline.assertMatches(
+            feedOracles().loop,
+            tolerance: PumpTimeline.Tolerance(time: TandemPumpCapabilities.bolusInitiationDelay + 2, units: 0.001, rate: 0.005),
+            "two identical boluses mutable at once"
+        )
+    }
+
     // MARK: - Helpers
 
     /// Pair, sync, and give both sides the same scheduled basal rate: the driver computes the temp
     /// basal percentage from its own schedule and the pump applies it to its profile rate, so a
     /// mismatch would make the reported rate disagree with the delivered one (#335).
     @discardableResult
-    private func startPairedDriver(scheduledBasalRate rate: Double) throws -> FaketandemHarness.Driver {
+    private func startPairedDriver(scheduledBasalRate rate: Double, historyDoseReporting: Bool = false) throws -> FaketandemHarness.Driver {
         _ = try harness.client.setState(["basal_rate": rate])
         let schedule = try XCTUnwrap(BasalRateSchedule(dailyItems: [RepeatingScheduleValue(startTime: 0, value: rate)]))
-        let driver = startDriver(state: TandemPumpManagerState(basalRateSchedule: schedule))
+        var state = TandemPumpManagerState(basalRateSchedule: schedule)
+        if historyDoseReporting {
+            state.featureFlags[.historyDoseReporting] = true
+            state.bolusReportLedger = BolusReportLedger(trackingSince: clock.now)
+        }
+        let driver = startDriver(state: state)
         try harness.pair(driver)
         _ = try sync()
+        if historyDoseReporting {
+            // Past the first tick, whatever the pump logs is newer than the floor history reports from.
+            try IntegrationWait.until("the first backfill tick", timeout: 180) { driver.manager.state.historyBackfill != nil }
+        }
         return driver
+    }
+
+    /// A sync, then the history pass it starts: read through the pump's last record and reported.
+    private func waitForHistoryPass(_ driver: FaketandemHarness.Driver, timeout: TimeInterval = 180) throws {
+        let last = try harness.client.snapshot().history.lastSequence
+        _ = try sync()
+        try IntegrationWait.until("the driver to read the pump's history through \(last)", timeout: timeout) {
+            (driver.manager.state.historyBackfill?.watermark).map { Int($0) >= last } == true
+                && !driver.manager.historyFetchGate.isBusy
+        }
+        // History's reports go out in a command job queued behind the tick.
+        let jobsDone = ResultBox<Void>()
+        driver.bluetooth.ensureConnected { _ in jobsDone.set(()) }
+        try jobsDone.wait("the history reports' command job", timeout: timeout)
+        drainDelegate()
+    }
+
+    private func assertReSent(_ raw: Data, in batches: [MockPumpManagerDelegate.PumpEventBatch], _ message: String, file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertTrue(
+            batches.contains { batch in
+                batch.replacePendingEvents && batch.events.contains { $0.raw == raw && $0.dose?.isMutable == true }
+            },
+            "\(message): the running dose is re-sent in a complete batch: \(batches.map(describe))",
+            file: file,
+            line: line
+        )
+    }
+
+    private func finalizedReports(of raw: Data) -> Int {
+        allPumpEventBatches.flatMap(\.events).filter { $0.raw == raw && $0.dose?.isMutable == false }.count
+    }
+
+    /// Each `raw` is one live dose in Loop and one row in Trio, the hosts hold no other dose of its
+    /// type, and neither has deleted one along the way.
+    private func assertEachDeliveryCountedOnce(
+        boluses: [Data] = [],
+        temps: [Data] = [],
+        _ message: String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let (loop, trio) = feedOracles()
+        loop.assertNoDuplicates(message, file: file, line: line)
+        trio.assertNoDuplicates(message, file: file, line: line)
+        let live = loop.doses.map(LoopDoseStoreOracle.describe)
+        for (type, raws) in [(DoseType.bolus, boluses), (DoseType.tempBasal, temps)] {
+            for raw in raws {
+                XCTAssertNotNil(loop.assertSingleDose(raw: raw, message, file: file, line: line))
+                XCTAssertEqual(
+                    trio.events.filter { $0.syncIdentifier == raw.hexadecimalString }.count, 1,
+                    "\(message): one Trio row for \(LoopDoseStoreOracle.describe(raw)): \(trio.events)",
+                    file: file,
+                    line: line
+                )
+            }
+            XCTAssertEqual(loop.doses.filter { $0.dose.type == type }.count, raws.count, "\(message): Loop's \(type) doses: \(live)", file: file, line: line)
+            XCTAssertTrue(
+                loop.deletedDoses.allSatisfy { $0.dose.type != type },
+                "\(message): Loop deleted \(loop.deletedDoses.map(LoopDoseStoreOracle.describe))",
+                file: file,
+                line: line
+            )
+        }
+        XCTAssertEqual(trio.boluses.count, boluses.count, "\(message): \(trio.boluses)", file: file, line: line)
+        XCTAssertEqual(trio.tempBasals.count, temps.count, "\(message): \(trio.tempBasals)", file: file, line: line)
+        XCTAssertTrue(trio.purged.isEmpty, "\(message): Trio purged \(trio.purged)", file: file, line: line)
+    }
+
+    private func assertHostsCountTheBoluses(_ delivered: Double, _ message: String, file: StaticString = #filePath, line: UInt = #line) throws {
+        let (loop, trio) = feedOracles()
+        let loopUnits = loop.doses.filter { $0.dose.type == .bolus }.compactMap(\.dose.deliveredUnits).reduce(0, +)
+        XCTAssertEqual(loopUnits, delivered, accuracy: 0.0015, "Loop: \(message)", file: file, line: line)
+        // Trio stores a bolus to its 0.1 U increment.
+        let trioUnits = trio.boluses.compactMap(\.bolusAmount).map { NSDecimalNumber(decimal: $0).doubleValue }.reduce(0, +)
+        XCTAssertEqual(trioUnits, delivered, accuracy: 0.05 * Double(max(1, trio.boluses.count)), "Trio: \(message)", file: file, line: line)
+    }
+
+    /// Both hosts count, above the schedule, what the pump's temp rates delivered from `start` to now.
+    private func assertHostsCountTheTempBasals(from start: Date, _ message: String, file: StaticString = #filePath, line: UInt = #line) throws {
+        let now = clock.now
+        let tempRates = try timeline().tempRates
+        let pump = tempRates.reduce(0.0) { total, temp in
+            let end = min(temp.end ?? now, now)
+            guard let rate = temp.rate, end > temp.start else { return total }
+            return total + (rate - Self.scheduledBasalRate) * end.timeIntervalSince(temp.start) / .hours(1)
+        }
+        let scheduled: (Date) -> Double = { _ in Self.scheduledBasalRate }
+        let (loop, trio) = feedOracles()
+        // A finished temp basal is reported to the pump's 0.001 U.
+        let accuracy = 0.001 * Double(max(1, tempRates.count))
+        XCTAssertEqual(loop.netBasalUnits(from: start, to: now, scheduledRate: scheduled), pump, accuracy: accuracy, "Loop: \(message)", file: file, line: line)
+        XCTAssertEqual(
+            try trio.netBasalUnits(from: start, to: now, clock: now, scheduledRate: scheduled),
+            pump,
+            accuracy: accuracy,
+            "Trio: \(message)",
+            file: file,
+            line: line
+        )
     }
 
     private func newBatches(since index: Int) -> [MockPumpManagerDelegate.PumpEventBatch] {
