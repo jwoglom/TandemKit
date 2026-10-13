@@ -211,6 +211,25 @@ import XCTest
         )
     }
 
+    func testABolusWhoseInitiateBolusWentUnansweredIsFinalizedAtItsProgrammedAmount() throws {
+        startManager()
+        bluetooth.stub(InitiateBolusRequest.self) { _ in nil }
+        bluetooth.stub(CurrentBolusStatusRequest.self) { _ in nil }
+        let enacted = expectation(description: "enactBolus")
+        manager.enactBolus(units: Self.bolusUnits, activationType: .manualNoRecommendation) { _ in enacted.fulfill() }
+        wait(for: [enacted], timeout: 5)
+        XCTAssertEqual(manager.state.bolusDose?.isUnconfirmed, true)
+        let bolusRaw = try XCTUnwrap(events.last { $0.dose?.type == .bolus }?.raw)
+        clock.advance(by: 30)
+
+        deactivate()
+
+        let bolus = try XCTUnwrap(events.last { $0.raw == bolusRaw }?.dose)
+        XCTAssertFalse(bolus.isMutable)
+        XCTAssertEqual(bolus.deliveredUnits, Self.bolusUnits, "the pump may be running it")
+        XCTAssertFalse(manager.status.deliveryIsUncertain)
+    }
+
     func testATempBasalIsCutWhereThePumpRescalesItAtASegmentChange() throws {
         clock.set(at(.hours(13) + .minutes(45)))
         startManager()

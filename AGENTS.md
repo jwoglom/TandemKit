@@ -291,7 +291,8 @@ edit instead of at the next sync.
   manager gives it.
 - A held bolus is finalized with its `BolusCompleted` record if backfill has read one; otherwise a
   running bolus at its programmed amount, ended no later than the deletion so Loop stores it at
-  once, and one with an unconfirmed volume at the fallback it was held with.
+  once, an unanswered one (`isUnconfirmed`) the same way, since the pump may be running it, and one
+  whose delivered volume was never read at the fallback it was held with.
 - Still open: Loop leaves the remainder out of IOB from a boundary past its end that came with no
   save (the next pump manager's empty batch) until that manager's next non-empty batch.
 - The integration harness's `shutDownDriver()` is the app going away (a relaunch), which tells the
