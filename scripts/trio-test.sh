@@ -49,22 +49,39 @@ TRIO_APP="$TRIO_DERIVED_DATA/Build/Products/Debug-iphonesimulator/Trio.app"
 # CI=true skips Trio's SwiftFormat and Crashlytics build phases, which rewrite sources and upload.
 # Signed ad hoc, not left unsigned: an unsigned simulator build carries no entitlements, the
 # keychain then refuses every write, and Trio stops on its first one (BaseKeychain).
-# Trio's scheme turns on ThreadSanitizer, whose runtime can deadlock symbolizing a race report and
-# freeze Trio; its reports go to a stderr the launcher discards, and tandemkit-stress is the TSan lane.
+# Trio's scheme runs it under ThreadSanitizer, which can deadlock reporting a race and freeze Trio, and
+# -enableThreadSanitizer NO left the build instrumented; tandemkit-stress is the TSan lane.
+TRIO_SCHEME=TrioWithoutThreadSanitizer
 build_trio() {
   if [[ ! -f "$TRIO_DIR/Trio.xcworkspace/contents.xcworkspacedata" || ! -d "$TRIO_DIR/TandemKit/Sources" ]]; then
     echo "No Trio checkout with TandemKit at $TRIO_DIR; set TRIO_DIR" >&2
     exit 1
   fi
-  xcodebuild build -workspace "$TRIO_DIR/Trio.xcworkspace" -scheme Trio -configuration Debug \
+  local schemes
+  schemes="$TRIO_DIR/Trio.xcodeproj/xcuserdata/$(id -un).xcuserdatad/xcschemes"
+  mkdir -p "$schemes"
+  sed 's/enableThreadSanitizer = "YES"/enableThreadSanitizer = "NO"/' \
+    "$TRIO_DIR/Trio.xcodeproj/xcshareddata/xcschemes/Trio.xcscheme" > "$schemes/$TRIO_SCHEME.xcscheme"
+  xcodebuild build -workspace "$TRIO_DIR/Trio.xcworkspace" -scheme "$TRIO_SCHEME" -configuration Debug \
     -destination "${DESTINATION:-platform=iOS Simulator,id=$UDID}" -derivedDataPath "$TRIO_DERIVED_DATA" \
-    -xcconfig "$ROOT/VirtualPump.xcconfig" -skipMacroValidation -skipPackagePluginValidation -enableThreadSanitizer NO \
+    -xcconfig "$ROOT/VirtualPump.xcconfig" -skipMacroValidation -skipPackagePluginValidation \
     DEVELOPER_TEAM="$TRIO_TEAM" CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- PROVISIONING_PROFILE_SPECIFIER= \
     CI=true "$@"
 }
 
+# Fails at once rather than as a 300 s timeout in whichever scenario the deadlock lands on.
+refuse_thread_sanitized_trio() {
+  local linked
+  linked="$(find "$TRIO_APP" -type f \( -perm -0100 -o -name '*.dylib' \) -exec otool -L {} + 2>/dev/null || true)"
+  if grep -q 'libclang_rt\.tsan' <<<"$linked"; then
+    echo "$TRIO_APP links the ThreadSanitizer runtime; rebuild it with '$0 build'" >&2
+    exit 1
+  fi
+}
+
 if [[ "$mode" == "build" ]]; then
   build_trio "$@" 2>&1 | tee "$LOG_DIR/xcodebuild-trio.log"
+  refuse_thread_sanitized_trio
   "$ROOT/scripts/test-local.sh" build "$@"
   exit
 elif [[ "$mode" == "all" ]]; then
@@ -79,6 +96,7 @@ if [[ ! -d "$TRIO_APP" ]]; then
   echo "No Trio build at $TRIO_APP; run '$0 build' first" >&2
   exit 1
 fi
+refuse_thread_sanitized_trio
 BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$TRIO_APP/Info.plist")"
 
 # shellcheck source=scripts/faketandem.sh

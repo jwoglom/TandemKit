@@ -1693,10 +1693,75 @@ public class TandemPumpManager: PumpManager, Pluggable {
     public func prepareForDeactivation(_ completion: @escaping (Error?) -> Void) {
         logger.debug("Preparing for pump deactivation – tearing down transport")
         bluetooth.deactivate()
+        telemetryScheduler.cancelAll()
+        finalizeHeldDosesForDeactivation()
 
         notifyDelegateOfDeactivation {
             completion(nil)
         }
+    }
+
+    /// The pump runs a temp basal to its end and finishes a bolus after the app forgets it. Loop stores a
+    /// finalized dose only once it has ended, so the temp is cut now and its remainder reported on its own.
+    func finalizeHeldDosesForDeactivation() {
+        settleDeliveryTransition()
+        guard state.basalDose.type == .tempBasal || state.bolusDose != nil || state.pendingBolusFinalization != nil else {
+            return
+        }
+
+        var events: [NewPumpEvent] = []
+        if state.basalDose.type == .tempBasal {
+            let end = state.basalDose.estimatedEndDate
+            // A second on at least: Trio orders two rows in one second arbitrarily.
+            let cut = max(now, state.basalDose.startDate.addingTimeInterval(1))
+            events += getActivePumpEvents(endDate: cut)
+            let running = state.basalDose
+            if cut < end, running.type == .tempBasal {
+                let remainder = UnfinalizedDose(
+                    tempRate: running.value,
+                    duration: end.timeIntervalSince(cut),
+                    automatic: running.automatic,
+                    insulinType: running.insulinType,
+                    startDate: cut,
+                    tempRateId: running.tempRateId,
+                    tempPercent: running.tempPercent
+                )
+                let (finished, last) = splitAtSegmentChanges(remainder, through: end)
+                events += finished
+                events.append(NewPumpEvent.tempBasal(dose: last.toDoseEntry(isMutable: false, endDate: end, now: now), of: last))
+            }
+            state.basalDose = UnfinalizedDose(basalRate: scheduledBasalRateInForce(at: end), insulinType: state.insulinType, startDate: end)
+        }
+
+        var bolusRaws = Set<Data>()
+        for dose in [state.bolusDose, state.pendingBolusFinalization].compactMap({ $0 }) {
+            let record = dose.bolusId.flatMap { historyBolusReport(bolusId: $0, startedAt: dose.startDate) }
+            if let record {
+                dose.deliveredUnits = record.deliveredUnits
+            } else if dose === state.bolusDose {
+                dose.deliveredUnits = dose.value
+            }
+            let end = BolusEndDate.resolve(
+                startDate: dose.startDate,
+                deliveryStartDate: dose.deliveryStartDate,
+                deliveredUnits: dose.deliveredUnits,
+                pumpTimestamp: record.map { hostDate(forPumpDate: $0.pumpTimestamp) },
+                detectedAt: now
+            )
+            let event = NewPumpEvent.bolus(dose: dose.toDoseEntry(endDate: end, now: now), date: dose.startDate)
+            if bolusRaws.insert(event.raw).inserted {
+                events.append(event)
+            }
+        }
+        state.bolusDose = nil
+        state.pendingBolusFinalization = nil
+        state.bolusState = .noBolus
+        bolusProgressReport = nil
+        state.lastReconciliation = now
+
+        logger.info("Pump manager deactivating; reporting \(events.count) held dose event(s) finalized")
+        notifyDelegateStateUpdated()
+        emitPumpEvents(events.sorted { $0.date < $1.date })
     }
 
     /// Called by whichever connect brought the session up. The pump's qualifying events are lost while

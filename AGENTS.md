@@ -276,6 +276,28 @@ edit instead of at the next sync.
 - Still open: a sync re-sends nothing while a dose runs, since its boundary batch is empty and
   non-replacing (#330, #450).
 
+### Deleting the pump manager
+- `prepareForDeactivation` tears the transport down, then sends one replacing batch before
+  `pumpManagerWillDeactivate` (`finalizeHeldDosesForDeactivation`, #350). Left mutable, the host's
+  next replacing batch, from whichever pump manager comes next, deletes what it holds. A Tandem
+  pump keeps delivering after the app forgets it, so nothing is stopped and no `.suspend` is due.
+  A pending delivery change is reported at detection first. `lastReconciliation` moves to the deletion.
+- A running temp basal is finalized at the deletion, a second after its start at least, and what
+  remains of it to its scheduled end is a finalized dose of its own, keyed as a segment cut's part
+  and cut at the segment changes in it. Loop stores a finalized dose only once it has ended, and a
+  mutable copy it soft-deletes before then can never be replaced, so one finalized whole would
+  leave Loop's IOB once a boundary passed its end. Loop counts the remainder from its `PumpEvent`
+  row until it can store it, at its first save behind a later boundary, which only the next pump
+  manager gives it.
+- A held bolus is finalized with its `BolusCompleted` record if backfill has read one; otherwise a
+  running bolus at its programmed amount, ended no later than the deletion so Loop stores it at
+  once, and one with an unconfirmed volume at the fallback it was held with.
+- Still open: Loop leaves the remainder out of IOB from a boundary past its end that came with no
+  save (the next pump manager's empty batch) until that manager's next non-empty batch.
+- The integration harness's `shutDownDriver()` is the app going away (a relaunch), which tells the
+  host nothing; `deactivateDriver()` is the deletion. Scenario: conformance D7; unit tests in
+  `DeactivationDoseReportingTests`.
+
 ### History backfill and dose reporting
 - History streaming runs through `HistoryLogFetcher`, and `HistoryBackfillCoordinator` keeps
   the session store caught up from every `syncPumpData` pass: an incremental read from the

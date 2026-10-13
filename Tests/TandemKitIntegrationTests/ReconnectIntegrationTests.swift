@@ -135,7 +135,7 @@ final class ReconnectIntegrationTests: FaketandemIntegrationTestCase {
     func testADeletedPumpIsNotReconnectedByALaterCommand() throws {
         let driver = makeDriver()
         try harness.pair(driver)
-        try shutDownDriver()
+        try deactivateDriver()
         let logStart = try harness.client.snapshot().requestLog.lastSeq
 
         let refused = expectation(description: "ensureConnected completes")
