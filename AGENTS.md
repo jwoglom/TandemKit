@@ -273,8 +273,14 @@ edit instead of at the next sync.
   the host holds it open, and no report starts in the same second as a row the host holds: Trio
   orders two rows at one timestamp arbitrarily and leaves one zero-length, so an override starts a
   second later.
-- Still open: a sync re-sends nothing while a dose runs, since its boundary batch is empty and
-  non-replacing (#330, #450).
+- A sync whose basal read the pump answered ends with `reportPendingDoses`: every dose the host
+  holds as mutable, the temp basal from `getActivePumpEvents()` and the boluses `emitPumpEvents`
+  appends, re-sent as one replacing batch, so a running dose is refreshed until it finalizes (#330,
+  #450). Loop keeps its row over a non-replacing re-send, so it has to replace. The batch is the
+  boundary alone, empty and non-replacing, with nothing mutable (an empty replacing batch purges
+  every mutable row in Trio), without a basal reading (the held temp may be one the pump has ended
+  or cut), and while a delivery change waits for history (the host still holds the dose it ended,
+  and `basalDose` is a placeholder: leaving that dose out deletes it for good in Loop).
 
 ### Deleting the pump manager
 - `prepareForDeactivation` tears the transport down, then sends one replacing batch before

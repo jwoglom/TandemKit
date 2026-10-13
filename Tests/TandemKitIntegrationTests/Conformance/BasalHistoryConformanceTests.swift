@@ -711,4 +711,47 @@ final class BasalHistoryConformanceTests: ConformanceTestCase {
         try assertCorrections(found, match: staged)
         try assertHostsCountThePumpsBasal(over: staged)
     }
+
+    // MARK: - H11
+
+    /// The same app temp enacted a minute into every cycle, as hosts keep one running, with a sync between.
+    func testH11_theSameTempEveryCycleIsCountedOnceAndReportsNothing() throws {
+        let driver = try stageDriver()
+        let before = allPumpEventBatches.count
+        var raws: [Data] = []
+        var cycles: [Int] = []
+        for _ in 1 ... 4 {
+            try clock.advanceBoth(seconds: .minutes(1), ticks: 1)
+            let beforeTemp = allPumpEventBatches.count
+            XCTAssertNil(try enactTempBasal(unitsPerHour: 1.5, duration: .minutes(30)))
+            raws += eventsSince(beforeTemp).filter { $0.dose?.type == .tempBasal && $0.dose?.isMutable == true }.map(\.raw)
+            try clock.advanceBoth(seconds: .minutes(4), ticks: 4)
+            cycles.append(try lastCycle())
+            _ = try sync()
+        }
+        try clock.advanceBoth(seconds: .minutes(5), ticks: 5)
+        let lastClosed = try lastCycle()
+        _ = try sync()
+        try clock.advanceBoth(seconds: .minutes(5), ticks: 5)
+        _ = try sync()
+        try waitForBackfill(driver)
+        try waitForReconciliation(driver, through: lastClosed)
+
+        XCTAssertTrue(corrections(since: before).isEmpty, "nothing reported: \(corrections(since: before))")
+        XCTAssertTrue(driver.manager.loggedBasalDifferences.isEmpty, "no 279 differs from what the host was told")
+        XCTAssertEqual(raws.count, 4)
+        XCTAssertEqual(Set(raws).count, raws.count, "one identity per enactment")
+        let (loop, trio) = feedOracles()
+        loop.assertNoDuplicates("the same temp every cycle")
+        trio.assertNoDuplicates("the same temp every cycle")
+        trio.assertNoSameSecondBasalRows()
+        XCTAssertEqual(
+            loop.doses.filter { $0.dose.type == .tempBasal }.compactMap(\.raw).sorted { $0.hexadecimalString < $1.hexadecimalString },
+            raws.sorted { $0.hexadecimalString < $1.hexadecimalString },
+            "one Loop dose per enactment: \(loop.doses.map(LoopDoseStoreOracle.describe))"
+        )
+        XCTAssertEqual(trio.tempBasals.count, raws.count, "one Trio row per enactment: \(trio.tempBasals)")
+        // The host counts the first temp from its command, the pump from its next 279.
+        try assertHostsCountThePumpsBasal(over: try XCTUnwrap(cycles.first) ... lastClosed)
+    }
 }

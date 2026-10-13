@@ -106,8 +106,8 @@ oracle one rule at a time.
 
 | ID | Scenario | Stage | Assert |
 |---|---|---|---|
-| C1 | Re-report a running bolus many times | enact 5 U at 0.02 U/s; sync 8× while running | every `replacePendingEvents: true` batch contains the bolus, byte-identical `raw`; oracle holds exactly one dose; `iob(at:)` at a fixed instant stays the same across syncs |
-| C2 | Running TBR across many syncs | enact 60 min TBR; sync every 5 min ×6 | same `raw` in every batch; `endDate` stays the scheduled end while mutable; one dose in the oracle |
+| C1 | Re-report a running bolus many times | enact 5 U at 0.02 U/s; sync 8× while running | each sync re-reports the bolus, mutable, in a `replacePendingEvents: true` batch; every such batch contains it, byte-identical `raw`; oracle holds exactly one dose; `iob(at:)` at a fixed instant stays the same across syncs |
+| C2 | Running TBR across many syncs | enact 60 min TBR; sync every 5 min ×6 | each sync re-reports the TBR, mutable, in a `replacePendingEvents: true` batch; same `raw` in every batch; `endDate` stays the scheduled end while mutable; one dose in the oracle |
 | C3 | Complete batches with several live doses | bolus running + TBR running; pump `suspend` then `resume` | every `replacePendingEvents: true` batch up to the resume includes both mutable doses; the suspend is appended without purging them; nothing live is dropped by silence |
 | C4 | Empty sync advances the trust boundary | no doses; sync twice with the clock advanced 5 min | `hasNewPumpEvents` called each time with an empty batch that does not claim to be complete (`replacePendingEvents: false`), `lastReconciliation` strictly increases |
 | C5 | Sync with no answer does not advance | fault `drop_response every` on `CurrentBasalStatusRequest` and friends; sync | `hasNewPumpEvents` not called, or called with unchanged `lastReconciliation` |
@@ -116,6 +116,11 @@ oracle one rule at a time.
 | C8 | A bolus that outlives the driver's estimate (#347, #330) | enact 1 U at 0.005 U/s; advance past the driver's model, inside the pump's; wait for the guard to release; enact a TBR | no replacing batch drops the running bolus (refusing the TBR also satisfies it); once the pump finishes, Loop holds the bolus at the pump's amount |
 | C9 | Two markers in one second (#352) | enact TBR; step both clocks to 0.4 s short of its end, the driver's alone 0.5 s on; neutral temp | no batch carries two events under one `raw`; the neutral temp's marker is the only one, so Trio holds no two basal rows in one second |
 | C10 | Two markers in one second, across batches (#352) | neutral temp; the driver's clock alone 0.2 s on, TBR; 0.3 s on, cancel | the two markers have their own `raw`, and Loop and Trio store both |
+| C11 | Identical boluses in a row (#330) | 1 U at 0.02 U/s three times, a few minutes apart; sync while each runs; sync until each is finalized; again with history dose reporting on | each its own `raw`, re-sent while it runs and finalized once; no other bolus report (none from history); each one dose in Loop and one row in Trio, nothing deleted or purged; both hosts count the pump's total |
+| C12 | The same temp basal every cycle (#450, #344) | 2 U/h for 30 min, enacted again every 5 minutes ×4 with a sync between | each enactment its own `raw`; the one it replaces finalized in the same batch and never reported again; only the latest mutable; Loop's temps back to back; both hosts count the pump's temp rates |
+| C13 | A temp basal re-sent until it runs out (#450) | 2 U/h for 30 min; sync every 5 min ×5; let it run out; sync until finalized; sync again | one dose throughout, its scheduled end while mutable; finalized once at that end with rate × duration delivered; not reported after; both hosts count it once |
+| C14 | A bolus re-sent through many syncs and a relaunch (#330) | 2 U at 0.01 U/s; sync every 15 s ×8, relaunching before the fourth; sync until finalized | one dose throughout, re-sent by every sync; finalized once at the pump's volume; both hosts count it once |
+| C15 | Two identical boluses mutable at once (#330, #448) | history backfill off, every `LastBolusStatus` dropped, delivery at the driver's modelled speed; 2 U finishes and is held; a second 2 U runs; sync ×3; it finishes; faults cleared; sync until finalized | every sync re-sends both in one complete batch; the first finalized at its programmed amount when the second is held; each finalized once, one dose in Loop and one row in Trio; both hosts count the pump's total |
 
 ## D. Pump-side failures and events (§7, §10 suspend/resume and faults; P10, P13, P14, P20, G04, G06; #331, #333, #338, #348, #349, #350, #351, #355, #424, #452)
 
@@ -207,6 +212,7 @@ cycle a suspend cuts short: Loop rebuilds the temp basal before a suspend withou
 | H8 | The pump runs a profile off the app's schedule while out of range (#400) | Corrections at the pump's rate for the cycles before the driver writes the schedule back; the cycle the write lands in is residual; the pump runs the schedule from its next 279 |
 | H9 | An alarm suspend during an app temp; the temp resumes with delivery | The app's temp ends at the stop; the temp's chunks after the resume reported, the first after the resume's second and the last ending at the app's next temp, and both hosts count them |
 | H10 | A CGM dropout during Control-IQ: Control-IQ, then the profile, then Control-IQ | Profile chunks at the app's schedule report nothing; the Control-IQ chunks off it do |
+| H11 | The same app temp enacted a minute into every cycle ×4, a sync between | One dose and one Trio row per enactment; no 279 differs and nothing is reported; both hosts count the pump's basal from the first 279 the temp ran |
 
 ## I. The pump's IOB against the boluses reported (#354 P21-3)
 

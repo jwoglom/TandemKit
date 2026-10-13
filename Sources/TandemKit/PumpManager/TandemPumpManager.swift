@@ -577,7 +577,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             self.fetchBatteryStatus()
             self.fetchBolusStatus(fromSync: true)
             self.finalizePendingBolus()
-            self.fetchBasalStatus()
+            let readDeliveryState = self.fetchBasalStatus()
             self.fetchInsulinOnBoard()
             self.fetchNotifications()
             self.fetchCGMSessionStatus()
@@ -587,8 +587,12 @@ public class TandemPumpManager: PumpManager, Pluggable {
             if self.bluetooth.responseCount > responsesBefore {
                 self.state.lastReconciliation = self.now
 
-                // Nothing above emits on a steady-state cycle.
-                self.reportReconciliationBoundary()
+                // Without a basal reading the temp basal held may be one the pump has ended or cut.
+                if readDeliveryState {
+                    self.reportPendingDoses()
+                } else {
+                    self.reportReconciliationBoundary()
+                }
             } else {
                 self.logger.error("Sync got no response from the pump; leaving lastSync where it was")
             }
@@ -2526,9 +2530,25 @@ extension TandemPumpManager {
         return state.lastReconciliation.map { min($0, hold) }
     }
 
-    /// Carries only the boundary; re-sending the pending set on every sync is #450.
     func reportReconciliationBoundary() {
         emitPumpEvents([], replacePendingEvents: false)
+    }
+
+    /// Every dose the host holds as mutable, re-sent as the complete pending set so a sync refreshes
+    /// a running dose. Loop ignores a non-replacing re-send of a `raw` it holds.
+    func reportPendingDoses() {
+        // The host still holds the dose the change ended, and `basalDose` is only a placeholder.
+        guard state.deliveryTransitions.pending == nil else {
+            reportReconciliationBoundary()
+            return
+        }
+        let events = getActivePumpEvents()
+        // An empty replacing batch purges every mutable row in Trio and nothing in Loop.
+        guard !events.isEmpty || !inProgressBolusEvents().isEmpty else {
+            reportReconciliationBoundary()
+            return
+        }
+        emitPumpEvents(events)
     }
 
     private func emitPumpEvents(_ batch: PendingPumpEventBatch) {
