@@ -285,6 +285,12 @@ final class InterruptConformanceTests: ConformanceTestCase {
         var fault = FaketandemFaultSpec(.disconnect, message: "InitiateBolusRequest")
         fault.after = "request"
         try harness.client.armFault(fault)
+        // The driver reconnects and syncs on its own, often before the checks below run. Only a bolus
+        // status answer can confirm the bolus, so refusing every one holds it unconfirmed until lifted.
+        var refusal = FaketandemFaultSpec(.errorResponse, message: "CurrentBolusStatusRequest")
+        refusal.every = true
+        refusal.errorCode = 3
+        let statusRefusal = try XCTUnwrap(harness.client.armFault(refusal))
 
         let error = try enactBolus(units: 1.0, timeout: 90)
         guard case .uncertainDelivery? = error else {
@@ -314,6 +320,7 @@ final class InterruptConformanceTests: ConformanceTestCase {
         )
         XCTAssertEqual(whileUncertain.trio.boluses.count, 1, "and so does Trio")
 
+        try harness.client.clearFault(id: statusRefusal.id)
         try waitForReconnect()
         _ = try sync()
         XCTAssertFalse(driver.manager.status.deliveryIsUncertain, "the pump, reached again, runs the driver's bolus id")
