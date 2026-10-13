@@ -189,9 +189,10 @@ extension TandemPumpManager {
 
     /// Defer to event-driven bolus tracking only while the bolus should still be delivering —
     /// a bolusChange event lost to a disconnect is never replayed, so sync must reconcile if past the grace time.
+    /// Never for an unconfirmed bolus, which nothing tracks until the pump is asked about it.
     func shouldDeferBolusSync(at date: Date? = nil) -> Bool {
         let date = date ?? now
-        guard let bolusDose = state.bolusDose else {
+        guard let bolusDose = state.bolusDose, !bolusDose.isUnconfirmed else {
             return false
         }
         return date < bolusDose.estimatedEndDate.addingTimeInterval(Self.bolusSyncReconcileGrace)
@@ -238,7 +239,7 @@ extension TandemPumpManager {
             return
         }
 
-        if fromSync, let bolusDose = state.bolusDose {
+        if fromSync, let bolusDose = state.bolusDose, !bolusDose.isUnconfirmed {
             logger.warning("Bolus \(bolusDose.bolusId ?? -1) past estimated end; reconciling stale bolus state")
         }
 
@@ -248,6 +249,12 @@ extension TandemPumpManager {
         }
 
         noteUntrackedBolus(response)
+
+        if let dose = state.bolusDose, dose.isUnconfirmed, let bolusId = dose.bolusId,
+           !confirmUnansweredBolus(dose, bolusId: bolusId, status: response)
+        {
+            return
+        }
 
         // The pump runs one bolus at a time: another id delivering means ours finished out of contact.
         let trackedBolusId = state.bolusDose?.bolusId
@@ -265,35 +272,8 @@ extension TandemPumpManager {
                 return
             }
 
-            var events = getActivePumpEvents()
-            if let lastBolus = queryLastBolusReport(bolusId: bolusId) {
-                dose.deliveredUnits = lastBolus.deliveredUnits
-                events.append(NewPumpEvent.bolus(
-                    dose: dose.toDoseEntry(
-                        endDate: BolusEndDate.resolve(
-                            startDate: dose.startDate,
-                            deliveryStartDate: dose.deliveryStartDate,
-                            deliveredUnits: dose.deliveredUnits,
-                            pumpTimestamp: hostDate(forPumpDate: lastBolus.pumpTimestamp),
-                            detectedAt: now
-                        ),
-                        now: now
-                    ),
-                    date: dose.startDate
-                ))
-            } else {
-                holdForFinalization(dose, fallbackUnits: dose.value)
-                events.append(NewPumpEvent.bolus(
-                    dose: dose.toDoseEntry(isMutable: true),
-                    date: dose.startDate
-                ))
-            }
-
-            state.bolusDose = nil
-            state.bolusState = .noBolus
-            state.lastReconciliation = now
-            notifyDelegateStateUpdated()
-            emitPumpEvents(events)
+            let lastBolus = queryLastBolusReport(bolusId: bolusId)
+            finishTrackedBolus(dose, deliveredUnits: lastBolus?.deliveredUnits, pumpTimestamp: lastBolus?.pumpTimestamp)
             return
         }
 
@@ -369,6 +349,107 @@ extension TandemPumpManager {
             notifyDelegateStateUpdated()
 
             emitPumpEvents(events)
+        }
+    }
+
+    /// Reports `dose` over: delivered as the pump says, or, with no number from it, held mutable
+    /// at its programmed amount until the pump or its history gives one.
+    private func finishTrackedBolus(_ dose: UnfinalizedDose, deliveredUnits: Double?, pumpTimestamp: Date?) {
+        var events = getActivePumpEvents()
+        if let deliveredUnits {
+            dose.deliveredUnits = deliveredUnits
+            events.append(NewPumpEvent.bolus(
+                dose: dose.toDoseEntry(
+                    endDate: BolusEndDate.resolve(
+                        startDate: dose.startDate,
+                        deliveryStartDate: dose.deliveryStartDate,
+                        deliveredUnits: dose.deliveredUnits,
+                        pumpTimestamp: pumpTimestamp.map(hostDate(forPumpDate:)),
+                        detectedAt: now
+                    ),
+                    now: now
+                ),
+                date: dose.startDate
+            ))
+        } else {
+            holdForFinalization(dose, fallbackUnits: dose.value)
+            events.append(NewPumpEvent.bolus(
+                dose: dose.toDoseEntry(isMutable: true),
+                date: dose.startDate
+            ))
+        }
+
+        state.bolusDose = nil
+        state.bolusState = .noBolus
+        state.lastReconciliation = now
+        notifyDelegateStateUpdated()
+        emitPumpEvents(events)
+    }
+
+    enum UnansweredBolusFinding {
+        case started(LastBolusReport?)
+        case notStarted
+        case unanswered
+        /// The pump's last bolus came after it, so only its history can say whether it ran.
+        case hiddenByLaterBolus
+    }
+
+    /// Whether the pump took `bolusId`, whose `InitiateBolus` went unanswered, given what
+    /// `CurrentBolusStatus` says it runs.
+    func findUnansweredBolus(_ bolusId: Int, status: CurrentBolusStatusResponse) -> UnansweredBolusFinding {
+        if status.bolusId == bolusId, status.status != .alreadyDeliveredOrInvalid {
+            return .started(nil)
+        }
+
+        let request = LastBolusRequestBuilder.create(
+            apiVersion: state.pumpState.apiVersion,
+            pumpModel: state.pumpState.pumpModel
+        )
+        guard let lastBolus = bluetooth.write(request) as? LastBolusStatusAbstractResponse else {
+            return .unanswered
+        }
+        if let milliunits = deliveredMilliunits(from: lastBolus, bolusId: bolusId) {
+            return .started(LastBolusReport(
+                deliveredUnits: TandemPumpCapabilities.roundToReportingResolution(Double(milliunits) / 1000.0),
+                pumpTimestamp: pumpTimestamp(from: lastBolus, bolusId: bolusId)
+            ))
+        }
+        return Self.bolusId(lastBolus.bolusId, precedes: bolusId) ? .notStarted : .hiddenByLaterBolus
+    }
+
+    /// The pump hands bolus ids out in order from a 16-bit counter; 0 is no bolus.
+    static func bolusId(_ earlier: Int, precedes later: Int) -> Bool {
+        let distance = (later - earlier) & 0xFFFF
+        return earlier == 0 || (distance > 0 && distance < 0x8000)
+    }
+
+    /// Whether to go on tracking `dose` as a bolus the pump took; false once it is settled
+    /// otherwise, or while the pump can't say.
+    private func confirmUnansweredBolus(_ dose: UnfinalizedDose, bolusId: Int, status: CurrentBolusStatusResponse) -> Bool {
+        switch findUnansweredBolus(bolusId, status: status) {
+        case let .started(lastBolus):
+            logger.info("The pump took bolus \(bolusId), whose InitiateBolus went unanswered")
+            dose.isUnconfirmed = false
+            notifyDelegateStateUpdated()
+            guard let lastBolus else {
+                return true
+            }
+            finishTrackedBolus(dose, deliveredUnits: lastBolus.deliveredUnits, pumpTimestamp: lastBolus.pumpTimestamp)
+            return false
+        case .notStarted:
+            logger.warning("The pump never started bolus \(bolusId), whose InitiateBolus went unanswered; reporting 0 U delivered")
+            releaseBolusPermission(bolusId: bolusId)
+            dose.isUnconfirmed = false
+            finishTrackedBolus(dose, deliveredUnits: 0, pumpTimestamp: nil)
+            return false
+        case .hiddenByLaterBolus:
+            logger.warning("A later bolus hides whether the pump ran bolus \(bolusId), whose InitiateBolus went unanswered; holding it at its programmed amount")
+            dose.isUnconfirmed = false
+            finishTrackedBolus(dose, deliveredUnits: nil, pumpTimestamp: nil)
+            return false
+        case .unanswered:
+            logger.warning("The pump still hasn't said whether it started bolus \(bolusId)")
+            return false
         }
     }
 

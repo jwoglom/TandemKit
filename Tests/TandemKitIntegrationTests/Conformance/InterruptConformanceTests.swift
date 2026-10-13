@@ -18,8 +18,8 @@ import XCTest
 /// in a strict `XCTExpectFailure` naming the issue, so a fix flips them to "unexpected pass".
 ///
 /// Timing: both clocks are frozen and moved together with `advanceBoth`. The only real-time waits
-/// are the driver's own — its response timeout when a response is lost (A2, A5, A5c), shortened by the
-/// harness, and the seconds an auto-reconnect takes.
+/// are the driver's own — its response timeout when a response is lost (A2, A2c, A5, A5c), shortened
+/// by the harness, and the seconds an auto-reconnect takes.
 final class InterruptConformanceTests: ConformanceTestCase {
     /// The pump's profile basal rate and the driver's scheduled rate, kept equal so a percent temp
     /// rate means the same U/h on both sides.
@@ -207,7 +207,8 @@ final class InterruptConformanceTests: ConformanceTestCase {
 
     // MARK: - A2
 
-    /// The pump applies `InitiateBolus` but its acknowledgement is lost (#327).
+    /// The pump applies `InitiateBolus` but its acknowledgement is lost (#327). The link is still
+    /// up, so the driver asks the pump, finds the bolus running and reports it as enacted.
     func testA2_lostInitiateBolusAcknowledgementStillRegistersTheBolus() throws {
         let driver = try stageDriver()
         let logStart = try harness.client.snapshot().requestLog.lastSeq
@@ -215,11 +216,8 @@ final class InterruptConformanceTests: ConformanceTestCase {
 
         try harness.client.armFault(FaketandemFaultSpec(.dropResponse, message: "InitiateBolusRequest"))
 
-        // The driver waits out its response timeout (real time) before giving up.
-        let error = try enactBolus(units: 1.0, timeout: 90)
-        guard case .communication? = error else {
-            return XCTFail("a lost acknowledgement is a communication error, got \(String(describing: error))")
-        }
+        // The driver waits out its response timeout (real time) before asking the pump.
+        XCTAssertNil(try enactBolus(units: 1.0, timeout: 90), "the pump says it runs the bolus, so it was enacted")
 
         // Pump side: the bolus is running under the id the driver was granted.
         let pumpBolus = try harness.client.snapshot().bolus
@@ -227,32 +225,33 @@ final class InterruptConformanceTests: ConformanceTestCase {
         XCTAssertEqual(pumpBolus.unitsTotal, 1.0)
         XCTAssertEqual(pumpBolus.sourceId, 8)
         let bolusId = pumpBolus.bolusId
-        let suppressed = try harness.requestLog(since: logStart).first { $0.isResponse && $0.message == "InitiateBolusResponse" }
-        XCTAssertEqual(suppressed?.fault, "drop_response", "the pump encoded the ack and suppressed it: \(String(describing: suppressed))")
-        XCTAssertEqual(suppressed?.fragmentsSent ?? 0, 0, "no fragment of the ack went out")
+        let suppressed = try XCTUnwrap(
+            harness.requestLog(since: logStart).first { $0.isResponse && $0.message == "InitiateBolusResponse" }
+        )
+        XCTAssertEqual(suppressed.fault, "drop_response", "the pump encoded the ack and suppressed it: \(suppressed)")
+        XCTAssertEqual(suppressed.fragmentsSent ?? 0, 0, "no fragment of the ack went out")
+        let afterTheAck = try harness.requestLog(since: suppressed.seq).filter(\.isRequest).map { $0.message ?? "" }
+        XCTAssertTrue(afterTheAck.contains("CurrentBolusStatusRequest"), "the driver asked the pump about the bolus: \(afterTheAck)")
+        XCTAssertFalse(afterTheAck.contains("BolusPermissionReleaseRequest"), "a bolus the pump took keeps its permission")
 
-        // Guide §10: register the dose up front, and say delivery is uncertain until the pump confirms.
+        // Guide §10: the dose is registered up front.
         let enactBatches = Array(allPumpEventBatches.dropFirst(batchesBefore))
-        let registered = enactBatches.flatMap(\.events).first { $0.dose?.type == .bolus }
-        XCTExpectFailure("jwoglom/TandemKit#327: a lost InitiateBolus acknowledgement leaves a possibly-running bolus untracked; nothing is registered and deliveryIsUncertain is hard-coded false") {
-            XCTAssertNotNil(registered, "a mutable, uncertain bolus is reported when the ack is lost; batches: \(enactBatches.map(\.events))")
-            XCTAssertEqual(registered?.dose?.isMutable, true)
-            XCTAssertTrue(driver.manager.status.deliveryIsUncertain, "delivery is uncertain until the pump confirms or denies the bolus")
-            XCTAssertNotNil(driver.manager.state.bolusDose, "the bolus id and units are kept for reconciliation")
-        }
+        let registered = try XCTUnwrap(
+            enactBatches.flatMap(\.events).first { $0.dose?.type == .bolus },
+            "the bolus is reported although its ack was lost; batches: \(enactBatches.map(\.events))"
+        )
+        XCTAssertEqual(registered.dose?.isMutable, true)
+        XCTAssertEqual(driver.manager.state.bolusDose?.bolusId, bolusId, "tracked under the pump's id")
+        XCTAssertFalse(driver.manager.status.deliveryIsUncertain, "the pump confirmed the bolus")
 
-        // Next contact: the pump is delivering the driver's bolus id; the driver must confirm it.
         try clock.advanceBoth(seconds: 5, ticks: 5)
         XCTAssertTrue(try harness.client.snapshot().bolus.active)
         _ = try sync()
-        XCTAssertTrue(
-            try messagesSeen(since: logStart).contains("CurrentBolusStatusRequest"),
-            "the sync asked the pump about the bolus"
-        )
         let midRun = feedOracles()
-        XCTExpectFailure("jwoglom/TandemKit#327: the sync sees the pump delivering the driver's bolus id and confirms nothing") {
-            XCTAssertEqual(midRun.loop.mutableDoses.filter { $0.dose.type == .bolus }.count, 1, "the running bolus is held as one mutable dose: \(midRun.loop.doses.map(LoopDoseStoreOracle.describe))")
-        }
+        XCTAssertEqual(
+            midRun.loop.mutableDoses.filter { $0.dose.type == .bolus }.count, 1,
+            "the running bolus is held as one mutable dose: \(midRun.loop.doses.map(LoopDoseStoreOracle.describe))"
+        )
 
         // The pump finishes; a sync past the driver's model must finalize it at the pump's amount.
         let lastBolus = try advanceUntilBolusFinishes(bolusId: bolusId, step: 2)
@@ -260,20 +259,132 @@ final class InterruptConformanceTests: ConformanceTestCase {
         try clock.advanceBoth(seconds: driver.manager.estimatedDuration(toBolus: 1.0) + .minutes(2))
         _ = try sync()
 
+        let finalized = try finalizedEvent(raw: registered.raw)
+        XCTAssertEqual(finalized.dose?.deliveredUnits, lastBolus.deliveredUnits)
         let (loop, trio) = feedOracles()
         loop.assertNoDuplicates()
         trio.assertNoDuplicates()
-        XCTAssertLessThanOrEqual(loop.doses.filter { $0.dose.type == .bolus }.count, 1, "never two doses for one bolus")
         let finalizedBoluses = loop.permanentDoses.filter { $0.dose.type == .bolus }
+        XCTAssertEqual(finalizedBoluses.count, 1, "the delivered bolus is finalized once: \(loop.doses.map(LoopDoseStoreOracle.describe))")
+        XCTAssertEqual(finalizedBoluses.first?.dose.deliveredUnits, lastBolus.deliveredUnits)
+        trio.assertSingleBolus(at: registered.date, amount: lastBolus.deliveredUnits)
+        XCTAssertTrue(completeBatchOmissions().isEmpty, "no complete batch may drop the bolus while it runs")
         let timeline = try timeline()
-        let pumpRecord = try XCTUnwrap(timeline.boluses.first { $0.bolusId == bolusId })
-        XCTAssertTrue(pumpRecord.isFinished)
-        XCTExpectFailure("jwoglom/TandemKit#327: the bolus the pump delivered is never reported, so both hosts have no IOB for it") {
-            XCTAssertEqual(finalizedBoluses.count, 1, "the delivered bolus is finalized once: \(loop.doses.map(LoopDoseStoreOracle.describe))")
-            XCTAssertEqual(finalizedBoluses.first?.dose.deliveredUnits, lastBolus.deliveredUnits)
-            XCTAssertEqual(trio.boluses.count, 1, "Trio has the bolus")
-            timeline.assertMatches(loop)
+        XCTAssertTrue(try XCTUnwrap(timeline.boluses.first { $0.bolusId == bolusId }).isFinished)
+        timeline.assertMatches(loop)
+    }
+
+    /// The link drops in place of the `InitiateBolus` answer, after the pump applied it, so the
+    /// driver cannot ask: the bolus is reported as delivering, and delivery as uncertain until the
+    /// pump, reached again, confirms it.
+    func testA2b_linkLostInPlaceOfTheAcknowledgementIsUncertainUntilThePumpConfirmsTheBolus() throws {
+        let driver = try stageDriver()
+        let logStart = try harness.client.snapshot().requestLog.lastSeq
+        let batchesBefore = allPumpEventBatches.count
+
+        var fault = FaketandemFaultSpec(.disconnect, message: "InitiateBolusRequest")
+        fault.after = "request"
+        try harness.client.armFault(fault)
+
+        let error = try enactBolus(units: 1.0, timeout: 90)
+        guard case .uncertainDelivery? = error else {
+            return XCTFail("a bolus the pump can't be asked about is uncertain delivery, got \(String(describing: error))")
         }
+
+        let pumpBolus = try harness.client.snapshot().bolus
+        XCTAssertTrue(pumpBolus.active, "the pump applied the bolus before it dropped the link")
+        let bolusId = pumpBolus.bolusId
+        XCTAssertTrue(
+            try harness.requestLog(since: logStart).contains { $0.message == "InitiateBolusResponse" && $0.fault == "disconnect" },
+            "the pump cut the link instead of answering"
+        )
+        XCTAssertEqual(driver.manager.state.bolusDose?.bolusId, bolusId)
+        XCTAssertTrue(driver.manager.status.deliveryIsUncertain, "delivery is uncertain until the pump confirms or denies the bolus")
+        XCTAssertTrue(driver.delegate.statusUpdates.contains { $0.newStatus.deliveryIsUncertain }, "the host was told")
+        let registered = try XCTUnwrap(
+            Array(allPumpEventBatches.dropFirst(batchesBefore)).flatMap(\.events).first { $0.dose?.type == .bolus },
+            "a mutable bolus is reported while delivery is uncertain"
+        )
+        XCTAssertEqual(registered.dose?.isMutable, true)
+        XCTAssertEqual(registered.dose?.programmedUnits, 1.0)
+        let whileUncertain = feedOracles()
+        XCTAssertEqual(
+            whileUncertain.loop.mutableDoses.filter { $0.dose.type == .bolus }.count, 1,
+            "Loop counts the bolus while it is uncertain: \(whileUncertain.loop.doses.map(LoopDoseStoreOracle.describe))"
+        )
+        XCTAssertEqual(whileUncertain.trio.boluses.count, 1, "and so does Trio")
+
+        try waitForReconnect()
+        _ = try sync()
+        XCTAssertFalse(driver.manager.status.deliveryIsUncertain, "the pump, reached again, runs the driver's bolus id")
+        XCTAssertEqual(driver.manager.state.bolusDose?.bolusId, bolusId)
+        XCTAssertTrue(driver.delegate.statusUpdates.contains { $0.oldStatus.deliveryIsUncertain && !$0.newStatus.deliveryIsUncertain })
+
+        let lastBolus = try advanceUntilBolusFinishes(bolusId: bolusId, step: 2)
+        XCTAssertEqual(lastBolus.deliveredUnits, 1.0)
+        try clock.advanceBoth(seconds: driver.manager.estimatedDuration(toBolus: 1.0) + .minutes(2))
+        _ = try sync()
+
+        let finalized = try finalizedEvent(raw: registered.raw)
+        XCTAssertEqual(finalized.dose?.deliveredUnits, lastBolus.deliveredUnits)
+        let (loop, trio) = feedOracles()
+        loop.assertNoDuplicates()
+        trio.assertNoDuplicates()
+        XCTAssertEqual(loop.doses.filter { $0.dose.type == .bolus }.count, 1, "never two doses for one bolus")
+        trio.assertSingleBolus(at: registered.date, amount: lastBolus.deliveredUnits)
+        XCTAssertTrue(completeBatchOmissions().isEmpty, "no complete batch may drop the bolus while it is uncertain")
+        try timeline().assertMatches(loop)
+    }
+
+    /// The pump never applies `InitiateBolus`, and the status read after it goes unanswered too: the
+    /// bolus is counted as delivering until the pump, asked again, shows it never started, and is
+    /// then reported as 0 U delivered.
+    func testA2c_unappliedBolusWhoseStatusReadIsLostIsReportedAsNothingDeliveredOnceThePumpAnswers() throws {
+        let driver = try stageDriver()
+        let logStart = try harness.client.snapshot().requestLog.lastSeq
+        let batchesBefore = allPumpEventBatches.count
+
+        var refusal = FaketandemFaultSpec(.errorResponse, message: "InitiateBolusRequest")
+        refusal.errorCode = 3
+        try harness.client.armFault(refusal)
+        try harness.client.armFault(FaketandemFaultSpec(.dropResponse, message: "CurrentBolusStatusRequest"))
+
+        let error = try enactBolus(units: 1.0, timeout: 90)
+        guard case .uncertainDelivery? = error else {
+            return XCTFail("a bolus the pump can't be asked about is uncertain delivery, got \(String(describing: error))")
+        }
+        XCTAssertFalse(try harness.client.snapshot().bolus.active, "the pump never started it")
+        XCTAssertTrue(driver.manager.status.deliveryIsUncertain)
+        let registered = try XCTUnwrap(
+            Array(allPumpEventBatches.dropFirst(batchesBefore)).flatMap(\.events).first { $0.dose?.type == .bolus }
+        )
+        XCTAssertEqual(registered.dose?.isMutable, true)
+        XCTAssertEqual(
+            feedOracles().loop.mutableDoses.filter { $0.dose.type == .bolus }.map(\.dose.programmedUnits), [1.0],
+            "counted at its programmed amount while uncertain, the direction that doses less"
+        )
+        XCTAssertFalse(try messagesSeen(since: logStart).contains("BolusPermissionReleaseRequest"), "not while it may be running")
+
+        _ = try sync()
+
+        XCTAssertFalse(driver.manager.status.deliveryIsUncertain)
+        XCTAssertNil(driver.manager.state.bolusDose)
+        XCTAssertNil(driver.manager.state.pendingBolusFinalization)
+        let finalized = try finalizedEvent(raw: registered.raw)
+        XCTAssertEqual(finalized.dose?.deliveredUnits, 0)
+        XCTAssertTrue(try messagesSeen(since: logStart).contains("BolusPermissionReleaseRequest"), "the permission it never used is released")
+
+        let (loop, trio) = feedOracles()
+        loop.assertNoDuplicates()
+        trio.assertNoDuplicates()
+        let boluses = loop.doses.filter { $0.dose.type == .bolus }
+        XCTAssertEqual(boluses.map(\.isMutable), [false])
+        XCTAssertEqual(boluses.map(\.dose.deliveredUnits), [0])
+        XCTAssertEqual(trio.boluses.map(\.bolusAmount), [0])
+        let timeline = try timeline()
+        XCTAssertTrue(timeline.boluses.isEmpty, "the pump has no bolus: \(timeline.boluses)")
+        let diff = timeline.diff(against: loop)
+        XCTAssertTrue(diff.missing.isEmpty && diff.duplicated.isEmpty && diff.mismatched.isEmpty, "\(diff)")
     }
 
     // MARK: - A3
