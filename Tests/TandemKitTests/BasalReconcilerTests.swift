@@ -36,7 +36,7 @@ final class BasalReconcilerTests: XCTestCase {
 
     private static let serial = HistoryLogSyncIdentifier.PumpSerial(123_456)!
 
-    /// A basal correction for the 279 `sequenceNum`, as the driver reports one.
+    /// A basal correction for the BasalDelivery record `sequenceNum`, as the driver reports one.
     private func correction(for sequenceNum: UInt32, _ rate: Double, from start: TimeInterval, to end: TimeInterval) -> NewPumpEvent {
         let entry = DoseEntry(
             type: .tempBasal,
@@ -87,7 +87,8 @@ final class BasalReconcilerTests: XCTestCase {
         }
     }
 
-    /// The pump's 279s every 300 s from `from` up to `to`, each at what `rate` gives.
+    /// The pump's BasalDelivery records every 300 s from `from` up to `to`, each at what `rate`
+    /// gives.
     private func cycles(_ log: inout PumpLog, from: Int, to: Int, source: Int = 1, rate: Int = 1000, profile: Int = 1000) {
         for seconds in stride(from: from, to: to, by: 300) {
             log.delivery(seconds, source: source, rate: rate, profile: profile)
@@ -292,7 +293,7 @@ final class BasalReconcilerTests: XCTestCase {
         log.delivery(0, source: 3, rate: 1000)
         let corrected = log.delivery(300, source: 3, rate: 2200)
 
-        // The host's marker in the 279's second put the correction a second after it.
+        // The host's marker in that BasalDelivery record's second moved the correction a second later.
         let ledger = told([marker(at: 300)], [correction(for: corrected, 2.2, from: 301, to: 600)])
 
         XCTAssertEqual(differing(reconcile(log, ledger)), [])

@@ -142,7 +142,9 @@ oracle one rule at a time.
 | D10 | A wizard finds the pump already stopped (#348) | radio off; pump `suspend`; radio on; `fetchSuspendStatus` (its own connect queues the reconnect's sync behind it); `resumeDelivery`; sync | a `.suspend` reaches the host no later than the check and is closed by the resume; dated at the pump's stop (#333) |
 | D11 | Resume over a TBR the driver still holds (#338, #348) | enact TBR; radio off; pump `suspend`; radio on; `resumeDelivery`; sync | Loop holds the TBR finalized, ended at the pump's stop; the `.suspend`, dated at the stop, reaches the host before the resume; Loop's store matches the pump's timeline |
 | D12 | A bolus programmed on the pump (§7, §11 external doses; #452) | history flags on; pump-source bolus in flight; sync until the backfill has read it; enact TBR; pump completes; sync | nothing reported while it runs (a deliberate departure from §9 item 4, #452); then reported once from history, finalized at the pump's amount, `wasProgrammedByPumpUI`, dated at the pump's start; Loop holds it permanent |
-| D13 | A 100% extended bolus programmed on the pump (#424) | history flags on; append `BolexActivated`, 30 min, `BolexCompleted`; sync until the backfill has read them | a dose for the extended bolus at `BolexCompleted`'s delivered amount, spanning the two records. faketandem encodes the two records' payloads from jwoglom/faketandem#39 on; before that they decode as zeros, and the marker fires either way |
+| D13 | A 100% extended bolus programmed on the pump (#424) | history flags on; append `BolexActivated`, 30 min, `BolexCompleted`; sync until the backfill has read them | one dose for the extended bolus under `HistoryLogSyncIdentifier.extendedBolus`, finalized at `BolexCompleted`'s delivered amount, spanning the two records, `wasProgrammedByPumpUI`; no up-front part; Loop holds it permanent and counts it in IOB, Trio stores one bolus row. faketandem encodes the two records' payloads from jwoglom/faketandem#39 on |
+| D13b | An extended bolus running when history reads it, stopped part-way (#424, #452) | history flags on; append a `BolusDelivery` record with `extendedDurationRequested` 60, `BolexActivated`; sync until read; enact TBR; 20 min; append `BolexCompleted` with `completionStatus` 0 and a third delivered; sync until read | reported at once, mutable, over the 60 minutes the `BolusDelivery` record programs; the TBR's replacing batch carries it; finalized once, in a replacing batch, at the delivered amount and the stop, under its first report's date; nothing live dropped by a replacing batch; one row in each host |
+| D13c | An extended bolus with an up-front part (#424) | history flags on; append `BolusDelivery`, `BolusActivated`; 30 s; `BolusCompleted`, `BolexActivated` in the same second; 30 min; `BolexCompleted`; sync until read | two doses under one `bolusId`: the up-front part under `HistoryLogSyncIdentifier.bolus` at `BolusCompleted`'s amount, the extended part under `extendedBolus` from `BolexActivated` to `BolexCompleted`; both permanent in Loop and two bolus rows in Trio |
 | D14 | The fill wizards' primes (#349 P10-5) | `recordTubingFill`; 2 min; `recordSiteChange(primeAmount: 0.3)` | a dose-less `.prime` each, the cannula's with its `.replaceComponent(.infusionSet)`, non-replacing, dated when reported; no dose in Loop; Trio stores two `Prime` rows and one `SiteChange` |
 | D15 | A pump with another serial (#349 P14-5) | pair; give `PumpVersionBRequest` another `serialNumber`; `deleteSavedPumpState`; re-pair; sync twice | one `.replaceComponent(.pump)` and one `pumpManagerPumpWasReplaced`, none for the first pump; Trio stores it as a `SiteChange` |
 | D16 | A bolus Control-IQ gives (§7, §11 external doses; #355 P20-7) | history flags on; Control-IQ on the pump; a bolus with Control-IQ's source, and its `BolusDelivery` (280) records at start and completion, which carry the source; pump completes; sync | reported once from history, finalized at the pump's amount and dated at its start, `automatic` and `wasProgrammedByPumpUI`; Loop holds it permanent and Trio stores it as an SMB |
@@ -197,27 +199,28 @@ The pump delivers basal in 5-minute cycles, one `BasalDelivery` (279) record eac
 `basalHistoryReporting` on, the driver compares each closed cycle with what the host counts and
 reports a correction where they differ (AGENTS.md "History backfill and dose reporting"). Each
 scenario runs faketandem's own basal cycle (`basal_cycle_enabled`), started once the driver is
-paired: a 279 every five minutes at the rate and source in force, `DailyBasal` totals,
-`ControlIQPcmChangeHistoryLog` records, and Control-IQ switched on the pump (`closed_loop_enabled`)
-or by the app (`ChangeControlIQSettingsRequest`) at a scripted rate. History backfill and basal
-reporting are on. Every scenario that corrects also checks, over its 279s and over each, that Loop's
-and Trio's net basal equals the pump's (`PumpTimeline.basalCycles`). Loop's may be 0.025 U off for a
-cycle a suspend cuts short: Loop rebuilds the temp basal before a suspend without its
-`deliveredUnits` and counts it in 0.05 U steps. `BasalHistoryConformanceTests`.
+paired: a BasalDelivery record every five minutes at the rate and source in force, `DailyBasal`
+totals, `ControlIQPcmChangeHistoryLog` records, and Control-IQ switched on the pump
+(`closed_loop_enabled`) or by the app (`ChangeControlIQSettingsRequest`) at a scripted rate. History
+backfill and basal reporting are on. Every scenario that corrects also checks, over its
+BasalDelivery records and over each, that Loop's and Trio's net basal equals the pump's
+(`PumpTimeline.basalCycles`). Loop's may be 0.025 U off for a cycle a suspend cuts short: Loop
+rebuilds the temp basal before a suspend without its `deliveredUnits` and counts it in 0.05 U steps.
+`BasalHistoryConformanceTests`.
 
 | ID | Scenario | Assert |
 |---|---|---|
-| H1 | An app temp runs; Control-IQ switched on by the app for an hour with rates either side of the profile, a 279 and a sync every 5 minutes; Control-IQ off; an app temp | The app temp ends at its completion record; one correction per 279 off the schedule, at its rate and start, the last before the app's next temp; the sync after the switch-off returns with all of them and the hand-back cleared; Loop keeps every correction, Trio stores every one, and both count the pump's basal |
-| H2 | The radio is off for 2 h during Control-IQ, then a sync | One ascending batch of corrections at the pump's rates, one per 279 off the schedule; Loop keeps every one, Trio stores every one and its IOB counts the pump's basal; a second pass reports nothing |
+| H1 | An app temp runs; Control-IQ switched on by the app for an hour with rates either side of the profile, a BasalDelivery record and a sync every 5 minutes; Control-IQ off; an app temp | The app temp ends at its completion record; one correction per BasalDelivery record off the schedule, at its rate and start, the last before the app's next temp; the sync after the switch-off returns with all of them and the hand-back cleared; Loop keeps every correction, Trio stores every one, and both count the pump's basal |
+| H2 | The radio is off for 2 h during Control-IQ, then a sync | One ascending batch of corrections at the pump's rates, one per BasalDelivery record off the schedule; Loop keeps every one, Trio stores every one and its IOB counts the pump's basal; a second pass reports nothing |
 | H3 | Relaunch from `rawValue` during Control-IQ | Nothing reported twice; corrections continue |
 | H4 | A suspend and resume during Control-IQ | The chunk under way ends at the suspend; no correction in the resume's second; the suspend, resume and corrections in one batch |
-| H5 | A5b with reporting on (#340), a 279 every 5 minutes | The pump's temp reported live at its pump start and rate; no 279 differs and nothing is corrected; Trio's IOB runs |
+| H5 | A5b with reporting on (#340), a BasalDelivery record every 5 minutes | The pump's temp reported live at its pump start and rate; no BasalDelivery record differs and nothing is corrected; Trio's IOB runs |
 | H6 | App temps, a cancel and a temp replaced within one cycle; an app temp across a profile segment change; a pump clock 11 minutes ahead across its segment change, with the skew compensation temp (D5) | No difference, nothing reported. The replaced temp is never delivered; the pump rescales the temp at the change and the driver cuts it there; the host is never told of the compensation temp |
 | H7 | A temp set on the pump's screen | Reported as its chunks close, with `wasProgrammedByPumpUI` |
-| H8 | The pump runs a profile off the app's schedule while out of range (#400) | Corrections at the pump's rate for the cycles before the driver writes the schedule back; the cycle the write lands in is residual; the pump runs the schedule from its next 279 |
+| H8 | The pump runs a profile off the app's schedule while out of range (#400) | Corrections at the pump's rate for the cycles before the driver writes the schedule back; the cycle the write lands in is residual; the pump runs the schedule from its next BasalDelivery record |
 | H9 | An alarm suspend during an app temp; the temp resumes with delivery | The app's temp ends at the stop; the temp's chunks after the resume reported, the first after the resume's second and the last ending at the app's next temp, and both hosts count them |
 | H10 | A CGM dropout during Control-IQ: Control-IQ, then the profile, then Control-IQ | Profile chunks at the app's schedule report nothing; the Control-IQ chunks off it do |
-| H11 | The same app temp enacted a minute into every cycle ×4, a sync between | One dose and one Trio row per enactment; no 279 differs and nothing is reported; both hosts count the pump's basal from the first 279 the temp ran |
+| H11 | The same app temp enacted a minute into every cycle ×4, a sync between | One dose and one Trio row per enactment; no BasalDelivery record differs and nothing is reported; both hosts count the pump's basal from the first BasalDelivery record the temp ran |
 
 ## I. The pump's IOB against the boluses reported (#354 P21-3)
 
@@ -239,6 +242,26 @@ verdict is read from `unreportedInsulinOnBoard.flagged`. `InsulinOnBoardConforma
 | I5 | A 2 h profile; a 4 U app bolus, 150 minutes, then a 2 U bolus on the pump | The pump no longer counts the app's bolus, nor does the window; the pump's reading flagged in full |
 | I6 | The profile's insulin duration shortened, then lengthened, each followed by a `profileChange` event | Each read without a sync; the shorter keeps the longer window until that long after the change; the longer applies at once |
 | I7 | Control-IQ on; a bolus on the pump the host never hears of | The pump answers `iobType` 1 and the driver keeps its Swan figure; nothing compared |
+
+## J. Extended boluses (#424)
+
+A Tandem extended bolus programmed off the app is two doses under one `bolusId`: the up-front part,
+reported like any pump bolus, and the extended part, reported mutable as soon as history reads its
+`BolexActivated` and finalized when it reads its `BolexCompleted` (AGENTS.md "History backfill and
+dose reporting"). faketandem delivers no extended bolus, so each scenario appends the records a pump
+writes for one, in the order and at the relative times Tandem's cloud export shows (helpers in
+`ExtendedBolusHistory.swift`). Every scenario runs with History Backfill and History Dose Reporting
+on and ends with both oracles and the complete-batch check. `ExtendedBolusConformanceTests`.
+
+| ID | Scenario | Assert |
+|---|---|---|
+| J1 | A 100% extended bolus over 60 minutes, a `BolusDelivery` record and a sync every 5 minutes, then its `BolexCompleted` | Every replacing batch carries it unchanged: mutable, under its first report's date, ending at its programmed end; Loop counts one dose and Trio holds one row at every sync; finalized once, at the delivered amount and its end |
+| J2 | t:slim X2 firmware that writes no `BolusDelivery` records: a 50% extended bolus with its `BolusRequestedMsg2` | The extended part runs to the programmed end from `BolusRequestedMsg2`'s `duration`; the up-front part reported once, finished. faketandem encodes `BolusRequestedMsg2` from branch `claude/compassionate-faraday-nhlrs7` on |
+| J3 | A suspend 10 minutes into the extended part: `BolexCompleted` with status 0, then the pump's suspend in the same second | Finalized at what it delivered, ending at the stop; one suspend at the stop; one row in each host |
+| J4 | A relaunch while the extended part runs | The relaunched driver carries it in its replacing batches under the same identity and date, never reports it anew, and finalizes it once |
+| J5 | Deleting the pump manager 10 minutes into a 2-hour extended part | The batch before `pumpManagerWillDeactivate` finalizes it at the deletion at its share of the programmed amount, and reports the rest as a finalized dose of its own to the programmed end; the two sum to the programmed amount; nothing mutable in either host; Loop stores the rest at the next manager's first batch past its end |
+| J6 | A `BolexCompleted` never read | Held through the programmed end and `extendedPartFinalizationWindow` after it, then finalized at its programmed amount, ending at its programmed end, in a replacing batch |
+| J7 | An app bolus, a quick bolus on the pump, an extended bolus, then an app bolus that still runs when history reads the extended part's end | The app boluses reported live and never again from history, the quick bolus once from history; the batch that finalizes the extended part carries the running app bolus; each finalized once; four rows in Trio |
 
 ## Execution order
 

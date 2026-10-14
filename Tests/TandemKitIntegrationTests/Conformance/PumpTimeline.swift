@@ -131,7 +131,7 @@ struct PumpTimeline {
     }
 
     /// One `BasalDelivery` (279) record: the pump delivers `rate` from it for one cycle, until the
-    /// next 279 or a suspend.
+    /// next BasalDelivery record or a suspend.
     struct BasalCycle: Equatable {
         let sequence: Int
         let start: Date
@@ -145,6 +145,9 @@ struct PumpTimeline {
     static let basalCycle: TimeInterval = 300
 
     let boluses: [Bolus]
+    /// The extended parts of extended boluses (BolexActivated to BolexCompleted), each a dose of its
+    /// own beside its up-front part in `boluses`, which shares its `bolusId`.
+    let extendedParts: [Bolus]
     let tempRates: [TempRate]
     let suspends: [Suspend]
     let basalCycles: [BasalCycle]
@@ -181,12 +184,14 @@ struct PumpTimeline {
 
         var boluses: [Int: Bolus] = [:]
         var bolusOrder: [Int] = []
+        var extendedParts: [Int: Bolus] = [:]
+        var extendedPartOrder: [Int] = []
         var tempRates: [TempRate] = []
         var suspends: [Suspend] = []
         var alarms: [Alarm] = []
         var unplaced: [Unplaced] = []
         var basalCycles: [BasalCycle] = []
-        // A cycle ends at the next 279 or suspend, or runs its full length.
+        // A cycle ends at the next BasalDelivery record or suspend, or runs its full length.
         func endLastCycle(at date: Date) {
             guard let last = basalCycles.last, date < last.end else { return }
             basalCycles[basalCycles.count - 1] = BasalCycle(sequence: last.sequence, start: last.start, end: max(date, last.start), rate: last.rate, source: last.source)
@@ -237,6 +242,43 @@ struct PumpTimeline {
                     deliveredUnits: data["insulinDelivered"]?.doubleValue,
                     endReason: BolusEndReason(id: data["completionStatusId"]?.intValue),
                     sourceId: existing?.sourceId
+                )
+
+            case "BolexActivated":
+                // Wire fields: bolusId, selectedIob, iob, bolexSize.
+                guard let id = data["bolusId"]?.intValue else {
+                    unplaced.append(Unplaced(sequence: entry.sequence, type: entry.type, note: "no bolusId"))
+                    continue
+                }
+                extendedPartOrder.append(id)
+                extendedParts[id] = Bolus(
+                    bolusId: id,
+                    programmedUnits: data["bolexSize"]?.doubleValue,
+                    start: instant(entry),
+                    startPumpSeconds: entry.pumpSeconds,
+                    end: nil,
+                    endPumpSeconds: nil,
+                    deliveredUnits: nil,
+                    endReason: nil,
+                    sourceId: nil
+                )
+
+            case "BolexCompleted":
+                // Wire fields: completionStatus, bolusId, iob, insulinDelivered, insulinRequested.
+                guard let id = data["bolusId"]?.intValue, let existing = extendedParts[id] else {
+                    unplaced.append(Unplaced(sequence: entry.sequence, type: entry.type, note: "no BolexActivated before it"))
+                    continue
+                }
+                extendedParts[id] = Bolus(
+                    bolusId: id,
+                    programmedUnits: existing.programmedUnits ?? data["insulinRequested"]?.doubleValue,
+                    start: existing.start,
+                    startPumpSeconds: existing.startPumpSeconds,
+                    end: instant(entry),
+                    endPumpSeconds: entry.pumpSeconds,
+                    deliveredUnits: data["insulinDelivered"]?.doubleValue,
+                    endReason: BolusEndReason(id: data["completionStatus"]?.intValue),
+                    sourceId: nil
                 )
 
             case "TempRateActivated":
@@ -446,6 +488,7 @@ struct PumpTimeline {
         let sequences = entries.map(\.sequence)
         return PumpTimeline(
             boluses: bolusOrder.compactMap { boluses[$0] },
+            extendedParts: extendedPartOrder.compactMap { extendedParts[$0] },
             tempRates: tempRates,
             suspends: suspends,
             basalCycles: basalCycles,
@@ -470,7 +513,8 @@ struct PumpTimeline {
     // MARK: - Basal
 
     /// Basal the pump delivered from `start` to `end` above (or, negative, below) `scheduledRate`,
-    /// from its 279s. Time no 279 covers delivered nothing, so a window should lie inside them.
+    /// from its BasalDelivery records. Time no BasalDelivery record covers delivered nothing, so a
+    /// window should lie inside them.
     func netBasalUnits(from start: Date, to end: Date, scheduledRate: (Date) -> Double) -> Double {
         let delivered = basalCycles.reduce(0.0) { total, cycle in
             let lo = max(cycle.start, start)
@@ -543,8 +587,8 @@ struct PumpTimeline {
             return abs(a.timeIntervalSince(b)) <= tolerance.time
         }
 
-        for bolus in boluses {
-            let label = "bolus \(bolus.bolusId) (\(bolus.programmedUnits.map { "\($0) U" } ?? "? U"))"
+        for (bolus, kind) in boluses.map({ ($0, "bolus") }) + extendedParts.map({ ($0, "extended part of bolus") }) {
+            let label = "\(kind) \(bolus.bolusId) (\(bolus.programmedUnits.map { "\($0) U" } ?? "? U"))"
             let matches = doses.filter { $0.dose.type == .bolus && near($0.dose.startDate, bolus.start) }
             guard let match = matches.first else {
                 diff.missing.append(label)

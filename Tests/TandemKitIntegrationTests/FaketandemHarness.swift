@@ -77,7 +77,7 @@ final class FaketandemHarness {
 
     func reset() throws {
         try client.clearFaults()
-        // First: a cycle left on would write 279s once the clock runs in real time again.
+        // First: a cycle left on writes BasalDelivery records once the clock runs in real time again.
         if try client.snapshot().basalCycle != nil {
             try client.setState(["basal_cycle_enabled": false, "controliq_algorithm_rate": -1, "cgm_available": true])
         }

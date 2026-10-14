@@ -85,8 +85,9 @@ enum BasalReconciler {
     }
 
     /// The host's rate at the chunk's start, or either side of a change it was commanded to make
-    /// within `transitionMatchTolerance`, which the pump may take up at the 279 either side. Not a
-    /// correction's edge: that is the pump's own cycle, and the rate before it the previous chunk's.
+    /// within `transitionMatchTolerance`, which the pump may take up at the BasalDelivery record
+    /// either side. Not a correction's edge: that is the pump's own cycle, and the rate before it
+    /// the previous chunk's.
     private static func matches(
         _ chunk: PumpBasalTimeline.Chunk,
         ledger: ReportedBasalLedger,

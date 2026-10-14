@@ -9,12 +9,13 @@ import XCTest
 
 /// Conformance group H (`docs/conformance-test-plan.md`): the basal the pump delivered, read back
 /// from its `BasalDelivery` (279) records and compared with what the host was told. Where the two
-/// differ the driver reports a correction at the pump's rate, one per 279, and a second pass
-/// reports nothing.
+/// differ the driver reports a correction at the pump's rate, one per BasalDelivery record, and a
+/// second pass reports nothing.
 ///
 /// faketandem runs the pump's 5-minute cycle (`basal_cycle_enabled`) from the end of
-/// `stageDriver()`, so every 279 lands on a five-minute step from there: its rate and source, the
-/// `DailyBasal` totals, the Control-IQ PCM changes and the resume rules are the emulator's own.
+/// `stageDriver()`, so every BasalDelivery record lands on a five-minute step from there: its rate
+/// and source, the `DailyBasal` totals, the Control-IQ PCM changes and the resume rules are the
+/// emulator's own.
 final class BasalHistoryConformanceTests: ConformanceTestCase {
     private static let profileRate = 1.0
     private static let cycle: TimeInterval = 300
@@ -42,7 +43,7 @@ final class BasalHistoryConformanceTests: ConformanceTestCase {
     // MARK: - Staging
 
     /// A paired driver with history backfill and basal reporting on, from an empty pump log, and the
-    /// pump's cycle running from now: a 279 now and every five minutes after.
+    /// pump's cycle running from now: a BasalDelivery record now and every five minutes after.
     @discardableResult
     private func stageDriver(schedule: [RepeatingScheduleValue<Double>]? = nil) throws -> FaketandemHarness.Driver {
         try eraseHistory()
@@ -102,7 +103,7 @@ final class BasalHistoryConformanceTests: ConformanceTestCase {
     }
 
     /// The reconciliation runs after the tick that reads a record, so a test that expects nothing
-    /// reported waits for it to be done with the last closed 279.
+    /// reported waits for it to be done with the last closed BasalDelivery record.
     private func waitForReconciliation(_ driver: FaketandemHarness.Driver, through sequence: Int, timeout: TimeInterval = 120) throws {
         try IntegrationWait.until("the driver to reconcile the pump's basal through record \(sequence)", timeout: timeout) {
             driver.manager.state.reportedBasal.reconciledThrough.map { Int($0) >= sequence } == true
@@ -130,21 +131,22 @@ final class BasalHistoryConformanceTests: ConformanceTestCase {
         try harness.client.snapshot().history.lastSequence
     }
 
-    /// The latest 279's sequence.
+    /// The latest BasalDelivery record's sequence.
     private func lastCycle() throws -> Int {
-        try XCTUnwrap(try harness.client.history(since: historyStartSequence).last { $0.type == "BasalDelivery" }, "no 279 yet").sequence
+        try XCTUnwrap(try harness.client.history(since: historyStartSequence).last { $0.type == "BasalDelivery" }, "no BasalDelivery record yet").sequence
     }
 
-    /// The rate Control-IQ runs from the next 279, in milliunits per hour.
+    /// The rate Control-IQ runs from the next BasalDelivery record, in milliunits per hour.
     private func setControlIQRate(_ rate: Int) throws {
         try harness.client.setState(["controliq_algorithm_rate": Double(rate) / 1000])
     }
 
-    /// Control-IQ switched on at the pump for a 279 at each of `rates`, then off, and a cycle on the
-    /// profile that closes the last. Starts on a 279; returns the records it wrote.
+    /// Control-IQ switched on at the pump for a BasalDelivery record at each of `rates`, then off,
+    /// and a cycle on the profile that closes the last. Starts on a BasalDelivery record; returns
+    /// the records it wrote.
     @discardableResult
     private func controlIQOnThePump(_ rates: [Int]) throws -> ClosedRange<Int> {
-        XCTAssertEqual(try harness.client.snapshot().basalCycle?.nextCycle?.date, clock.now.addingTimeInterval(Self.cycle), "starts on a 279")
+        XCTAssertEqual(try harness.client.snapshot().basalCycle?.nextCycle?.date, clock.now.addingTimeInterval(Self.cycle), "starts on a BasalDelivery record")
         let first = try lastSequence() + 1
         try harness.client.setState(["closed_loop_enabled": true])
         for rate in rates {
@@ -171,17 +173,18 @@ final class BasalHistoryConformanceTests: ConformanceTestCase {
         }
     }
 
-    /// The closed 279s in `sequences` that delivered off the schedule.
+    /// The closed BasalDelivery records in `sequences` that delivered off the schedule.
     private func cyclesOffTheSchedule(in sequences: ClosedRange<Int>) throws -> [PumpTimeline.BasalCycle] {
         try timeline().basalCycles.filter {
             sequences.contains($0.sequence) && $0.end <= clock.now && $0.source != 0 && abs($0.rate - Self.profileRate) > 0.01
         }
     }
 
-    /// One correction per closed 279 in `sequences` off the schedule, ascending, at its rate and start.
+    /// One correction per closed BasalDelivery record in `sequences` off the schedule, ascending,
+    /// at its rate and start.
     private func assertCorrections(_ corrections: [NewPumpEvent], match sequences: ClosedRange<Int>, file: StaticString = #filePath, line: UInt = #line) throws {
         let differing = try cyclesOffTheSchedule(in: sequences)
-        XCTAssertEqual(corrections.count, differing.count, "one correction per 279 off the schedule: \(corrections)", file: file, line: line)
+        XCTAssertEqual(corrections.count, differing.count, "one correction per BasalDelivery record off the schedule: \(corrections)", file: file, line: line)
         XCTAssertEqual(corrections.map(\.date), corrections.map(\.date).sorted(), "ascending", file: file, line: line)
         for (correction, cycle) in zip(corrections, differing) {
             XCTAssertEqual(correction.dose?.type, .tempBasal, file: file, line: line)
@@ -191,12 +194,13 @@ final class BasalHistoryConformanceTests: ConformanceTestCase {
         }
     }
 
-    /// Both hosts count the basal the closed 279s in `sequences` delivered: over all of them, and each.
+    /// Both hosts count the basal the closed BasalDelivery records in `sequences` delivered: over
+    /// all of them, and each.
     private func assertHostsCountThePumpsBasal(over sequences: ClosedRange<Int>, file: StaticString = #filePath, line: UInt = #line) throws {
         let timeline = try timeline()
         let cycles = timeline.basalCycles.filter { sequences.contains($0.sequence) && $0.end <= clock.now }
         guard let first = cycles.first, let last = cycles.last else {
-            return XCTFail("no closed 279s in \(sequences)", file: file, line: line)
+            return XCTFail("no closed BasalDelivery records in \(sequences)", file: file, line: line)
         }
         let (loop, trio) = feedOracles()
         let scheduled: (Date) -> Double = { _ in Self.profileRate }
@@ -241,8 +245,9 @@ final class BasalHistoryConformanceTests: ConformanceTestCase {
     // MARK: - H1
 
     /// The app's temp runs, Control-IQ takes over for an hour with a sync every cycle, then hands
-    /// back: the temp ends where Control-IQ stopped it, every 279 off the schedule is corrected by
-    /// the time the sync after the hand-back returns, and the app's next temp follows them.
+    /// back: the temp ends where Control-IQ stopped it, every BasalDelivery record off the schedule
+    /// is corrected by the time the sync after the hand-back returns, and the app's next temp
+    /// follows them.
     func testH1_aControlIQHourBetweenAppTempsIsCorrectedAndHandedBack() throws {
         let driver = try stageDriver()
         let before = allPumpEventBatches.count
@@ -273,7 +278,7 @@ final class BasalHistoryConformanceTests: ConformanceTestCase {
         _ = try sync()
         let offSchedule = rates.filter { abs($0 - Int(Self.profileRate * 1000)) > 10 }.count
         let found = corrections(since: before)
-        XCTAssertEqual(found.count, offSchedule, "every 279 off the schedule is corrected by the time the sync after the hand-back returns")
+        XCTAssertEqual(found.count, offSchedule, "every BasalDelivery record off the schedule is corrected by the time the sync after the hand-back returns")
         XCTAssertNil(driver.manager.state.controlIQEndedAt, "the hand-back is reconciled")
         XCTAssertNil(try enactTempBasal(unitsPerHour: 0.8, duration: .minutes(30)))
         let nextTemp = clock.now
@@ -309,7 +314,7 @@ final class BasalHistoryConformanceTests: ConformanceTestCase {
     // MARK: - H2
 
     /// Two hours of Control-IQ while the phone was out of range reach the host in one ascending
-    /// batch, a correction per 279 off the schedule.
+    /// batch, a correction per BasalDelivery record off the schedule.
     func testH2_anOutageDuringControlIQIsCorrectedInOneAscendingBatch() throws {
         let driver = try stageDriver()
         let before = allPumpEventBatches.count
@@ -366,7 +371,7 @@ final class BasalHistoryConformanceTests: ConformanceTestCase {
         let (loop, trio) = feedOracles()
         loop.assertNoDuplicates("relaunch")
         trio.assertNoDuplicates("relaunch")
-        XCTAssertEqual(Set(all.map(\.raw)).count, all.count, "one correction per 279")
+        XCTAssertEqual(Set(all.map(\.raw)).count, all.count, "one correction per BasalDelivery record")
         try assertHostsCountThePumpsBasal(over: first)
         try assertHostsCountThePumpsBasal(over: second)
     }
@@ -397,7 +402,7 @@ final class BasalHistoryConformanceTests: ConformanceTestCase {
         try clock.advanceBoth(seconds: .minutes(5), ticks: 1)
         let outage = first ... (try lastSequence())
         let cycles = try timeline().basalCycles.filter { outage.contains($0.sequence) }
-        XCTAssertEqual(cycles.map(\.source), [3, 3, 0, 0, 3, 3, 3, 1], "suspended 279s, and one at the resume")
+        XCTAssertEqual(cycles.map(\.source), [3, 3, 0, 0, 3, 3, 3, 1], "suspended BasalDelivery records, and one at the resume")
         XCTAssertEqual(cycles.first { $0.start >= resumedAt }?.start, resumedAt, "the resume restarts the cadence")
 
         try radioOnAndSync()
@@ -422,7 +427,8 @@ final class BasalHistoryConformanceTests: ConformanceTestCase {
     // MARK: - H5
 
     /// A5 with basal reporting on (#340): the link drops in place of the `SetTempRate` answer, the
-    /// next sync adopts the pump's temp from history, and its 279s find nothing left to correct.
+    /// next sync adopts the pump's temp from history, and its BasalDelivery records find nothing
+    /// left to correct.
     func testH5_aLostSetTempRateIsReportedLiveAndLeavesNothingToCorrect() throws {
         let driver = try stageDriver()
         let before = allPumpEventBatches.count
@@ -446,7 +452,7 @@ final class BasalHistoryConformanceTests: ConformanceTestCase {
         try waitForReconciliation(driver, through: lastClosed)
 
         XCTAssertTrue(corrections(since: before).isEmpty, "the live path reported what the pump ran")
-        XCTAssertTrue(driver.manager.loggedBasalDifferences.isEmpty, "no 279 differs from what the host was told")
+        XCTAssertTrue(driver.manager.loggedBasalDifferences.isEmpty, "no BasalDelivery record differs from what the host was told")
         let (loop, trio) = feedOracles()
         loop.assertNoDuplicates("lost SetTempRate answer")
         trio.assertNoDuplicates("lost SetTempRate answer")
@@ -461,7 +467,8 @@ final class BasalHistoryConformanceTests: ConformanceTestCase {
     // MARK: - H6
 
     /// App temps, a cancel, and a temp replaced within one cycle: the host counts each change from
-    /// its command and the pump from its next 279, so nothing differs and nothing is reported.
+    /// its command and the pump from its next BasalDelivery record, so nothing differs and nothing
+    /// is reported.
     func testH6_appTempsAndACancelReportNothing() throws {
         let driver = try stageDriver()
         let before = allPumpEventBatches.count
@@ -476,7 +483,7 @@ final class BasalHistoryConformanceTests: ConformanceTestCase {
         try clock.advanceBoth(seconds: .minutes(1), ticks: 1)
         XCTAssertNil(try enactTempBasal(unitsPerHour: 2.0, duration: .minutes(30)))
         try clock.advanceBoth(seconds: .minutes(1), ticks: 1)
-        XCTAssertNil(try enactTempBasal(unitsPerHour: 0.5, duration: .minutes(30)), "replaces the last before the pump's next 279")
+        XCTAssertNil(try enactTempBasal(unitsPerHour: 0.5, duration: .minutes(30)), "replaces the last before the pump's next BasalDelivery record")
         try clock.advanceBoth(seconds: .minutes(3), ticks: 3)
         _ = try sync()
         try clock.advanceBoth(seconds: .minutes(5), ticks: 5)
@@ -488,13 +495,14 @@ final class BasalHistoryConformanceTests: ConformanceTestCase {
         try waitForReconciliation(driver, through: lastClosed)
 
         XCTAssertTrue(corrections(since: before).isEmpty, "nothing reported: \(corrections(since: before))")
-        XCTAssertTrue(driver.manager.loggedBasalDifferences.isEmpty, "no 279 differs from what the host was told")
+        XCTAssertTrue(driver.manager.loggedBasalDifferences.isEmpty, "no BasalDelivery record differs from what the host was told")
         let rates = try timeline().basalCycles.map { Int(($0.rate * 1000).rounded()) }
-        XCTAssertEqual(rates, [1000, 1500, 1000, 500, 500, 500], "the 2.0 U/hr temp was replaced before a 279 ran it")
+        XCTAssertEqual(rates, [1000, 1500, 1000, 500, 500, 500], "the 2.0 U/hr temp was replaced before a BasalDelivery record ran it")
     }
 
     /// An app temp across a profile segment change: the pump rescales it at the change and runs the
-    /// new rate from its next 279, the driver cuts the temp there, and nothing differs.
+    /// new rate from its next BasalDelivery record, the driver cuts the temp there, and nothing
+    /// differs.
     func testH6_aTempAcrossASegmentChangeReportsNothing() throws {
         let change = try startClocksBeforeASegmentChange()
         let driver = try stageDriver(schedule: schedule(changingTo: 0.8, at: change))
@@ -519,9 +527,9 @@ final class BasalHistoryConformanceTests: ConformanceTestCase {
         try waitForReconciliation(driver, through: lastClosed)
 
         XCTAssertTrue(corrections(since: before).isEmpty, "nothing reported: \(corrections(since: before))")
-        XCTAssertTrue(driver.manager.loggedBasalDifferences.isEmpty, "no 279 differs from what the host was told")
+        XCTAssertTrue(driver.manager.loggedBasalDifferences.isEmpty, "no BasalDelivery record differs from what the host was told")
         let rates = try timeline().basalCycles.map { Int(($0.rate * 1000).rounded()) }
-        XCTAssertEqual(rates, [1000, 1500, 1500, 1500, 1200, 1200, 1200], "1.2 U/hr from the first 279 after the change")
+        XCTAssertEqual(rates, [1000, 1500, 1500, 1500, 1200, 1200, 1200], "1.2 U/hr from the first BasalDelivery record after the change")
         let (loop, trio) = feedOracles()
         loop.assertNoDuplicates("segment change")
         trio.assertNoDuplicates("segment change")
@@ -534,7 +542,8 @@ final class BasalHistoryConformanceTests: ConformanceTestCase {
 
     /// The pump's clock runs 11 minutes ahead, so it reaches its 2.0 U/hr segment 11 minutes before
     /// the phone does. The driver runs a temp that delivers the host's 1.0 until the phone gets
-    /// there, and the host, never told of it, counts what the pump's 279s ran: nothing differs.
+    /// there, and the host, never told of it, counts what the pump's BasalDelivery records ran:
+    /// nothing differs.
     func testH6_aSkewedPumpClocksCompensationReportsNothing() throws {
         let change = try startClocksBeforeASegmentChange(skewSeconds: 660)
         let driver = try stageDriver(schedule: schedule(changingTo: 2.0, at: change))
@@ -561,7 +570,7 @@ final class BasalHistoryConformanceTests: ConformanceTestCase {
         try waitForReconciliation(driver, through: lastClosed)
 
         XCTAssertTrue(corrections(since: before).isEmpty, "nothing reported: \(corrections(since: before))")
-        XCTAssertTrue(driver.manager.loggedBasalDifferences.isEmpty, "no 279 differs from what the host was told")
+        XCTAssertTrue(driver.manager.loggedBasalDifferences.isEmpty, "no BasalDelivery record differs from what the host was told")
         let cycles = try timeline().basalCycles
         XCTAssertEqual(cycles.map { Int(($0.rate * 1000).rounded()) }, [1000, 1000, 1000, 1000, 2000, 2000, 2000])
         XCTAssertEqual(cycles.map(\.source), [1, 1, 2, 2, 1, 1, 1], "the compensation ran as a temp")
@@ -624,7 +633,7 @@ final class BasalHistoryConformanceTests: ConformanceTestCase {
         let found = corrections(since: before)
         try assertCorrections(found, match: outage)
         XCTAssertTrue(found.allSatisfy { $0.dose?.automatic == false && $0.dose?.wasProgrammedByPumpUI == false })
-        XCTAssertEqual(try timeline().basalCycles.last?.rate, Self.profileRate, "the pump runs the schedule from its next 279")
+        XCTAssertEqual(try timeline().basalCycles.last?.rate, Self.profileRate, "the pump runs the schedule from its next BasalDelivery record")
         XCTAssertNil(driver.manager.state.basalRateMismatchDetectedAt)
         try assertHostsCountThePumpsBasal(over: outage)
     }
@@ -738,7 +747,7 @@ final class BasalHistoryConformanceTests: ConformanceTestCase {
         try waitForReconciliation(driver, through: lastClosed)
 
         XCTAssertTrue(corrections(since: before).isEmpty, "nothing reported: \(corrections(since: before))")
-        XCTAssertTrue(driver.manager.loggedBasalDifferences.isEmpty, "no 279 differs from what the host was told")
+        XCTAssertTrue(driver.manager.loggedBasalDifferences.isEmpty, "no BasalDelivery record differs from what the host was told")
         XCTAssertEqual(raws.count, 4)
         XCTAssertEqual(Set(raws).count, raws.count, "one identity per enactment")
         let (loop, trio) = feedOracles()
@@ -751,7 +760,8 @@ final class BasalHistoryConformanceTests: ConformanceTestCase {
             "one Loop dose per enactment: \(loop.doses.map(LoopDoseStoreOracle.describe))"
         )
         XCTAssertEqual(trio.tempBasals.count, raws.count, "one Trio row per enactment: \(trio.tempBasals)")
-        // The host counts the first temp from its command, the pump from its next 279.
+        // The host counts the first temp from its command, the pump from its next BasalDelivery
+        // record.
         try assertHostsCountThePumpsBasal(over: try XCTUnwrap(cycles.first) ... lastClosed)
     }
 }

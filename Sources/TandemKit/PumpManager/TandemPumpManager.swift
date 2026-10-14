@@ -180,7 +180,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
     /// The temp `maintainPumpClockSkewCompensation` has running. Only touched from command queue jobs.
     var skewCompensationTemp: (percent: Int, endsAt: Date)?
 
-    /// The 279s whose basal difference has been logged this session. Only touched from command queue jobs.
+    /// The BasalDelivery records whose basal difference has been logged this session. Only touched
+    /// from command queue jobs.
     var loggedBasalDifferences = Set<UInt32>()
     /// How many history passes each store gap has held basal reconciliation back. Command queue only.
     var basalGapPasses: [ClosedRange<UInt32>: Int] = [:]
@@ -1770,7 +1771,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
     /// finalized dose only once it has ended, so the temp is cut now and its remainder reported on its own.
     func finalizeHeldDosesForDeactivation() {
         settleDeliveryTransition()
-        guard state.basalDose.type == .tempBasal || state.bolusDose != nil || state.pendingBolusFinalization != nil else {
+        let heldExtendedParts = deactivatedExtendedPartEvents()
+        guard state.basalDose.type == .tempBasal || state.bolusDose != nil || state.pendingBolusFinalization != nil
+            || !heldExtendedParts.isEmpty
+        else {
             return
         }
 
@@ -1818,6 +1822,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 events.append(event)
             }
         }
+        events += heldExtendedParts
         state.bolusDose = nil
         state.pendingBolusFinalization = nil
         state.bolusState = .noBolus
@@ -2557,7 +2562,7 @@ extension TandemPumpManager {
     func inProgressBolusEvents() -> [NewPumpEvent] {
         let events = [state.bolusDose, state.pendingBolusFinalization].compactMap { dose in
             dose.map { NewPumpEvent.bolus(dose: $0.toDoseEntry(isMutable: true), date: $0.startDate) }
-        }
+        } + heldExtendedPartEvents()
         var seen = Set<Data>()
         return events.filter { seen.insert($0.raw).inserted }
     }

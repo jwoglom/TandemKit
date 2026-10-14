@@ -916,8 +916,8 @@ final class PumpSideConformanceTests: ConformanceTestCase {
 
     // MARK: - D13
 
-    /// A 100% extended bolus logs no BolusActivated/BolusCompleted pair, only BolexActivated (59) and
-    /// BolexCompleted (21).
+    /// A 100% extended bolus logs no BolusActivated/BolusCompleted pair, only BolexActivated and
+    /// BolexCompleted, and reaches the host as one dose spanning the two (#424).
     func testD13AnExtendedBolusProgrammedOnThePumpIsReportedFromItsHistory() throws {
         let driver = try startPairedDriverReportingHistory()
         let batchesBefore = allPumpEventBatches.count
@@ -934,23 +934,156 @@ final class PumpSideConformanceTests: ConformanceTestCase {
             "completionStatus": 3, "bolusId": bolusId, "iob": 0.0, "insulinDelivered": units, "insulinRequested": units,
         ]).history.lastSequence
 
-        _ = try sync()
-        try IntegrationWait.until("the backfill to read the extended bolus's completion", timeout: 180) {
-            (driver.manager.state.historyBackfill?.watermark).map { Int($0) >= completedSequence } ?? false
-        }
-        // The report runs as a command job after the tick; a sync queues behind it.
-        _ = try sync()
+        try syncUntilHistoryRead(through: completedSequence, driver)
 
+        let raw = try extendedPartRaw(bolusId: bolusId, driver)
         let events = eventsSince(batchesBefore)
-        expectDefect("jwoglom/TandemKit#424: BolexActivated (59) and BolexCompleted (21) fall through HistoryToDoseMapper's default: continue, so an extended bolus programmed on the pump never reaches the host") {
-            let extended = events.first { $0.dose?.type == .bolus }
-            XCTAssertNotNil(extended, "a dose for the pump's extended bolus: \(events)")
-            XCTAssertEqual(extended?.dose?.deliveredUnits ?? -1, units, accuracy: 0.0005, "at BolexCompleted's insulinDelivered")
-            XCTAssertEqual(extended?.dose?.startDate.timeIntervalSince(startedAt) ?? .infinity, 0, accuracy: 2, "from BolexActivated")
-            XCTAssertEqual(extended?.dose?.endDate.timeIntervalSince(completedAt) ?? .infinity, 0, accuracy: 2, "to BolexCompleted")
-            XCTAssertEqual(extended?.dose?.wasProgrammedByPumpUI, true)
-            XCTAssertGreaterThan(feedOracles().loop.iob(at: completedAt), 0, "the extended bolus counts towards IOB")
-        }
+        let extended = try XCTUnwrap(events.last { $0.raw == raw }, "a dose for the pump's extended bolus: \(events)")
+        assertFieldSemantics(extended, programmed: units, automatic: false)
+        XCTAssertEqual(extended.dose?.deliveredUnits ?? -1, units, accuracy: 0.0005, "at BolexCompleted's insulinDelivered")
+        XCTAssertEqual(extended.dose?.startDate.timeIntervalSince(startedAt) ?? .infinity, 0, accuracy: 2, "from BolexActivated")
+        XCTAssertEqual(extended.dose?.endDate.timeIntervalSince(completedAt) ?? .infinity, 0, accuracy: 2, "to BolexCompleted")
+        XCTAssertEqual(extended.dose?.wasProgrammedByPumpUI, true)
+        XCTAssertFalse(events.contains { $0.dose?.type == .bolus && $0.raw != raw }, "no up-front part: \(events)")
+        XCTAssertTrue(completeBatchOmissions().isEmpty, completeBatchOmissions().joined(separator: "\n"))
+
+        let (loop, trio) = feedOracles()
+        loop.assertNoDuplicates()
+        trio.assertNoDuplicates()
+        let stored = loop.assertPermanent(raw: raw, "the extended bolus once it finished")
+        XCTAssertEqual(stored?.dose.deliveredUnits ?? -1, units, accuracy: 0.0005)
+        XCTAssertGreaterThan(loop.iob(at: completedAt), 0, "the extended bolus counts towards IOB")
+        let row = trio.event(syncIdentifier: raw.hexadecimalString)
+        XCTAssertEqual(row?.isMutable, false)
+        XCTAssertEqual(row?.bolusAmount, Decimal(units))
+        XCTAssertEqual(row?.isSMB, false)
+        try timeline().assertMatches(loop)
+    }
+
+    /// Reported mutable over the duration its BolusDelivery record programs, and carried by every
+    /// replacing batch until its BolexCompleted, here a stop part-way, finalizes it in one (#424, #452).
+    func testD13bAnExtendedBolusRunningWhenHistoryReadsItIsHeldUntilItEnds() throws {
+        let driver = try startPairedDriverReportingHistory()
+        let batchesBefore = allPumpEventBatches.count
+        let bolusId = 7025
+        let units = 3.0
+        let minutes = 60
+
+        let startedAt = clock.now
+        try appendExtendedBolusDelivery(bolusId: bolusId, upFrontUnits: 0, extendedUnits: units, minutes: minutes)
+        let activatedSequence = try harness.client.appendHistory(type: "BolexActivated", secondsAgo: 0, data: [
+            "bolusId": bolusId, "selectedIob": 0, "iob": 0.0, "bolexSize": units,
+        ]).history.lastSequence
+        try syncUntilHistoryRead(through: activatedSequence, driver)
+
+        let raw = try extendedPartRaw(bolusId: bolusId, driver)
+        let held = try XCTUnwrap(eventsSince(batchesBefore).first { $0.raw == raw }, "reported while it runs: \(eventsSince(batchesBefore))")
+        XCTAssertEqual(held.dose?.isMutable, true)
+        XCTAssertEqual(held.dose?.programmedUnits ?? -1, units, accuracy: 0.0005)
+        XCTAssertEqual(held.dose?.startDate.timeIntervalSince(startedAt) ?? .infinity, 0, accuracy: 2)
+        XCTAssertEqual(
+            held.dose?.endDate.timeIntervalSince(startedAt) ?? .infinity,
+            .minutes(Double(minutes)),
+            accuracy: 2,
+            "over its programmed duration"
+        )
+        let counted = feedOracles().loop.normalizedDoses().first { $0.syncIdentifier == raw.hexadecimalString }
+        XCTAssertEqual(counted?.isMutable, true, "Loop counts it while it runs")
+        XCTAssertEqual(counted?.programmedUnits ?? -1, units, accuracy: 0.0005)
+
+        let beforeTemp = allPumpEventBatches.count
+        XCTAssertNil(try enactTempBasal(unitsPerHour: 1.5, duration: .minutes(30)))
+        let tempBatch = try XCTUnwrap(allPumpEventBatches.dropFirst(beforeTemp).first { batch in
+            batch.replacePendingEvents && batch.events.contains { $0.dose?.type == .tempBasal }
+        })
+        XCTAssertEqual(tempBatch.events.first { $0.raw == raw }?.dose?.isMutable, true, "the temp basal's batch carries it")
+
+        try clock.advanceBoth(seconds: .minutes(20), ticks: 20)
+        let stoppedAt = clock.now
+        let delivered = 1.0
+        let stoppedSequence = try harness.client.appendHistory(type: "BolexCompleted", secondsAgo: 0, data: [
+            "completionStatus": 0, "bolusId": bolusId, "iob": delivered, "insulinDelivered": delivered, "insulinRequested": units,
+        ]).history.lastSequence
+        try syncUntilHistoryRead(through: stoppedSequence, driver)
+
+        let finalizing = try XCTUnwrap(allPumpEventBatches.dropFirst(batchesBefore).first { batch in
+            batch.events.contains { $0.raw == raw && $0.dose?.isMutable == false }
+        }, "finalized once its BolexCompleted is read")
+        XCTAssertTrue(finalizing.replacePendingEvents, "Loop keeps a mutable row over a non-replacing report of its raw")
+        let finalized = try XCTUnwrap(finalizing.events.first { $0.raw == raw })
+        assertFieldSemantics(finalized, programmed: units, automatic: false)
+        XCTAssertEqual(finalized.dose?.deliveredUnits ?? -1, delivered, accuracy: 0.0005, "what it delivered before it stopped")
+        XCTAssertEqual(finalized.dose?.endDate.timeIntervalSince(stoppedAt) ?? .infinity, 0, accuracy: 2, "at the stop")
+        XCTAssertEqual(finalized.date, held.date, "under the date it was first reported at")
+
+        _ = try sync()
+        XCTAssertEqual(eventsSince(batchesBefore).filter { $0.raw == raw && $0.dose?.isMutable == false }.count, 1, "finalized once")
+        let omissions = completeBatchOmissions()
+        XCTAssertTrue(omissions.isEmpty, "nothing live may be dropped by silence:\n" + omissions.joined(separator: "\n"))
+
+        let (loop, trio) = feedOracles()
+        loop.assertNoDuplicates()
+        trio.assertNoDuplicates()
+        let stored = loop.assertPermanent(raw: raw, "the extended bolus once it stopped")
+        XCTAssertEqual(stored?.dose.deliveredUnits ?? -1, delivered, accuracy: 0.0005)
+        XCTAssertTrue(loop.deletedDoses.filter { $0.raw == raw && !$0.isMutable }.isEmpty, "the finalized dose is never deleted")
+        let row = trio.event(syncIdentifier: raw.hexadecimalString)
+        XCTAssertEqual(row?.isMutable, false)
+        XCTAssertEqual(row?.bolusAmount, Decimal(delivered))
+        try timeline().assertMatches(loop)
+    }
+
+    /// An extended bolus with an up-front part is two doses: BolusCompleted counts the up-front part
+    /// alone, and the extended part runs from BolexActivated, logged within a second of it.
+    func testD13cAnExtendedBolusWithAnUpFrontPartIsReportedAsTwoDoses() throws {
+        let driver = try startPairedDriverReportingHistory()
+        let batchesBefore = allPumpEventBatches.count
+        let bolusId = 7026
+        let upFront = 1.0
+        let extended = 2.0
+
+        let startedAt = clock.now
+        try appendExtendedBolusDelivery(bolusId: bolusId, upFrontUnits: upFront, extendedUnits: extended, minutes: 30)
+        try harness.client.appendHistory(type: "BolusActivated", secondsAgo: 0, data: [
+            "bolusId": bolusId, "selectedIob": 0, "iob": 0.0, "bolusSize": upFront,
+        ])
+        try clock.advanceBoth(seconds: 30)
+        let extendedAt = clock.now
+        try harness.client.appendHistory(type: "BolusCompleted", secondsAgo: 0, data: [
+            "completionStatusId": 3, "bolusId": bolusId, "iob": upFront, "insulinDelivered": upFront, "insulinRequested": upFront,
+        ])
+        try harness.client.appendHistory(type: "BolexActivated", secondsAgo: 0, data: [
+            "bolusId": bolusId, "selectedIob": 0, "iob": upFront, "bolexSize": extended,
+        ])
+        try clock.advanceBoth(seconds: .minutes(30), ticks: 30)
+        let completedAt = clock.now
+        let completedSequence = try harness.client.appendHistory(type: "BolexCompleted", secondsAgo: 0, data: [
+            "completionStatus": 3, "bolusId": bolusId, "iob": extended, "insulinDelivered": extended, "insulinRequested": extended,
+        ]).history.lastSequence
+        try syncUntilHistoryRead(through: completedSequence, driver)
+
+        let serial = try XCTUnwrap(HistoryLogSyncIdentifier.PumpSerial(driver.manager.state.pumpState.pumpSerial))
+        let upFrontRaw = HistoryLogSyncIdentifier.bolus(pumpSerial: serial, bolusId: bolusId)
+        let extendedRaw = HistoryLogSyncIdentifier.extendedBolus(pumpSerial: serial, bolusId: bolusId)
+        let events = eventsSince(batchesBefore)
+        let upFrontPart = try XCTUnwrap(events.last { $0.raw == upFrontRaw }, "the up-front part: \(events)")
+        let extendedPart = try XCTUnwrap(events.last { $0.raw == extendedRaw }, "the extended part: \(events)")
+        assertFieldSemantics(upFrontPart, programmed: upFront, automatic: false)
+        assertFieldSemantics(extendedPart, programmed: extended, automatic: false)
+        XCTAssertEqual(upFrontPart.dose?.deliveredUnits ?? -1, upFront, accuracy: 0.0005, "BolusCompleted counts the up-front part alone")
+        XCTAssertEqual(upFrontPart.dose?.startDate.timeIntervalSince(startedAt) ?? .infinity, 0, accuracy: 2)
+        XCTAssertEqual(extendedPart.dose?.deliveredUnits ?? -1, extended, accuracy: 0.0005)
+        XCTAssertEqual(extendedPart.dose?.startDate.timeIntervalSince(extendedAt) ?? .infinity, 0, accuracy: 2)
+        XCTAssertEqual(extendedPart.dose?.endDate.timeIntervalSince(completedAt) ?? .infinity, 0, accuracy: 2)
+        XCTAssertTrue(completeBatchOmissions().isEmpty, completeBatchOmissions().joined(separator: "\n"))
+
+        let (loop, trio) = feedOracles()
+        loop.assertNoDuplicates()
+        trio.assertNoDuplicates()
+        XCTAssertEqual(loop.assertPermanent(raw: upFrontRaw)?.dose.deliveredUnits ?? -1, upFront, accuracy: 0.0005)
+        XCTAssertEqual(loop.assertPermanent(raw: extendedRaw)?.dose.deliveredUnits ?? -1, extended, accuracy: 0.0005)
+        XCTAssertEqual(trio.boluses.map(\.bolusAmount), [Decimal(upFront), Decimal(extended)], "\(trio.boluses)")
+        try timeline().assertMatches(loop)
     }
 
     // MARK: - D14
@@ -1230,26 +1363,6 @@ final class PumpSideConformanceTests: ConformanceTestCase {
             "requestedNow": Int((Self.bolusUnits * 1000).rounded()),
             "deliveredTotal": Int((deliveredUnits * 1000).rounded()),
         ])
-    }
-
-    /// Waits out the first backfill tick, so anything the pump logs from here on is newer than the
-    /// floor it reports from.
-    @discardableResult
-    private func startPairedDriverReportingHistory() throws -> FaketandemHarness.Driver {
-        var state = TandemPumpManagerState(rawValue: [:])
-        state.featureFlags[.historyBackfill] = true
-        state.featureFlags[.historyDoseReporting] = true
-        state.bolusReportLedger = BolusReportLedger(trackingSince: clock.now)
-        state.insulinType = .novolog
-        state.basalRateSchedule = try XCTUnwrap(BasalRateSchedule(dailyItems: [RepeatingScheduleValue(startTime: 0, value: Self.profileRate)]))
-        let driver = startDriver(state: state)
-        try harness.client.setState(["basal_rate": Self.profileRate])
-        try harness.pair(driver)
-        _ = try sync()
-        try IntegrationWait.until("the first backfill tick", timeout: 180) {
-            driver.manager.state.historyBackfill != nil
-        }
-        return driver
     }
 
     /// The pump stops delivery while the link is down, so none of its qualifying events reach the driver;

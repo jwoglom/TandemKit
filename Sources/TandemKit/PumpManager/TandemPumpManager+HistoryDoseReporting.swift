@@ -1,9 +1,9 @@
 import Foundation
 import LoopKit
 
-/// Reports history boluses the live path didn't report or couldn't finish (#354), and the pump's
-/// own suspends and resumes (`TandemPumpManager+DeliveryTransitions`), and compares the basal it
-/// delivered with what the host was told (`TandemPumpManager+BasalReconciliation`).
+/// Reports history boluses the live path didn't report or couldn't finish (#354), extended parts,
+/// and the pump's own suspends and resumes (`TandemPumpManager+DeliveryTransitions`), and compares
+/// the basal it delivered with what the host was told (`TandemPumpManager+BasalReconciliation`).
 extension TandemPumpManager {
     func reportHistoryDoses(after outcome: HistoryBackfillCoordinator.TickOutcome, now: Date) {
         guard state.featureFlags.historyBackfill, let serial = historyLogStoreSerial else {
@@ -44,10 +44,6 @@ extension TandemPumpManager {
             return
         }
 
-        for bolex in logs.compactMap({ $0 as? BolexActivatedHistoryLog }) {
-            logger.warning("Extended bolus \(bolex.bolusId) in pump history is not reported to the app")
-        }
-
         state.bolusReportLedger.prune(now: now)
         let ledger = state.bolusReportLedger
 
@@ -62,18 +58,32 @@ extension TandemPumpManager {
         var reports: [NewPumpEvent] = []
         var finalizesHeldDose = false
         for event in events {
-            // Only once its completion is read: reported while it ran, a pump bolus would have to
-            // ride every replacing batch until then, or the host deletes it (#452).
-            guard let dose = event.dose, dose.type == .bolus, !dose.isMutable, dose.startDate >= floor,
-                  let decoded = HistoryLogSyncIdentifier.decode(event.raw), decoded.scheme == .bolus
+            guard let dose = event.dose, dose.type == .bolus, dose.startDate >= floor,
+                  let decoded = HistoryLogSyncIdentifier.decode(event.raw)
             else {
                 continue
             }
             let bolusId = Int(decoded.identifier)
-            let isHeld = state.bolusReportLedger.entry(bolusId: bolusId, pumpSerial: serial.rawValue) != nil
-            if let report = historyBolusReport(event, dose: dose, bolusId: bolusId, serial: serial) {
-                reports.append(report)
-                finalizesHeldDose = finalizesHeldDose || isHeld
+            switch decoded.scheme {
+            case .bolus:
+                // Only once its completion is read: a pump bolus runs for seconds, and reported while it
+                // ran it would have to ride every replacing batch until then, or the host deletes it (#452).
+                guard !dose.isMutable else {
+                    continue
+                }
+                let isHeld = state.bolusReportLedger.entry(bolusId: bolusId, pumpSerial: serial.rawValue) != nil
+                if let report = historyBolusReport(event, dose: dose, bolusId: bolusId, serial: serial) {
+                    reports.append(report)
+                    finalizesHeldDose = finalizesHeldDose || isHeld
+                }
+            case .extendedBolus:
+                let held = state.bolusReportLedger.entry(bolusId: bolusId, pumpSerial: serial.rawValue, part: .extended)
+                if let report = extendedPartReport(event, dose: dose, bolusId: bolusId, held: held, serial: serial) {
+                    reports.append(report)
+                    finalizesHeldDose = finalizesHeldDose || held != nil
+                }
+            case .tempRate, .logSequence:
+                continue
             }
         }
 
@@ -96,7 +106,7 @@ extension TandemPumpManager {
     private static func isReportedBolusInput(_ log: HistoryLog) -> Bool {
         switch log {
         case is BolusActivatedHistoryLog, is BolusCompletedHistoryLog, is BolusDeliveryHistoryLog,
-             is BolusRequestedMsg2HistoryLog, is BolexActivatedHistoryLog,
+             is BolusRequestedMsg2HistoryLog, is BolexActivatedHistoryLog, is BolexCompletedHistoryLog,
              is TimeChangedHistoryLog, is DateChangeHistoryLog:
             return true
         default:
@@ -135,8 +145,104 @@ extension TandemPumpManager {
             releaseLiveBolusState(bolusId)
         }
 
-        return Self.reported(dose, as: entry)
+        return Self.reported(dose, as: entry, title: event.title)
     }
+
+    /// Reported mutable once its BolexActivated is read, since it can run for hours; every replacing batch
+    /// carries it until its BolexCompleted finalizes it in one.
+    private func extendedPartReport(
+        _ event: NewPumpEvent,
+        dose: DoseEntry,
+        bolusId: Int,
+        held: BolusReportLedger.Entry?,
+        serial: HistoryLogSyncIdentifier.PumpSerial
+    ) -> NewPumpEvent? {
+        guard let held else {
+            state.bolusReportLedger.record(BolusReportLedger.Entry(
+                bolusId: bolusId,
+                pumpSerial: serial.rawValue,
+                origin: .history,
+                part: .extended,
+                raw: event.raw,
+                eventDate: event.date,
+                automatic: dose.automatic ?? false,
+                isFinalized: false,
+                units: dose.deliveredUnits ?? dose.programmedUnits,
+                programmedEndDate: dose.isMutable ? dose.endDate : nil
+            ))
+            return event
+        }
+        guard !held.isFinalized, !dose.isMutable else {
+            return nil
+        }
+        return Self.reported(dose, as: held, title: event.title)
+    }
+
+    /// A held part whose BolexCompleted is still unread `extendedPartFinalizationWindow` after its programmed
+    /// end is finalized at its programmed amount, what the host counted: history may never show its end.
+    func heldExtendedPartEvents() -> [NewPumpEvent] {
+        state.bolusReportLedger.heldExtendedParts.map { entry in
+            let end = entry.programmedEndDate ?? entry.eventDate
+            let isOverdue = now.timeIntervalSince(end) > Self.extendedPartFinalizationWindow
+            return extendedPartEvent(entry, end: end, deliveredUnits: isOverdue ? entry.units ?? 0 : nil)
+        }
+    }
+
+    /// Loop stores a finalized dose only once it has ended, and never replaces a mutable copy it dropped
+    /// before then, so a part still running is finalized to the deletion under its own identity and the
+    /// rest, which the pump goes on delivering, is a finalized dose of its own to the programmed end.
+    func deactivatedExtendedPartEvents() -> [NewPumpEvent] {
+        state.bolusReportLedger.heldExtendedParts.flatMap { entry -> [NewPumpEvent] in
+            let units = entry.units ?? 0
+            let end = entry.programmedEndDate ?? entry.eventDate
+            // A second on at least: Trio matches a new row on its timestamp.
+            let cut = max(now, entry.eventDate.addingTimeInterval(1))
+            guard cut < end else {
+                return [extendedPartEvent(entry, end: end, deliveredUnits: units)]
+            }
+            let ranSoFar = TandemPumpCapabilities.roundToReportingResolution(
+                units * cut.timeIntervalSince(entry.eventDate) / end.timeIntervalSince(entry.eventDate)
+            )
+            let rest = TandemPumpCapabilities.roundToReportingResolution(units - ranSoFar)
+            let remainder = DoseEntry(
+                type: .bolus,
+                startDate: cut,
+                endDate: end,
+                value: rest,
+                unit: .units,
+                deliveredUnits: rest,
+                description: "Extended bolus #\(entry.bolusId)",
+                insulinType: state.insulinType,
+                automatic: entry.automatic,
+                wasProgrammedByPumpUI: entry.origin == .history
+            )
+            return [
+                extendedPartEvent(entry, end: cut, deliveredUnits: ranSoFar),
+                NewPumpEvent(date: cut, dose: remainder, raw: NewPumpEvent.bolus(dose: remainder, date: cut).raw, title: "Extended Bolus", type: .bolus)
+            ]
+        }
+    }
+
+    /// Mutable while `deliveredUnits` is nil.
+    private func extendedPartEvent(_ entry: BolusReportLedger.Entry, end: Date, deliveredUnits: Double?) -> NewPumpEvent {
+        let dose = DoseEntry(
+            type: .bolus,
+            startDate: entry.eventDate,
+            endDate: end,
+            value: entry.units ?? 0,
+            unit: .units,
+            deliveredUnits: deliveredUnits,
+            description: "Extended bolus #\(entry.bolusId)",
+            syncIdentifier: entry.raw.hexadecimalString,
+            insulinType: state.insulinType,
+            automatic: entry.automatic,
+            isMutable: deliveredUnits == nil,
+            wasProgrammedByPumpUI: entry.origin == .history
+        )
+        return NewPumpEvent(date: entry.eventDate, dose: dose, raw: entry.raw, title: "Extended Bolus", type: .bolus)
+    }
+
+    static let extendedPartFinalizationWindow: TimeInterval = .hours(1)
 
     private func isTrackingBolusLive(_ bolusId: Int) -> Bool {
         bolusProgressReport != nil && state.bolusDose?.bolusId == bolusId
@@ -153,7 +259,7 @@ extension TandemPumpManager {
     }
 
     /// Under the host's existing identity and date, so it updates that row instead of adding one.
-    private static func reported(_ dose: DoseEntry, as entry: BolusReportLedger.Entry) -> NewPumpEvent {
+    private static func reported(_ dose: DoseEntry, as entry: BolusReportLedger.Entry, title: String) -> NewPumpEvent {
         let rekeyed = DoseEntry(
             type: .bolus,
             startDate: dose.startDate,
@@ -168,6 +274,6 @@ extension TandemPumpManager {
             isMutable: dose.isMutable,
             wasProgrammedByPumpUI: entry.origin == .history
         )
-        return NewPumpEvent(date: entry.eventDate, dose: rekeyed, raw: entry.raw, title: "Bolus", type: .bolus)
+        return NewPumpEvent(date: entry.eventDate, dose: rekeyed, raw: entry.raw, title: title, type: .bolus)
     }
 }

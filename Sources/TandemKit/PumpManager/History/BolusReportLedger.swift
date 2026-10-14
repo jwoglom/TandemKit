@@ -8,10 +8,18 @@ public struct BolusReportLedger: Equatable {
         case history
     }
 
+    /// Tandem's names for a bolus's up-front and extended parts, which share its `bolusId` and are
+    /// reported as two doses.
+    public enum Part: String, Equatable {
+        case standard
+        case extended
+    }
+
     public struct Entry: Equatable {
         public let bolusId: Int
         public let pumpSerial: UInt32?
         public let origin: Origin
+        public let part: Part
         public let raw: Data
         /// Trio falls back to dedupe on this, so every report of the bolus reuses it.
         public let eventDate: Date
@@ -21,25 +29,37 @@ public struct BolusReportLedger: Equatable {
         /// What the host counts: the programmed amount while mutable, the delivered amount once
         /// finalized. Nil on an entry recorded before amounts were kept.
         public var units: Double?
+        /// An extended part's programmed end, on the phone's clock: its mutable dose ends there until
+        /// BolexCompleted is read.
+        public let programmedEndDate: Date?
 
         public init(
             bolusId: Int,
             pumpSerial: UInt32?,
             origin: Origin,
+            part: Part = .standard,
             raw: Data,
             eventDate: Date,
             automatic: Bool,
             isFinalized: Bool,
-            units: Double? = nil
+            units: Double? = nil,
+            programmedEndDate: Date? = nil
         ) {
             self.bolusId = bolusId
             self.pumpSerial = pumpSerial
             self.origin = origin
+            self.part = part
             self.raw = raw
             self.eventDate = eventDate
             self.automatic = automatic
             self.isFinalized = isFinalized
             self.units = units
+            self.programmedEndDate = programmedEndDate
+        }
+
+        /// An entry recorded before the serial was known matches any serial.
+        func matches(bolusId: Int, pumpSerial: UInt32) -> Bool {
+            self.bolusId == bolusId && (self.pumpSerial == nil || self.pumpSerial == pumpSerial)
         }
     }
 
@@ -77,9 +97,18 @@ public struct BolusReportLedger: Equatable {
         self.unreported = unreported
     }
 
-    /// An entry recorded before the serial was known matches any serial.
-    public func entry(bolusId: Int, pumpSerial: UInt32) -> Entry? {
-        entries.last { $0.bolusId == bolusId && ($0.pumpSerial == nil || $0.pumpSerial == pumpSerial) }
+    public func entry(bolusId: Int, pumpSerial: UInt32, part: Part = .standard) -> Entry? {
+        entries.last { $0.part == part && $0.matches(bolusId: bolusId, pumpSerial: pumpSerial) }
+    }
+
+    /// Whether the host has been told of either part of the bolus.
+    public func hasEntry(bolusId: Int, pumpSerial: UInt32) -> Bool {
+        entries.contains { $0.matches(bolusId: bolusId, pumpSerial: pumpSerial) }
+    }
+
+    /// Extended parts the host holds as mutable.
+    public var heldExtendedParts: [Entry] {
+        entries.filter { $0.part == .extended && !$0.isFinalized }
     }
 
     /// Only another pump's history could report a bolus seen on it.
@@ -87,12 +116,11 @@ public struct BolusReportLedger: Equatable {
         unreported.filter { $0.pumpSerial == pumpSerial }.map(\.holdsBoundaryAt).min()
     }
 
+    /// Recorded as its report goes out, so the boundary is held for it no longer.
     public mutating func record(_ entry: Entry) {
-        entries.removeAll { $0.bolusId == entry.bolusId && $0.pumpSerial == entry.pumpSerial }
+        entries.removeAll { $0.bolusId == entry.bolusId && $0.pumpSerial == entry.pumpSerial && $0.part == entry.part }
         entries.append(entry)
-        if entry.origin == .commanded {
-            dropUnreported(matching: entry)
-        }
+        dropUnreported(matching: entry)
     }
 
     public mutating func markFinalized(raw: Data, units: Double) {
@@ -122,7 +150,7 @@ public struct BolusReportLedger: Equatable {
 
     /// No-op for a bolus this ledger already has an entry for.
     public mutating func noteUnreported(_ bolus: UnreportedBolus) {
-        guard entry(bolusId: bolus.bolusId, pumpSerial: bolus.pumpSerial) == nil,
+        guard !hasEntry(bolusId: bolus.bolusId, pumpSerial: bolus.pumpSerial),
               !unreported.contains(where: { $0.bolusId == bolus.bolusId && $0.pumpSerial == bolus.pumpSerial })
         else {
             return
@@ -137,7 +165,7 @@ public struct BolusReportLedger: Equatable {
     }
 
     private mutating func dropUnreported(matching entry: Entry) {
-        unreported.removeAll { $0.bolusId == entry.bolusId && (entry.pumpSerial == nil || entry.pumpSerial == $0.pumpSerial) }
+        unreported.removeAll { entry.matches(bolusId: $0.bolusId, pumpSerial: $0.pumpSerial) }
     }
 }
 
@@ -209,11 +237,13 @@ extension BolusReportLedger.Entry: RawRepresentable {
             bolusId: bolusId,
             pumpSerial: rawValue["pumpSerial"] as? UInt32,
             origin: origin,
+            part: (rawValue["part"] as? String).flatMap(BolusReportLedger.Part.init(rawValue:)) ?? .standard,
             raw: raw,
             eventDate: Date(timeIntervalSinceReferenceDate: eventDate),
             automatic: rawValue["automatic"] as? Bool ?? false,
             isFinalized: rawValue["isFinalized"] as? Bool ?? false,
-            units: rawValue["units"] as? Double
+            units: rawValue["units"] as? Double,
+            programmedEndDate: (rawValue["programmedEndDate"] as? TimeInterval).map(Date.init(timeIntervalSinceReferenceDate:))
         )
     }
 
@@ -221,6 +251,7 @@ extension BolusReportLedger.Entry: RawRepresentable {
         var raw: RawValue = [
             "bolusId": bolusId,
             "origin": origin.rawValue,
+            "part": part.rawValue,
             "raw": self.raw,
             "eventDate": eventDate.timeIntervalSinceReferenceDate,
             "automatic": automatic,
@@ -228,6 +259,7 @@ extension BolusReportLedger.Entry: RawRepresentable {
         ]
         raw["pumpSerial"] = pumpSerial
         raw["units"] = units
+        raw["programmedEndDate"] = programmedEndDate?.timeIntervalSinceReferenceDate
         return raw
     }
 }

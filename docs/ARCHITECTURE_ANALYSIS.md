@@ -321,7 +321,7 @@ there.
   `HistoryBackfillPlanner`, which is pure arithmetic, and the persisted `HistoryBackfillState`
   watermark. `HistoryToDoseMapper` turns bolus records into `NewPumpEvent`s, dated through
   `HistoryRecordDates`, and `TandemPumpManager+HistoryDoseReporting` reports boluses not already
-  reported by the live path. `PumpBasalTimeline` reads the basal the pump delivered from its
+  reported by the live path, the extended part of an extended bolus as a dose of its own. `PumpBasalTimeline` reads the basal the pump delivered from its
   `BasalDelivery` (279) records, one 5-minute chunk per record, and `BasalReconciler` compares it
   with `ReportedBasalLedger`, every non-bolus row the host was told, folded as Trio folds them.
   `TandemPumpManager+BasalReconciliation` logs the differences and, behind

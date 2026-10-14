@@ -4,6 +4,9 @@ import LoopKit
 /// Maps Tandem history log records to the LoopKit `NewPumpEvent`s that report the boluses in them
 /// to the host app. Basal comes from `PumpBasalTimeline`.
 ///
+/// An extended bolus becomes two doses with one `bolusId`: the up-front part, BolusActivated to BolusCompleted
+/// (whose amount excludes the extended part), and the extended part, BolexActivated to BolexCompleted.
+///
 /// Pure: emitting and reconciling against live reports are the caller's job. Every `raw` is a
 /// `HistoryLogSyncIdentifier`, stable however often the window is re-fetched.
 final class HistoryToDoseMapper {
@@ -27,21 +30,45 @@ final class HistoryToDoseMapper {
         let sortedLogs = logs.sorted { $0.sequenceNum < $1.sequenceNum }
 
         let controlIqTriggeredBolusIds = Self.controlIqTriggeredBolusIds(in: sortedLogs)
+        let extendedDurations = Self.extendedDurations(in: sortedLogs)
         var bolusActivations: [Int: BolusActivatedHistoryLog] = [:]
+        var bolexActivations: [Int: BolexActivatedHistoryLog] = [:]
+        var upFrontDates: [Int: Date] = [:]
         var events: [NewPumpEvent] = []
 
         for log in sortedLogs {
             switch log {
             case let activation as BolusActivatedHistoryLog:
                 bolusActivations[activation.bolusId] = activation
+                upFrontDates[activation.bolusId] = dates.phoneDate(of: activation)
             case let completion as BolusCompletedHistoryLog:
-                events.append(completedBolusEvent(
+                let event = completedBolusEvent(
                     activation: bolusActivations.removeValue(forKey: completion.bolusId),
                     completion: completion,
                     dates: dates,
                     pumpSerial: pumpSerial,
                     insulinType: insulinType,
                     isControlIqTriggered: controlIqTriggeredBolusIds.contains(completion.bolusId),
+                    isCommandedBolus: isCommandedBolus
+                )
+                upFrontDates[completion.bolusId] = event.date
+                events.append(event)
+            case let activation as BolexActivatedHistoryLog:
+                bolexActivations[activation.bolusId] = activation
+            case let completion as BolexCompletedHistoryLog:
+                // BolexCompleted has no start time, so without its BolexActivated the dose can't be dated.
+                guard let activation = bolexActivations.removeValue(forKey: completion.bolusId) else {
+                    continue
+                }
+                events.append(extendedPartEvent(
+                    activation,
+                    completion: completion,
+                    programmedDuration: extendedDurations[activation.bolusId],
+                    upFrontDate: upFrontDates[activation.bolusId],
+                    dates: dates,
+                    pumpSerial: pumpSerial,
+                    insulinType: insulinType,
+                    isControlIqTriggered: controlIqTriggeredBolusIds.contains(activation.bolusId),
                     isCommandedBolus: isCommandedBolus
                 ))
             default:
@@ -54,6 +81,20 @@ final class HistoryToDoseMapper {
         for activation in bolusActivations.values {
             events.append(inFlightBolusEvent(
                 activation,
+                dates: dates,
+                pumpSerial: pumpSerial,
+                insulinType: insulinType,
+                isControlIqTriggered: controlIqTriggeredBolusIds.contains(activation.bolusId),
+                isCommandedBolus: isCommandedBolus
+            ))
+        }
+
+        for activation in bolexActivations.values {
+            events.append(extendedPartEvent(
+                activation,
+                completion: nil,
+                programmedDuration: extendedDurations[activation.bolusId],
+                upFrontDate: upFrontDates[activation.bolusId],
                 dates: dates,
                 pumpSerial: pumpSerial,
                 insulinType: insulinType,
@@ -82,6 +123,23 @@ final class HistoryToDoseMapper {
             }
         }
         return ids
+    }
+
+    /// From BolusDelivery, or BolusRequestedMsg2 on t:slim X2 firmware that logs no BolusDelivery
+    /// records; both are in minutes, and agree wherever a pump logs both.
+    private static func extendedDurations(in logs: [HistoryLog]) -> [Int: TimeInterval] {
+        var durations: [Int: TimeInterval] = [:]
+        for log in logs {
+            switch log {
+            case let delivery as BolusDeliveryHistoryLog where delivery.extendedDurationRequested > 0:
+                durations[delivery.bolusID] = .minutes(Double(delivery.extendedDurationRequested))
+            case let request as BolusRequestedMsg2HistoryLog where request.duration > 0:
+                durations[request.bolusId] = durations[request.bolusId] ?? .minutes(Double(request.duration))
+            default:
+                continue
+            }
+        }
+        return durations
     }
 
     // MARK: - Event builders
@@ -144,5 +202,49 @@ final class HistoryToDoseMapper {
             wasProgrammedByPumpUI: !isCommandedBolus(activation.bolusId)
         )
         return NewPumpEvent(date: dose.startDate, dose: dose, raw: raw, title: "Bolus", type: .bolus)
+    }
+
+    /// Finalized from BolexCompleted (what it delivered, when it ended); until then mutable over its
+    /// programmed duration.
+    private func extendedPartEvent(
+        _ activation: BolexActivatedHistoryLog,
+        completion: BolexCompletedHistoryLog?,
+        programmedDuration: TimeInterval?,
+        upFrontDate: Date?,
+        dates: HistoryRecordDates,
+        pumpSerial: HistoryLogSyncIdentifier.PumpSerial,
+        insulinType: InsulinType?,
+        isControlIqTriggered: Bool,
+        isCommandedBolus: (Int) -> Bool
+    ) -> NewPumpEvent {
+        var startDate = dates.phoneDate(of: activation)
+        // BolexActivated can share a second with the up-front part's start, and Trio matches a new row by timestamp.
+        if let upFrontDate, startDate <= upFrontDate {
+            startDate = upFrontDate.addingTimeInterval(1)
+        }
+        let endDate: Date
+        if let completion {
+            endDate = max(dates.phoneDate(of: completion), startDate)
+        } else {
+            // No programmed duration read: count it all at the start, which overstates IOB early rather than missing it.
+            endDate = startDate.addingTimeInterval(programmedDuration ?? 0)
+        }
+
+        let raw = HistoryLogSyncIdentifier.extendedBolus(pumpSerial: pumpSerial, bolusId: activation.bolusId)
+        let dose = DoseEntry(
+            type: .bolus,
+            startDate: startDate,
+            endDate: endDate,
+            value: TandemPumpCapabilities.roundToReportingResolution(Double(activation.bolexSize)),
+            unit: .units,
+            deliveredUnits: completion.map { TandemPumpCapabilities.roundToReportingResolution(Double($0.insulinDelivered)) },
+            description: "Extended bolus #\(activation.bolusId)",
+            syncIdentifier: raw.hexadecimalString,
+            insulinType: insulinType,
+            automatic: isControlIqTriggered,
+            isMutable: completion == nil,
+            wasProgrammedByPumpUI: !isCommandedBolus(activation.bolusId)
+        )
+        return NewPumpEvent(date: startDate, dose: dose, raw: raw, title: "Extended Bolus", type: .bolus)
     }
 }

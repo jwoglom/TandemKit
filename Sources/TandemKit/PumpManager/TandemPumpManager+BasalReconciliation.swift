@@ -423,7 +423,7 @@ extension TandemPumpManager {
             action = "none; the transitions pass owns it"
         }
         let outcome = !chunk.isTrusted ? "untrusted, so not corrected" : reporting ? "takes \(action)" : "would take \(action) with History Basal Reporting"
-        return "279 #\(chunk.sequenceNum) \(chunk.start)-\(chunk.end): pump \(chunk.unitsPerHour) U/hr (\(chunk.kind)), "
+        return "BasalDelivery #\(chunk.sequenceNum) \(chunk.start)-\(chunk.end): pump \(chunk.unitsPerHour) U/hr (\(chunk.kind)), "
             + "host \(difference.host.rate) U/hr; \(outcome)"
     }
 }

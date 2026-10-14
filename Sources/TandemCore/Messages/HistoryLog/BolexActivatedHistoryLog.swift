@@ -13,7 +13,8 @@ public class BolexActivatedHistoryLog: HistoryLog {
     public static let typeId = 59
 
     public let bolusId: Int
-    /// Byte 12, as in opcode 55; equals the paired Msg2 selectedIOB in 9/9 captured records (pumpX2 #46).
+    /// Byte 12, as in BolusActivated; equals the paired Msg2 selectedIOB in 9/9 captured records
+    /// (pumpX2 #46).
     public let selectedIob: Int
     public let iob: Float
     public let bolexSize: Float
