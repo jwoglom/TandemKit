@@ -299,6 +299,9 @@ final class HistoryBackfillIntegrationTests: ConformanceTestCase {
     /// The pump's log is erased and its numbering restarts below what the driver has read. The
     /// driver starts the pump's history again, and what the pump does next reaches the host once.
     func testAnErasedLogIsReadFromItsNewStart() throws {
+        // The driver sees an erase only as a last record below what it has read, so the log has to
+        // be longer than what the pump writes after it.
+        try pumpLogs(count: 100, spacing: 300)
         let driver = try stageDriver()
         let watermark = try XCTUnwrap(driver.manager.state.historyBackfill?.watermark)
         let batchesBefore = allPumpEventBatches.count
