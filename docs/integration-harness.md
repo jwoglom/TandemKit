@@ -18,8 +18,10 @@ authenticate, reassemble, sign, poll and report against a pump that behaves like
 ## Running
 
 Prerequisites: Xcode with an iOS simulator, Trio simulator products for the staged
-LoopKit (see `scripts/test-local.sh`), Go, Java 17+ (pumpX2's cliparser), and a
-faketandem checkout with its cliparser jar (`make jar` there).
+LoopKit (see `scripts/test-local.sh`), Go, and a faketandem checkout. faketandem parses,
+encodes and pairs with its Go port of pumpX2, so it needs no Java; Java 17+ and the cliparser jar
+(`make jar` there) are only for `FAKETANDEM_CODEC=compare` or `pumpx2`, or for a faketandem from
+before that port.
 
 ```bash
 # from the TandemKit checkout
@@ -31,7 +33,7 @@ scripts/integration-test.sh build                                  # compile onl
 
 On Linux the same script runs the suite under `swift test` instead, built with
 `-DTANDEMKIT_VIRTUAL_PUMP` into `.build-virtual`; Package.swift declares the target only when
-`TANDEMKIT_INTEGRATION_TESTS=1`, which the script sets. It needs Go, Java and faketandem but no
+`TANDEMKIT_INTEGRATION_TESTS=1`, which the script sets. It needs Go and faketandem but no
 simulator. Filter with `--filter`, e.g. `scripts/integration-test.sh test --filter
 TandemKitIntegrationTests.BolusIntegrationTests`. Differences from macOS:
 
@@ -56,11 +58,16 @@ scheme through `scripts/test-local.sh`, and kills the emulator on exit. Logs:
 | `TandemKitIntegrationTests.xcresult` | The result bundle; each test attaches the pump's request log (`xcrun xcresulttool export attachments --path … --output-path …`). |
 
 Environment variables the script reads: `FAKETANDEM_DIR`, `FAKETANDEM_JAR`, `FAKETANDEM_BIN`,
-`FAKETANDEM_ARGS` (extra emulator flags), `FAKETANDEM_HOST`, `LOG_DIR`, plus everything
+`FAKETANDEM_ARGS` (extra emulator flags), `FAKETANDEM_CODEC`, `FAKETANDEM_JPAKE_MODE`,
+`FAKETANDEM_HOST`, `LOG_DIR`, plus everything
 `scripts/test-local.sh` reads (`TRIO_PRODUCTS`, `DERIVED_DATA`, `SIMULATOR`, `DESTINATION`). The script
 sets `VIRTUAL_PUMP=1` for `test-local.sh`, which adds `-xcconfig VirtualPump.xcconfig`, and
 defaults `DERIVED_DATA` to `.derived-data-virtual-pump` so the flagged build does not
 invalidate the plain one.
+
+`FAKETANDEM_CODEC=compare` (with a jar) checks faketandem's Go port of pumpX2 against pumpX2 on
+everything the suite sends: faketandem still answers from the port, logs each difference as
+`pumpX2 parity mismatch`, and the script prints their count when it stops the emulator.
 
 In CI, the `integration` job in `.github/workflows/macos.yml` runs this script on the self-hosted
 macOS runners for every push, pull request and manual run, once the `unit` job has passed. It builds
@@ -253,9 +260,9 @@ generates a random 32-byte key, hands it to the pump (`setLongTermKey`) and to t
 `Jpake3SessionKeyRequest`/`Jpake4KeyConfirmationRequest` alone — the state a driver is in
 after any completed pairing. Both sides derive the session key as
 `HKDF(serverNonce, longTermKey)`, so this is a real authentication, not a bypass. Use
-`.fresh` for the onboarding flow: faketandem drives pumpX2's `jpake-server` over pipes, so
-it runs on macOS too, and `PairingIntegrationTests` covers it — it just costs a subprocess
-and a few seconds per pairing.
+`.fresh` for the onboarding flow: faketandem runs the pump's side of EC-JPAKE itself (a Go
+port of pumpX2's, or pumpX2's `jpake-server` with `FAKETANDEM_JPAKE_MODE=pumpx2`), and
+`PairingIntegrationTests` covers it.
 
 ## Adding a test
 

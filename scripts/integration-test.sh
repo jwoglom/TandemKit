@@ -20,10 +20,14 @@
 #
 # Environment:
 #   FAKETANDEM_DIR    faketandem checkout (default: ../faketandem next to this repo).
-#   FAKETANDEM_JAR    pumpX2 cliparser jar (default: newest
+#   FAKETANDEM_CODEC  faketandem's -message-codec: native (default, its Go port of pumpX2),
+#                     compare (also checks that port against pumpX2 on every message) or pumpx2.
+#   FAKETANDEM_JPAKE_MODE  faketandem's -jpake-mode: go (default) or pumpx2.
+#   FAKETANDEM_JAR    pumpX2 cliparser jar, needed only when either of those names pumpX2 or the
+#                     faketandem predates its Go port (default: newest
 #                     $FAKETANDEM_DIR/third_party/pumpx2-cliparser-*.jar; `make jar` there fetches it).
 #   FAKETANDEM_BIN    Prebuilt faketandem binary; skips the go build, so FAKETANDEM_DIR need only
-#                     hold third_party/ (or set FAKETANDEM_JAR).
+#                     hold third_party/ when a jar is needed (or set FAKETANDEM_JAR).
 #   FAKETANDEM_ARGS   Extra flags for the emulator (e.g. "-q" for info-level logging).
 #   FAKETANDEM_HOST   Interface to bind (default 127.0.0.1; the simulator shares the host network).
 #   LOG_DIR           Where faketandem.log, the test log and results go (default:
