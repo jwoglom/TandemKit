@@ -2,24 +2,25 @@ import Foundation
 
 /// The basal the pump delivered, read from its `BasalDelivery` (279) records.
 ///
-/// The pump delivers basal in 5-minute cycles: at each it writes a 279 and delivers 300 s at that
-/// record's `commandedRate`. A change of rate (a temp's start or end, a profile segment, Control-IQ)
-/// takes effect at the next 279. A late 279, a missing one, or a resume that writes none leaves time
-/// in which nothing was delivered, and no chunk covers it.
+/// The pump delivers basal in 5-minute cycles: at each it writes a BasalDelivery record and delivers
+/// 300 s at that record's `commandedRate`. A change of rate (a temp's start or end, a profile
+/// segment, Control-IQ) takes effect at the next BasalDelivery record. A late BasalDelivery record,
+/// a missing one, or a resume that writes none leaves time in which nothing was delivered, and no
+/// chunk covers it.
 ///
 /// Pure: built from one pass's records, with every date on the phone's clock.
 struct PumpBasalTimeline: Equatable {
     static let cycle: TimeInterval = 300
     /// `commandedRate` when the pump has none.
     static let notAvailable = 0xFFFF
-    /// A temp change or bolus this soon after a 279 can cut its cycle short.
+    /// A temp change or bolus this soon after a BasalDelivery record can cut its cycle short.
     static let shortCycleWindow: TimeInterval = 20
-    /// `DailyBasal` counts a cycle about 10 s after its 279.
+    /// `DailyBasal` counts a cycle about 10 s after its BasalDelivery record.
     static let dailyBasalSettle: TimeInterval = 60
     static let dailyBasalStretch: TimeInterval = .hours(1)
     /// Units.
     static let dailyBasalTolerance = 0.01
-    /// Either side of a temp's programmed end, a 279 may or may not still run it.
+    /// Either side of a temp's programmed end, a BasalDelivery record may or may not still run it.
     static let tempEndTolerance: TimeInterval = 60
 
     enum Kind: Equatable {
@@ -30,7 +31,7 @@ struct PumpBasalTimeline: Equatable {
     }
 
     struct Chunk: Equatable {
-        /// The 279's.
+        /// Of the chunk's BasalDelivery record.
         let sequenceNum: UInt32
         let start: Date
         let end: Date
@@ -50,7 +51,7 @@ struct PumpBasalTimeline: Equatable {
         var units: Double { unitsPerHour * end.timeIntervalSince(start) / .hours(1) }
     }
 
-    /// A 279 whose chunk is not closed yet.
+    /// A BasalDelivery record whose chunk is not closed yet.
     struct OpenChunk: Equatable {
         let sequenceNum: UInt32
         let start: Date
@@ -84,7 +85,7 @@ struct PumpBasalTimeline: Equatable {
                 let sameSecond = records[(index + 1)...].prefix { $0.log.pumpTimeSec == record.log.pumpTimeSec }
                 let (passes, problem) = replay.check(delivery, at: record.date, sameSecond: sameSecond.map(\.log))
                 if let problem {
-                    problems.append("279 #\(delivery.sequenceNum) at \(record.date): \(problem)")
+                    problems.append("BasalDelivery #\(delivery.sequenceNum) at \(record.date): \(problem)")
                 }
                 deliveries.append((index, record, delivery, passes, replay.tempInForce(at: record.date, includingEnding: true)?.log.tempRateId))
             }
@@ -201,8 +202,8 @@ struct PumpBasalTimeline: Equatable {
         }
 
         /// Source 3 or 4 passes unless the PCM in force is open loop or none. Anything else must be
-        /// what the replay expects, at the 279's own `profileBasalRate`, before or after the records
-        /// sharing its second.
+        /// what the replay expects, at the BasalDelivery record's own `profileBasalRate`, before or
+        /// after the records sharing its second.
         func check(_ delivery: BasalDeliveryHistoryLog, at date: Date, sameSecond: [HistoryLog]) -> (passes: Bool, problem: String?) {
             if delivery.commandedRate == PumpBasalTimeline.notAvailable {
                 return (true, nil)
@@ -264,14 +265,14 @@ struct PumpBasalTimeline: Equatable {
         }
 
         var description: String {
-            "DailyBasal #\(from.sequenceNum)-#\(to.sequenceNum) (\(fromDate)-\(toDate)) grew \(deliveredUnits) U; its 279s say \(countedUnits) U"
+            "DailyBasal #\(from.sequenceNum)-#\(to.sequenceNum) (\(fromDate)-\(toDate)) grew \(deliveredUnits) U; its BasalDelivery records say \(countedUnits) U"
         }
     }
 
     /// Stretches of at least an hour within one pump day, between `DailyBasal` records each written
-    /// long enough after its latest 279 to include it. Each 279 between counts its full cycle, even
-    /// one a suspend cut short. A shortfall is allowed only where a temp change or bolus started
-    /// right after a 279.
+    /// long enough after its latest BasalDelivery record to include it. Each BasalDelivery record
+    /// between counts its full cycle, even one a suspend cut short. A shortfall is allowed only
+    /// where a temp change or bolus started right after a BasalDelivery record.
     private static func dailyBasalStretches(_ records: [Record], hasGap: (UInt32, UInt32) -> Bool) -> [Stretch] {
         var anchors: [(log: DailyBasalHistoryLog, date: Date)] = []
         var latestDelivery: Date?

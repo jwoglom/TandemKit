@@ -14,6 +14,8 @@ Never:
 - Explain the obvious half of a line to get to the useful half. Write only the useful half.
 - Pad. One line unless the reason genuinely needs two; never three.
 - Repeat in a comment what an adjacent log message, test name, or assertion message already says.
+- Refer to a history record by its bare type number (`279`). Name it (`BasalDelivery`), in comments,
+  log and assertion messages and docs alike.
 
 Comment-worthy, in one line where possible:
 - A pump quirk, firmware race, or host behaviour being worked around.
@@ -447,14 +449,14 @@ rate check runs on a profile edit instead of at the next sync.
   row `emitPumpEvents` sends, folded as Trio's IOB folds them (the latest row at or before an
   instant wins, a temp basal until its end, a suspend until its resume, otherwise the host's
   schedule). `trackingSince` is stamped on the first decode; rows are kept 36 hours.
-  - A chunk differs when H at its 279 is more than 10 mU/h off its `commandedRate` (plus 1% of the
-    profile for a temp chunk, which runs a whole percent), H either side of a change the host was
-    commanded to make within `transitionMatchTolerance` of the 279 doesn't match either, and no
-    correction carries its 279. A correction's own edges don't count as changes: they are the
-    pump's cycles, and H before one is the previous chunk's, so a run of cycles at one rate would
-    otherwise get only its first corrected. A matching chunk never differs, whatever H does later
-    inside it: the host counts a change from its command, the pump from its next cycle, and that
-    residual is only logged, per day.
+  - A chunk differs when H at its BasalDelivery record is more than 10 mU/h off its `commandedRate`
+    (plus 1% of the profile for a temp chunk, which runs a whole percent), H either side of a change
+    the host was commanded to make within `transitionMatchTolerance` of the BasalDelivery record
+    doesn't match either, and no correction carries its BasalDelivery record. A correction's own
+    edges don't count as changes: they are the pump's cycles, and H before one is the previous
+    chunk's, so a run of cycles at one rate would otherwise get only its first corrected. A matching
+    chunk never differs, whatever H does later inside it: the host counts a change from its command,
+    the pump from its next cycle, and that residual is only logged, per day.
   - Skipped: suspended time (the pump's or the host's), chunks before the latest of
     `firstSeenFloor`, 24 hours ago and `trackingSince`, chunks still running, and temp chunks within
     `segmentChangeWindow` before a segment change, which the driver reports at the request on
@@ -463,9 +465,9 @@ rate check runs on a profile edit instead of at the next sync.
     `basalHistoryReporting`, and only for a trusted chunk, is anything reported:
     - H from the host's schedule: a correction, an immutable `.tempBasal` at the pump's rate over
       the chunk (cut at the host's next row inside it), with `deliveredUnits` to 0.001 U, under
-      `HistoryLogSyncIdentifier.logSequence` of the 279, so at most one per 279. `automatic` for
-      Control-IQ chunks and temps with a `SetTempRateResponse` (309) record;
-      `wasProgrammedByPumpUI` for Control-IQ chunks and temps without one.
+      `HistoryLogSyncIdentifier.logSequence` of the BasalDelivery record, so at most one per
+      BasalDelivery record. `automatic` for Control-IQ chunks and temps with a `SetTempRateResponse`
+      (309) record; `wasProgrammedByPumpUI` for Control-IQ chunks and temps without one.
     - H from the temp basal the driver holds: ended at its `TempRateCompleted` through
       `closeTransition`, or, if the pump runs it at another rate, re-stated as at a segment
       change: finished at the old rate, a mutable continuation at the pump's.
@@ -478,14 +480,14 @@ rate check runs on a profile edit instead of at the next sync.
   - A chunk waits, with everything after it, behind an open chunk, a store gap for
     `basalGapPatience` (2) passes (then the gap is skipped, with a warning), a pending delivery
     change, or a temp basal the host still holds open before it. `reconciledThrough` (persisted,
-    reset on a new serial or an erased log) is the last 279 a pass is done with.
+    reset on a new serial or an erased log) is the last BasalDelivery record a pass is done with.
   - Control-IQ hand-back: when `useControlIQ` goes off (`configureControlIQMode`,
     `fetchControlIQStatus`) `controlIQEndedAt` is persisted. While it is set, with reporting on,
     `isAwaitingHistory` holds: `ensureCurrentPumpData` does not throttle and `syncPumpData` waits
     for a history pass (`afterHistoryIsReported`, `transitionHistoryWait`), as for a pending
     delivery change. A pass that started after it, read to the pump's end and left nothing open
-    before it clears it. A pass that sees Control-IQ in the 279s while `useControlIQ` is off, or
-    PCM 1 while it is on, reads the Control-IQ status.
+    before it clears it. A pass that sees Control-IQ in the BasalDelivery records while
+    `useControlIQ` is off, or PCM 1 while it is on, reads the Control-IQ status.
   - Scenarios: unit tests in `BasalReconciliationReportingTests`; conformance group H.
 - Every date a history pass takes from a record goes through `HistoryRecordDates.phoneDate(of:)`:
   past the pump's own clock changes (`HistoryTimestampReconciler`), then the pump clock offset
@@ -502,12 +504,13 @@ rate check runs on a profile edit instead of at the next sync.
 
 ### Therapy command validation
 - The pump delivers basal in 5-minute cycles: at each it writes a `BasalDelivery` (279) record and
-  delivers 300 s at its `commandedRate`. A change of rate (a temp's start or end, a profile
-  segment, Control-IQ) takes effect at the next 279, 0–5 minutes after the command, and a temp set
-  and replaced between two 279s is never delivered. A late or missing 279, or a resume inside the
-  suspend's own cycle, delivers nothing until the next. `PumpBasalTimeline` reads this back: one
-  chunk per 279, used once closed, and trusted only if it, the chunks either side, and its
-  `DailyBasal` stretch agree with the pump's other records.
+  delivers 300 s at its `commandedRate`. A change of rate (a temp's start or end, a profile segment,
+  Control-IQ) takes effect at the next BasalDelivery record, 0–5 minutes after the command, and a
+  temp set and replaced between two BasalDelivery records is never delivered. A late or missing
+  BasalDelivery record, or a resume inside the suspend's own cycle, delivers nothing until the next.
+  `PumpBasalTimeline` reads this back: one chunk per BasalDelivery record, used once closed, and
+  trusted only if it, the chunks either side, and its `DailyBasal` stretch agree with the pump's
+  other records.
 - `enactBolus` rejects non-positive amounts and anything above `state.settings.maxBolus`
   (seeded from `PumpManagerSetupSettings` at setup, then whatever the host app last synced).
   The pump enforces the same ceiling in firmware, because `syncDeliveryLimits` pushes it down
@@ -586,14 +589,14 @@ rate check runs on a profile edit instead of at the next sync.
   (a held temp cut at a segment change starts at the cut, after the pump's record), is a
   `PendingTransition` with a `replacement`; `basalDose` keeps the held temp, and nothing cuts it at
   a segment change meanwhile. History ends the held temp at its `TempRateCompleted` and adopts the
-  pump's from its `TempRateActivated` (start, duration, `tempRateId`; `automatic` if a 309 has its
-  id), at its percent of the pump's rate, mutable until its completion. If that activation is the
-  held temp's own, nothing replaced it and the pending change is dropped. At detection the held
-  temp ends at the pump's record of the new one's start, and the new one, whose duration only
-  history gives (`TempRateResponse.duration`'s unit is unknown), is reported finished: at the last
-  reading that saw it when above the schedule, at detection when below. The `.basal` marker after
-  it is left out when a command reports in that same second. A temp the driver never sees reaches
-  the host after the fact, through basal reconciliation.
+  pump's from its `TempRateActivated` (start, duration, `tempRateId`; `automatic` if a
+  SetTempRateResponse record has its id), at its percent of the pump's rate, mutable until its
+  completion. If that activation is the held temp's own, nothing replaced it and the pending change
+  is dropped. At detection the held temp ends at the pump's record of the new one's start, and the
+  new one, whose duration only history gives (`TempRateResponse.duration`'s unit is unknown), is
+  reported finished: at the last reading that saw it when above the schedule, at detection when
+  below. The `.basal` marker after it is left out when a command reports in that same second. A temp
+  the driver never sees reaches the host after the fact, through basal reconciliation.
 - `suspendDelivery` stops a running temp, then sends `SuspendPumping`; `write` gives nil for a lost
   answer and a refusal alike (#340). Unless the suspend is confirmed it reads `CurrentBasalStatus`.
   Suspended after a nil, where the driver held no suspend, is the app's suspend, reported at the

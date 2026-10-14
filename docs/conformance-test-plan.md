@@ -195,27 +195,28 @@ The pump delivers basal in 5-minute cycles, one `BasalDelivery` (279) record eac
 `basalHistoryReporting` on, the driver compares each closed cycle with what the host counts and
 reports a correction where they differ (AGENTS.md "History backfill and dose reporting"). Each
 scenario runs faketandem's own basal cycle (`basal_cycle_enabled`), started once the driver is
-paired: a 279 every five minutes at the rate and source in force, `DailyBasal` totals,
-`ControlIQPcmChangeHistoryLog` records, and Control-IQ switched on the pump (`closed_loop_enabled`)
-or by the app (`ChangeControlIQSettingsRequest`) at a scripted rate. History backfill and basal
-reporting are on. Every scenario that corrects also checks, over its 279s and over each, that Loop's
-and Trio's net basal equals the pump's (`PumpTimeline.basalCycles`). Loop's may be 0.025 U off for a
-cycle a suspend cuts short: Loop rebuilds the temp basal before a suspend without its
-`deliveredUnits` and counts it in 0.05 U steps. `BasalHistoryConformanceTests`.
+paired: a BasalDelivery record every five minutes at the rate and source in force, `DailyBasal`
+totals, `ControlIQPcmChangeHistoryLog` records, and Control-IQ switched on the pump
+(`closed_loop_enabled`) or by the app (`ChangeControlIQSettingsRequest`) at a scripted rate. History
+backfill and basal reporting are on. Every scenario that corrects also checks, over its
+BasalDelivery records and over each, that Loop's and Trio's net basal equals the pump's
+(`PumpTimeline.basalCycles`). Loop's may be 0.025 U off for a cycle a suspend cuts short: Loop
+rebuilds the temp basal before a suspend without its `deliveredUnits` and counts it in 0.05 U steps.
+`BasalHistoryConformanceTests`.
 
 | ID | Scenario | Assert |
 |---|---|---|
-| H1 | An app temp runs; Control-IQ switched on by the app for an hour with rates either side of the profile, a 279 and a sync every 5 minutes; Control-IQ off; an app temp | The app temp ends at its completion record; one correction per 279 off the schedule, at its rate and start, the last before the app's next temp; the sync after the switch-off returns with all of them and the hand-back cleared; Loop keeps every correction, Trio stores every one, and both count the pump's basal |
-| H2 | The radio is off for 2 h during Control-IQ, then a sync | One ascending batch of corrections at the pump's rates, one per 279 off the schedule; Loop keeps every one, Trio stores every one and its IOB counts the pump's basal; a second pass reports nothing |
+| H1 | An app temp runs; Control-IQ switched on by the app for an hour with rates either side of the profile, a BasalDelivery record and a sync every 5 minutes; Control-IQ off; an app temp | The app temp ends at its completion record; one correction per BasalDelivery record off the schedule, at its rate and start, the last before the app's next temp; the sync after the switch-off returns with all of them and the hand-back cleared; Loop keeps every correction, Trio stores every one, and both count the pump's basal |
+| H2 | The radio is off for 2 h during Control-IQ, then a sync | One ascending batch of corrections at the pump's rates, one per BasalDelivery record off the schedule; Loop keeps every one, Trio stores every one and its IOB counts the pump's basal; a second pass reports nothing |
 | H3 | Relaunch from `rawValue` during Control-IQ | Nothing reported twice; corrections continue |
 | H4 | A suspend and resume during Control-IQ | The chunk under way ends at the suspend; no correction in the resume's second; the suspend, resume and corrections in one batch |
-| H5 | A5b with reporting on (#340), a 279 every 5 minutes | The pump's temp reported live at its pump start and rate; no 279 differs and nothing is corrected; Trio's IOB runs |
+| H5 | A5b with reporting on (#340), a BasalDelivery record every 5 minutes | The pump's temp reported live at its pump start and rate; no BasalDelivery record differs and nothing is corrected; Trio's IOB runs |
 | H6 | App temps, a cancel and a temp replaced within one cycle; an app temp across a profile segment change; a pump clock 11 minutes ahead across its segment change, with the skew compensation temp (D5) | No difference, nothing reported. The replaced temp is never delivered; the pump rescales the temp at the change and the driver cuts it there; the host is never told of the compensation temp |
 | H7 | A temp set on the pump's screen | Reported as its chunks close, with `wasProgrammedByPumpUI` |
-| H8 | The pump runs a profile off the app's schedule while out of range (#400) | Corrections at the pump's rate for the cycles before the driver writes the schedule back; the cycle the write lands in is residual; the pump runs the schedule from its next 279 |
+| H8 | The pump runs a profile off the app's schedule while out of range (#400) | Corrections at the pump's rate for the cycles before the driver writes the schedule back; the cycle the write lands in is residual; the pump runs the schedule from its next BasalDelivery record |
 | H9 | An alarm suspend during an app temp; the temp resumes with delivery | The app's temp ends at the stop; the temp's chunks after the resume reported, the first after the resume's second and the last ending at the app's next temp, and both hosts count them |
 | H10 | A CGM dropout during Control-IQ: Control-IQ, then the profile, then Control-IQ | Profile chunks at the app's schedule report nothing; the Control-IQ chunks off it do |
-| H11 | The same app temp enacted a minute into every cycle ×4, a sync between | One dose and one Trio row per enactment; no 279 differs and nothing is reported; both hosts count the pump's basal from the first 279 the temp ran |
+| H11 | The same app temp enacted a minute into every cycle ×4, a sync between | One dose and one Trio row per enactment; no BasalDelivery record differs and nothing is reported; both hosts count the pump's basal from the first BasalDelivery record the temp ran |
 
 ## I. The pump's IOB against the boluses reported (#354 P21-3)
 

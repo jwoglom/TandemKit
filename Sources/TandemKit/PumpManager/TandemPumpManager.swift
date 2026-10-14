@@ -180,7 +180,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
     /// The temp `maintainPumpClockSkewCompensation` has running. Only touched from command queue jobs.
     var skewCompensationTemp: (percent: Int, endsAt: Date)?
 
-    /// The 279s whose basal difference has been logged this session. Only touched from command queue jobs.
+    /// The BasalDelivery records whose basal difference has been logged this session. Only touched
+    /// from command queue jobs.
     var loggedBasalDifferences = Set<UInt32>()
     /// How many history passes each store gap has held basal reconciliation back. Command queue only.
     var basalGapPasses: [ClosedRange<UInt32>: Int] = [:]

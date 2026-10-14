@@ -481,10 +481,10 @@ A manual `workflow_dispatch` and a re-run always run, and a plan step that canno
   the source the driver takes a history bolus's `automatic` from. Conformance D16 appends them
   itself.
 
-One behaviour is opt-in: faketandem runs the pump's 5-minute basal cycle, and follows
-profile segment boundaries, only with `basal_cycle_enabled` (faketandem README "Basal cycle").
-Conformance group H (`BasalHistoryConformanceTests`) turns it on and `FaketandemHarness.reset()`
-turns it off; every other scenario runs with basal delivered continuously and no 279s, and stages
+One behaviour is opt-in: faketandem runs the pump's 5-minute basal cycle, and follows profile
+segment boundaries, only with `basal_cycle_enabled` (faketandem README "Basal cycle"). Conformance
+group H (`BasalHistoryConformanceTests`) turns it on and `FaketandemHarness.reset()` turns it off;
+every other scenario runs with basal delivered continuously and no BasalDelivery records, and stages
 the rate in force with `basal_rate`.
 
 Everything else the harness found has been fixed in faketandem. What was fixed, because the
@@ -568,10 +568,11 @@ shape of it explains what the harness is for:
   (279), `DailyBasal`, `ControlIQPcmChangeHistoryLog` or `SetTempRateResponse` records, ran no
   Control-IQ basal, ended a temp at every suspend, and `ChangeControlIQSettingsRequest` did not
   switch Control-IQ, so group H appended the pump's records itself and H9, H6's segment change and
-  skew compensation were unit tests only. With `basal_cycle_enabled` the emulator writes a 279 every
-  five minutes at the rate and source in force, with the pump's resume rules, Control-IQ at a
-  scripted rate (`controliq_algorithm_rate`, `cgm_available`) and an alarm suspend that keeps the
-  temp (`keep_temp`); `TempRateCompleted.timeLeft` is in milliseconds, as a pump writes it.
+  skew compensation were unit tests only. With `basal_cycle_enabled` the emulator writes a
+  BasalDelivery record every five minutes at the rate and source in force, with the pump's resume
+  rules, Control-IQ at a scripted rate (`controliq_algorithm_rate`, `cgm_available`) and an alarm
+  suspend that keeps the temp (`keep_temp`); `TempRateCompleted.timeLeft` is in milliseconds, as a
+  pump writes it.
 
 Not gaps, but worth knowing when reading timings: `FaketandemHarness.makeDriver` shortens the
 driver's response timeout to 5 s and its connect timeout to 15 s (`VirtualPump.responseTimeout`,

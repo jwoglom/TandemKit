@@ -215,7 +215,7 @@ struct FaketandemSnapshot: Decodable {
     /// The pump's 5-minute basal cycle (`basal_cycle_enabled`).
     struct BasalCycle: Decodable {
         let enabled: Bool
-        /// When the next 279 is due; nil while the cycle is off.
+        /// When the next BasalDelivery record is due; nil while the cycle is off.
         let nextCycle: FaketandemOptionalTime?
         let pcm: Int
     }

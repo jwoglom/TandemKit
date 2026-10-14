@@ -57,7 +57,7 @@ public struct ReportedBasalLedger: Equatable {
     public private(set) var rows: [Row]
     /// The pump `reconciledThrough` counts on.
     public private(set) var pumpSerial: UInt32?
-    /// The last 279 a reporting pass is done with; later passes start after it.
+    /// The last BasalDelivery record a reporting pass is done with; later passes start after it.
     public private(set) var reconciledThrough: UInt32?
 
     public init(trackingSince: Date, rows: [Row] = [], pumpSerial: UInt32? = nil, reconciledThrough: UInt32? = nil) {
@@ -161,7 +161,7 @@ public struct ReportedBasalLedger: Equatable {
         return Set(edges.filter { interval.start < $0 && $0 < interval.end }).sorted()
     }
 
-    /// The 279 a basal correction on the tracked pump was reported for.
+    /// The BasalDelivery record a basal correction on the tracked pump was reported for.
     public func correctedSequenceNum(of row: Row) -> UInt32? {
         guard let identifier = HistoryLogSyncIdentifier.decode(row.raw), identifier.scheme == .logSequence,
               identifier.pumpSerial.rawValue == pumpSerial

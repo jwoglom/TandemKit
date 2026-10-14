@@ -131,7 +131,7 @@ struct PumpTimeline {
     }
 
     /// One `BasalDelivery` (279) record: the pump delivers `rate` from it for one cycle, until the
-    /// next 279 or a suspend.
+    /// next BasalDelivery record or a suspend.
     struct BasalCycle: Equatable {
         let sequence: Int
         let start: Date
@@ -191,7 +191,7 @@ struct PumpTimeline {
         var alarms: [Alarm] = []
         var unplaced: [Unplaced] = []
         var basalCycles: [BasalCycle] = []
-        // A cycle ends at the next 279 or suspend, or runs its full length.
+        // A cycle ends at the next BasalDelivery record or suspend, or runs its full length.
         func endLastCycle(at date: Date) {
             guard let last = basalCycles.last, date < last.end else { return }
             basalCycles[basalCycles.count - 1] = BasalCycle(sequence: last.sequence, start: last.start, end: max(date, last.start), rate: last.rate, source: last.source)
@@ -513,7 +513,8 @@ struct PumpTimeline {
     // MARK: - Basal
 
     /// Basal the pump delivered from `start` to `end` above (or, negative, below) `scheduledRate`,
-    /// from its 279s. Time no 279 covers delivered nothing, so a window should lie inside them.
+    /// from its BasalDelivery records. Time no BasalDelivery record covers delivered nothing, so a
+    /// window should lie inside them.
     func netBasalUnits(from start: Date, to end: Date, scheduledRate: (Date) -> Double) -> Double {
         let delivered = basalCycles.reduce(0.0) { total, cycle in
             let lo = max(cycle.start, start)
