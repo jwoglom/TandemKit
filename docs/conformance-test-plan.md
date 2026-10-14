@@ -64,7 +64,7 @@ oracle one rule at a time.
 - Delivery: `bolus_rate_units_per_second` is set per scenario: the pump's real speed, or a slower
   rate where a bolus has to keep running; `stall`/`resume`/`abort` stage pump-side interruptions.
 
-## A. Interrupt everything (§10 "bolus during BLE loss", §11; P12, P15, P11; #326, #327, #340, #449, #451)
+## A. Interrupt everything (§10 "bolus during BLE loss", §11; P12, P15, P11; #326, #327, #340, #346, #449, #451)
 
 | ID | Scenario | Stage | Assert |
 |---|---|---|---|
@@ -81,6 +81,8 @@ oracle one rule at a time.
 | A5b | The link drops in place of the `SetTempRate` response (#340) | fault `disconnect` scoped to `SetTempRateRequest`; enact TBR; sync | the next sync reads `TempRateRequest`, history ends the previous TBR at its completion and adopts the pump's from its activation: one live TBR at the pump's start, rate and duration |
 | A5c | Lost `SuspendPumping` response after the temp stop (#340) | enact TBR; fault `drop_response` scoped to `SuspendPumpingRequest`; `suspendDelivery`; sync | the command reads `CurrentBasalStatus` back and succeeds; the `.suspend` is reported before it returns, at the stop, and not again from history; the TBR is finalized at the stop |
 | A5d | `SuspendPumping` refused after the temp stop (#340) | enact TBR; fault `error_response` scoped to `SuspendPumpingRequest`; `suspendDelivery`; sync | the command fails after reading `CurrentBasalStatus` back; no `.suspend`; the TBR is finalized at the stop |
+| A5e | Lost `ResumePumping` response (#346, P02-5) | `suspendDelivery`; 10 min; fault `drop_response` scoped to `ResumePumpingRequest`; `resumeDelivery`; sync | the command reads `CurrentBasalStatus` back and succeeds without sending the resume again; the `.resume` is reported before it returns, at the send, and not again from history; the suspend is closed after 10 minutes in Loop, and Trio holds one `PumpResume` |
+| A5f | `ResumePumping` refused (#346) | `suspendDelivery`; 10 min; fault `error_response` scoped to `ResumePumpingRequest`; `resumeDelivery`; sync | the command fails after reading `CurrentBasalStatus` back; no `.resume`; the pump and both hosts hold the suspend |
 | A6 | Link drops inside a multi-fragment response | fault `disconnect` with `after: partial_response, fragments_sent: 1` on `PumpVersionBRequest` during sync | no dose is emitted or duplicated, `lastReconciliation` does not advance, next sync succeeds |
 | A7 | Radio off during a running bolus, on again later | `radio_off` after enact; advance past pump completion; `radio_on`; sync | same as A1; additionally `connectionIssue` surfaced and cleared |
 | A8 | Link down across completion, then a pump-programmed bolus runs | `radio_off` after enact; pump completes ours; start a bolus on the pump (`source: pump`); advance past our estimate; `radio_on`; sync | the other bolus id delivering finishes ours: finalized from its own `LastBolusStatus` record under the original `raw`, with its own start and end, never the pump bolus's; `bolusDose` cleared; the pump's bolus is not reported as ours |
@@ -121,6 +123,7 @@ oracle one rule at a time.
 | C13 | A temp basal re-sent until it runs out (#450) | 2 U/h for 30 min; sync every 5 min ×5; let it run out; sync until finalized; sync again | one dose throughout, its scheduled end while mutable; finalized once at that end with rate × duration delivered; not reported after; both hosts count it once |
 | C14 | A bolus re-sent through many syncs and a relaunch (#330) | 2 U at 0.01 U/s; sync every 15 s ×8, relaunching before the fourth; sync until finalized | one dose throughout, re-sent by every sync; finalized once at the pump's volume; both hosts count it once |
 | C15 | Two identical boluses mutable at once (#330, #448) | history backfill off, every `LastBolusStatus` dropped, delivery at the driver's modelled speed; 2 U finishes and is held; a second 2 U runs; sync ×3; it finishes; faults cleared; sync until finalized | every sync re-sends both in one complete batch; the first finalized at its programmed amount when the second is held; each finalized once, one dose in Loop and one row in Trio; both hosts count the pump's total |
+| C16 | The first poll after a relaunch (P18-6) | pair and sync; relaunch from `rawValue`; 1 min; `ensureCurrentPumpData`; again | the first poll, inside the 4.5-minute throttle, reaches the pump since the relaunched driver has no link, and hands the host a boundary later than the persisted one; the second, on a live link, is throttled and tells the host nothing |
 
 ## D. Pump-side failures and events (§7, §10 suspend/resume and faults; P10, P13, P14, P20, G04, G06; #331, #333, #338, #348, #349, #350, #351, #355, #424, #452, #556)
 

@@ -18,8 +18,8 @@ import XCTest
 /// in a strict `XCTExpectFailure` naming the issue, so a fix flips them to "unexpected pass".
 ///
 /// Timing: both clocks are frozen and moved together with `advanceBoth`. The only real-time waits
-/// are the driver's own — its response timeout when a response is lost (A2, A2c, A5, A5c), shortened
-/// by the harness, and the seconds an auto-reconnect takes.
+/// are the driver's own — its response timeout when a response is lost (A2, A2c, A5, A5c, A5e),
+/// shortened by the harness, and the seconds an auto-reconnect takes.
 final class InterruptConformanceTests: ConformanceTestCase {
     /// The pump's profile basal rate and the driver's scheduled rate, kept equal so a percent temp
     /// rate means the same U/h on both sides.
@@ -884,6 +884,90 @@ final class InterruptConformanceTests: ConformanceTestCase {
         XCTAssertTrue(diff.isEmpty, "pump timeline and Loop oracle disagree:\n\(diff)")
     }
 
+    // MARK: - A5e, A5f
+
+    /// A5c for `resumeDelivery`: the resume is applied and its answer lost. The driver reads the pump
+    /// back and reports the resume, dated at the send.
+    func testA5e_lostResumePumpingResponse() throws {
+        try stageDriver()
+        let suspendedAt = clock.now
+        XCTAssertNil(try suspendDelivery())
+        try clock.advanceBoth(seconds: .minutes(10), ticks: 10)
+        let logStart = try harness.client.snapshot().requestLog.lastSeq
+        let batchesBefore = allPumpEventBatches.count
+
+        try harness.client.armFault(FaketandemFaultSpec(.dropResponse, message: "ResumePumpingRequest"))
+        let resumedAt = clock.now
+        let resumed = try resumeDeliveryHolding(timeout: 90)
+        XCTAssertNil(resumed.error, "the pump reads back delivering")
+        XCTAssertEqual(resumed.held, .resume, "the driver holds the resume when the command returns")
+
+        let log = try harness.requestLog(since: logStart)
+        XCTAssertEqual(
+            log.last { $0.isResponse && $0.message == "ResumePumpingResponse" }?.fault, "drop_response",
+            "the resume was applied and its answer suppressed"
+        )
+        XCTAssertEqual(log.filter { $0.isRequest && $0.message == "ResumePumpingRequest" }.count, 1, "not sent again to a pump already delivering")
+        XCTAssertFalse(try harness.client.snapshot().basal.suspended)
+
+        let reported = Array(allPumpEventBatches.dropFirst(batchesBefore)).flatMap(\.events)
+        let resume = try XCTUnwrap(
+            reported.first { $0.dose?.type == .resume },
+            "the resume is reported: \(reported.map { LoopDoseStoreOracle.describe($0.raw) })"
+        )
+        XCTAssertEqual(resume.date.timeIntervalSince(resumedAt), 0, accuracy: 2)
+
+        try clock.advanceBoth(seconds: .minutes(1), ticks: 1)
+        _ = try sync()
+
+        let (loop, trio) = feedOracles()
+        loop.assertNoDuplicates()
+        trio.assertNoDuplicates()
+        let suspends = loop.doses.filter { $0.dose.type == .suspend }
+        XCTAssertEqual(suspends.count, 1, "\(loop.doses.map(LoopDoseStoreOracle.describe))")
+        XCTAssertEqual(suspends.first?.isMutable, false, "closed by the resume")
+        XCTAssertEqual(suspends.first?.dose.endDate.timeIntervalSince(suspendedAt) ?? 0, .minutes(10), accuracy: 2)
+        XCTAssertEqual(trio.suspends.count, 1)
+        XCTAssertEqual(trio.resumes.count, 1, "history does not report the resume again: \(trio.resumes)")
+
+        let diff = try timeline().diff(against: loop)
+        XCTAssertTrue(diff.isEmpty, "pump timeline and Loop oracle disagree:\n\(diff)")
+    }
+
+    /// The resume is refused, so the pump stays suspended. The driver reads the pump back and reports
+    /// no resume.
+    func testA5f_refusedResumePumping() throws {
+        try stageDriver()
+        XCTAssertNil(try suspendDelivery())
+        try clock.advanceBoth(seconds: .minutes(10), ticks: 10)
+        let logStart = try harness.client.snapshot().requestLog.lastSeq
+
+        var fault = FaketandemFaultSpec(.errorResponse, message: "ResumePumpingRequest")
+        fault.errorCode = 3
+        XCTAssertNotNil(try harness.client.armFault(fault))
+        let refused = try resumeDeliveryHolding()
+        XCTAssertNotNil(refused.error, "a refused resume fails")
+        XCTAssertEqual(refused.held, .suspend)
+
+        let log = try harness.requestLog(since: logStart)
+        let refusal = try XCTUnwrap(log.firstIndex { $0.fault == "error_response" }, "the pump refused the resume")
+        XCTAssertTrue(log[refusal...].contains { $0.isRequest && $0.message == "CurrentBasalStatusRequest" }, "read back after the refusal")
+        XCTAssertTrue(try harness.client.snapshot().basal.suspended)
+
+        try clock.advanceBoth(seconds: .minutes(1), ticks: 1)
+        _ = try sync()
+
+        let (loop, trio) = feedOracles()
+        loop.assertNoDuplicates()
+        trio.assertNoDuplicates()
+        XCTAssertFalse(loop.doses.contains { $0.dose.type == .resume }, "\(loop.doses.map(LoopDoseStoreOracle.describe))")
+        XCTAssertEqual(trio.suspends.count, 1)
+        XCTAssertTrue(trio.resumes.isEmpty, "\(trio.resumes)")
+
+        let diff = try timeline().diff(against: loop)
+        XCTAssertTrue(diff.isEmpty, "pump timeline and Loop oracle disagree:\n\(diff)")
+    }
+
     /// `suspendDelivery`, and the delivery the driver holds as it completes: the completion runs in
     /// the command, ahead of the basal read the pump's qualifying event queues behind it.
     private func suspendDeliveryHolding(timeout: TimeInterval? = nil) throws -> (error: Error?, held: DoseType) {
@@ -891,6 +975,15 @@ final class InterruptConformanceTests: ConformanceTestCase {
         let box = ResultBox<(error: Error?, held: DoseType)>()
         manager.suspendDelivery { box.set(($0, manager.state.basalDose.type)) }
         let result = try box.wait("suspendDelivery completion", timeout: timeout ?? commandTimeout)
+        drainDelegate()
+        return result
+    }
+
+    private func resumeDeliveryHolding(timeout: TimeInterval? = nil) throws -> (error: Error?, held: DoseType) {
+        let manager = try XCTUnwrap(driver, "no driver").manager
+        let box = ResultBox<(error: Error?, held: DoseType)>()
+        manager.resumeDelivery { box.set(($0, manager.state.basalDose.type)) }
+        let result = try box.wait("resumeDelivery completion", timeout: timeout ?? commandTimeout)
         drainDelegate()
         return result
     }

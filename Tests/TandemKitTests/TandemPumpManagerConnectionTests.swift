@@ -330,6 +330,49 @@ import XCTest
         XCTAssertEqual(delegate.pumpEventBatches.last?.lastReconciliation, boundary)
     }
 
+    /// A relaunched driver has no link, so its first poll syncs inside the throttle and the host
+    /// hears a boundary from this launch rather than only the persisted one.
+    func testTheFirstPollAfterARelaunchSyncsAndReportsAFreshBoundary() throws {
+        var persisted = TandemPumpManagerState(rawValue: [:])
+        let beforeRelaunch = Date().addingTimeInterval(-60)
+        persisted.lastReconciliation = beforeRelaunch
+        persisted.isConnected = true
+        manager = TandemPumpManager(state: TandemPumpManagerState(rawValue: persisted.rawValue), bluetooth: bluetooth)
+        let (delegate, queue) = attachDelegate()
+        stubSyncResponses()
+
+        let polled = expectation(description: "ensureCurrentPumpData completes")
+        var reportedLastSync: Date?
+        manager.ensureCurrentPumpData {
+            reportedLastSync = $0
+            polled.fulfill()
+        }
+        wait(for: [polled], timeout: 5.0)
+        queue.sync {}
+
+        XCTAssertEqual(bluetooth.ensureConnectedCount, 1)
+        let boundary = try XCTUnwrap(manager.state.lastReconciliation)
+        XCTAssertGreaterThan(boundary, beforeRelaunch)
+        XCTAssertEqual(reportedLastSync, boundary)
+        XCTAssertEqual(delegate.pumpEventBatches.last?.lastReconciliation, boundary)
+    }
+
+    /// The link is up only after a sync in this launch, which already reported its boundary.
+    func testAPollSkippedInsideTheThrottleTellsTheHostNothing() {
+        let (delegate, queue) = attachDelegate()
+        manager.state.lastReconciliation = Date().addingTimeInterval(-60)
+        manager.state.isConnected = true
+        let batchesBefore = delegate.pumpEventBatches.count
+
+        let polled = expectation(description: "ensureCurrentPumpData completes")
+        manager.ensureCurrentPumpData { _ in polled.fulfill() }
+        wait(for: [polled], timeout: 5.0)
+        queue.sync {}
+
+        XCTAssertEqual(bluetooth.ensureConnectedCount, 0)
+        XCTAssertEqual(delegate.pumpEventBatches.count, batchesBefore)
+    }
+
     func testAReconnectBeforeTheHostAdoptsThePumpLeavesTheSyncToItsFirstPoll() {
         stubSyncResponses()
 

@@ -42,4 +42,13 @@ final class TandemPumpCapabilitiesTests: XCTestCase {
         XCTAssertEqual(rates.last, 15.0)
         XCTAssertFalse(rates.contains(where: { $0 > 0 && $0 < 0.1 }))
     }
+
+    func testSupportedBasalRatesStepByAHundredth() {
+        let rates = TandemPumpCapabilities.supportedBasalRates
+        XCTAssertEqual(rates.count, 1 + 1491)
+        XCTAssertEqual(Array(rates.prefix(4)), [0.0, 0.1, 0.11, 0.12])
+        for literal in [0.15, 0.29, 1.0, 1.26, 2.35, 14.99] {
+            XCTAssertTrue(rates.contains(literal), "\(literal)")
+        }
+    }
 }

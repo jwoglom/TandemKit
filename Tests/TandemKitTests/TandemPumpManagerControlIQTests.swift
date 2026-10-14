@@ -276,6 +276,36 @@ import XCTest
         XCTAssertFalse(manager.state.useControlIQ)
     }
 
+    func testControlIQTurnedOnAtThePumpRefusesTheHostsNextAutomaticDoses() {
+        manager.state.settings = TandemPumpManagerSettings(maxBolus: 5.0)
+        manager.state.useControlIQ = false
+
+        readControlIQStatus(closedLoopEnabled: true)
+
+        let bolused = expectation(description: "enactBolus")
+        var bolusError: PumpManagerError?
+        manager.enactBolus(units: 1.0, activationType: .automatic) {
+            bolusError = $0
+            bolused.fulfill()
+        }
+        let tempSet = expectation(description: "enactTempBasal")
+        var tempError: PumpManagerError?
+        manager.enactTempBasal(unitsPerHour: 1.0, for: .minutes(30)) {
+            tempError = $0
+            tempSet.fulfill()
+        }
+        wait(for: [bolused, tempSet], timeout: 5.0)
+
+        for error in [bolusError, tempError] {
+            guard case let .deviceState(underlying?) = error else {
+                return XCTFail("expected a device state error, got \(String(describing: error))")
+            }
+            XCTAssertEqual(underlying as? TandemPumpManagerValidationError, .controlIQModeActive)
+        }
+        XCTAssertFalse(bluetooth.didSend(InitiateBolusRequest.self))
+        XCTAssertFalse(bluetooth.didSend(SetTempRateRequest.self))
+    }
+
     // MARK: - Sleep schedules
 
     /// Sleep schedule writes are Mobi-only, from API 3.5. On anything else the request would go
