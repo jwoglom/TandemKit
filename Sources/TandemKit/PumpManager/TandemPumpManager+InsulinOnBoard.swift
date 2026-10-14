@@ -145,8 +145,9 @@ extension TandemPumpManager {
         }
 
         let onBoard = Double(response.pumpDisplayedIOB) / 1000
+        // Saved with the next state change, not pushed: no host reads it, and iobChange comes
+        // about once a minute, each push a full state save in the host.
         state.latestInsulinOnBoard = onBoard
-        notifyDelegateStateUpdated()
 
         // Under Control-IQ the pump also counts basal above and below the profile.
         guard response.type == .MUDALIAR,
