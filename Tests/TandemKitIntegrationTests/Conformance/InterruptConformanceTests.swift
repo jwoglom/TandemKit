@@ -1057,8 +1057,21 @@ final class InterruptConformanceTests: ConformanceTestCase {
 
         // The trust boundary must not move: bolus and basal status were never read.
         XCTAssertEqual(lastSync, boundaryBefore, "the sync completed without reconciling; lastSync stays where it was")
-        XCTAssertEqual(driver.manager.state.lastReconciliation, boundaryBefore)
-        XCTAssertEqual(interrupted.loop.lastReconciliation, boundaryBefore, "the host's boundary did not advance")
+        // The reconnect's own sync (#351) may have run since: the boundaries are read before the log,
+        // so the log holds every read that could have moved them.
+        let boundaryNow = driver.manager.state.lastReconciliation
+        let answeredSinceReconnect = try harness.requestLog(since: cut.seq)
+            .drop { !($0.kind == "connection" && $0.connected == true) }
+            .filter { $0.isResponse && $0.fault == nil && ($0.fragmentsSent ?? 0) > 0 }
+            .compactMap(\.message)
+        let reconciledSinceReconnect = answeredSinceReconnect.contains("CurrentBolusStatusResponse")
+            && answeredSinceReconnect.contains("CurrentBasalStatusResponse")
+        for boundary in [boundaryNow, interrupted.loop.lastReconciliation] where boundary != boundaryBefore {
+            XCTAssertTrue(
+                reconciledSinceReconnect,
+                "only a sync that read bolus and basal status on the new session moves the boundary, to \(String(describing: boundary)): \(answeredSinceReconnect)"
+            )
+        }
 
         // The next sync, on a fresh session, succeeds and moves the boundary.
         try waitForReconnect()
