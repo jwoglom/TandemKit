@@ -14,12 +14,13 @@ import XCTest
         XCTAssertFalse(flags.isOverridden(.controlIQSupport))
     }
 
-    func testHistoryBackfillIsOnUntilSomeoneTurnsItOff() {
+    func testHistoryBackfillAndDoseReportingAreOnUntilSomeoneTurnsThemOff() {
         let flags = TandemFeatureFlags.default
 
         XCTAssertTrue(flags.historyBackfill)
         XCTAssertFalse(flags.isOverridden(.historyBackfill))
-        XCTAssertFalse(flags.historyDoseReporting)
+        XCTAssertTrue(flags.historyDoseReporting)
+        XCTAssertFalse(flags.isOverridden(.historyDoseReporting))
         XCTAssertFalse(flags.basalHistoryReporting)
     }
 

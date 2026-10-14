@@ -857,6 +857,8 @@ import XCTest
     }
 
     func testASyncThatSeesNoChangeDoesNotWaitForHistory() {
+        // A pump that can bolus on its own waits for history anyway.
+        manager.state.quickBolusEnabled = false
         stubPump(serving: [suspended(at: minutes(10))], streams: false)
         stubBasalStatus(0)
 
