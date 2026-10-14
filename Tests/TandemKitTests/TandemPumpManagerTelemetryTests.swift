@@ -109,14 +109,12 @@ import XCTest
 
     // MARK: - Reservoir
 
-    func testReservoirTelemetryUpdatesStateAndNotifiesDelegate() {
+    func testReservoirTelemetryUpdatesStateButNotTheBoundary() {
         let manager = makeManager(apiVersion: .apiV3_4)
         let delegate = MockPumpManagerDelegate()
-        manager.delegateQueue = DispatchQueue(label: "reservoir-telemetry-test")
+        let queue = DispatchQueue(label: "reservoir-telemetry-test")
+        manager.delegateQueue = queue
         manager.pumpManagerDelegate = delegate
-
-        let readReservoir = expectation(description: "delegate received reservoir value")
-        delegate.didReadReservoirExpectation = readReservoir
 
         bluetooth.stub(InsulinStatusRequest.self, with: InsulinStatusResponse(
             currentInsulinAmount: 150,
@@ -125,12 +123,11 @@ import XCTest
         ))
 
         manager.fetchReservoirStatus()
-
-        wait(for: [readReservoir], timeout: 2.0)
+        queue.sync {}
 
         XCTAssertEqual(manager.reservoirLevel?.unitVolume, 150)
-        XCTAssertEqual(delegate.reservoirReadings.last?.units, 150)
-        XCTAssertNotNil(manager.state.lastReconciliation)
+        XCTAssertNil(manager.state.lastReconciliation)
+        XCTAssertTrue(delegate.reservoirReadings.isEmpty, "Reported by the next sync that reconciles past it")
     }
 
     func testReservoirTelemetryErrorLeavesLastReadingUnchanged() {

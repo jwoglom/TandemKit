@@ -31,6 +31,14 @@ import XCTest
             isEstimate: 0,
             insulinLowAmount: 20
         ))
+        bluetooth.stubIdleDelivery()
+    }
+
+    /// The reading reaches the host only once a sync's delivery reads move the boundary past it.
+    private func sync() {
+        let synced = expectation(description: "syncPumpData completes")
+        manager.syncPumpData { _ in synced.fulfill() }
+        wait(for: [synced], timeout: 5.0)
     }
 
     /// Drains the queue on the way out so assertions see everything the attach kicked off.
@@ -54,7 +62,7 @@ import XCTest
         return queue
     }
 
-    func testReadingIsReportedImmediatelyWhenADelegateIsAttached() {
+    func testASyncsReadingIsReportedWhenADelegateIsAttached() {
         let delegate = MockPumpManagerDelegate()
         let queue = attachDelegate(delegate)
 
@@ -62,7 +70,7 @@ import XCTest
         delegate.didReadReservoirExpectation = readReservoir
         stubReservoir(units: 150)
 
-        manager.fetchReservoirStatus()
+        sync()
         wait(for: [readReservoir], timeout: 2.0)
         queue.sync {}
 
@@ -76,7 +84,7 @@ import XCTest
     func testReadingTakenWithoutADelegateIsReportedWhenOneAttaches() {
         stubReservoir(units: 50)
 
-        manager.fetchReservoirStatus()
+        sync()
 
         XCTAssertEqual(manager.reservoirLevel?.unitVolume, 50)
         XCTAssertTrue(
@@ -103,7 +111,7 @@ import XCTest
 
     func testHeldReadingIsReportedWhenTheQueueIsAttachedFirst() {
         stubReservoir(units: 75)
-        manager.fetchReservoirStatus()
+        sync()
 
         let delegate = MockPumpManagerDelegate()
         let readReservoir = expectation(description: "delegate received the held reservoir value")
@@ -123,7 +131,7 @@ import XCTest
         let readReservoir = expectation(description: "delegate received reservoir value")
         delegate.didReadReservoirExpectation = readReservoir
         stubReservoir(units: 120)
-        manager.fetchReservoirStatus()
+        sync()
         wait(for: [readReservoir], timeout: 2.0)
         queue.sync {}
 
@@ -145,9 +153,21 @@ import XCTest
         XCTAssertTrue(delegate.reservoirReadings.isEmpty)
     }
 
+    func testAttachingADelegateDoesNotReportAReadingNoSyncHasReconciledPast() {
+        stubReservoir(units: 60)
+        manager.fetchReservoirStatus()
+
+        let delegate = MockPumpManagerDelegate()
+        let queue = attachDelegate(delegate)
+        queue.sync {}
+
+        XCTAssertTrue(delegate.reservoirReadings.isEmpty)
+        XCTAssertTrue(manager.state.lastReservoirReadingNeedsReport, "Held for the next sync, not dropped")
+    }
+
     func testPendingReportSurvivesAStateRoundTrip() throws {
         stubReservoir(units: 90)
-        manager.fetchReservoirStatus()
+        sync()
 
         let restored = try XCTUnwrap(TandemPumpManagerState(rawValue: manager.state.rawValue))
         XCTAssertEqual(restored.lastReservoirReading?.unitVolume, 90)

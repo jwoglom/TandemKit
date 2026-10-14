@@ -119,7 +119,6 @@ final class ReconnectIntegrationTests: FaketandemIntegrationTestCase {
         file: StaticString = #filePath,
         line: UInt = #line
     ) throws {
-        // The sync's reservoir read already reports a batch, ahead of its basal read.
         try IntegrationWait.until("the driver to sync on its own", timeout: timeout) {
             try driver.delegate.pumpEventBatches.count > outage.batchesBefore
                 && self.harness.requestsSeen(since: outage.logStart).contains { $0.message == "CurrentBasalStatusRequest" }

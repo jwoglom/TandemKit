@@ -254,12 +254,14 @@ The host calls `ensureCurrentPumpData` about every 5 minutes. It returns immedia
 2. `enforceQuickBolusDisabled`, unless the quick-bolus feature flag is on.
 3. Every time: reservoir, battery, bolus status and pending-bolus finalization, basal status
    (including the basal rate check), notifications, time since reset, and CGM session.
-4. `lastReconciliation` advances only if the pump actually answered something during this sync
-   (`responseCount` rose). The boundary is reported even when there are no doses, held at a pump
-   bolus history has yet to report (`reconciliationBoundary`). If the basal read was answered, the
-   batch carrying it re-sends every dose the host holds as mutable, replacing
-   (`reportPendingDoses`), the temp basal a delivery change waiting for history ended among them;
-   with none, it is empty and non-replacing.
+4. `lastReconciliation` advances only if the pump answered the bolus and basal status reads (or
+   the sync deferred to a bolus it tracks); any other answer, the reservoir's included, leaves it
+   and reports nothing. The boundary is reported even when there are no doses, held at a pump
+   bolus history has yet to report (`reconciliationBoundary`). The batch carrying it re-sends
+   every dose the host holds as mutable, replacing (`reportPendingDoses`), the temp basal a
+   delivery change waiting for history ended among them; with none, it is empty and
+   non-replacing. The sync's reservoir reading goes to the host after that batch, never ahead of
+   the boundary.
 5. `historyBackfillCoordinator.runTick()` is started. The sync completes without waiting for it
    unless a delivery change is pending, Control-IQ has handed back, or the pump may bolus on its
    own (`isAwaitingHistory`, `awaitsHistoryBoluses`); then it waits for the pass, at most
@@ -336,8 +338,8 @@ there.
 
 Doses reach the host through `emitPumpEvents` / `hasNewPumpEvents`. The pump is read before the
 host attaches a delegate and a delegate queue, so batches emitted before then are held
-(`PendingPumpEventBatch`). They are replayed from `deliverStateMissedByTheDelegate`, along with
-any pending reservoir reading.
+(`PendingPumpEventBatch`). They are replayed from `deliverStateMissedByTheDelegate`, followed by
+any pending reservoir reading the boundary covers.
 
 ## Threads, queues and timeouts
 

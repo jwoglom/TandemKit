@@ -251,6 +251,21 @@ rate check runs on a profile edit instead of at the next sync.
   the schedule after) stops a running non-zero temp basal, since the pump rescales it, and
   restarts the scheduled basal dose at the new rate. A zero temp keeps running.
 
+### Reconciliation boundary
+- `lastReconciliation` moves at a dose change the driver reports, and at the end of a sync whose
+  `CurrentBolusStatus` and `CurrentBasalStatus` reads the pump answered (#449). A bolus the sync
+  defers to, which the host already counts, stands in for its read. Loop takes delivery up to the
+  boundary as accounted for, and no other answer, a reservoir level included, says anything about
+  delivery. So an unreconciled sync hands the host the boundary it had and arms no poll throttle.
+- A reservoir reading reaches the host only once `lastReconciliation` covers it, after the batch
+  that carries the boundary (`flushPendingReservoirReading`): past its boundary, Loop's `DoseStore`
+  counts whole-unit reservoir drops in place of pump events, which made IOB alternate. A reading
+  between syncs (a `.remainingInsulin` event, the cartridge screen) waits for the next sync, whose
+  own read supersedes it. After a sync whose delivery reads went unanswered the host has nothing
+  newer than its boundary, so Loop's 15-minute pump data check stops it dosing instead of counting
+  reservoir drops. `reconciliationBoundary`'s hold for a pump bolus (#353) is behind the reading on
+  purpose, and the gate is the driver's own boundary. Trio doses on neither.
+
 ### Pump event batches
 - A `replacePendingEvents: true` batch makes both hosts delete every mutable dose it leaves out,
   and Loop never revives a deleted one. `emitPumpEvents` appends the boluses the host holds as
@@ -280,13 +295,12 @@ rate check runs on a profile edit instead of at the next sync.
   the host holds it open, and no report starts in the same second as a row the host holds: Trio
   orders two rows at one timestamp arbitrarily and leaves one zero-length, so an override starts a
   second later.
-- A sync whose basal read the pump answered ends with `reportPendingDoses`: every dose the host
-  holds as mutable, the temp basal from `getActivePumpEvents()` and the boluses `emitPumpEvents`
-  appends, re-sent as one replacing batch, so a running dose is refreshed until it finalizes (#330,
-  #450). Loop keeps its row over a non-replacing re-send, so it has to replace. The batch is the
-  boundary alone, empty and non-replacing, with nothing mutable (an empty replacing batch purges
-  every mutable row in Trio) and without a basal reading (the held temp may be one the pump has
-  ended or cut).
+- A sync that moves the boundary ends with `reportPendingDoses`: every dose the host holds as
+  mutable, the temp basal from `getActivePumpEvents()` and the boluses `emitPumpEvents` appends,
+  re-sent as one replacing batch, so a running dose is refreshed until it finalizes (#330, #450).
+  Loop keeps its row over a non-replacing re-send, so it has to replace. The batch is the boundary
+  alone, empty and non-replacing, with nothing mutable (an empty replacing batch purges every
+  mutable row in Trio).
 - While a delivery change waits for history, `basalDose` is a placeholder and the host still holds
   the dose the change ended, so `getActivePumpEvents()` gives `pending.prior`, as last reported and
   uncut, mutable (#556). A bolus that finishes or is cancelled meanwhile, and the sync's re-send,

@@ -452,8 +452,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
         // Not pumpManagerDidUpdateState: Loop and Trio save rawValue on the main thread right after
         // attaching, and its save from their delegate queue races that one.
         notifyDelegate(includingState: false)
-        flushPendingReservoirReading()
         flushPendingPumpEvents()
+        flushPendingReservoirReading()
         flushPendingPumpClockAdjustments()
     }
 
@@ -584,26 +584,21 @@ public class TandemPumpManager: PumpManager, Pluggable {
             self.fetchTimeSinceReset()
             self.fetchReservoirStatus()
             self.fetchBatteryStatus()
-            self.fetchBolusStatus(fromSync: true)
+            let readBolusState = self.fetchBolusStatus(fromSync: true)
             self.finalizePendingBolus()
-            let readDeliveryState = self.fetchBasalStatus()
+            let readBasalState = self.fetchBasalStatus()
             self.fetchInsulinOnBoard()
             self.fetchNotifications()
             self.fetchCGMSessionStatus()
 
-            // A connected link is not a working one: a session can stay up while every read times
-            // out, and advancing lastSync then promises Loop a reconciliation that never happened.
-            if self.bluetooth.responseCount > responsesBefore {
+            // Not on any answer: a pump that answered the rest of the sync has still said nothing
+            // about delivery, and advancing lastSync promises the host a reconciliation that never happened.
+            if readBolusState, readBasalState {
                 self.state.lastReconciliation = self.now
-
-                // Without a basal reading the temp basal held may be one the pump has ended or cut.
-                if readDeliveryState {
-                    self.reportPendingDoses()
-                } else {
-                    self.reportReconciliationBoundary()
-                }
+                self.reportPendingDoses()
+                self.flushPendingReservoirReading()
             } else {
-                self.logger.error("Sync got no response from the pump; leaving lastSync where it was")
+                self.logger.error("Sync got no answer to its bolus or basal status read; leaving lastSync where it was")
             }
 
             self.notifyDelegateStateUpdated()
@@ -2452,9 +2447,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
             if self.state.deliveryTransitions.pending != nil {
                 self.historyBackfillCoordinator.runTick()
             }
-
-            // The fetches move the boundary even when none of them found a dose.
-            self.reportReconciliationBoundary()
 
             completion()
         }

@@ -89,6 +89,24 @@ final class StubPumpBluetooth: PumpBluetoothConnection {
         stub(CurrentBasalStatusRequest.self) { _ in pump.status() }
     }
 
+    /// Answers the delivery reads a sync needs before it moves `lastReconciliation`: no bolus, and
+    /// the profile's basal at `profileMilliunits` per hour.
+    func stubIdleDelivery(profileMilliunits: UInt32 = 1000) {
+        stub(CurrentBolusStatusRequest.self, with: CurrentBolusStatusResponse(
+            statusId: 0,
+            bolusId: 0,
+            timestamp: 0,
+            requestedVolume: 0,
+            bolusSourceId: 0,
+            bolusTypeBitmask: 0
+        ))
+        stub(CurrentBasalStatusRequest.self, with: CurrentBasalStatusResponse(
+            profileBasalRate: profileMilliunits,
+            currentBasalRate: profileMilliunits,
+            basalModifiedBitmask: 0
+        ))
+    }
+
     // MARK: - Assertions
 
     /// Forget the traffic recorded so far, so a later phase of a test can assert on its own

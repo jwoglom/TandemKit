@@ -556,7 +556,6 @@ final class PumpSideConformanceTests: ConformanceTestCase {
             try driver.manager.state.isConnected && harness.client.snapshot().auth.authenticated
         }
 
-        // The sync's reservoir read already reports a batch, ahead of its basal read.
         try IntegrationWait.until("the reconnect's sync to read the pump and report", timeout: 30) {
             let reads = try self.harness.requestLog(since: logStart).filter(\.isRequest).compactMap(\.message)
             return self.allPumpEventBatches.count > batchesBefore && reads.contains("CurrentBasalStatusRequest")

@@ -20,10 +20,15 @@ import XCTest
         super.tearDown()
     }
 
-    /// A pump answering only the reservoir read: nothing in the driver has a dose to report.
+    /// A pump with nothing running: nothing in the driver has a dose to report.
     private func stubQuietSyncResponses() {
+        stubReservoir(units: 150)
+        bluetooth.stubIdleDelivery()
+    }
+
+    private func stubReservoir(units: Int) {
         bluetooth.stub(InsulinStatusRequest.self, with: InsulinStatusResponse(
-            currentInsulinAmount: 150,
+            currentInsulinAmount: units,
             isEstimate: 0,
             insulinLowAmount: 20
         ))
@@ -104,24 +109,92 @@ import XCTest
         XCTAssertTrue(delegate.pumpEventBatches.isEmpty, "An unanswered sync must not report a boundary")
     }
 
-    func testStandaloneReservoirReadReportsItsOwnStamp() {
+    // MARK: - Only the delivery reads move it (#449)
+
+    func testASyncWhoseDeliveryReadsGoUnansweredReportsNoBoundaryAndNoReservoirReading() {
+        let delegate = MockPumpManagerDelegate()
+        let queue = attachDelegate(delegate)
+        let earlier = Date().addingTimeInterval(-.minutes(5))
+        manager.state.lastReconciliation = earlier
+        stubReservoir(units: 150)
+        bluetooth.stub(CurrentBatteryV1Request.self, with: CurrentBatteryV1Response(currentBatteryAbc: 20, currentBatteryIbc: 80))
+
+        runSync(on: queue)
+
+        XCTAssertEqual(manager.state.lastReconciliation, earlier)
+        XCTAssertTrue(delegate.pumpEventBatches.isEmpty, "\(delegate.pumpEventBatches)")
+        XCTAssertTrue(delegate.reservoirReadings.isEmpty, "Loop counts reservoir drops past its boundary")
+        XCTAssertEqual(manager.reservoirLevel?.unitVolume, 150, "The driver's own status still shows it")
+        XCTAssertTrue(manager.state.lastReservoirReadingNeedsReport)
+    }
+
+    func testASyncReportsItsReservoirReadingAfterTheBoundaryThatCoversIt() throws {
         let delegate = MockPumpManagerDelegate()
         let queue = attachDelegate(delegate)
         stubQuietSyncResponses()
 
+        runSync(on: queue)
+
+        let boundary = try XCTUnwrap(manager.state.lastReconciliation)
+        let reading = try XCTUnwrap(delegate.reservoirReadings.last)
+        XCTAssertLessThanOrEqual(reading.date, boundary)
+        let kinds = delegate.journal.compactMap { entry -> String? in
+            switch entry.kind {
+            case .pumpEvents: return "batch"
+            case .reservoirReading: return "reservoir"
+            default: return nil
+            }
+        }
+        XCTAssertEqual(kinds, ["batch", "reservoir"])
+        XCTAssertTrue(delegate.reservoirReadingsAheadOfTheBoundary.isEmpty)
+        XCTAssertFalse(manager.state.lastReservoirReadingNeedsReport)
+    }
+
+    func testAReadingHeldThroughAnUnreconciledSyncIsReportedByTheNextReconciledOne() throws {
+        let delegate = MockPumpManagerDelegate()
+        let queue = attachDelegate(delegate)
+        stubReservoir(units: 150)
+        runSync(on: queue)
+        let heldAt = try XCTUnwrap(manager.reservoirLevel?.startDate)
+
+        bluetooth.stub(InsulinStatusRequest.self) { _ in nil }
+        bluetooth.stubIdleDelivery()
+        runSync(on: queue)
+
+        XCTAssertEqual(delegate.reservoirReadings.map(\.units), [150])
+        XCTAssertEqual(delegate.reservoirReadings.last?.date, heldAt, "The held reading keeps the time it was taken")
+        XCTAssertGreaterThanOrEqual(try XCTUnwrap(manager.state.lastReconciliation), heldAt)
+        XCTAssertTrue(delegate.reservoirReadingsAheadOfTheBoundary.isEmpty)
+    }
+
+    func testAStandaloneReservoirReadMovesNoBoundaryAndWaitsForTheNextSync() throws {
+        let delegate = MockPumpManagerDelegate()
+        let queue = attachDelegate(delegate)
+        stubQuietSyncResponses()
+        runSync(on: queue)
+        let boundary = manager.state.lastReconciliation
+        let batchesBefore = delegate.pumpEventBatches.count
+
+        stubReservoir(units: 149)
         manager.fetchReservoirStatus()
         queue.sync {}
 
-        XCTAssertEqual(
-            delegate.pumpEventBatches.last?.lastReconciliation,
-            manager.state.lastReconciliation,
-            "A reservoir read that moves the boundary must tell the host it moved"
-        )
+        XCTAssertEqual(manager.state.lastReconciliation, boundary, "A reservoir level says nothing about bolus or basal state")
+        XCTAssertEqual(delegate.pumpEventBatches.count, batchesBefore)
+        XCTAssertEqual(delegate.reservoirReadings.map(\.units), [150])
+        XCTAssertEqual(manager.reservoirLevel?.unitVolume, 149)
+
+        runSync(on: queue)
+
+        XCTAssertEqual(delegate.reservoirReadings.map(\.units), [150, 149])
+        XCTAssertTrue(delegate.reservoirReadingsAheadOfTheBoundary.isEmpty)
     }
 
-    func testQualifyingEventFetchReportsTheBoundary() {
+    func testARemainingInsulinEventMovesNoBoundaryAndReportsNothing() {
         let delegate = MockPumpManagerDelegate()
         let queue = attachDelegate(delegate)
+        let earlier = Date().addingTimeInterval(-.minutes(2))
+        manager.state.lastReconciliation = earlier
         stubQuietSyncResponses()
 
         let handled = expectation(description: "qualifying events handled")
@@ -129,10 +202,10 @@ import XCTest
         wait(for: [handled], timeout: 5.0)
         queue.sync {}
 
-        XCTAssertEqual(
-            delegate.pumpEventBatches.last?.lastReconciliation,
-            manager.state.lastReconciliation
-        )
+        XCTAssertTrue(bluetooth.didSend(InsulinStatusRequest.self))
+        XCTAssertEqual(manager.state.lastReconciliation, earlier)
+        XCTAssertTrue(delegate.pumpEventBatches.isEmpty, "\(delegate.pumpEventBatches)")
+        XCTAssertTrue(delegate.reservoirReadings.isEmpty)
     }
 
     // MARK: - Emitted before the host adopted the manager
@@ -160,6 +233,8 @@ import XCTest
             "The held report keeps the boundary it was emitted with"
         )
         XCTAssertEqual(manager.heldPumpEventBatchCount, 0)
+        XCTAssertEqual(delegate.reservoirReadings.count, 1)
+        XCTAssertTrue(delegate.reservoirReadingsAheadOfTheBoundary.isEmpty, "The held boundary goes out ahead of the held reading")
         queue.sync {}
     }
 
@@ -224,7 +299,6 @@ import XCTest
         let queue = attachDelegate(delegate)
         runSync(on: queue)
 
-        // The pairing sync reports twice (the reservoir read stamps, then the sync does).
         let boundaries = delegate.pumpEventBatches.compactMap(\.lastReconciliation)
         XCTAssertTrue(
             boundaries.contains(try XCTUnwrap(pairingBoundary)),

@@ -367,6 +367,10 @@ final class IdempotencyConformanceTests: ConformanceTestCase {
 
         XCTAssertEqual(boundaries, boundaries.sorted(), "the boundary never goes backwards: \(boundaries)")
         XCTAssertEqual(Set(boundaries).count, boundaries.count, "each sync advances it: \(boundaries)")
+        XCTAssertTrue(
+            driver.delegate.reservoirReadingsAheadOfTheBoundary.isEmpty,
+            "each sync's reservoir reading reaches the host behind the boundary it reports: \(driver.delegate.journal.map(\.kind))"
+        )
         try timeline().assertMatches(feedOracles().loop, tolerance: .exact, "two quiet syncs")
     }
 
@@ -422,22 +426,17 @@ final class IdempotencyConformanceTests: ConformanceTestCase {
         XCTAssertEqual(lastSync, driver.manager.state.lastReconciliation, "the host is handed the driver's own boundary")
         XCTAssertTrue(loopBefore.doses.isEmpty, "nothing was invented for a pump that said nothing")
 
-        XCTExpectFailure(
-            "jwoglom/TandemKit#449: the boundary is stamped when any read answers, so a sync whose delivery reads "
-                + "all went unanswered still moves the host's trust boundary"
-        ) {
+        XCTAssertEqual(
+            driver.manager.state.lastReconciliation, boundaryBefore,
+            "guide §6: lastReconciliation is never advanced past delivery that has not actually been accounted for"
+        )
+        for batch in newBatches(since: before) {
             XCTAssertEqual(
-                driver.manager.state.lastReconciliation, boundaryBefore,
-                "guide §6: lastReconciliation is never advanced past delivery that has not actually been accounted for"
+                batch.lastReconciliation, boundaryBefore,
+                "a sync whose delivery reads were not answered may only repeat the boundary it had: \(describe(batch))"
             )
-            for batch in newBatches(since: before) {
-                XCTAssertEqual(
-                    batch.lastReconciliation, boundaryBefore,
-                    "a sync whose delivery reads were not answered may only repeat the boundary it had: \(describe(batch))"
-                )
-            }
-            XCTAssertEqual(feedOracles().loop.lastReconciliation, reportedBefore, "the host's boundary stands")
         }
+        XCTAssertEqual(feedOracles().loop.lastReconciliation, reportedBefore, "the host's boundary stands")
 
         let (loop, _) = feedOracles()
         XCTAssertTrue(
@@ -1027,6 +1026,106 @@ final class IdempotencyConformanceTests: ConformanceTestCase {
         XCTAssertTrue(loop.doses.isEmpty, "\(loop.doses.map(LoopDoseStoreOracle.describe))")
         XCTAssertTrue(trio.events.isEmpty, "\(trio.events)")
         try timeline().assertMatches(loop, tolerance: .exact, "a quiet relaunch")
+    }
+
+    // MARK: - C17 (§6 safety; #449)
+
+    /// The pump's remaining insulin changes between syncs, and its qualifying event reads the reservoir.
+    func testAReservoirReadMovesNoBoundaryAndWaitsForTheNextSync() throws {
+        let driver = try startPairedDriver()
+        let boundaryBefore = try XCTUnwrap(driver.manager.state.lastReconciliation)
+        drainDelegate()
+        let readingsBefore = driver.delegate.reservoirReadings.count
+        let batchesBefore = allPumpEventBatches.count
+
+        try clock.advanceBoth(seconds: .minutes(2))
+        let readAt = clock.now
+        _ = try harness.client.raiseQualifyingEvent(bitmask: QualifyingEvent.remainingInsulin.id)
+        try IntegrationWait.until("the driver to read the reservoir", timeout: 30) {
+            driver.manager.reservoirLevel?.startDate == readAt
+        }
+        let jobsDone = ResultBox<Void>()
+        driver.bluetooth.ensureConnected { _ in jobsDone.set(()) }
+        try jobsDone.wait("the qualifying event's command job", timeout: commandTimeout)
+        drainDelegate()
+
+        XCTAssertEqual(
+            driver.manager.state.lastReconciliation, boundaryBefore,
+            "guide §6: a reservoir level says nothing about bolus or basal state"
+        )
+        XCTAssertTrue(newBatches(since: batchesBefore).isEmpty, "\(newBatches(since: batchesBefore).map(describe))")
+        XCTAssertEqual(
+            driver.delegate.reservoirReadings.count, readingsBefore,
+            "a reading newer than the host's boundary would have Loop count reservoir drops in place of pump events"
+        )
+
+        try clock.advanceBoth(seconds: .minutes(3))
+        let lastSync = try XCTUnwrap(try sync())
+
+        XCTAssertGreaterThan(lastSync, boundaryBefore)
+        let reading = try XCTUnwrap(driver.delegate.reservoirReadings.last)
+        XCTAssertEqual(driver.delegate.reservoirReadings.count, readingsBefore + 1, "the sync's own reading supersedes the held one")
+        XCTAssertLessThanOrEqual(reading.date, lastSync)
+        XCTAssertTrue(driver.delegate.reservoirReadingsAheadOfTheBoundary.isEmpty, "\(driver.delegate.journal.map(\.kind))")
+        let (loop, _) = feedOracles()
+        XCTAssertEqual(loop.lastReconciliation, lastSync)
+        XCTAssertTrue(loop.doses.isEmpty, "\(loop.doses.map(LoopDoseStoreOracle.describe))")
+        try timeline().assertMatches(loop, tolerance: .exact, "after a reservoir read between syncs")
+    }
+
+    // MARK: - C18 (§6 safety; #449)
+
+    func testASyncWhoseDeliveryReadsGoUnansweredHoldsItsReservoirReading() throws {
+        let driver = try startPairedDriver()
+        let boundaryBefore = try XCTUnwrap(driver.manager.state.lastReconciliation)
+        drainDelegate()
+        let readingsBefore = driver.delegate.reservoirReadings.count
+        let reportedBefore = feedOracles().loop.lastReconciliation
+
+        let silentReads = ["CurrentBolusStatusRequest", "CurrentBasalStatusRequest"]
+        let client = harness.client
+        addTeardownBlock { _ = try? client.clearFaults() }
+        for message in silentReads {
+            var fault = FaketandemFaultSpec(.dropResponse, message: message)
+            fault.every = true
+            _ = try harness.client.armFault(fault)
+        }
+
+        try clock.advanceBoth(seconds: .minutes(5))
+        let before = allPumpEventBatches.count
+        let logBefore = try harness.client.snapshot().requestLog.lastSeq
+        let lastSync = try sync(timeout: 420)
+
+        let entries = try harness.requestLog(since: logBefore)
+        for message in silentReads {
+            XCTAssertTrue(entries.contains { $0.isRequest && $0.message == message }, "the sync must have asked \(message)")
+        }
+        XCTAssertTrue(
+            entries.contains { $0.isResponse && $0.message == "InsulinStatusResponse" && $0.fault == nil && ($0.fragmentsSent ?? 0) > 0 },
+            "the reservoir read was answered"
+        )
+        XCTAssertEqual(lastSync, boundaryBefore)
+        XCTAssertEqual(driver.manager.state.lastReconciliation, boundaryBefore)
+        for batch in newBatches(since: before) {
+            XCTAssertEqual(batch.lastReconciliation, boundaryBefore, describe(batch))
+        }
+        XCTAssertEqual(feedOracles().loop.lastReconciliation, reportedBefore, "the host's boundary stands")
+        XCTAssertEqual(driver.delegate.reservoirReadings.count, readingsBefore, "the reading waits for a boundary that covers it")
+        XCTAssertEqual(driver.manager.reservoirLevel?.startDate, clock.now, "the driver's own status shows it")
+        XCTAssertTrue(driver.manager.state.lastReservoirReadingNeedsReport)
+
+        try harness.client.clearFaults()
+        try clock.advanceBoth(seconds: .minutes(5))
+        let next = try XCTUnwrap(try sync())
+
+        XCTAssertGreaterThan(next, boundaryBefore)
+        XCTAssertEqual(driver.delegate.reservoirReadings.count, readingsBefore + 1)
+        XCTAssertLessThanOrEqual(try XCTUnwrap(driver.delegate.reservoirReadings.last).date, next)
+        XCTAssertTrue(driver.delegate.reservoirReadingsAheadOfTheBoundary.isEmpty, "\(driver.delegate.journal.map(\.kind))")
+        let (loop, _) = feedOracles()
+        XCTAssertEqual(loop.lastReconciliation, next)
+        XCTAssertTrue(loop.doses.isEmpty, "\(loop.doses.map(LoopDoseStoreOracle.describe))")
+        try timeline().assertMatches(loop, tolerance: .exact, "after a sync whose delivery reads went unanswered")
     }
 
     // MARK: - Helpers
