@@ -4,8 +4,8 @@ import LoopKit
 /// Maps Tandem history log records to the LoopKit `NewPumpEvent`s that report the boluses in them
 /// to the host app. Basal comes from `PumpBasalTimeline`.
 ///
-/// An extended bolus is two doses under one `bolusId`: the up-front part, 55 to a 20 that counts it
-/// alone (none when 100% extended), and the extended part, 59 to 21, under `extendedBolus`.
+/// An extended bolus becomes two doses with one `bolusId`: the up-front part, BolusActivated to BolusCompleted
+/// (whose amount excludes the extended part), and the extended part, BolexActivated to BolexCompleted.
 ///
 /// Pure: emitting and reconciling against live reports are the caller's job. Every `raw` is a
 /// `HistoryLogSyncIdentifier`, stable however often the window is re-fetched.
@@ -56,7 +56,7 @@ final class HistoryToDoseMapper {
             case let activation as BolexActivatedHistoryLog:
                 bolexActivations[activation.bolusId] = activation
             case let completion as BolexCompletedHistoryLog:
-                // A 21 carries no start, so without its 59 the dose can't be placed in time.
+                // BolexCompleted has no start time, so without its BolexActivated the dose can't be dated.
                 guard let activation = bolexActivations.removeValue(forKey: completion.bolusId) else {
                     continue
                 }
@@ -125,7 +125,7 @@ final class HistoryToDoseMapper {
         return ids
     }
 
-    /// `BolusDeliveryHistoryLog.extendedDurationRequested` is in minutes; every 280 of a bolus repeats it.
+    /// `extendedDurationRequested` is in minutes, and every BolusDelivery record of a bolus repeats it.
     private static func extendedDurations(in logs: [HistoryLog]) -> [Int: TimeInterval] {
         var durations: [Int: TimeInterval] = [:]
         for case let delivery as BolusDeliveryHistoryLog in logs where delivery.extendedDurationRequested > 0 {
@@ -196,7 +196,8 @@ final class HistoryToDoseMapper {
         return NewPumpEvent(date: dose.startDate, dose: dose, raw: raw, title: "Bolus", type: .bolus)
     }
 
-    /// Ends at its 21 with what it delivered, however it ended; mutable over its programmed duration until then.
+    /// Finalized from BolexCompleted (what it delivered, when it ended); until then mutable over its
+    /// programmed duration.
     private func extendedPartEvent(
         _ activation: BolexActivatedHistoryLog,
         completion: BolexCompletedHistoryLog?,
@@ -209,7 +210,7 @@ final class HistoryToDoseMapper {
         isCommandedBolus: (Int) -> Bool
     ) -> NewPumpEvent {
         var startDate = dates.phoneDate(of: activation)
-        // 59 can fall in its up-front part's second, and Trio matches a new row on its timestamp.
+        // BolexActivated can share a second with the up-front part's start, and Trio matches a new row by timestamp.
         if let upFrontDate, startDate <= upFrontDate {
             startDate = upFrontDate.addingTimeInterval(1)
         }
@@ -217,7 +218,7 @@ final class HistoryToDoseMapper {
         if let completion {
             endDate = max(dates.phoneDate(of: completion), startDate)
         } else {
-            // Without its 280 it counts at its start: early, so IOB is overstated rather than missed.
+            // No BolusDelivery duration: count it all at the start, which overstates IOB early rather than missing it.
             endDate = startDate.addingTimeInterval(programmedDuration ?? 0)
         }
 

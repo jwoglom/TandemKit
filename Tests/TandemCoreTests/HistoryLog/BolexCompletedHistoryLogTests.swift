@@ -1,8 +1,8 @@
 @testable import TandemKit
 import XCTest
 
-/// SYNTHETIC records at the offsets pumpX2 parses: pumpX2's test is ignored for want of a sample, and
-/// no BolexCompleted (21) capture is held here. A pump capture should replace them.
+/// SYNTHETIC records at the offsets pumpX2 parses: pumpX2's own test is skipped for want of a sample, and
+/// no captured BolexCompleted record exists here. A pump capture should replace them.
 final class BolexCompletedHistoryLogTests: XCTestCase {
     func testBolexCompletedHistoryLogSyntheticCompleted() {
         let expected = BolexCompletedHistoryLog(

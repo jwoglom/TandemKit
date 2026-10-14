@@ -916,8 +916,8 @@ final class PumpSideConformanceTests: ConformanceTestCase {
 
     // MARK: - D13
 
-    /// A 100% extended bolus logs no BolusActivated/BolusCompleted pair, only BolexActivated (59) and
-    /// BolexCompleted (21), and reaches the host as one dose spanning the two (#424).
+    /// A 100% extended bolus logs no BolusActivated/BolusCompleted pair, only BolexActivated and
+    /// BolexCompleted, and reaches the host as one dose spanning the two (#424).
     func testD13AnExtendedBolusProgrammedOnThePumpIsReportedFromItsHistory() throws {
         let driver = try startPairedDriverReportingHistory()
         let batchesBefore = allPumpEventBatches.count
@@ -960,7 +960,7 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         try timeline().assertMatches(loop)
     }
 
-    /// Reported mutable over the duration its BolusDelivery (280) programs, and carried by every
+    /// Reported mutable over the duration its BolusDelivery record programs, and carried by every
     /// replacing batch until its BolexCompleted, here a stop part-way, finalizes it in one (#424, #452).
     func testD13bAnExtendedBolusRunningWhenHistoryReadsItIsHeldUntilItEnds() throws {
         let driver = try startPairedDriverReportingHistory()
@@ -1033,8 +1033,8 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         try timeline().assertMatches(loop)
     }
 
-    /// An extended bolus with an up-front part is two doses: BolusCompleted (20) counts the up-front
-    /// part alone, and the extended part runs from BolexActivated (59), logged within a second of it.
+    /// An extended bolus with an up-front part is two doses: BolusCompleted counts the up-front part
+    /// alone, and the extended part runs from BolexActivated, logged within a second of it.
     func testD13cAnExtendedBolusWithAnUpFrontPartIsReportedAsTwoDoses() throws {
         let driver = try startPairedDriverReportingHistory()
         let batchesBefore = allPumpEventBatches.count
@@ -1271,7 +1271,7 @@ final class PumpSideConformanceTests: ConformanceTestCase {
 
     // MARK: - Helpers
 
-    /// The 280 the pump logs as an extended bolus starts; `extendedDurationRequested` is in minutes.
+    /// The BolusDelivery record the pump logs as an extended bolus starts; `extendedDurationRequested` is in minutes.
     private func appendExtendedBolusDelivery(bolusId: Int, upFrontUnits: Double, extendedUnits: Double, minutes: Int) throws {
         let types: [BolusDeliveryHistoryLog.BolusType] = upFrontUnits > 0 ? [.now, .later] : [.later]
         try harness.client.appendHistory(type: "BolusDelivery", secondsAgo: 0, data: [

@@ -303,7 +303,8 @@ rate check runs on a profile edit instead of at the next sync.
 - A held bolus is finalized with its `BolusCompleted` record if backfill has read one; otherwise a
   running bolus at its programmed amount, ended no later than the deletion so Loop stores it at
   once, and one with an unconfirmed volume at the fallback it was held with. A held extended part
-  is finalized at its programmed amount to its programmed end, which the pump runs on to.
+  is finalized at its programmed amount, ending at its programmed end, since the pump keeps
+  delivering it.
 - Still open: Loop leaves the remainder out of IOB from a boundary past its end that came with no
   save (the next pump manager's empty batch) until that manager's next non-empty batch.
 - The integration harness's `shutDownDriver()` is the app going away (a relaunch), which tells the
@@ -403,26 +404,30 @@ rate check runs on a profile edit instead of at the next sync.
   `trackingSince` is stamped on the first decode by a build that has the ledger; nothing older
   is reported, because it cannot be told apart from an app bolus reported live without an
   entry.
-- An extended bolus programmed off the app (the pump's screen, Tandem's app; TandemKit and
-  Control-IQ never give one) is two doses under one `bolusId` (#424). The up-front part,
-  BolusActivated (55) to BolusCompleted (20), whose 20 counts that part alone, is reported as any
-  pump bolus; a 100% extended bolus has none. The extended part, BolexActivated (59) to
-  BolexCompleted (21), is a dose of its own under `HistoryLogSyncIdentifier.extendedBolus`, with its
-  own ledger entry (`BolusReportLedger.Part.extended`), so neither part reads as the other already
-  reported.
-  - Unlike a pump bolus it is reported as soon as history reads its 59, mutable, at 59's
-    `bolexSize` from 59 over the duration its 280s program (`extendedDurationRequested`, minutes),
-    or at once without a 280: it can run for hours, too long to leave out of IOB. Loop spreads it
-    over that span; Trio counts it all at its start. It rides every replacing batch, under its
-    first report's date, until its 21 is read, which finalizes it in a replacing batch at 21's
-    `insulinDelivered` and date, a stop part-way included.
-  - A 21 whose 59 is not in the store is not reported, since only the 59 places it in time. A
-    held part whose 21 is still unread `extendedPartFinalizationWindow` (1 h) past its programmed
-    end is finalized at its programmed amount, what the host counted, as the next replacing batch
-    goes out: history may never show it (another pump, the flags turned off), and the ledger would
-    otherwise drop it still mutable.
-  - A 59 in its up-front part's second is moved a second on, since Trio matches a new row on its
-    timestamp. Reporting either part releases a `reconciliationBoundary` hold on the bolus.
+- An extended bolus programmed off the app (on the pump's screen or in Tandem's app; TandemKit and
+  Control-IQ never give one) is reported as two doses with one `bolusId` (#424).
+  - The up-front part runs from BolusActivated to BolusCompleted, whose amount covers this part
+    only. It is reported like any pump bolus. A 100% extended bolus has no up-front part.
+  - The extended part runs from BolexActivated to BolexCompleted. It is a dose of its own under
+    `HistoryLogSyncIdentifier.extendedBolus`, with its own ledger entry
+    (`BolusReportLedger.Part.extended`), so neither part reads as the other already reported.
+  - Unlike a pump bolus, the extended part is reported as soon as history reads its
+    BolexActivated, because it can run for hours. It goes out mutable, at BolexActivated's
+    `bolexSize`, from BolexActivated's time over the duration its BolusDelivery records program
+    (`extendedDurationRequested`, in minutes). With no BolusDelivery record it counts all at its
+    start. Loop spreads it over that span; Trio counts it all at its start.
+  - Every replacing batch carries it, under its first report's date, until its BolexCompleted is
+    read. That finalizes it in a replacing batch, at BolexCompleted's `insulinDelivered` and time,
+    a stop part-way included.
+  - A BolexCompleted whose BolexActivated is not in the store is not reported: BolexCompleted has
+    no start time.
+  - A held part whose BolexCompleted is still unread `extendedPartFinalizationWindow` (1 h) after
+    its programmed end is finalized at its programmed amount, which is what the host counted, in the
+    next replacing batch. History may never show its end (another pump, the flags turned off), and
+    the ledger would otherwise drop it while still mutable.
+  - A BolexActivated in the same second as its up-front part's start is moved a second later,
+    because Trio matches a new row on its timestamp. Reporting either part releases a
+    `reconciliationBoundary` hold on the bolus.
   - Scenarios: conformance D13, D13b and D13c; unit tests in `ExtendedBolusReportingTests` and
     `HistoryToDoseMapperTests`.
 - A bolus the app did not start that the live bolus status sees running is recorded, with

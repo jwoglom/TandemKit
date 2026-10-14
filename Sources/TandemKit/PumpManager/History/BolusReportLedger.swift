@@ -29,7 +29,8 @@ public struct BolusReportLedger: Equatable {
         /// What the host counts: the programmed amount while mutable, the delivered amount once
         /// finalized. Nil on an entry recorded before amounts were kept.
         public var units: Double?
-        /// An extended part's programmed end on the phone's clock, for the mutable dose batches carry.
+        /// An extended part's programmed end, on the phone's clock: its mutable dose ends there until
+        /// BolexCompleted is read.
         public let programmedEndDate: Date?
 
         public init(

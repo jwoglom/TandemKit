@@ -148,8 +148,8 @@ extension TandemPumpManager {
         return Self.reported(dose, as: entry, title: event.title)
     }
 
-    /// Mutable from its 59 on, since it can run for hours; every replacing batch carries it until its
-    /// 21 finalizes it in one.
+    /// Reported mutable once its BolexActivated is read, since it can run for hours; every replacing batch
+    /// carries it until its BolexCompleted finalizes it in one.
     private func extendedPartReport(
         _ event: NewPumpEvent,
         dose: DoseEntry,
@@ -178,8 +178,8 @@ extension TandemPumpManager {
         return Self.reported(dose, as: held, title: event.title)
     }
 
-    /// One whose 21 is unread `extendedPartFinalizationWindow` past its programmed end is finalized at
-    /// what the host counted: history may never show it (another pump, the flags off).
+    /// A held part whose BolexCompleted is still unread `extendedPartFinalizationWindow` after its programmed
+    /// end is finalized at its programmed amount, what the host counted: history may never show its end.
     func heldExtendedPartEvents(finalizingAll: Bool = false) -> [NewPumpEvent] {
         state.bolusReportLedger.heldExtendedParts.map { entry in
             let end = entry.programmedEndDate ?? entry.eventDate
