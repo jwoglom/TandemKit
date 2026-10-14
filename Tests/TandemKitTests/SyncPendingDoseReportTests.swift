@@ -314,7 +314,10 @@ import XCTest
         let before = batches.count
         manager.reportPendingDoses()
 
-        XCTAssertTrue(batches(since: before).allSatisfy { !$0.replacePendingEvents }, "\(batches(since: before))")
+        let batch = try XCTUnwrap(batches(since: before).last)
+        XCTAssertTrue(batch.replacePendingEvents)
+        XCTAssertEqual(Set(batch.events.map(\.raw)), [tempRaw, bolusRaw])
+        XCTAssertTrue(batch.events.allSatisfy { $0.dose?.isMutable == true }, "the temp as the host holds it, not the placeholder")
         XCTAssertEqual(feedLoop().dose(raw: tempRaw)?.isMutable, true)
 
         manager.settleDeliveryTransition()

@@ -600,11 +600,17 @@ final class IdempotencyConformanceTests: ConformanceTestCase {
             driver.manager.bolusProgressReport?.isUnfinalized() == false
         }
 
-        _ = try enactTempBasal(unitsPerHour: Self.tempBasalRate, duration: .minutes(30))
-        XCTAssertTrue(try harness.client.snapshot().bolus.active, "the pump was still delivering when the temp basal went out")
+        let refused = try enactTempBasal(unitsPerHour: Self.tempBasalRate, duration: .minutes(30))
+        let pump = try harness.client.snapshot()
+        XCTAssertTrue(pump.bolus.active, "the pump was still delivering when the temp basal was asked for")
 
-        // Refusing the temp basal and carrying the bolus in its batch both satisfy this; the guard
-        // is still the driver's own estimate (#347), so it is the carry that does.
+        // Refusing the temp basal and carrying the bolus in its batch both satisfy the guide; the
+        // driver refuses it until the pump says the bolus is over (#347).
+        guard case let .deviceState(underlying?)? = refused else {
+            return XCTFail("the temp basal is refused while the pump delivers the bolus: \(String(describing: refused))")
+        }
+        XCTAssertEqual(underlying as? TandemPumpManagerValidationError, .bolusIsRunning)
+        XCTAssertFalse(pump.basal.tempActive)
         let omissions = completeBatchOmissions()
         XCTAssertTrue(omissions.isEmpty, "guide §3/§5: nothing live may be dropped by silence:\n" + omissions.joined(separator: "\n"))
         let held = feedOracles().loop
@@ -1042,8 +1048,8 @@ final class IdempotencyConformanceTests: ConformanceTestCase {
         _ = try harness.client.setState(["basal_rate": rate])
         let schedule = try XCTUnwrap(BasalRateSchedule(dailyItems: [RepeatingScheduleValue(startTime: 0, value: rate)]))
         var state = TandemPumpManagerState(basalRateSchedule: schedule)
+        state.featureFlags[.historyDoseReporting] = historyDoseReporting
         if historyDoseReporting {
-            state.featureFlags[.historyDoseReporting] = true
             state.bolusReportLedger = BolusReportLedger(trackingSince: clock.now)
         }
         let driver = startDriver(state: state)

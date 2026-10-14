@@ -282,9 +282,14 @@ rate check runs on a profile edit instead of at the next sync.
   appends, re-sent as one replacing batch, so a running dose is refreshed until it finalizes (#330,
   #450). Loop keeps its row over a non-replacing re-send, so it has to replace. The batch is the
   boundary alone, empty and non-replacing, with nothing mutable (an empty replacing batch purges
-  every mutable row in Trio), without a basal reading (the held temp may be one the pump has ended
-  or cut), and while a delivery change waits for history (the host still holds the dose it ended,
-  and `basalDose` is a placeholder: leaving that dose out deletes it for good in Loop).
+  every mutable row in Trio) and without a basal reading (the held temp may be one the pump has
+  ended or cut).
+- While a delivery change waits for history, `basalDose` is a placeholder and the host still holds
+  the dose the change ended, so `getActivePumpEvents()` gives `pending.prior`, as last reported and
+  uncut, mutable (#556). A bolus that finishes or is cancelled meanwhile, and the sync's re-send,
+  carry it: leaving it out deletes it for good in Loop, and the change keeps its history dating.
+  `getActivePumpEvents(endDate:)` ends the temp at the caller's own change, so its callers settle
+  the pending change first, as the app commands do.
 
 ### Deleting the pump manager
 - `prepareForDeactivation` tears the transport down, then sends one replacing batch before
@@ -316,8 +321,8 @@ rate check runs on a profile edit instead of at the next sync.
   `HistoryBackfillPlanner` holds that decision as pure arithmetic. A `.bolusChange` qualifying
   event kicks a tick as well; one requested while a tick runs (the pump sends `.bolusChange`
   at both activation and completion) runs straight after it instead of being dropped.
-- Three feature flags: `historyBackfill` is on by default, `historyDoseReporting` and
-  `basalHistoryReporting` are off. The flags screen reveals itself when any flag is off its
+- Three feature flags: `historyBackfill` and `historyDoseReporting` are on by default,
+  `basalHistoryReporting` is off. The flags screen reveals itself when any flag is off its
   default, so a user who turned the backfill off can still find it. `historyBackfill` runs the
   whole thing: while off, `runTick` returns immediately and the pump's history log is never read.
   `historyDoseReporting` decides whether boluses found in that history reach the app's insulin
@@ -355,9 +360,10 @@ rate check runs on a profile edit instead of at the next sync.
     is not throttled while one is pending, so the host doses on a sync that has reported it.
     `resumeDelivery` and the settings screen's resume read the pump first and wait the same way:
     the resume ends the temp basal the host holds, so a stop the driver missed must be reported
-    before it, or Loop ignores it. A failed read still resumes. Before an app command emits (temp
-    basal, cancel, suspend, resume) a pending change is reported at detection first. A second
-    change before history dates the first reports the first at detection.
+    before it, or Loop ignores it. A failed read still resumes. Before an app command that changes
+    basal emits (temp basal, cancel, suspend, resume, enabling Control-IQ over a temp) a pending
+    change is reported at detection first. A second change before history dates the first reports
+    the first at detection.
   - At detection each end is dated the way that counts more insulin: a stop at detection, a
     resume at the last reading that saw the pump suspended, a temp basal below the schedule
     ended at that reading and one above it at detection, against the host's schedule on the
@@ -492,14 +498,17 @@ rate check runs on a profile edit instead of at the next sync.
   replaced was already stopped, a bolus's nack reason. A refused bolus cancel says the bolus may
   still be delivering.
 - `enactBolus` refuses automatic boluses while Control-IQ is active. `enactTempBasal` refuses
-  while Control-IQ is active or a bolus is running.
+  while Control-IQ is active, and with `bolusIsRunning` while a bolus is running, by the same test
+  as `enactBolus` below (`bolusIsStillRunning`), not the progress reporter's elapsed-time
+  estimate: a pump slower than the estimate is still delivering when it runs out, and no reporter
+  survives a relaunch (#347).
 - `enactBolus` refuses with `bolusIsRunning` while a bolus it started has not been seen to end
   (`isBolusInFlight`), and checks again inside its command job: a host's SMB enacted while a manual
   bolus was being initiated queued behind it and ran right after its `InitiateBolus`, and only the
-  pump's permission nack stopped it (#504). Past the bolus's estimated end it reads
-  `CurrentBolusStatus` first, so a bolus that finished out of contact does not block the next; no
-  answer still refuses. `cancelBolus` resets `bolusState` with `bolusDose`, or the next bolus is
-  refused.
+  pump's permission nack stopped it (#504). Past the bolus's estimated end and its 30 s grace
+  (`shouldDeferBolusSync`) it reads `CurrentBolusStatus` first, so a bolus that finished out of
+  contact does not block the next; no answer still refuses.
+  `cancelBolus` resets `bolusState` with `bolusDose`, or the next bolus is refused.
 - A zero temp basal is always allowed, whatever the profile, sync or update state below, since 0%
   of any profile is 0. Control-IQ, a running bolus and a duration the pump refuses still refuse it.
 - `enactTempBasal` refuses a temp outside 15 minutes to 72 hours (`supportedTempBasalMinutes`)

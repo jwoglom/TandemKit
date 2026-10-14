@@ -512,7 +512,8 @@ import XCTest
     }
 
     /// Dose reporting is a separate switch, and it does not gate the reading.
-    func testDoseReportingIsOffEvenWithTheBackfillRunning() throws {
+    func testTheBackfillReadsWithDoseReportingOff() throws {
+        manager.state.featureFlags[.historyDoseReporting] = false
         setPumpSerial()
         stubStatus(first: 1, last: 10)
         stubHistoryStream()
@@ -520,10 +521,6 @@ import XCTest
         let outcome = try XCTUnwrap(runTick())
 
         XCTAssertEqual(outcome.rangesRead, [1 ... 10], "Reading is unaffected by the reporting flag")
-        XCTAssertFalse(
-            manager.state.featureFlags.historyDoseReporting,
-            "Doses found in history reach insulin history only when this is turned on too"
-        )
     }
 
     /// Reporting means nothing without the read that produces something to report.

@@ -35,11 +35,11 @@ public struct TandemFeatureFlags: RawRepresentable, Equatable {
 
         public var defaultValue: Bool {
             switch self {
-            case .historyBackfill:
+            case .historyBackfill,
+                 .historyDoseReporting:
                 return true
             case .controlIQSupport,
                  .quickBolusButtonSupport,
-                 .historyDoseReporting,
                  .basalHistoryReporting:
                 return false
             }
