@@ -122,7 +122,7 @@ oracle one rule at a time.
 | C14 | A bolus re-sent through many syncs and a relaunch (#330) | 2 U at 0.01 U/s; sync every 15 s ×8, relaunching before the fourth; sync until finalized | one dose throughout, re-sent by every sync; finalized once at the pump's volume; both hosts count it once |
 | C15 | Two identical boluses mutable at once (#330, #448) | history backfill off, every `LastBolusStatus` dropped, delivery at the driver's modelled speed; 2 U finishes and is held; a second 2 U runs; sync ×3; it finishes; faults cleared; sync until finalized | every sync re-sends both in one complete batch; the first finalized at its programmed amount when the second is held; each finalized once, one dose in Loop and one row in Trio; both hosts count the pump's total |
 
-## D. Pump-side failures and events (§7, §10 suspend/resume and faults; P10, P13, P14, P20, G04, G06; #331, #333, #338, #348, #349, #350, #351, #355, #424, #452)
+## D. Pump-side failures and events (§7, §10 suspend/resume and faults; P10, P13, P14, P20, G04, G06; #331, #333, #338, #348, #349, #350, #351, #355, #424, #452, #556)
 
 | ID | Scenario | Stage | Assert |
 |---|---|---|---|
@@ -144,6 +144,7 @@ oracle one rule at a time.
 | D15 | A pump with another serial (#349 P14-5) | pair; give `PumpVersionBRequest` another `serialNumber`; `deleteSavedPumpState`; re-pair; sync twice | one `.replaceComponent(.pump)` and one `pumpManagerPumpWasReplaced`, none for the first pump; Trio stores it as a `SiteChange` |
 | D16 | A bolus Control-IQ gives (§7, §11 external doses; #355 P20-7) | history flags on; Control-IQ on the pump; a bolus with Control-IQ's source, and its `BolusDelivery` (280) records at start and completion, which carry the source; pump completes; sync | reported once from history, finalized at the pump's amount and dated at its start, `automatic` and `wasProgrammedByPumpUI`; Loop holds it permanent and Trio stores it as an SMB |
 | D17 | A stop seen only through its alarm (#333 P02-5, P11-4) | enact 1.5 U/h for 60 min; advance 5 min; `drop_fragment` every fragment on `QualifyingEvents`; `suspend {reason: occlusion}`; advance 3 min; clear the fault; raise `alarm` alone; later `resume`; sync | with no sync, the alarm's basal read finds the stop: one `.suspend` and the temp basal's end at the pump's stop, not at the alarm, and the `.alarm`; the resume closes the suspend; one temp basal row in Trio |
+| D18 | An occlusion mid-bolus under a running TBR (#556) | enact 1.5 U/h for 60 min; advance 5 min; 1 U bolus at 0.01 U/s; advance 60 s; `drop_fragment` every fragment on `QualifyingEvents`; `suspend {reason: occlusion}`; clear the fault; raise `alarm`, `pumpSuspend` and `bolusChange` as one event; later `resume`; sync | the basal read leaves the stop for history and the bolus read then finalizes the bolus at the pump's volume in a replacing batch that still carries the TBR, mutable: no omission, nothing deleted in Loop; history ends the TBR at the stop and dates the `.suspend` there; Loop holds the TBR permanent to the stop; one temp basal row in Trio |
 
 ## E. Rounding and field semantics (§2, §9 item 7; P07, P19, P22) — folded into A–D
 
