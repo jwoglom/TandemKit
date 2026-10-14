@@ -57,11 +57,13 @@ import XCTest
 
     /// The records the pump writes for an extended bolus programmed on its screen, `secondsAgo` before
     /// now: the up-front part first unless `upFront` is nil (100% extended), then its BolexActivated.
+    /// Older t:slim X2 firmware writes no BolusDelivery records.
     private func extendedBolusStart(
         bolusId: Int,
         upFront: Float?,
         extended: Float,
         minutes: Int,
+        bolusDeliveryRecords: Bool = true,
         firstSequenceNum: UInt32,
         secondsAgo: UInt32
     ) -> [HistoryLog] {
@@ -82,8 +84,10 @@ import XCTest
                 declinedCorrection: false,
                 selectedIOB: 0,
                 spare2: 0
-            ),
-            BolusDeliveryHistoryLog(
+            )
+        ]
+        if bolusDeliveryRecords {
+            logs.append(BolusDeliveryHistoryLog(
                 pumpTimeSec: activated,
                 sequenceNum: firstSequenceNum + 1,
                 bolusID: bolusId,
@@ -96,15 +100,15 @@ import XCTest
                 correction: 0,
                 extendedDurationRequested: minutes,
                 deliveredTotal: 0
-            )
-        ]
+            ))
+        }
         var bolexActivated = activated
         if let upFront {
             let upFrontCompleted = activated + 30
             logs += [
                 BolusActivatedHistoryLog(
                     pumpTimeSec: activated,
-                    sequenceNum: firstSequenceNum + 2,
+                    sequenceNum: firstSequenceNum + UInt32(logs.count),
                     bolusId: bolusId,
                     selectedIob: 0,
                     iob: 0,
@@ -112,7 +116,7 @@ import XCTest
                 ),
                 BolusCompletedHistoryLog(
                     pumpTimeSec: upFrontCompleted,
-                    sequenceNum: firstSequenceNum + 3,
+                    sequenceNum: firstSequenceNum + UInt32(logs.count) + 1,
                     completionStatusId: 3,
                     bolusId: bolusId,
                     iob: upFront,
@@ -120,7 +124,7 @@ import XCTest
                     insulinRequested: upFront
                 )
             ]
-            bolexActivated = upFrontCompleted + 1
+            bolexActivated = upFrontCompleted
         }
         logs.append(BolexActivatedHistoryLog(
             pumpTimeSec: bolexActivated,
@@ -290,6 +294,18 @@ import XCTest
         XCTAssertEqual(events(raw: extendedRaw(33)).count, 1, "held, so a re-read sends nothing of its own")
     }
 
+    func testOnFirmwareWithoutBolusDeliveryRecordsTheRunningPartTakesItsDurationFromTheRequest() throws {
+        let start = extendedBolusStart(
+            bolusId: 44, upFront: 0.75, extended: 0.75, minutes: 60, bolusDeliveryRecords: false, firstSequenceNum: 1200, secondsAgo: 600
+        )
+
+        report(start)
+
+        let dose = try XCTUnwrap(events(raw: extendedRaw(44)).first?.dose)
+        XCTAssertTrue(dose.isMutable)
+        XCTAssertEqual(dose.endDate, try pumpDate(XCTUnwrap(start.last)).addingTimeInterval(.minutes(60)))
+    }
+
     func testAHeldExtendedPartRidesEveryReplacingBatchUntilItsCompletionFinalizesItInOne() throws {
         let start = extendedBolusStart(bolusId: 34, upFront: nil, extended: 2.0, minutes: 120, firstSequenceNum: 500, secondsAgo: 1800)
         report(start)
@@ -385,20 +401,41 @@ import XCTest
         XCTAssertEqual(delegate.pumpEventBatches.count, batches, "the host never revises a finalized row")
     }
 
-    func testDeletingThePumpManagerFinalizesAHeldExtendedPartAtItsProgrammedEnd() throws {
+    func testDeletingThePumpManagerSplitsAHeldExtendedPartAtTheDeletion() throws {
+        manager.state.lastReconciliation = now
+        // A batch with no dose that outlasts reconciliation never reaches InsulinDeliveryStore.
+        runTempBasal()
         let start = extendedBolusStart(bolusId: 37, upFront: nil, extended: 4.0, minutes: 240, firstSequenceNum: 800, secondsAgo: 3600)
         report(start)
+        reportPendingDoses()
+        let programmedEnd = pumpDate(start[2]).addingTimeInterval(.minutes(240))
 
         manager.finalizeHeldDosesForDeactivation()
         delegateQueue.sync {}
 
         let batch = try XCTUnwrap(delegate.pumpEventBatches.last)
         XCTAssertTrue(batch.replacePendingEvents)
-        let dose = try XCTUnwrap(batch.events.first { $0.raw == extendedRaw(37) }?.dose)
-        XCTAssertFalse(dose.isMutable)
-        XCTAssertEqual(dose.deliveredUnits, 4.0)
-        XCTAssertEqual(dose.endDate, pumpDate(start[2]).addingTimeInterval(.minutes(240)), "the pump runs it on after the app forgets it")
-        XCTAssertTrue(feedLoop().mutableDoses.isEmpty)
+        let ranSoFar = try XCTUnwrap(batch.events.first { $0.raw == extendedRaw(37) }?.dose)
+        XCTAssertFalse(ranSoFar.isMutable)
+        XCTAssertEqual(ranSoFar.endDate, now, "finalized at the deletion, so Loop stores it at once")
+        XCTAssertEqual(ranSoFar.deliveredUnits ?? -1, 4.0 * 3586 / 14400, accuracy: 0.0005)
+        let remainderEvent = try XCTUnwrap(batch.events.first { $0.dose?.type == .bolus && $0.raw != extendedRaw(37) && $0.dose?.startDate == now })
+        let remainder = try XCTUnwrap(remainderEvent.dose)
+        XCTAssertFalse(remainder.isMutable)
+        XCTAssertEqual(remainder.endDate, programmedEnd, "the pump runs it on after the app forgets it")
+        XCTAssertEqual((ranSoFar.deliveredUnits ?? 0) + (remainder.deliveredUnits ?? 0), 4.0, accuracy: 0.0005)
+
+        let loop = feedLoop()
+        XCTAssertTrue(loop.mutableDoses.isEmpty, "\(loop.mutableDoses.map(LoopDoseStoreOracle.describe))")
+        XCTAssertNotNil(loop.assertPermanent(raw: extendedRaw(37)))
+        XCTAssertEqual(loop.normalizedDoses().filter { $0.syncIdentifier == remainderEvent.raw.hexadecimalString }.count, 1, "counted from its pump event")
+        let later = programmedEnd.addingTimeInterval(.minutes(1))
+        let nextManagersReport = NewPumpEvent.basal(
+            dose: UnfinalizedDose(basalRate: 1.0, insulinType: nil, startDate: later).toDoseEntry(),
+            date: later
+        )
+        loop.addPumpEvents([nextManagersReport], lastReconciliation: later, replacePendingEvents: true, now: later)
+        XCTAssertNotNil(loop.assertPermanent(raw: remainderEvent.raw), "stored once it has ended")
     }
 
     func testAHeldExtendedPartIsStillCarriedAfterARelaunchAndNotReportedAgain() throws {

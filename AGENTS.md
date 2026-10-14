@@ -304,14 +304,15 @@ rate check runs on a profile edit instead of at the next sync.
   manager gives it.
 - A held bolus is finalized with its `BolusCompleted` record if backfill has read one; otherwise a
   running bolus at its programmed amount, ended no later than the deletion so Loop stores it at
-  once, and one with an unconfirmed volume at the fallback it was held with. A held extended part
-  is finalized at its programmed amount, ending at its programmed end, since the pump keeps
-  delivering it.
+  once, and one with an unconfirmed volume at the fallback it was held with. A held extended part,
+  which the pump runs on to its programmed end, is cut at the deletion as a temp basal is: the share
+  of its programmed amount up to then under its own `raw`, and the rest a finalized dose of its own
+  to its programmed end under a new `raw`.
 - Still open: Loop leaves the remainder out of IOB from a boundary past its end that came with no
   save (the next pump manager's empty batch) until that manager's next non-empty batch.
 - The integration harness's `shutDownDriver()` is the app going away (a relaunch), which tells the
-  host nothing; `deactivateDriver()` is the deletion. Scenario: conformance D7; unit tests in
-  `DeactivationDoseReportingTests`.
+  host nothing; `deactivateDriver()` is the deletion. Scenarios: conformance D7 and J5; unit tests
+  in `DeactivationDoseReportingTests` and `ExtendedBolusReportingTests`.
 
 ### History backfill and dose reporting
 - History streaming runs through `HistoryLogFetcher`, and `HistoryBackfillCoordinator` keeps
@@ -415,9 +416,10 @@ rate check runs on a profile edit instead of at the next sync.
     (`BolusReportLedger.Part.extended`), so neither part reads as the other already reported.
   - Unlike a pump bolus, the extended part is reported as soon as history reads its
     BolexActivated, because it can run for hours. It goes out mutable, at BolexActivated's
-    `bolexSize`, from BolexActivated's time over the duration its BolusDelivery records program
-    (`extendedDurationRequested`, in minutes). With no BolusDelivery record it counts all at its
-    start. Loop spreads it over that span; Trio counts it all at its start.
+    `bolexSize`, from BolexActivated's time over its programmed duration: BolusDelivery's
+    `extendedDurationRequested`, or BolusRequestedMsg2's `duration` on t:slim X2 firmware that
+    writes no BolusDelivery records (both minutes). With neither it counts all at its start. Loop
+    spreads it over that span; Trio counts it all at its start.
   - Every replacing batch carries it, under its first report's date, until its BolexCompleted is
     read. That finalizes it in a replacing batch, at BolexCompleted's `insulinDelivered` and time,
     a stop part-way included.
@@ -430,8 +432,8 @@ rate check runs on a profile edit instead of at the next sync.
   - A BolexActivated in the same second as its up-front part's start is moved a second later,
     because Trio matches a new row on its timestamp. Reporting either part releases a
     `reconciliationBoundary` hold on the bolus.
-  - Scenarios: conformance D13, D13b and D13c; unit tests in `ExtendedBolusReportingTests` and
-    `HistoryToDoseMapperTests`.
+  - Scenarios: conformance D13, D13b, D13c and group J (`ExtendedBolusConformanceTests`); unit
+    tests in `ExtendedBolusReportingTests` and `HistoryToDoseMapperTests`.
 - A bolus the app did not start that the live bolus status sees running is recorded, with
   `historyDoseReporting` on, as `BolusReportLedger.unreported` (#353). Until the batch that
   reports it from history, the `lastReconciliation` the host is given (`reconciliationBoundary`)

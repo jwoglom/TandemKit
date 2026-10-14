@@ -125,11 +125,19 @@ final class HistoryToDoseMapper {
         return ids
     }
 
-    /// `extendedDurationRequested` is in minutes, and every BolusDelivery record of a bolus repeats it.
+    /// From BolusDelivery, or BolusRequestedMsg2 on t:slim X2 firmware that logs no BolusDelivery
+    /// records; both are in minutes, and agree wherever a pump logs both.
     private static func extendedDurations(in logs: [HistoryLog]) -> [Int: TimeInterval] {
         var durations: [Int: TimeInterval] = [:]
-        for case let delivery as BolusDeliveryHistoryLog in logs where delivery.extendedDurationRequested > 0 {
-            durations[delivery.bolusID] = .minutes(Double(delivery.extendedDurationRequested))
+        for log in logs {
+            switch log {
+            case let delivery as BolusDeliveryHistoryLog where delivery.extendedDurationRequested > 0:
+                durations[delivery.bolusID] = .minutes(Double(delivery.extendedDurationRequested))
+            case let request as BolusRequestedMsg2HistoryLog where request.duration > 0:
+                durations[request.bolusId] = durations[request.bolusId] ?? .minutes(Double(request.duration))
+            default:
+                continue
+            }
         }
         return durations
     }
@@ -218,7 +226,7 @@ final class HistoryToDoseMapper {
         if let completion {
             endDate = max(dates.phoneDate(of: completion), startDate)
         } else {
-            // No BolusDelivery duration: count it all at the start, which overstates IOB early rather than missing it.
+            // No programmed duration read: count it all at the start, which overstates IOB early rather than missing it.
             endDate = startDate.addingTimeInterval(programmedDuration ?? 0)
         }
 

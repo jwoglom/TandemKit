@@ -1271,36 +1271,6 @@ final class PumpSideConformanceTests: ConformanceTestCase {
 
     // MARK: - Helpers
 
-    /// The BolusDelivery record the pump logs as an extended bolus starts; `extendedDurationRequested` is in minutes.
-    private func appendExtendedBolusDelivery(bolusId: Int, upFrontUnits: Double, extendedUnits: Double, minutes: Int) throws {
-        let types: [BolusDeliveryHistoryLog.BolusType] = upFrontUnits > 0 ? [.now, .later] : [.later]
-        try harness.client.appendHistory(type: "BolusDelivery", secondsAgo: 0, data: [
-            "bolusId": bolusId,
-            "bolusDeliveryStatus": BolusDeliveryHistoryLog.BolusDeliveryStatus.started.rawValue,
-            "bolusTypeBitmask": BolusDeliveryHistoryLog.BolusType.toBitmask(types),
-            "bolusSource": BolusDeliveryHistoryLog.BolusSource.gui.rawValue,
-            "remoteId": bolusId & 0xFF,
-            "requestedNow": Int((upFrontUnits * 1000).rounded()),
-            "requestedLater": Int((extendedUnits * 1000).rounded()),
-            "extendedDurationRequested": minutes,
-            "deliveredTotal": 0,
-        ])
-    }
-
-    private func extendedPartRaw(bolusId: Int, _ driver: FaketandemHarness.Driver) throws -> Data {
-        let serial = try XCTUnwrap(HistoryLogSyncIdentifier.PumpSerial(driver.manager.state.pumpState.pumpSerial))
-        return HistoryLogSyncIdentifier.extendedBolus(pumpSerial: serial, bolusId: bolusId)
-    }
-
-    /// The report runs as a command job after the tick; the second sync queues behind it.
-    private func syncUntilHistoryRead(through sequence: Int, _ driver: FaketandemHarness.Driver) throws {
-        _ = try sync()
-        try IntegrationWait.until("the backfill to read sequence \(sequence)", timeout: 180) {
-            (driver.manager.state.historyBackfill?.watermark).map { Int($0) >= sequence } ?? false
-        }
-        _ = try sync()
-    }
-
     private func appendBolusDelivery(
         bolusId: Int,
         status: BolusDeliveryHistoryLog.BolusDeliveryStatus,
@@ -1315,26 +1285,6 @@ final class PumpSideConformanceTests: ConformanceTestCase {
             "requestedNow": Int((Self.bolusUnits * 1000).rounded()),
             "deliveredTotal": Int((deliveredUnits * 1000).rounded()),
         ])
-    }
-
-    /// Waits out the first backfill tick, so anything the pump logs from here on is newer than the
-    /// floor it reports from.
-    @discardableResult
-    private func startPairedDriverReportingHistory() throws -> FaketandemHarness.Driver {
-        var state = TandemPumpManagerState(rawValue: [:])
-        state.featureFlags[.historyBackfill] = true
-        state.featureFlags[.historyDoseReporting] = true
-        state.bolusReportLedger = BolusReportLedger(trackingSince: clock.now)
-        state.insulinType = .novolog
-        state.basalRateSchedule = try XCTUnwrap(BasalRateSchedule(dailyItems: [RepeatingScheduleValue(startTime: 0, value: Self.profileRate)]))
-        let driver = startDriver(state: state)
-        try harness.client.setState(["basal_rate": Self.profileRate])
-        try harness.pair(driver)
-        _ = try sync()
-        try IntegrationWait.until("the first backfill tick", timeout: 180) {
-            driver.manager.state.historyBackfill != nil
-        }
-        return driver
     }
 
     /// The pump stops delivery while the link is down, so none of its qualifying events reach the driver;

@@ -1731,7 +1731,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     /// finalized dose only once it has ended, so the temp is cut now and its remainder reported on its own.
     func finalizeHeldDosesForDeactivation() {
         settleDeliveryTransition()
-        let heldExtendedParts = heldExtendedPartEvents(finalizingAll: true)
+        let heldExtendedParts = deactivatedExtendedPartEvents()
         guard state.basalDose.type == .tempBasal || state.bolusDose != nil || state.pendingBolusFinalization != nil
             || !heldExtendedParts.isEmpty
         else {
@@ -1782,7 +1782,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 events.append(event)
             }
         }
-        // The pump goes on with it, so it ends at its programmed end, not at the deletion.
         events += heldExtendedParts
         state.bolusDose = nil
         state.pendingBolusFinalization = nil

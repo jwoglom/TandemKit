@@ -180,26 +180,66 @@ extension TandemPumpManager {
 
     /// A held part whose BolexCompleted is still unread `extendedPartFinalizationWindow` after its programmed
     /// end is finalized at its programmed amount, what the host counted: history may never show its end.
-    func heldExtendedPartEvents(finalizingAll: Bool = false) -> [NewPumpEvent] {
+    func heldExtendedPartEvents() -> [NewPumpEvent] {
         state.bolusReportLedger.heldExtendedParts.map { entry in
             let end = entry.programmedEndDate ?? entry.eventDate
-            let isFinalized = finalizingAll || now.timeIntervalSince(end) > Self.extendedPartFinalizationWindow
-            let dose = DoseEntry(
+            let isOverdue = now.timeIntervalSince(end) > Self.extendedPartFinalizationWindow
+            return extendedPartEvent(entry, end: end, deliveredUnits: isOverdue ? entry.units ?? 0 : nil)
+        }
+    }
+
+    /// Loop stores a finalized dose only once it has ended, and never replaces a mutable copy it dropped
+    /// before then, so a part still running is finalized to the deletion under its own identity and the
+    /// rest, which the pump goes on delivering, is a finalized dose of its own to the programmed end.
+    func deactivatedExtendedPartEvents() -> [NewPumpEvent] {
+        state.bolusReportLedger.heldExtendedParts.flatMap { entry -> [NewPumpEvent] in
+            let units = entry.units ?? 0
+            let end = entry.programmedEndDate ?? entry.eventDate
+            // A second on at least: Trio matches a new row on its timestamp.
+            let cut = max(now, entry.eventDate.addingTimeInterval(1))
+            guard cut < end else {
+                return [extendedPartEvent(entry, end: end, deliveredUnits: units)]
+            }
+            let ranSoFar = TandemPumpCapabilities.roundToReportingResolution(
+                units * cut.timeIntervalSince(entry.eventDate) / end.timeIntervalSince(entry.eventDate)
+            )
+            let rest = TandemPumpCapabilities.roundToReportingResolution(units - ranSoFar)
+            let remainder = DoseEntry(
                 type: .bolus,
-                startDate: entry.eventDate,
+                startDate: cut,
                 endDate: end,
-                value: entry.units ?? 0,
+                value: rest,
                 unit: .units,
-                deliveredUnits: isFinalized ? entry.units : nil,
+                deliveredUnits: rest,
                 description: "Extended bolus #\(entry.bolusId)",
-                syncIdentifier: entry.raw.hexadecimalString,
                 insulinType: state.insulinType,
                 automatic: entry.automatic,
-                isMutable: !isFinalized,
                 wasProgrammedByPumpUI: entry.origin == .history
             )
-            return NewPumpEvent(date: entry.eventDate, dose: dose, raw: entry.raw, title: "Extended Bolus", type: .bolus)
+            return [
+                extendedPartEvent(entry, end: cut, deliveredUnits: ranSoFar),
+                NewPumpEvent(date: cut, dose: remainder, raw: NewPumpEvent.bolus(dose: remainder, date: cut).raw, title: "Extended Bolus", type: .bolus)
+            ]
         }
+    }
+
+    /// Mutable while `deliveredUnits` is nil.
+    private func extendedPartEvent(_ entry: BolusReportLedger.Entry, end: Date, deliveredUnits: Double?) -> NewPumpEvent {
+        let dose = DoseEntry(
+            type: .bolus,
+            startDate: entry.eventDate,
+            endDate: end,
+            value: entry.units ?? 0,
+            unit: .units,
+            deliveredUnits: deliveredUnits,
+            description: "Extended bolus #\(entry.bolusId)",
+            syncIdentifier: entry.raw.hexadecimalString,
+            insulinType: state.insulinType,
+            automatic: entry.automatic,
+            isMutable: deliveredUnits == nil,
+            wasProgrammedByPumpUI: entry.origin == .history
+        )
+        return NewPumpEvent(date: entry.eventDate, dose: dose, raw: entry.raw, title: "Extended Bolus", type: .bolus)
     }
 
     static let extendedPartFinalizationWindow: TimeInterval = .hours(1)

@@ -480,6 +480,9 @@ A manual `workflow_dispatch` and a re-run always run, and a plan step that canno
   writes one of these records when a bolus starts and another when it completes, and they carry
   the source the driver takes a history bolus's `automatic` from. Conformance D16 appends them
   itself.
+- **No extended bolus is delivered.** faketandem's bolus runs only an up-front part. Conformance D13
+  and group J (`ExtendedBolusConformanceTests`) append the records a pump writes for one
+  (`ExtendedBolusHistory.swift`), so nothing checks that the emulator would write them in that order.
 
 One behaviour is opt-in: faketandem runs the pump's 5-minute basal cycle, and follows profile
 segment boundaries, only with `basal_cycle_enabled` (faketandem README "Basal cycle"). Conformance

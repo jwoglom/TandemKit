@@ -15,6 +15,8 @@ public class BolusRequestedMsg2HistoryLog: HistoryLog {
     public let bolusId: Int
     public let options: Int
     public let standardPercent: Int
+    /// Minutes the extended part is programmed to run. In 30 extended boluses from Tandem's cloud export
+    /// it equals BolusDelivery's `extendedDurationRequested`, and the run of each not stopped early.
     public let duration: Int
     public let spare1: Int
     public let isf: Int

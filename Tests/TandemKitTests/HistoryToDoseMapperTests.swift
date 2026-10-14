@@ -321,6 +321,55 @@ final class HistoryToDoseMapperTests: XCTestCase {
         XCTAssertNil(dose.deliveredUnits)
     }
 
+    private func extendedRequest(bolusId: Int, standardPercent: Int, minutes: Int, at pumpTimeSec: UInt32, sequenceNum: UInt32) -> BolusRequestedMsg2HistoryLog {
+        BolusRequestedMsg2HistoryLog(
+            pumpTimeSec: pumpTimeSec,
+            sequenceNum: sequenceNum,
+            bolusId: bolusId,
+            options: BolusRequestedMsg2HistoryLog.BolusOption.extended.rawValue,
+            standardPercent: standardPercent,
+            duration: minutes,
+            spare1: 0,
+            isf: 0,
+            targetBG: 0,
+            userOverride: false,
+            declinedCorrection: false,
+            selectedIOB: 0,
+            spare2: 0
+        )
+    }
+
+    func testAnExtendedPartInFlightTakesItsDurationFromTheRequestWithoutBolusDeliveryRecords() throws {
+        let events = map([
+            extendedRequest(bolusId: 20, standardPercent: 50, minutes: 60, at: 1000, sequenceNum: 1),
+            BolusActivatedHistoryLog(pumpTimeSec: 1015, sequenceNum: 2, bolusId: 20, selectedIob: 0, iob: 0, bolusSize: 0.75),
+            BolusCompletedHistoryLog(
+                pumpTimeSec: 1055,
+                sequenceNum: 3,
+                completionStatusId: 3,
+                bolusId: 20,
+                iob: 0.75,
+                insulinDelivered: 0.75,
+                insulinRequested: 0.75
+            ),
+            bolexActivation(bolusId: 20, units: 0.75, at: 1055, sequenceNum: 4)
+        ])
+
+        let extended = try XCTUnwrap(events.first { $0.raw == HistoryLogSyncIdentifier.extendedBolus(pumpSerial: serial, bolusId: 20) }?.dose)
+        XCTAssertTrue(extended.isMutable)
+        XCTAssertEqual(extended.endDate, pumpDate(1055 + 60 * 60))
+    }
+
+    func testBolusDeliveryRecordsWinOverTheRequestForTheDuration() throws {
+        let events = map([
+            extendedRequest(bolusId: 21, standardPercent: 0, minutes: 45, at: 1000, sequenceNum: 1),
+            bolusDelivery(bolusId: 21, extendedMinutes: 30, at: 1015, sequenceNum: 2),
+            bolexActivation(bolusId: 21, units: 2.0, at: 1015, sequenceNum: 3)
+        ])
+
+        XCTAssertEqual(try XCTUnwrap(events.first?.dose).endDate, pumpDate(1015 + 30 * 60))
+    }
+
     func testAnExtendedPartInFlightWithoutItsDurationCountsAtItsStart() throws {
         let events = map([bolexActivation(bolusId: 16, units: 3.0, at: 1000, sequenceNum: 1)])
 
