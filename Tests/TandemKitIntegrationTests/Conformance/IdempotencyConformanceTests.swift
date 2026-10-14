@@ -1001,8 +1001,8 @@ final class IdempotencyConformanceTests: ConformanceTestCase {
         _ = try harness.client.setState(["basal_rate": rate])
         let schedule = try XCTUnwrap(BasalRateSchedule(dailyItems: [RepeatingScheduleValue(startTime: 0, value: rate)]))
         var state = TandemPumpManagerState(basalRateSchedule: schedule)
+        state.featureFlags[.historyDoseReporting] = historyDoseReporting
         if historyDoseReporting {
-            state.featureFlags[.historyDoseReporting] = true
             state.bolusReportLedger = BolusReportLedger(trackingSince: clock.now)
         }
         let driver = startDriver(state: state)

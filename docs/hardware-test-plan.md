@@ -33,8 +33,8 @@ insulin, stops delivery or changes basal, and some steps deliberately cause erro
   the phone's time and give it a profile with no zero rates.
 - **Build.** Record the TandemKit commit and the host app's version.
 - **Feature flags** (Settings → View Debug Options → Feature Flags). Leave them at their defaults
-  unless a step changes one: History Backfill on; Control-IQ Support, Quick Bolus Button Support,
-  History Dose Reporting and History Basal Reporting off.
+  unless a step changes one: History Backfill and History Dose Reporting on; Control-IQ Support,
+  Quick Bolus Button Support and History Basal Reporting off.
 - **Logs.** Use "Share Tandem pump logs" on TandemKit's settings screen at the end of each run, and
   after any step that fails.
 - **Mobi.** The Mobi has no screen. Do steps marked *on the pump* on a t:slim X2. On a Mobi, do
@@ -68,7 +68,7 @@ flags that are off by default.
 | ID | Do | Expect | Automated |
 |---|---|---|---|
 | Q1 | Quick Bolus Button Support off. Before pairing, turn the pump's quick bolus on in the pump's own settings, then pair (P2). Right after onboarding, press the quick bolus button. While still paired, turn quick bolus on again on the pump, then let the host sync. | Quick bolus is off on the pump as soon as onboarding ends, and pressing the button delivers nothing. After the sync, quick bolus is off again. | `QuickBolusEnforcementTests`, `SyncIntegrationTests`, `OnboardingIntegrationTests` |
-| Q2 | Turn on Quick Bolus Button Support and History Dose Reporting. On TandemKit's Quick Bolus Settings screen, turn quick bolus on, then give a quick bolus with the pump's button. | Quick bolus stays on after syncs. Nothing is reported while the bolus runs. Once it finishes, the host holds one bolus at the pump's delivered amount, dated at its start, programmed on the pump and not automatic. | `SyncIntegrationTests`, conformance D12, `TrioBolusTests` |
+| Q2 | Turn on Quick Bolus Button Support. On TandemKit's Quick Bolus Settings screen, turn quick bolus on, then give a quick bolus with the pump's button. | Quick bolus stays on after syncs. Nothing is reported while the bolus runs. Once it finishes, the host holds one bolus at the pump's delivered amount, dated at its start, programmed on the pump and not automatic. | `SyncIntegrationTests`, conformance D12, `TrioBolusTests` |
 | Q3 | As Q2, but with History Dose Reporting off. | The host never holds the bolus, and nothing in the app says so. While it runs, the driver's log says that the pump is delivering a bolus the app did not start, and that it will never be reported. With Control-IQ off, once TandemKit has been paired for longer than the pump's insulin duration, the log also warns 30 minutes after the bolus that the pump holds more bolus insulin than the host was told of. | conformance I3, `UnreportedInsulinOnBoardTests` |
 | C1 | Turn on Control-IQ Support. With a CGM paired to the pump, set Control-IQ's weight and total daily insulin to test values. Long-press the algorithm status on TandemKit's settings screen to switch to Control-IQ. Set a temp basal from the host, then turn the host's closed loop on for a few loop cycles, then give a manual bolus. | The "Control-IQ On" status appears. The temp basal is refused: "Control-IQ is active on the pump". So is every temp basal and automatic bolus the loop asks for. The manual bolus is delivered. Record what the host does with each refusal. | `DeliveryLimitIntegrationTests` (L5), `TandemPumpManagerControlIQTests` |
 | C2 | As C1, with History Dose Reporting on. Wait for Control-IQ to give an automatic bolus. It gives one only when it predicts high glucose, so this step may have to wait. | Nothing is reported while the bolus runs. Once it finishes, the host holds it once, as automatic and programmed on the pump. | conformance D16 |

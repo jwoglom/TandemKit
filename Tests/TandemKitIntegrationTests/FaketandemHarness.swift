@@ -95,6 +95,9 @@ final class FaketandemHarness {
         // Naming the zone sets the pump's clock back to the phone's local time, which a test that
         // changed the pump's clock or the phone's zone left elsewhere.
         try client.setClock(mode: "real", pumpOffsetSeconds: 0, pumpTimezone: TimeZone.current.identifier)
+        // An earlier test's records, dated on its clock, reach a fresh driver with dose reporting
+        // on as pump boluses it never heard of.
+        try client.eraseHistory()
         try client.setPairingState(.pairStep2)
         // An emulator without profile or limit modelling has nothing to restore.
         let snapshot = try client.snapshot()

@@ -50,6 +50,7 @@ import XCTest
     private func makeManager(state: TandemPumpManagerState) -> TandemPumpManager {
         let manager = TandemPumpManager(state: state, bluetooth: bluetooth, clock: clock)
         delegate = MockPumpManagerDelegate()
+        delegate.journalClock = clock
         delegateQueue = DispatchQueue(label: "delivery-transition-test")
         manager.pumpManagerDelegate = delegate
         manager.delegateQueue = delegateQueue
@@ -856,6 +857,8 @@ import XCTest
     }
 
     func testASyncThatSeesNoChangeDoesNotWaitForHistory() {
+        // A pump that can bolus on its own waits for history anyway.
+        manager.state.quickBolusEnabled = false
         stubPump(serving: [suspended(at: minutes(10))], streams: false)
         stubBasalStatus(0)
 
@@ -1061,6 +1064,241 @@ import XCTest
         handleQualifyingEvents([.malfunction])
 
         XCTAssertEqual(events(.suspend).map(\.date), [minutes(12)])
+    }
+
+    // MARK: - A dose that finishes while the change waits (#556)
+
+    private static let bolusId = 4100
+
+    private func appBolus() throws -> Data {
+        bluetooth.stub(BolusPermissionRequest.self, with: BolusPermissionResponse(status: 0, bolusId: Self.bolusId, nackReasonId: 0))
+        bluetooth.stub(InitiateBolusRequest.self, with: InitiateBolusResponse(status: 0, bolusId: Self.bolusId, statusTypeId: 0))
+        let done = expectation(description: "enactBolus")
+        manager.enactBolus(units: 2.0, activationType: .manualNoRecommendation) { error in
+            XCTAssertNil(error)
+            done.fulfill()
+        }
+        wait(for: [done], timeout: 5)
+        delegateQueue.sync {}
+        return try XCTUnwrap(events(.bolus).last?.raw)
+    }
+
+    /// The pump's answers once it has stopped the 2 U bolus at `deliveredMilliunits`.
+    private func stubBolusOver(deliveredMilliunits: UInt32?) {
+        bluetooth.stub(CurrentBolusStatusRequest.self, with: CurrentBolusStatusResponse(
+            statusId: 0, bolusId: 0, timestamp: 0, requestedVolume: 2000, bolusSourceId: 0, bolusTypeBitmask: 0
+        ))
+        bluetooth.stub(LastBolusStatusRequest.self) { _ in
+            deliveredMilliunits.map {
+                LastBolusStatusResponse(
+                    status: 0, bolusId: Self.bolusId, timestamp: 0, deliveredVolume: $0,
+                    bolusStatusId: 0, bolusSourceId: 0, bolusTypeBitmask: 0, extendedBolusDuration: 0
+                )
+            }
+        }
+    }
+
+    private func feedLoop() -> LoopDoseStoreOracle {
+        let loop = LoopDoseStoreOracle()
+        delegateQueue.sync {}
+        delegate.feed(loop)
+        return loop
+    }
+
+    private func feedTrio() -> TrioDoseStoreOracle {
+        let trio = TrioDoseStoreOracle()
+        delegateQueue.sync {}
+        delegate.feed(trio)
+        return trio
+    }
+
+    private func assertCarriesTheHeldTemp(
+        _ tempRaw: Data,
+        since index: Int,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        let replacing = batches.dropFirst(index).filter(\.replacePendingEvents)
+        XCTAssertFalse(replacing.isEmpty, "the dose finishing goes out in a replacing batch", file: file, line: line)
+        for batch in replacing {
+            let temp = batch.events.first { $0.raw == tempRaw }
+            XCTAssertEqual(temp?.dose?.isMutable, true, "the host still holds the temp basal: \(batch.events.map(\.raw))", file: file, line: line)
+        }
+        let loop = feedLoop()
+        XCTAssertEqual(loop.dose(raw: tempRaw)?.isMutable, true, file: file, line: line)
+        XCTAssertTrue(loop.deletedDoses.isEmpty, "Loop never revives a deleted dose: \(loop.deletedDoses.map(LoopDoseStoreOracle.describe))", file: file, line: line)
+    }
+
+    func testABolusThatEndsWhileAStopWaitsForHistoryLeavesTheHostItsTempBasal() throws {
+        appTempBasal(2.0)
+        let tempRaw = try XCTUnwrap(events(.tempBasal).last?.raw)
+        let bolusRaw = try appBolus()
+        let stoppedAt = minutes(2)
+        advance(to: minutes(3))
+        observe(1)
+        XCTAssertNotNil(manager.state.deliveryTransitions.pending)
+        let before = batches.count
+
+        stubBolusOver(deliveredMilliunits: 800)
+        manager.fetchBolusStatus(fromSync: false)
+        delegateQueue.sync {}
+
+        XCTAssertTrue(batches.dropFirst(before).contains { $0.events.contains { $0.raw == bolusRaw && $0.dose?.isMutable == false } })
+        assertCarriesTheHeldTemp(tempRaw, since: before)
+        XCTAssertEqual(manager.state.basalDose.type, .suspend, "status still shows the stop")
+
+        pass([tempRateCompleted(50, at: stoppedAt, timeLeft: 28 * 60), suspended(at: stoppedAt)])
+
+        let loop = feedLoop()
+        let temp = try XCTUnwrap(loop.assertPermanent(raw: tempRaw))
+        XCTAssertEqual(temp.dose.endDate, stoppedAt, "ended at the pump's stop")
+        let finished = events.last { $0.raw == tempRaw }?.dose
+        XCTAssertEqual(finished?.isMutable, false)
+        XCTAssertEqual(try XCTUnwrap(finished?.deliveredUnits), 2.0 * 2 / 60, accuracy: 0.001)
+        XCTAssertEqual(loop.assertPermanent(raw: bolusRaw)?.dose.deliveredUnits, 0.8)
+        XCTAssertTrue(loop.deletedDoses.isEmpty)
+        XCTAssertEqual(feedTrio().tempBasals.count, 1)
+        XCTAssertEqual(events(.suspend).map(\.date), [stoppedAt])
+    }
+
+    func testAnOcclusionMidBolusRaisedAsOneEventEndsTheTempBasalAtThePumpsStop() throws {
+        appTempBasal(2.0)
+        let tempRaw = try XCTUnwrap(events(.tempBasal).last?.raw)
+        let bolusRaw = try appBolus()
+        let stoppedAt = minutes(2)
+        stubPump(serving: [
+            resumed(at: start.addingTimeInterval(-60)),
+            tempRateCompleted(50, at: stoppedAt, timeLeft: 28 * 60),
+            suspended(at: stoppedAt)
+        ])
+        advance(to: minutes(3))
+        stubBasalStatus(1)
+        stubBolusOver(deliveredMilliunits: 800)
+        let before = batches.count
+
+        // Fetched in QualifyingEventFetch order: the basal read leaves the stop pending, then the bolus read finishes the bolus.
+        handleQualifyingEvents([.alarm, .pumpSuspend, .bolusChange])
+        waitUntilReported(.suspend)
+
+        let loop = feedLoop()
+        XCTAssertTrue(loop.deletedDoses.isEmpty, "\(loop.deletedDoses.map(LoopDoseStoreOracle.describe))")
+        let temp = try XCTUnwrap(loop.assertPermanent(raw: tempRaw))
+        XCTAssertEqual(temp.dose.endDate, stoppedAt)
+        XCTAssertEqual(loop.assertPermanent(raw: bolusRaw)?.dose.deliveredUnits, 0.8)
+        let trio = feedTrio()
+        XCTAssertEqual(trio.tempBasals.count, 1, "\(trio.tempBasals)")
+        XCTAssertEqual(trio.suspends.map(\.timestamp), [stoppedAt])
+        let replacing = batches.dropFirst(before).filter(\.replacePendingEvents)
+        XCTAssertTrue(replacing.allSatisfy { $0.events.contains { $0.raw == tempRaw } }, "\(replacing.map { $0.events.map(\.raw) })")
+    }
+
+    func testABolusCancelledWhileATempEndWaitsForHistoryLeavesTheHostItsTempBasal() throws {
+        appTempBasal(2.0)
+        let tempRaw = try XCTUnwrap(events(.tempBasal).last?.raw)
+        _ = try appBolus()
+        let endedAt = minutes(2)
+        advance(to: minutes(3))
+        observe(0)
+        XCTAssertNotNil(manager.state.deliveryTransitions.pending)
+        bluetooth.stub(CancelBolusRequest.self, with: CancelBolusResponse(statusId: 0, bolusId: Self.bolusId, reasonId: 0))
+        stubBolusOver(deliveredMilliunits: 900)
+        let before = batches.count
+
+        let cancelled = expectation(description: "cancelBolus")
+        manager.cancelBolus { result in
+            if case let .failure(error) = result {
+                XCTFail("cancelBolus failed: \(error)")
+            }
+            cancelled.fulfill()
+        }
+        wait(for: [cancelled], timeout: 10)
+        delegateQueue.sync {}
+
+        assertCarriesTheHeldTemp(tempRaw, since: before)
+        XCTAssertNotNil(manager.state.deliveryTransitions.pending, "a bolus cancel changes no basal, so the change keeps its history dating")
+
+        pass([tempRateCompleted(50, at: endedAt, timeLeft: 28 * 60)])
+
+        XCTAssertEqual(try XCTUnwrap(feedLoop().assertPermanent(raw: tempRaw)).dose.endDate, endedAt)
+    }
+
+    func testABolusHeldForItsVolumeThatSettlesWhileAStopWaitsLeavesTheHostItsTempBasal() throws {
+        appTempBasal(2.0)
+        let tempRaw = try XCTUnwrap(events(.tempBasal).last?.raw)
+        let bolusRaw = try appBolus()
+        advance(to: minutes(1))
+        stubBolusOver(deliveredMilliunits: nil)
+        manager.fetchBolusStatus(fromSync: false)
+        XCTAssertNotNil(manager.state.pendingBolusFinalization)
+        advance(to: minutes(3))
+        observe(1)
+        let before = batches.count
+
+        stubBolusOver(deliveredMilliunits: 2000)
+        manager.finalizePendingBolus()
+        delegateQueue.sync {}
+
+        XCTAssertNil(manager.state.pendingBolusFinalization)
+        XCTAssertEqual(feedLoop().dose(raw: bolusRaw)?.isMutable, false)
+        assertCarriesTheHeldTemp(tempRaw, since: before)
+    }
+
+    func testATempThePumpRunsInPlaceOfTheHeldOneIsNotCutAtASegmentChangeWhenABolusEnds() throws {
+        let segmentChange = minutes(10)
+        manager.state.basalRateSchedule = BasalRateSchedule(dailyItems: [
+            RepeatingScheduleValue(startTime: 0, value: Self.scheduledRate),
+            RepeatingScheduleValue(startTime: segmentChange.timeIntervalSince(Calendar.current.startOfDay(for: segmentChange)), value: 2.0)
+        ])!
+        appTempBasal(1.5)
+        let tempRaw = try XCTUnwrap(events(.tempBasal).last?.raw)
+        _ = try appBolus()
+        // Read before the change, so the pump's 1 U/hr profile still matches the schedule.
+        advance(to: minutes(8))
+        observeTemp(percent: 120, from: minutes(5))
+        XCTAssertNotNil(manager.state.deliveryTransitions.pending?.replacement)
+        let held = manager.state.basalDose
+        advance(to: minutes(12))
+        let before = batches.count
+
+        stubBolusOver(deliveredMilliunits: 2000)
+        manager.fetchBolusStatus(fromSync: false)
+        delegateQueue.sync {}
+
+        let temps = batches.dropFirst(before).flatMap(\.events).filter { $0.dose?.type == .tempBasal }
+        XCTAssertEqual(temps.map(\.raw), [tempRaw], "the held temp as the host holds it, uncut")
+        XCTAssertEqual(temps.first?.dose?.isMutable, true)
+        XCTAssertTrue(manager.state.basalDose === held)
+
+        pass([tempRateCompleted(50, at: minutes(5), timeLeft: 25 * 60), tempRateActivated(51, at: minutes(5), percent: 120)])
+
+        let loop = feedLoop()
+        XCTAssertEqual(try XCTUnwrap(loop.assertPermanent(raw: tempRaw)).dose.endDate, minutes(5), "the held temp ended where the pump's replaced it")
+        XCTAssertFalse(
+            loop.doses.contains { $0.dose.type == .tempBasal && $0.dose.startDate == start && $0.dose.endDate == segmentChange },
+            "\(loop.doses.map(LoopDoseStoreOracle.describe))"
+        )
+    }
+
+    func testEnablingControlIQWhileAReplacingTempWaitsForHistoryReportsItFirst() throws {
+        appTempBasal(1.5)
+        let tempRaw = try XCTUnwrap(events(.tempBasal).last?.raw)
+        advance(to: minutes(8))
+        observeTemp(percent: 120, from: minutes(5))
+        XCTAssertNotNil(manager.state.deliveryTransitions.pending?.replacement)
+        bluetooth.stub(ChangeControlIQSettingsRequest.self, with: ChangeControlIQSettingsResponse(status: 1))
+
+        let done = expectation(description: "configureControlIQMode")
+        manager.configureControlIQMode(ChangeControlIQSettingsRequest(enabled: true, weightLbs: 150, totalDailyInsulinUnits: 30)) { _ in
+            done.fulfill()
+        }
+        wait(for: [done], timeout: 5)
+        delegateQueue.sync {}
+
+        XCTAssertNil(manager.state.deliveryTransitions.pending)
+        XCTAssertTrue(bluetooth.didSend(StopTempRateRequest.self), "the temp the pump runs is stopped before Control-IQ takes over")
+        let loop = feedLoop()
+        XCTAssertEqual(try XCTUnwrap(loop.assertPermanent(raw: tempRaw)).dose.endDate, minutes(5), "the held temp ended where the pump's replaced it")
+        XCTAssertEqual(manager.state.basalDose.type, .basal)
     }
 
     // MARK: - What history never reports

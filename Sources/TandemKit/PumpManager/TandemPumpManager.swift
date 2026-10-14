@@ -2061,6 +2061,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
             if request.enabled, self.state.basalDose.type == .tempBasal {
                 _ = self.bluetooth.write(StopTempRateRequest())
+                self.settleDeliveryTransition()
 
                 let dose = UnfinalizedDose(
                     basalRate: self.scheduledBasalRateInForce(),
@@ -2476,6 +2477,12 @@ extension TandemPumpManager {
     }
 
     func getActivePumpEvents(endDate: Date? = nil) -> [NewPumpEvent] {
+        // Until history dates a change the pump made, the host holds the dose it ended as last reported
+        // and uncut. A caller ending the temp at `endDate` settles the change first.
+        if endDate == nil, let held = state.deliveryTransitions.pending?.prior {
+            guard held.type == .tempBasal else { return [] }
+            return [NewPumpEvent.tempBasal(dose: held.toDoseEntry(isMutable: true, now: now), of: held)]
+        }
         guard state.basalDose.type == .tempBasal else {
             return []
         }
@@ -2563,11 +2570,6 @@ extension TandemPumpManager {
     /// Every dose the host holds as mutable, re-sent as the complete pending set so a sync refreshes
     /// a running dose. Loop ignores a non-replacing re-send of a `raw` it holds.
     func reportPendingDoses() {
-        // The host still holds the dose the change ended, and `basalDose` is only a placeholder.
-        guard state.deliveryTransitions.pending == nil else {
-            reportReconciliationBoundary()
-            return
-        }
         let events = getActivePumpEvents()
         // An empty replacing batch purges every mutable row in Trio and nothing in Loop.
         guard !events.isEmpty || !inProgressBolusEvents().isEmpty else {

@@ -99,11 +99,11 @@ final class VirtualPumpControlTests: XCTestCase {
     }
 
     func testAFeatureFlagIsSetAsTheFlagsScreenSetsIt() throws {
-        XCTAssertFalse(manager.state.featureFlags[.historyDoseReporting])
-
-        try client.send(.init(command: .setFeatureFlag, featureFlag: "historyDoseReporting", enabled: true))
-
         XCTAssertTrue(manager.state.featureFlags[.historyDoseReporting])
+
+        try client.send(.init(command: .setFeatureFlag, featureFlag: "historyDoseReporting", enabled: false))
+
+        XCTAssertFalse(manager.state.featureFlags[.historyDoseReporting])
         XCTAssertThrowsError(try client.send(.init(command: .setFeatureFlag, featureFlag: "noSuchFlag", enabled: true))) { error in
             XCTAssertEqual(String(describing: error), "no feature flag noSuchFlag")
         }

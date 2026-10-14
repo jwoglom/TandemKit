@@ -1269,6 +1269,84 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         try timeline().assertMatches(loop, tolerance: PumpTimeline.Tolerance(units: 0.05))
     }
 
+    // MARK: - D18
+
+    /// An occlusion stops the pump mid-bolus under a running temp basal, and its events reach the
+    /// driver as one notification. The basal read leaves the stop for history to date, then the bolus
+    /// read finishes the bolus in a replacing batch, which must still carry the temp basal the host
+    /// holds: Loop deletes a mutable dose a replacing batch leaves out and never revives it (#556).
+    func testD18AnOcclusionMidBolusKeepsTheTempBasalUntilHistoryEndsItAtTheStop() throws {
+        let driver = try startPairedDriver(scheduledRate: Self.profileRate)
+        try IntegrationWait.until("the driver to start tracking the pump's history", timeout: 60) {
+            driver.manager.state.deliveryTransitions.trackedAfter != nil
+        }
+        try harness.client.setState(["bolus_rate_units_per_second": Self.bolusUnits / 100])
+        let batchesBefore = allPumpEventBatches.count
+
+        let rate = 1.5
+        XCTAssertNil(try enactTempBasal(unitsPerHour: rate, duration: .minutes(60)))
+        let temp = try XCTUnwrap(eventsSince(batchesBefore).first { $0.dose?.type == .tempBasal })
+        let tempStart = try XCTUnwrap(temp.dose?.startDate)
+        try clock.advanceBoth(seconds: .minutes(5), ticks: 5)
+        XCTAssertNil(try enactBolus(units: Self.bolusUnits))
+        let bolusId = try XCTUnwrap(driver.manager.state.bolusDose?.bolusId)
+        let bolus = try XCTUnwrap(eventsSince(batchesBefore).first { $0.dose?.type == .bolus })
+        try clock.advanceBoth(seconds: 60, ticks: 12)
+
+        var lost = FaketandemFaultSpec(.dropFragment)
+        lost.characteristic = "QualifyingEvents"
+        lost.everyNth = 1
+        lost.every = true
+        let fault = try XCTUnwrap(try harness.client.armFault(lost))
+        let stoppedAt = clock.now
+        let stopped = try harness.client.suspend(reason: "occlusion")
+        XCTAssertFalse(stopped.basal.tempActive, "the stop ended the temp rate")
+        XCTAssertFalse(stopped.bolus.active, "and the bolus")
+        let lastBolus = try XCTUnwrap(stopped.lastBolus)
+        XCTAssertEqual(lastBolus.bolusId, bolusId)
+        XCTAssertLessThan(lastBolus.deliveredUnits, Self.bolusUnits - 0.2, "stopped short of the programmed amount")
+        try clock.advanceBoth(seconds: 60, ticks: 1)
+        try harness.client.clearFault(id: fault.id)
+        drainDelegate()
+        XCTAssertEqual(driver.manager.state.basalDose.type, .tempBasal, "none of the stop's own events reached the driver")
+        XCTAssertNotNil(driver.manager.state.bolusDose)
+
+        try harness.client.raiseQualifyingEvent(
+            bitmask: QualifyingEvent.alarm.id | QualifyingEvent.pumpSuspend.id | QualifyingEvent.bolusChange.id
+        )
+
+        let suspend = try IntegrationWait.value("the suspend, with no sync from the host", timeout: 60) {
+            self.eventsSince(batchesBefore).first { $0.type == .suspend }
+        }
+        XCTAssertEqual(suspend.date.timeIntervalSince(stoppedAt), 0, accuracy: 1, "dated at the pump's stop")
+        let finishedBolus = try XCTUnwrap(eventsSince(batchesBefore).first { $0.raw == bolus.raw && $0.dose?.isMutable == false })
+        XCTAssertEqual(finishedBolus.dose?.deliveredUnits ?? -1, lastBolus.deliveredUnits, accuracy: 0.0005)
+        let finishedTemp = try XCTUnwrap(
+            eventsSince(batchesBefore).first { $0.raw == temp.raw && $0.dose?.isMutable == false },
+            "the temp basal is finished with the stop: \(eventsSince(batchesBefore))"
+        )
+        XCTAssertEqual(try XCTUnwrap(finishedTemp.dose?.endDate).timeIntervalSince(stoppedAt), 0, accuracy: 1, "ended at the occlusion")
+        let omissions = completeBatchOmissions()
+        XCTAssertTrue(omissions.isEmpty, "nothing live may be dropped by silence:\n" + omissions.joined(separator: "\n"))
+
+        try clock.advanceBoth(seconds: .minutes(2), ticks: 2)
+        try harness.client.resume(clearAlarms: true)
+        _ = try sync()
+
+        let (loop, trio) = feedOracles()
+        loop.assertNoDuplicates()
+        trio.assertNoDuplicates()
+        XCTAssertTrue(loop.deletedDoses.isEmpty, "Loop never revives a deleted dose: \(loop.deletedDoses.map(LoopDoseStoreOracle.describe))")
+        let storedTemp = try XCTUnwrap(loop.assertPermanent(raw: temp.raw))
+        XCTAssertEqual(storedTemp.dose.startDate, tempStart)
+        XCTAssertEqual(storedTemp.dose.endDate.timeIntervalSince(stoppedAt), 0, accuracy: 1, "Loop counts the temp basal up to the stop")
+        XCTAssertEqual(loop.assertPermanent(raw: bolus.raw)?.dose.deliveredUnits ?? -1, lastBolus.deliveredUnits, accuracy: 0.0005)
+        XCTAssertEqual(trio.tempBasals.count, 1, "one temp basal row: \(trio.tempBasals)")
+        XCTAssertEqual(trio.suspends.map(\.timestamp), [suspend.date])
+        // At Loop's resolution, as in D17: `reconciled` re-derives a temp basal a suspend truncated on the 0.05 U grid.
+        try timeline().assertMatches(loop, tolerance: PumpTimeline.Tolerance(units: 0.05))
+    }
+
     // MARK: - Helpers
 
     private func appendBolusDelivery(
