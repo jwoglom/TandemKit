@@ -531,14 +531,17 @@ rate check runs on a profile edit instead of at the next sync.
   replaced was already stopped, a bolus's nack reason. A refused bolus cancel says the bolus may
   still be delivering.
 - `enactBolus` refuses automatic boluses while Control-IQ is active. `enactTempBasal` refuses
-  while Control-IQ is active or a bolus is running.
+  while Control-IQ is active, and with `bolusIsRunning` while a bolus is running, by the same test
+  as `enactBolus` below (`bolusIsStillRunning`), not the progress reporter's elapsed-time
+  estimate: a pump slower than the estimate is still delivering when it runs out, and no reporter
+  survives a relaunch (#347).
 - `enactBolus` refuses with `bolusIsRunning` while a bolus it started has not been seen to end
   (`isBolusInFlight`), and checks again inside its command job: a host's SMB enacted while a manual
   bolus was being initiated queued behind it and ran right after its `InitiateBolus`, and only the
-  pump's permission nack stopped it (#504). Past the bolus's estimated end it reads
-  `CurrentBolusStatus` first, so a bolus that finished out of contact does not block the next; no
-  answer still refuses. `cancelBolus` resets `bolusState` with `bolusDose`, or the next bolus is
-  refused.
+  pump's permission nack stopped it (#504). Past the bolus's estimated end and its 30 s grace
+  (`shouldDeferBolusSync`) it reads `CurrentBolusStatus` first, so a bolus that finished out of
+  contact does not block the next; no answer still refuses.
+  `cancelBolus` resets `bolusState` with `bolusDose`, or the next bolus is refused.
 - A zero temp basal is always allowed, whatever the profile, sync or update state below, since 0%
   of any profile is 0. Control-IQ, a running bolus and a duration the pump refuses still refuse it.
 - `enactTempBasal` refuses a temp outside 15 minutes to 72 hours (`supportedTempBasalMinutes`)
@@ -610,6 +613,10 @@ rate check runs on a profile edit instead of at the next sync.
   Suspended after a nil, where the driver held no suspend, is the app's suspend, reported at the
   reading; any other reading goes to `observeDeliveryState`, which ends a temp the stop ended. The
   command succeeds whenever the pump reads suspended, so a cartridge wizard can go on.
+- `ResumePumping` is read back the same way, from `resumeDelivery` and the settings screen's resume
+  alike. Delivering after a nil, where the driver held a suspend, is the app's resume, reported at
+  the send, the earliest the pump could have resumed. The command succeeds whenever the pump reads
+  delivering, so the settings screen acknowledges no alarm for a resume that went through.
 - A pump clock more than `pumpClockSkewThreshold` (5 min) off the phone's (`isPumpClockSkewed`)
   raises a LoopKit alert, retracted once the clock agrees (`pumpClockSkewAlertIssued`, persisted),
   and a status highlight; the settings screen syncs the clock. While skewed, wherever the host

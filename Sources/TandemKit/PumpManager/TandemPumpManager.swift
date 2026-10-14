@@ -727,7 +727,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
 
         if shouldDeferBolusSync() {
-            refuseWhileABolusRuns(completion)
+            refuseWhileABolusRuns(.enactBolus, completion)
             return
         }
 
@@ -739,12 +739,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
             }
 
             // Again here: a second enact queues behind the first's job and runs right after its InitiateBolus.
-            // Past its estimated end a bolus may have finished out of contact, so the pump is read first.
-            if self.isBolusInFlight, !self.shouldDeferBolusSync() {
-                self.fetchBolusStatus(fromSync: true)
-            }
-            guard !self.isBolusInFlight else {
-                self.refuseWhileABolusRuns(completion)
+            guard !self.bolusIsStillRunning() else {
+                self.refuseWhileABolusRuns(.enactBolus, completion)
                 return
             }
 
@@ -882,8 +878,22 @@ public class TandemPumpManager: PumpManager, Pluggable {
         state.bolusDose != nil || state.bolusState != .noBolus || bolusProgressReport?.isUnfinalized() == true
     }
 
-    private func refuseWhileABolusRuns(_ completion: (PumpManagerError?) -> Void) {
-        logger.warning("[enactBolus] Blocked: bolus \(state.bolusDose?.bolusId ?? -1) is still running")
+    /// Past its estimated end a bolus may have finished out of contact, or may still be running on a
+    /// pump slower than the estimate, so the pump is asked.
+    private func bolusIsStillRunning() -> Bool {
+        if isBolusInFlight, !shouldDeferBolusSync() {
+            fetchBolusStatus(fromSync: true)
+        }
+        return isBolusInFlight
+    }
+
+    private enum DosingCommand: String {
+        case enactBolus
+        case enactTempBasal
+    }
+
+    private func refuseWhileABolusRuns(_ command: DosingCommand, _ completion: (PumpManagerError?) -> Void) {
+        logger.warning("[\(command.rawValue)] Blocked: bolus \(state.bolusDose?.bolusId ?? -1) is still running")
         completion(.deviceState(TandemPumpManagerValidationError.bolusIsRunning))
     }
 
@@ -995,9 +1005,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
             return
         }
 
-        if let bolusProgressReport, bolusProgressReport.isUnfinalized() {
-            logger.warning("[enactTempBasal] Blocked: A bolus is still running")
-            completion(.deviceState(TandemPumpManagerValidationError.bolusIsRunning))
+        if shouldDeferBolusSync() {
+            refuseWhileABolusRuns(.enactTempBasal, completion)
             return
         }
 
@@ -1031,6 +1040,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
             if let error {
                 self.logger.error("Failed to connect for temp basal: \(error.localizedDescription)")
                 completion(.connection(PumpCommError.pumpNotConnected))
+                return
+            }
+
+            guard !self.bolusIsStillRunning() else {
+                self.refuseWhileABolusRuns(.enactTempBasal, completion)
                 return
             }
 
@@ -1414,19 +1428,27 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
-    /// Sends a single `ResumePumpingRequest` and, on success, records the resume dose and notifies
-    /// LoopKit. Returns nil on success or the error to report otherwise.
+    /// Sends a single `ResumePumpingRequest` and, once the pump has resumed, records the resume dose
+    /// and notifies LoopKit. Returns nil once the pump is delivering or the error to report otherwise.
     ///
     /// Must be called while connected (i.e. inside `bluetooth.ensureConnected`).
     private func sendResumePumping() -> Error? {
+        let sentAt = now
         let response = bluetooth.write(ResumePumpingRequest())
         guard let response, response.status == 0 else {
             logger.error("Failed to Resume delivery - Status: \(response?.status ?? -1)")
-            return PumpCommError.noResponse
+            let isDelivering = readBackUnconfirmedResume(mayHaveApplied: response == nil, sentAt: sentAt)
+            return isDelivering ? nil : PumpCommError.noResponse
         }
 
+        recordResume(at: now)
+        return nil
+    }
+
+    /// Dated at the answer, or at the send after a lost one: the earlier start counts more insulin.
+    private func recordResume(at date: Date) {
         settleDeliveryTransition()
-        var resumedAt = now
+        var resumedAt = date
         if let host = hostTransition(before: .distantFuture), host.kind == .suspend {
             // Trio's IOB throws on a suspend and resume in the same second.
             resumedAt = max(resumedAt, host.date.addingTimeInterval(1))
@@ -1439,14 +1461,32 @@ public class TandemPumpManager: PumpManager, Pluggable {
         events.append(NewPumpEvent.resume(dose: dose.toDoseEntry(), date: dose.startDate))
 
         state.basalDose = dose
-        state.lastReconciliation = resumedAt
-        recordReportedTransition(.resume, at: dose.startDate)
+        state.lastReconciliation = max(resumedAt, now)
+        recordReportedTransition(
+            .resume,
+            at: dose.startDate,
+            latest: max(dose.startDate, now).addingTimeInterval(Self.transitionMatchTolerance)
+        )
 
         notifyDelegateStateUpdated()
         emitPumpEvents(events)
-
         logger.info("Insulin Delivery Resumed!")
-        return nil
+    }
+
+    /// As `readBackUnconfirmedSuspend`, for a resume. Returns whether the pump is delivering.
+    private func readBackUnconfirmedResume(mayHaveApplied: Bool, sentAt: Date) -> Bool {
+        guard let status = bluetooth.write(CurrentBasalStatusRequest()) else {
+            logger.warning("No basal status after an unconfirmed ResumePumping; the next reading settles it")
+            return false
+        }
+        let held = state.deliveryTransitions.pending?.observed ?? state.basalDose.type
+        if mayHaveApplied, status.basalType != .suspend, held == .suspend {
+            logger.warning("The pump is delivering though the ResumePumping answer was lost; reporting the resume")
+            recordResume(at: sentAt)
+        } else {
+            observeDeliveryState(status.basalType)
+        }
+        return status.basalType != .suspend
     }
 
     public func syncDeliveryLimits(

@@ -600,11 +600,17 @@ final class IdempotencyConformanceTests: ConformanceTestCase {
             driver.manager.bolusProgressReport?.isUnfinalized() == false
         }
 
-        _ = try enactTempBasal(unitsPerHour: Self.tempBasalRate, duration: .minutes(30))
-        XCTAssertTrue(try harness.client.snapshot().bolus.active, "the pump was still delivering when the temp basal went out")
+        let refused = try enactTempBasal(unitsPerHour: Self.tempBasalRate, duration: .minutes(30))
+        let pump = try harness.client.snapshot()
+        XCTAssertTrue(pump.bolus.active, "the pump was still delivering when the temp basal was asked for")
 
-        // Refusing the temp basal and carrying the bolus in its batch both satisfy this; the guard
-        // is still the driver's own estimate (#347), so it is the carry that does.
+        // Refusing the temp basal and carrying the bolus in its batch both satisfy the guide; the
+        // driver refuses it until the pump says the bolus is over (#347).
+        guard case let .deviceState(underlying?)? = refused else {
+            return XCTFail("the temp basal is refused while the pump delivers the bolus: \(String(describing: refused))")
+        }
+        XCTAssertEqual(underlying as? TandemPumpManagerValidationError, .bolusIsRunning)
+        XCTAssertFalse(pump.basal.tempActive)
         let omissions = completeBatchOmissions()
         XCTAssertTrue(omissions.isEmpty, "guide §3/§5: nothing live may be dropped by silence:\n" + omissions.joined(separator: "\n"))
         let held = feedOracles().loop
@@ -991,7 +997,48 @@ final class IdempotencyConformanceTests: ConformanceTestCase {
         )
     }
 
+    // MARK: - C16 (§6, §11 empty syncs; P18-6)
+
+    /// The host's first poll after a relaunch falls inside its 4.5-minute throttle, but the
+    /// relaunched driver has no link, so the poll still reaches the pump.
+    func testTheFirstPollAfterARelaunchReportsABoundaryFromThisLaunch() throws {
+        let driver = try startPairedDriver()
+        let persisted = try XCTUnwrap(driver.manager.state.lastReconciliation)
+
+        let relaunched = try relaunch()
+        try clock.advanceBoth(seconds: .minutes(1))
+        let before = allPumpEventBatches.count
+        let polled = try poll(relaunched)
+
+        let reported = try XCTUnwrap(
+            newBatches(since: before).last?.lastReconciliation,
+            "the relaunched driver's host is handed a boundary by its first poll"
+        )
+        XCTAssertGreaterThan(reported, persisted)
+        XCTAssertEqual(polled, reported)
+        XCTAssertEqual(relaunched.manager.state.lastReconciliation, reported)
+
+        let beforeSecond = allPumpEventBatches.count
+        XCTAssertEqual(try poll(relaunched), reported, "a poll inside the throttle on a live link")
+        XCTAssertTrue(newBatches(since: beforeSecond).isEmpty, "\(newBatches(since: beforeSecond).map(describe))")
+
+        let (loop, trio) = feedOracles()
+        XCTAssertEqual(loop.lastReconciliation, reported)
+        XCTAssertTrue(loop.doses.isEmpty, "\(loop.doses.map(LoopDoseStoreOracle.describe))")
+        XCTAssertTrue(trio.events.isEmpty, "\(trio.events)")
+        try timeline().assertMatches(loop, tolerance: .exact, "a quiet relaunch")
+    }
+
     // MARK: - Helpers
+
+    /// The host's periodic `ensureCurrentPumpData`; returns the lastSync it handed the host.
+    private func poll(_ driver: FaketandemHarness.Driver) throws -> Date? {
+        let box = ResultBox<Date?>()
+        driver.manager.ensureCurrentPumpData { box.set($0) }
+        let lastSync = try box.wait("ensureCurrentPumpData completion", timeout: syncTimeout)
+        drainDelegate()
+        return lastSync
+    }
 
     /// Pair, sync, and give both sides the same scheduled basal rate: the driver computes the temp
     /// basal percentage from its own schedule and the pump applies it to its profile rate, so a

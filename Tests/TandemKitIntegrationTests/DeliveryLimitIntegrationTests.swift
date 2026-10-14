@@ -372,4 +372,87 @@ final class DeliveryLimitIntegrationTests: ConformanceTestCase {
         XCTAssertTrue(sent.contains("CurrentBolusStatusRequest"), "\(sent)")
         XCTAssertFalse(sent.contains("BolusPermissionRequest"), "\(sent)")
     }
+
+    // MARK: - L12
+
+    func testPastItsEstimatedEndATempBasalIsRefusedWhileThePumpStillDeliversTheBolus() throws {
+        let driver = try startDriverWithSchedule()
+        let batchesBefore = allPumpEventBatches.count
+        XCTAssertNil(try enactBolus(units: 1))
+        let bolusId = try XCTUnwrap(driver.manager.state.bolusDose?.bolusId)
+        let bolusRaw = try XCTUnwrap(eventsSince(batchesBefore).first { $0.dose?.type == .bolus }?.raw)
+        // The estimate counts from the first delivering status, so the clock waits for it.
+        try IntegrationWait.until("the driver to see the bolus delivering", timeout: 30) {
+            driver.manager.bolusProgressReport?.bolusStatedOn != nil
+        }
+        try harness.client.stallBolus()
+        try clock.advanceBoth(seconds: driver.manager.estimatedDuration(toBolus: 1) + .minutes(2))
+        try IntegrationWait.until("the driver's estimate to reach the programmed amount", timeout: 15) {
+            driver.manager.bolusProgressReport?.isUnfinalized() == false
+        }
+        XCTAssertTrue(try harness.client.snapshot().bolus.active)
+        let mark = try logMark()
+        let refusedFrom = allPumpEventBatches.count
+
+        let error = try enactTempBasal(unitsPerHour: 1.5, duration: .minutes(30))
+
+        XCTAssertEqual(validationError(error), .bolusIsRunning, "\(String(describing: error))")
+        let sent = try requestsSince(mark)
+        XCTAssertTrue(sent.contains("CurrentBolusStatusRequest"), "\(sent)")
+        XCTAssertFalse(sent.contains("SetTempRateRequest"), "\(sent)")
+        XCTAssertFalse(try harness.client.snapshot().basal.tempActive)
+        XCTAssertTrue(eventsSince(refusedFrom).isEmpty, "\(eventsSince(refusedFrom))")
+        XCTAssertEqual(feedOracles().loop.mutableDoses.filter { $0.dose.type == .bolus }.count, 1)
+
+        try harness.client.resumeBolus()
+        let lastBolus = try advanceUntilBolusFinishes(bolusId: bolusId)
+        try clock.advanceBoth(seconds: driver.manager.estimatedDuration(toBolus: 1) + .minutes(2))
+
+        XCTAssertNil(try enactTempBasal(unitsPerHour: 1.5, duration: .minutes(30)), "allowed once the pump says the bolus finished")
+        XCTAssertTrue(try harness.client.snapshot().basal.tempActive)
+        let (loop, trio) = feedOracles()
+        let stored = loop.assertPermanent(raw: bolusRaw, "once the pump has finished")
+        XCTAssertEqual(stored?.dose.deliveredUnits ?? -1, lastBolus.deliveredUnits, accuracy: 0.0005)
+        XCTAssertEqual(trio.boluses.count, 1)
+    }
+
+    // MARK: - L13
+
+    /// No progress reporter survives a relaunch, so only the bolus the driver persisted holds the temp basal back.
+    func testAfterARelaunchMidBolusATempBasalIsRefusedUntilThePumpSaysTheBolusFinished() throws {
+        let driver = try startDriverWithSchedule()
+        let batchesBefore = allPumpEventBatches.count
+        XCTAssertNil(try enactBolus(units: 1))
+        let bolusId = try XCTUnwrap(driver.manager.state.bolusDose?.bolusId)
+        let bolusRaw = try XCTUnwrap(eventsSince(batchesBefore).first { $0.dose?.type == .bolus }?.raw)
+        try harness.client.stallBolus()
+        let persisted = driver.manager.state.rawValue
+        try shutDownDriver()
+        let relaunched = startDriver(state: TandemPumpManagerState(rawValue: persisted))
+        XCTAssertNil(relaunched.manager.bolusProgressReport)
+        let mark = try logMark()
+
+        let insideTheEstimate = try enactTempBasal(unitsPerHour: 1.5, duration: .minutes(30))
+        try clock.advanceBoth(seconds: relaunched.manager.estimatedDuration(toBolus: 1) + .minutes(2))
+        XCTAssertTrue(try harness.client.snapshot().bolus.active)
+        let pastTheEstimate = try enactTempBasal(unitsPerHour: 1.5, duration: .minutes(30))
+
+        XCTAssertEqual(validationError(insideTheEstimate), .bolusIsRunning, "\(String(describing: insideTheEstimate))")
+        XCTAssertEqual(validationError(pastTheEstimate), .bolusIsRunning, "\(String(describing: pastTheEstimate))")
+        let sent = try requestsSince(mark)
+        XCTAssertTrue(sent.contains("CurrentBolusStatusRequest"), "\(sent)")
+        XCTAssertFalse(sent.contains("SetTempRateRequest"), "\(sent)")
+        XCTAssertFalse(try harness.client.snapshot().basal.tempActive)
+
+        try harness.client.resumeBolus()
+        let lastBolus = try advanceUntilBolusFinishes(bolusId: bolusId)
+        try clock.advanceBoth(seconds: relaunched.manager.estimatedDuration(toBolus: 1) + .minutes(2))
+
+        XCTAssertNil(try enactTempBasal(unitsPerHour: 1.5, duration: .minutes(30)), "allowed once the pump says the bolus finished")
+        XCTAssertTrue(try harness.client.snapshot().basal.tempActive)
+        let (loop, trio) = feedOracles()
+        let stored = loop.assertPermanent(raw: bolusRaw, "once the pump has finished")
+        XCTAssertEqual(stored?.dose.deliveredUnits ?? -1, lastBolus.deliveredUnits, accuracy: 0.0005)
+        XCTAssertEqual(trio.boluses.count, 1)
+    }
 }
