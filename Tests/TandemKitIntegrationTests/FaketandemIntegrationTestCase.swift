@@ -37,14 +37,15 @@ class FaketandemIntegrationTestCase: XCTestCase {
         state: TandemPumpManagerState = TandemPumpManagerState(rawValue: [:]),
         clock: TandemClock = ManualClock(Date()),
         stageBasalScheduleSync: Bool = true,
-        poweredOnBeforeAttach: Bool = false
+        poweredOnBeforeAttach: Bool = false,
+        via relay: SocketPumpEndpoint? = nil
     ) -> FaketandemHarness.Driver {
         precondition(driver == nil, "one driver per test; shut the previous one down first")
         var state = state
         if stageBasalScheduleSync {
             state.hasSyncedBasalRateSchedule = true
         }
-        let created = harness.makeDriver(state: state, clock: clock, poweredOnBeforeAttach: poweredOnBeforeAttach)
+        let created = harness.makeDriver(state: state, clock: clock, poweredOnBeforeAttach: poweredOnBeforeAttach, via: relay)
         driver = created
         return created
     }
