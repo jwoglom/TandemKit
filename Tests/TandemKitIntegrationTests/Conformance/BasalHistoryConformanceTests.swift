@@ -641,8 +641,8 @@ final class BasalHistoryConformanceTests: ConformanceTestCase {
     // MARK: - H9
 
     /// An alarm stops delivery during the app's temp and the pump keeps the temp: it ends for the
-    /// host at the stop, runs again from the resume, and its chunks are reported until the app's
-    /// next temp.
+    /// host at the stop, and the driver reports it again from the resume until the app's next temp,
+    /// leaving basal reconciliation nothing to correct.
     func testH9_aTempAnAlarmSuspendKeptIsReportedAfterTheResume() throws {
         let driver = try stageDriver()
         let before = allPumpEventBatches.count
@@ -678,17 +678,24 @@ final class BasalHistoryConformanceTests: ConformanceTestCase {
         try waitForReconciliation(driver, through: lastClosed)
 
         let found = corrections(since: before)
-        XCTAssertEqual(found.map(\.dose?.unitsPerHour), [1.5, 1.5, 1.5, 1.5], "the four chunks the temp ran after the resume")
-        XCTAssertGreaterThan(try XCTUnwrap(found.first?.dose?.startDate), resumedAt, "never in the resume's second")
-        XCTAssertEqual(found.last?.dose?.endDate.timeIntervalSince(nextTemp) ?? .infinity, 0, accuracy: 2, "the last ends at the app's next temp")
-        XCTAssertTrue(found.allSatisfy { $0.dose?.automatic == true }, "the app set the temp")
+        XCTAssertTrue(found.isEmpty, "the host already counts the temp it ran after the resume: \(found.map(\.dose))")
+        let resumed = eventsSince(before).filter { event in
+            guard let dose = event.dose, dose.type == .tempBasal else { return false }
+            return dose.startDate > resumedAt && dose.startDate < nextTemp
+        }
+        let resumedStart = try XCTUnwrap(resumed.first?.dose?.startDate)
+        XCTAssertGreaterThan(resumedStart, resumedAt, "never in the resume's second")
+        XCTAssertEqual(resumedStart.timeIntervalSince(resumedAt), 1, accuracy: 2, "from the resume")
+        XCTAssertEqual(Set(resumed.map(\.dose?.unitsPerHour)), [1.5])
+        XCTAssertEqual(resumed.last?.dose?.isMutable, false)
+        XCTAssertEqual(resumed.last?.dose?.endDate.timeIntervalSince(nextTemp) ?? .infinity, 0, accuracy: 2, "it ends at the app's next temp")
+        XCTAssertTrue(resumed.allSatisfy { $0.dose?.automatic == true }, "the app set the temp")
 
         let (loop, trio) = feedOracles()
         loop.assertNoDuplicates("alarm suspend keeping the temp")
         trio.assertNoDuplicates("alarm suspend keeping the temp")
         trio.assertNoSameSecondBasalRows()
-        let correctionIds = Set(found.map(\.raw.hexadecimalString))
-        let appTemp = loop.permanentDoses.first { $0.dose.type == .tempBasal && !correctionIds.contains($0.syncIdentifier) }
+        let appTemp = loop.permanentDoses.first { $0.dose.type == .tempBasal }
         XCTAssertEqual(appTemp.map { $0.dose.endDate.timeIntervalSince(suspendedAt) } ?? .infinity, 0, accuracy: 2, "the app's temp ends at the stop")
         try assertHostsCountThePumpsBasal(over: resumeCycle ... lastResumed - 1)
     }
