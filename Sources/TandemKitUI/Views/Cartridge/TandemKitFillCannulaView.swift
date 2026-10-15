@@ -94,26 +94,28 @@ struct TandemKitFillCannulaView: View {
 
     private var suspendStepContent: some View {
         VStack(alignment: .leading, spacing: 20) {
-            HStack(spacing: 12) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundColor(guidanceColors.warning)
-                    .font(.title2)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Important", comment: "Important section header")
-                        .font(.headline)
+            if !viewModel.isCheckingSuspendStatus {
+                HStack(spacing: 12) {
+                    Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundColor(guidanceColors.warning)
-                    Text(
-                        "Filling cannula requires suspending insulin delivery. Select the prime amount carefully.",
-                        comment: "Warning message for cannula fill"
-                    )
-                    .font(.subheadline)
+                        .font(.title2)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Important", comment: "Important section header")
+                            .font(.headline)
+                            .foregroundColor(guidanceColors.warning)
+                        Text(
+                            "Filling cannula requires suspending insulin delivery. Select the prime amount carefully.",
+                            comment: "Warning message for cannula fill"
+                        )
+                        .font(.subheadline)
+                    }
                 }
+                .wizardCard(background: guidanceColors.warning.opacity(0.1))
             }
-            .wizardCard(background: guidanceColors.warning.opacity(0.1))
 
             // Step header
             VStack(alignment: .leading, spacing: 8) {
-                Text("Step 1: Suspend Insulin", comment: "Step header")
+                Text("Suspend Insulin", comment: "Step header")
                     .font(.title2)
                     .fontWeight(.bold)
                 Text("First, suspend insulin delivery", comment: "Step description")

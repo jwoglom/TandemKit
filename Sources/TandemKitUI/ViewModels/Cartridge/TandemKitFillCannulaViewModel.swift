@@ -22,6 +22,7 @@ enum CannulaFillStep: Int {
 class TandemKitFillCannulaViewModel: ObservableObject {
     @Published var currentStep: CannulaFillStep = .suspend
     @Published var isSuspended: Bool? = nil
+    @Published var isCheckingSuspendStatus = true
     @Published var isProcessing = false
 
     @Published var primeAmount: Double
@@ -71,8 +72,14 @@ class TandemKitFillCannulaViewModel: ObservableObject {
     }
 
     func checkSuspendedStatus() {
-        pumpManager?.fetchSuspendStatus { isSuspended in
+        guard let pumpManager else {
+            isCheckingSuspendStatus = false
+            return
+        }
+        isCheckingSuspendStatus = true
+        pumpManager.fetchSuspendStatus { isSuspended in
             DispatchQueue.main.async {
+                self.isCheckingSuspendStatus = false
                 self.isSuspended = isSuspended
 
                 if self.isSuspended == true, self.currentStep == .suspend {
