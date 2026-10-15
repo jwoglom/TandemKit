@@ -58,17 +58,12 @@ import XCTest
         }
     }
 
-    private func resume(acknowledgingAlarms: Bool = false) -> Error? {
+    private func resume() -> Error? {
         let done = expectation(description: "resume completion")
         var error: Error?
-        let completion: (Error?) -> Void = {
+        manager.resumeDelivery {
             error = $0
             done.fulfill()
-        }
-        if acknowledgingAlarms {
-            manager.resumeDeliveryAcknowledgingResumeAlarms(completion: completion)
-        } else {
-            manager.resumeDelivery(completion: completion)
         }
         wait(for: [done], timeout: 5)
         delegateQueue.sync {}
@@ -121,6 +116,26 @@ import XCTest
         XCTAssertTrue(resumes.isEmpty)
     }
 
+    func testARefusedResumeAcknowledgesTheResumePumpAlarmAndRetries() {
+        let alarm = AlarmStatusResponse.AlarmResponseType.RESUME_PUMP_ALARM2
+        bluetooth.stub(AlarmStatusRequest.self, with: AlarmStatusResponse(intMap: UInt64(1) << UInt64(alarm.rawValue)))
+        bluetooth.stub(DismissNotificationRequest.self, with: DismissNotificationResponse(status: 0))
+        bluetooth.stub(ResumePumpingRequest.self) { [unowned self] _ in
+            guard self.bluetooth.didSend(DismissNotificationRequest.self) else {
+                return ResumePumpingResponse(status: 1)
+            }
+            self.isSuspended = false
+            return ResumePumpingResponse(status: 0)
+        }
+
+        XCTAssertNil(resume())
+
+        XCTAssertEqual(bluetooth.sent(DismissNotificationRequest.self).map(\.notificationId), [UInt32(alarm.rawValue)])
+        XCTAssertEqual(bluetooth.sent(ResumePumpingRequest.self).count, 2)
+        XCTAssertEqual(manager.state.basalDose.type, .resume)
+        XCTAssertEqual(resumes.count, 1)
+    }
+
     func testARefusalFromAPumpAlreadyDeliveringSucceeds() {
         manager.state.featureFlags[.historyBackfill] = false
         isSuspended = false
@@ -149,10 +164,10 @@ import XCTest
         XCTAssertEqual(manager.state.basalDose.type, .resume)
     }
 
-    func testTheSettingsResumeAcknowledgesNoAlarmWhenALostAnswerWasApplied() {
+    func testAResumeAcknowledgesNoAlarmWhenALostAnswerWasApplied() {
         loseTheAnswer(applying: true)
 
-        XCTAssertNil(resume(acknowledgingAlarms: true))
+        XCTAssertNil(resume())
 
         XCTAssertFalse(bluetooth.didSend(AlarmStatusRequest.self))
         XCTAssertEqual(bluetooth.sent(ResumePumpingRequest.self).count, 1)

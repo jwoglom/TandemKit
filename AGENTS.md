@@ -295,7 +295,9 @@ edit instead of at the next sync.
   unless `pendingSegmentWrites` finds nothing left to write. `fetchBasalStatus` compares the
   pump's rate against the schedule every sync, on the pump's clock via `pumpClockOffset`, using
   `profileBasalRate` during a temp basal and under Control-IQ, and skipping suspend and an
-  all-zero schedule, the placeholder for one the host never gave.
+  all-zero schedule, the placeholder for one the host never gave. The schedule's rate up to
+  `basalRateCheckTolerance` (1 min) either side matches: the offset trails the pump's clock by up to
+  a second plus the read's latency, and the read a segment change triggers lands in that gap (#566).
 - The driver writes the host's schedule over a pump profile that differs, under Control-IQ too,
   since hosts take the pump to hold what they last saved (Trio keeps a profile only once the sync
   takes). A rate read off the schedule, or a profile `adoptMatchingPumpProfile` finds different,
@@ -443,7 +445,7 @@ edit instead of at the next sync.
   - A sync, or a wizard's `fetchSuspendStatus`, that leaves a change pending completes once it
     is reported, or after `transitionHistoryWait` (30 s) at detection; `ensureCurrentPumpData`
     is not throttled while one is pending, so the host doses on a sync that has reported it.
-    `resumeDelivery` and the settings screen's resume read the pump first and wait the same way:
+    `resumeDelivery` reads the pump first and waits the same way:
     the resume ends the temp basal the host holds, so a stop the driver missed must be reported
     before it, or Loop ignores it. A failed read still resumes. Before an app command that changes
     basal emits (temp basal, cancel, suspend, resume, enabling Control-IQ over a temp) a pending
@@ -699,10 +701,13 @@ edit instead of at the next sync.
   Suspended after a nil, where the driver held no suspend, is the app's suspend, reported at the
   reading; any other reading goes to `observeDeliveryState`, which ends a temp the stop ended. The
   command succeeds whenever the pump reads suspended, so a cartridge wizard can go on.
-- `ResumePumping` is read back the same way, from `resumeDelivery` and the settings screen's resume
-  alike. Delivering after a nil, where the driver held a suspend, is the app's resume, reported at
-  the send, the earliest the pump could have resumed. The command succeeds whenever the pump reads
-  delivering, so the settings screen acknowledges no alarm for a resume that went through.
+- `ResumePumping` is read back the same way. Delivering after a nil, where the driver held a
+  suspend, is the app's resume, reported at the send, the earliest the pump could have resumed. The
+  command succeeds whenever the pump reads delivering, so no alarm is acknowledged for a resume that
+  went through. One the pump refuses while it raises `RESUME_PUMP_ALARM` or `RESUME_PUMP_ALARM2`
+  acknowledges those and is retried once (`ResumeWithAlarmAcknowledgement`), from the host's resume
+  and the settings screen's alike: the host shows only its own error, and the alarms ask for the
+  resume being made (#170). Any other alarm is left for the user to dismiss.
 - A pump clock more than `pumpClockSkewThreshold` (5 min) off the phone's (`isPumpClockSkewed`)
   raises a LoopKit alert, retracted once the clock agrees (`pumpClockSkewAlertIssued`, persisted),
   and a status highlight; the settings screen syncs the clock. While skewed, wherever the host

@@ -167,17 +167,12 @@ import XCTest
         delegateQueue.sync {}
     }
 
-    private func appResume(acknowledgingAlarms: Bool = false) {
+    private func appResume() {
         bluetooth.stub(ResumePumpingRequest.self, with: ResumePumpingResponse(status: 0))
         let done = expectation(description: "resumeDelivery")
-        let completion: (Error?) -> Void = { error in
+        manager.resumeDelivery { error in
             XCTAssertNil(error)
             done.fulfill()
-        }
-        if acknowledgingAlarms {
-            manager.resumeDeliveryAcknowledgingResumeAlarms(completion: completion)
-        } else {
-            manager.resumeDelivery(completion: completion)
         }
         wait(for: [done], timeout: 60)
         delegateQueue.sync {}
@@ -934,17 +929,6 @@ import XCTest
         XCTAssertEqual(transitions, [.suspend, .resume])
         XCTAssertEqual(events(.suspend).map(\.date), [minutes(10)])
         XCTAssertEqual(events(.resume).map(\.date), [minutes(30)])
-    }
-
-    func testSettingsResumeReportsAMissedStopFromHistoryFirst() {
-        stubPump(serving: [resumed(at: start.addingTimeInterval(-60)), suspended(at: minutes(10))])
-        advance(to: minutes(30))
-        stubBasalStatus(1)
-
-        appResume(acknowledgingAlarms: true)
-
-        XCTAssertEqual(transitions, [.suspend, .resume])
-        XCTAssertEqual(events(.suspend).map(\.date), [minutes(10)])
     }
 
     func testWithTheFlagOffResumeReportsAMissedStopAtDetectionFirst() {

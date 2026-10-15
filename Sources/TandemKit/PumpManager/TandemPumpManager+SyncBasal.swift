@@ -114,14 +114,15 @@ extension TandemPumpManager {
 
             if idpManager.getProfiles().isEmpty == true {
                 self.logger.info("No profiles in IDPManager, creating initial profile for Trio")
-                // TODO(jwoglom): read correct profile defaults
+                // The host gives a pump manager no carb ratio, sensitivity or target, so these bias the
+                // pump's own bolus calculator and Control-IQ's corrections toward less insulin.
                 let message = idpManager.createNewProfileMessage(
                     profileName: "TandemKitProfile",
-                    defaultCarbRatio: 10,
+                    defaultCarbRatio: 30000, // 30 g/U, in the pump's milligrams per unit
                     defaultBasalRateUnits: sortedItems.first?.value ?? 0,
-                    defaultTargetBG: 110,
-                    defaultISF: 40,
-                    defaultInsulinDurationMinutes: 240,
+                    defaultTargetBG: 140, // mg/dL
+                    defaultISF: 100, // mg/dL per unit
+                    defaultInsulinDurationMinutes: 300, // the 5 hours Control-IQ requires
                     profileCarbEntryEnabled: false
                 )
 

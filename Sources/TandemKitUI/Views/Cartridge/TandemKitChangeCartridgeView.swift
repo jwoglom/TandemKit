@@ -213,7 +213,7 @@ struct TandemKitChangeCartridgeView: View {
                 Text("Prepare Pump", comment: "Step header")
                     .font(.title2)
                     .fontWeight(.bold)
-                Text("Swipe away any active pump notifications below", comment: "Step description")
+                Text("Dismiss any active pump notifications below", comment: "Step description")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }
@@ -222,7 +222,7 @@ struct TandemKitChangeCartridgeView: View {
                 Label(
                     String(
                         localized:
-                        "Clear all notifications before starting cartridge change by swiping them away",
+                        "Dismiss all notifications before starting cartridge change",
                         comment: "Warning message"
                     ),
                     systemImage: "exclamationmark.triangle.fill"
@@ -392,7 +392,7 @@ struct TandemKitChangeCartridgeView: View {
                 Label(
                     String(
                         localized:
-                        "Clear all notifications before continuing by swiping them away",
+                        "Dismiss all notifications before continuing",
                         comment: "Warning message"
                     ),
                     systemImage: "exclamationmark.triangle.fill"

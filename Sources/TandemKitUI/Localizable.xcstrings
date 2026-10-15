@@ -625,46 +625,46 @@
     "Checksum mismatch" : {
 
     },
-    "Clear all notifications before completing tubing fill by swiping them away" : {
+    "Dismiss all notifications before completing tubing fill" : {
       "comment" : "Warning message",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Clear all notifications before completing tubing fill by swiping them away"
+            "value" : "Dismiss all notifications before completing tubing fill"
           }
         }
       }
     },
-    "Clear all notifications before continuing by swiping them away" : {
+    "Dismiss all notifications before continuing" : {
       "comment" : "Warning message",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Clear all notifications before continuing by swiping them away"
+            "value" : "Dismiss all notifications before continuing"
           }
         }
       }
     },
-    "Clear all notifications before starting cartridge change by swiping them away" : {
+    "Dismiss all notifications before starting cartridge change" : {
       "comment" : "Warning message",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Clear all notifications before starting cartridge change by swiping them away"
+            "value" : "Dismiss all notifications before starting cartridge change"
           }
         }
       }
     },
-    "Clear all notifications before starting tubing fill by swiping them away" : {
+    "Dismiss all notifications before starting tubing fill" : {
       "comment" : "Warning message",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Clear all notifications before starting tubing fill by swiping them away"
+            "value" : "Dismiss all notifications before starting tubing fill"
           }
         }
       }
@@ -1113,6 +1113,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Disabled"
+          }
+        }
+      }
+    },
+    "Dismiss" : {
+      "comment" : "Button that dismisses a pump notification",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dismiss"
           }
         }
       }
@@ -3328,13 +3339,13 @@
         }
       }
     },
-    "Swipe away any active pump notifications below" : {
+    "Dismiss any active pump notifications below" : {
       "comment" : "Step description",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Swipe away any active pump notifications below"
+            "value" : "Dismiss any active pump notifications below"
           }
         }
       }
@@ -3552,13 +3563,13 @@
         }
       }
     },
-    "The pump rejected starting insulin delivery. Check \"View Notifications\" to see the pump's current status and swipe away all active pump notifications. This may have occurred due to active pump notifications, invalid settings, empty cartridge, or not filling the tubing." : {
+    "The pump rejected starting insulin delivery. Check \"View Notifications\" to see the pump's current status and dismiss all active pump notifications. This may have occurred due to active pump notifications, invalid settings, empty cartridge, or not filling the tubing." : {
       "comment" : "Message for failed to resume insulin delivery",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The pump rejected starting insulin delivery. Check \"View Notifications\" to see the pump's current status and swipe away all active pump notifications. This may have occurred due to active pump notifications, invalid settings, empty cartridge, or not filling the tubing."
+            "value" : "The pump rejected starting insulin delivery. Check \"View Notifications\" to see the pump's current status and dismiss all active pump notifications. This may have occurred due to active pump notifications, invalid settings, empty cartridge, or not filling the tubing."
           }
         }
       }
@@ -3574,13 +3585,13 @@
         }
       }
     },
-    "The pump rejected suspending insulin delivery. Check \"View Notifications\" to see the pump's current status and swipe away all active pump notifications. This may have occurred due to an active bolus. To urgently suspend insulin delivery, detach from your site." : {
+    "The pump rejected suspending insulin delivery. Check \"View Notifications\" to see the pump's current status and dismiss all active pump notifications. This may have occurred due to an active bolus. To urgently suspend insulin delivery, detach from your site." : {
       "comment" : "Message for failed to suspend insulin delivery",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The pump rejected suspending insulin delivery. Check \"View Notifications\" to see the pump's current status and swipe away all active pump notifications. This may have occurred due to an active bolus. To urgently suspend insulin delivery, detach from your site."
+            "value" : "The pump rejected suspending insulin delivery. Check \"View Notifications\" to see the pump's current status and dismiss all active pump notifications. This may have occurred due to an active bolus. To urgently suspend insulin delivery, detach from your site."
           }
         }
       }
@@ -3863,13 +3874,13 @@
         }
       }
     },
-    "To dismiss a pump notification, swipe it away." : {
+    "To dismiss a pump notification, tap Dismiss or swipe it to the left." : {
       "comment" : "Hint for dismissing notifications",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "To dismiss a pump notification, swipe it away."
+            "value" : "To dismiss a pump notification, tap Dismiss or swipe it to the left."
           }
         }
       }
