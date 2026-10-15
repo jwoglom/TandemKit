@@ -74,8 +74,8 @@ Coverage that was dropped along with the code it tested (the `PumpComm` fault ta
 policy, `HistoryDeduplicator`/`HistoryReconciler`, `PumpChallengeRequestBuilder` and the V1
 16-character pairing path) is not represented anywhere now. If any of those behaviours come back,
 they need tests written against the current architecture, not restored from git history. Some have
-come back, with tests of their own: the packet layer `TandemBLE` held is `Packetize` and
-`BTResponseParser` in TandemCore, pumpX2's `PumpStateSupplier` is `QualifyingEventContext`,
+come back, with tests of their own: the packet layer `TandemBLE` held is `Packetize`,
+`PacketAssembler` and `BTResponseParser` in TandemCore, pumpX2's `PumpStateSupplier` is `QualifyingEventContext`,
 `HistoryToDoseMapper` and `HistoryTimestampReconciler` are back, and `BolusReportLedger`,
 `DeliveryTransitionLedger` and `BasalReconciler` match history against what the host was told.
 
@@ -156,6 +156,30 @@ Bolus progress observers are called on the queue the host passed
 `createBolusProgressReporter(reportingOn:)`, which Trio relies on to serialize its own reporter
 state. `TandemDoseProgressReporter` is shared by the command queue, the telemetry queue and every
 host queue, so its state stays behind its lock, as does the manager's reference to it.
+
+### Responses and the shared link
+- The pump has one link to the phone, and iOS notifies every app subscribed to a characteristic,
+  so the driver also receives the responses to another app's requests, as field logs show after a
+  connect (#507). `PendingWrite` takes only its own answer: on the request's characteristic, under
+  the request's txId (byte 1 of every notification and byte 3 of the first, as pumpX2 checks),
+  starting with the response's opcode, and then each next piece by txId and `remaining` countdown
+  (`PacketAssembler`). A refusal is an `ErrorResponse` under that txId, on `CURRENT_STATUS` or the
+  request's characteristic: faketandem sends it on the first, pumpX2 expects the second.
+- `PacketAssembler` checks the CRC and declared length of every message, as pumpX2's
+  `PacketArrayList` does. A corrupt message under the pending txId is dropped and the write waits
+  on; one that does not decode as the response type ends it as unanswered.
+- History log, control stream and qualifying-event notifications are routed before the pending
+  write. None answers a write, and at the 23-byte MTU the second notification of a signed stream
+  message is HMAC, whose byte 2 can be any opcode. Both streams are reassembled, and a piece that
+  starts a message drops one that lost a piece. Control-stream messages that share an opcode are
+  told apart by declared length (`ControlStreamMessages.responseType`).
+- Anything else on a request characteristic is reassembled and logged once
+  (`UnsolicitedNotificationLog`): as the late answer of a write that timed out under its txId in
+  the last two minutes, otherwise as another app's, at info for the first of a burst and at debug
+  for the rest.
+- Still open: another app's response under the pending write's txId and opcode is taken as the
+  answer. It answers the same request, so it reads the same pump state. Nothing tells the user
+  that another app talks to the pump, and nothing checks the HMAC of a signed response.
 
 ### Handshake failures
 `TandemBluetoothManager` counts JPAKE handshakes the pump ended or left unanswered
@@ -799,8 +823,8 @@ integration scenarios.
 - **Delivery-uncertainty recovery.** `deliveryIsUncertain` is set only for an unconfirmed bolus,
   which the next read of the pump settles on its own; `deliveryUncertaintyRecoveryViewController`
   returns the general `TandemUICoordinator`, and there is no dedicated recovery screen.
-- **Response validation.** `BTResponseParser` does not check the CRC, HMAC or `txId` of received
-  packets; it only rejects cargo shorter than the message's declared size.
+- **Response validation.** `PacketAssembler` checks the txId, packet countdown, declared length
+  and CRC of every received message, but nothing checks the HMAC of a signed response.
 - **Hardware validation.** [docs/hardware-test-plan.md](docs/hardware-test-plan.md) is the manual
   procedure for the t:slim X2 and the Mobi, but no run of it is recorded, so which pump firmware
   versions work is unknown.

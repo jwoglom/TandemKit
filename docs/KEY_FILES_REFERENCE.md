@@ -25,6 +25,7 @@ pieces fit together. Paths are relative to the repository root.
 | `PumpBluetoothConnection.swift` | The protocol everything above the BLE layer talks through. |
 | `TandemBluetoothManager.swift` | `CBCentralManager`, the serial command queue (`ensureConnected`), connect, reconnect and scan. |
 | `TandemPeripheralManager.swift` | `CBPeripheral`: session setup (`performInitialSetup`), the write/response path, and routing notifications by characteristic. |
+| `UnsolicitedNotificationLog.swift` | Sorts responses no write waited for into late answers and bursts from another app on the phone, for the log. |
 | `HistoryLogFetcher.swift` | Reads a window of history logs in 255-entry chunks with gap healing, using the store before the pump. |
 | `PumpTelemetryScheduler.swift` | Timer helper. Used today only for the 1 s bolus progress poll. |
 | `TandemDoseProgressReporter.swift` | LoopKit `DoseProgressReporter` for a running bolus. |
@@ -68,7 +69,8 @@ pieces fit together. Paths are relative to the repository root.
 | `Messages/Message.swift` | `Message`, `PumpRequest` and `MessageProps`. |
 | `Messages/MessageRegistry.swift` | The catalog: response lookup by opcode and characteristic, request/response pairing, lookup by name. |
 | `Messages/Packetizer.swift` | `Packetize.parse` (header, HMAC-SHA1 signing, CRC, chunking) and `Packet`. |
-| `Messages/BTResponseParser.swift` | Reassembles notification packets into a typed response. |
+| `Messages/PacketAssembler.swift` | Reassembles one message from its notifications, taking only the pieces that continue it, and checks its length and CRC. |
+| `Messages/BTResponseParser.swift` | Decodes an assembled message into a typed response. |
 | `Messages/ErrorResponse.swift` | The pump's refusal of a request. |
 | `Messages/Authentication/`, `Control/`, `ControlStream/`, `CurrentStatus/`, `HistoryLog/`, `QualifyingEvent/` | Message types. A request and its response share a file; history records have one file per type, decoded by `HistoryLog/HistoryLogParser.swift`. |
 | `Messages/Models/` | Shared message models: `KnownApiVersion`, `SupportedDevices`, `MessageSupport` (`isSupported(pumpModel:apiVersion:)`), `PumpFaultCode` and others. |
