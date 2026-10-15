@@ -220,7 +220,7 @@ struct TandemKitSettingsView: View {
                 HStack(alignment: .firstTextBaseline) {
                     deliveryStatus
 
-                    if let dose = viewModel.basalDose, dose.type == .suspend {
+                    if viewModel.isDeliverySuspended {
                         Spacer()
                     } else {
                         algorithmStatus
@@ -783,8 +783,10 @@ struct TandemKitSettingsView: View {
         }
     }
 
+    // With the algorithm column hidden while suspended, the two columns sit at the card's edges, so
+    // their headers align to those edges rather than centering over values of a different width.
     var reservoirStatus: some View {
-        VStack(alignment: .center, spacing: 5) {
+        VStack(alignment: viewModel.isDeliverySuspended ? .trailing : .center, spacing: 5) {
             Text("Cartridge", comment: "Header for insulin remaining")
                 .foregroundColor(Color(UIColor.secondaryLabel))
 
@@ -823,7 +825,7 @@ struct TandemKitSettingsView: View {
     }
 
     var deliveryStatus: some View {
-        VStack(alignment: .center, spacing: 5) {
+        VStack(alignment: viewModel.isDeliverySuspended ? .leading : .center, spacing: 5) {
             Text(deliverySectionTitle)
                 .foregroundColor(Color(UIColor.secondaryLabel))
                 .lineLimit(1)
