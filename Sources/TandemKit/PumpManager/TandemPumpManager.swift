@@ -971,8 +971,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
             ))
 
             var events = self.getActivePumpEvents()
-            // A zero delivery is reported, not retracted: Trio only shrinks a stored bolus when a
-            // smaller one arrives, so dropping the event leaves it at the programmed amount.
+            // A zero delivery is finalized at 0 U, not withdrawn: Loop purges nothing on an empty batch,
+            // and keeps a 0 U bolus out of IOB and HealthKit itself.
             // bolusDose.startDate, not the dose's: the date it was first reported under.
             events.append(NewPumpEvent.bolus(dose: canceledDose, date: bolusDose.startDate))
 
