@@ -625,35 +625,35 @@
     "Checksum mismatch" : {
 
     },
-    "Clear all notifications before completing tubing fill" : {
+    "Clear all notifications before completing tubing fill by swiping them away" : {
       "comment" : "Warning message",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Clear all notifications before completing tubing fill"
+            "value" : "Clear all notifications before completing tubing fill by swiping them away"
           }
         }
       }
     },
-    "Clear all notifications before continuing" : {
+    "Clear all notifications before continuing by swiping them away" : {
       "comment" : "Warning message",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Clear all notifications before continuing"
+            "value" : "Clear all notifications before continuing by swiping them away"
           }
         }
       }
     },
-    "Clear all notifications before starting cartridge change" : {
+    "Clear all notifications before starting cartridge change by swiping them away" : {
       "comment" : "Warning message",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Clear all notifications before starting cartridge change"
+            "value" : "Clear all notifications before starting cartridge change by swiping them away"
           }
         }
       }
@@ -665,17 +665,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Clear all notifications before starting tubing fill by swiping them away"
-          }
-        }
-      }
-    },
-    "Clear all pump notifications before continuing" : {
-      "comment" : "Step description",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Clear all pump notifications before continuing"
           }
         }
       }
@@ -1668,6 +1657,39 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Finish"
+          }
+        }
+      }
+    },
+    "Checking insulin delivery status..." : {
+      "comment" : "Status text",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Checking insulin delivery status..."
+          }
+        }
+      }
+    },
+    "Filling tubing requires disconnecting from your site." : {
+      "comment" : "Step description",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filling tubing requires disconnecting from your site."
+          }
+        }
+      }
+    },
+    "Insulin delivery will be suspended during the cartridge change." : {
+      "comment" : "Step description",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Insulin delivery will be suspended during the cartridge change."
           }
         }
       }
