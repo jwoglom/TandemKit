@@ -376,17 +376,25 @@ public final class CBCentralManager: NSObject {
         link.close()
 
         let cancelledLocally = peripheral.detach(link)
-        let error: Error? = if let disconnectReason {
-            SocketPumpError.pumpDisconnected(reason: disconnectReason)
-        } else if cancelledLocally {
+        // As CoreBluetooth reports them: a pump that ends the link sends a terminate
+        // (peripheralDisconnected), and one that goes quiet, out of range, is timed out.
+        let error: Error? = if let disconnectReason, disconnectReason != Self.radioOffReason {
+            CBError(.peripheralDisconnected)
+        } else if disconnectReason == nil, cancelledLocally {
             nil
         } else {
-            readError ?? SocketPumpError.pumpDisconnected(reason: "connection closed")
+            CBError(.connectionTimeout)
+        }
+        if error != nil {
+            logger.info("Link closed: \(disconnectReason ?? readError.map(String.init(describing:)) ?? "connection closed")")
         }
         queue.async {
             self.delegate?.centralManager(self, didDisconnectPeripheral: peripheral, error: error)
         }
     }
+
+    /// faketandem's reason for a link its radio fault took down.
+    static let radioOffReason = "radio_off"
 
     public func cancelPeripheralConnection(_ peripheral: CBPeripheral) {
         peripheral.cancelConnection()

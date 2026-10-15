@@ -109,6 +109,42 @@ import XCTest
         XCTAssertTrue(bluetooth.isJpakeFailureLimitReached)
     }
 
+    // MARK: - What counts
+
+    func testARoundLostToTheRadioIsNotCounted() {
+        let loss = TandemPeripheralManager.LinkLoss(disconnectError: CBError(.connectionTimeout))
+
+        XCTAssertEqual(loss, .radio)
+        XCTAssertFalse(TandemPeripheralManager.WriteFailure.linkLost(loss).countsAsJpakeFailure)
+    }
+
+    func testARoundLostToThePumpEndingTheLinkIsCounted() {
+        let loss = TandemPeripheralManager.LinkLoss(disconnectError: CBError(.peripheralDisconnected))
+
+        XCTAssertEqual(loss, .other)
+        XCTAssertTrue(TandemPeripheralManager.WriteFailure.linkLost(loss).countsAsJpakeFailure)
+    }
+
+    // A connect that ran out of time mid-handshake is cancelled by the driver, with no error.
+    func testARoundLostToADisconnectTheDriverAskedForIsCounted() {
+        let loss = TandemPeripheralManager.LinkLoss(disconnectError: nil)
+
+        XCTAssertEqual(loss, .other)
+        XCTAssertTrue(TandemPeripheralManager.WriteFailure.linkLost(loss).countsAsJpakeFailure)
+    }
+
+    func testARoundLostToBluetoothGoingOffIsNotCounted() {
+        XCTAssertFalse(TandemPeripheralManager.WriteFailure.linkLost(.bluetooth).countsAsJpakeFailure)
+    }
+
+    func testARoundNeverSentIsNotCounted() {
+        XCTAssertFalse(TandemPeripheralManager.WriteFailure.notSent.countsAsJpakeFailure)
+    }
+
+    func testARoundTheLinkCarriedButThePumpLeftUnansweredIsCounted() {
+        XCTAssertTrue(TandemPeripheralManager.WriteFailure.unanswered.countsAsJpakeFailure)
+    }
+
     // MARK: - What it stops
 
     func testAnAutomaticReconnectIsSkippedOnceTheLimitIsReached() {

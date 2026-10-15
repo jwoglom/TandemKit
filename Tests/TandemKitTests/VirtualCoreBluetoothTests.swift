@@ -443,9 +443,42 @@ final class VirtualCoreBluetoothTests: XCTestCase {
         try XCTUnwrap(server.latestAttachedConnection).drop(reason: "fault_injection")
         wait(for: [dropped], timeout: 5)
 
-        XCTAssertEqual(reported as? SocketPumpError, .pumpDisconnected(reason: "fault_injection"))
+        XCTAssertEqual((reported as? CBError)?.code, .peripheralDisconnected)
         XCTAssertNil(peripheral.services, "services must be rediscovered after reconnecting")
         XCTAssertTrue(central.retrieveConnectedPeripherals(withServices: [ServiceUUID.PUMP_SERVICE]).isEmpty)
+    }
+
+    func testARadioOffDropIsReportedAsAConnectionTimeout() throws {
+        let peripheral = try connectPeripheral()
+
+        let reported = try disconnectError(of: peripheral) {
+            try XCTUnwrap(server.latestAttachedConnection).drop(reason: CBCentralManager.radioOffReason)
+        }
+
+        XCTAssertEqual((reported as? CBError)?.code, .connectionTimeout)
+    }
+
+    func testALinkClosedWithNoDisconnectIsReportedAsAConnectionTimeout() throws {
+        let peripheral = try connectPeripheral()
+
+        let reported = try disconnectError(of: peripheral) {
+            try XCTUnwrap(server.latestAttachedConnection).link.shutdown()
+        }
+
+        XCTAssertEqual((reported as? CBError)?.code, .connectionTimeout)
+    }
+
+    private func disconnectError(of peripheral: CBPeripheral, after drop: () throws -> Void) throws -> Error? {
+        let dropped = expectation(description: "didDisconnect")
+        var reported: Error?
+        recorder.onDisconnect = { disconnected, error in
+            XCTAssertTrue(disconnected === peripheral)
+            reported = error
+            dropped.fulfill()
+        }
+        try drop()
+        wait(for: [dropped], timeout: 5)
+        return reported
     }
 
     func testCancelPeripheralConnectionReportsACleanDisconnect() throws {

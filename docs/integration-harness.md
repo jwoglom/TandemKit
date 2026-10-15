@@ -126,6 +126,10 @@ it simply reports skips.
   before each test (`reset()`: drop any attached central, set the pairing code and clear
   the long-term key, real clock, no faults, `PairStep2`, empty request log), builds a
   `Driver`, and offers the flows the onboarding UI uses (`discover`, `pair`, `sync`).
+- The virtual `CBCentralManager` reports a link faketandem drops as CoreBluetooth would: a
+  `disconnect` with reason `radio_off` (the `radioOff` fault), or a socket that closes with no
+  `disconnect` at all, as `CBError.connectionTimeout`, the phone losing the pump; any other reason as
+  `peripheralDisconnected`, the pump ending the link.
 - `Driver` is one real stack: `VirtualPump.endpoint` pointed at the emulator, then
   `TandemBluetoothManager()` (which creates its `CBCentralManager` as in production) →
   `TandemPumpManager(state:bluetooth:clock:)` with a `MockPumpManagerDelegate` attached in
@@ -235,7 +239,7 @@ inbound messages since the last reset; each test attaches the whole log to its r
 | `PairingIntegrationTests` | Fresh JPAKE pairing through every round; wrong code refused; seeded long-term key authenticates through rounds 3/4 only. |
 | `SyncIntegrationTests` | `syncPumpData` reports a status update, one reservoir reading, the reconciliation boundary as an empty non-replacing batch; a second sync is quiet and advances the boundary. |
 | `BolusIntegrationTests` | `enactBolus(1.0)`: BolusPermission then InitiateBolus on Control, the mutable dose event, the pump's bolus record (source id 8), then finalization from `LastBolusStatus` with the same `raw`/`syncIdentifier`. |
-| `ReconnectIntegrationTests` | A pump-side drop is followed by a quick reconnect (round 3 first, key unchanged) and the new session serves a sync; a reconnect after an outage syncs and reports to the host on its own, whether the retry or a command brought the link back; a driver rebuilt from persisted `rawValue` reaches the pump on its first command. |
+| `ReconnectIntegrationTests` | A pump-side drop is followed by a quick reconnect (round 3 first, key unchanged) and the new session serves a sync; a reconnect after an outage syncs and reports to the host on its own, whether the retry or a command brought the link back; a driver rebuilt from persisted `rawValue` reaches the pump on its first command. Three radio drops in a row during the handshake leave the driver reconnecting on its own; three far-end drops at round 3 stop it, with `.handshakeFailing`. |
 | `CartridgeProcedureIntegrationTests` | The emulator's `workflow_mode` refuses `EnterChangeCartridgeMode` while fill-tubing (or change mode) is open, and the exit that would back out; `recoverAndReenterChangeCartridgeMode` unwinds it (fill-tubing exit, change-cartridge exit, enter) and re-enters. The refusal rule is inferred from a field report, not confirmed on firmware. |
 | `Conformance/` | The dose-reporting conformance groups A–D and F–I (`docs/conformance-test-plan.md`): interrupts, cancels, idempotency, pump-side failures, outages, time changes, basal read back from the pump's history and the pump's IOB against the boluses reported, A–D, F and G each ending in a diff of the host's stored doses against `PumpTimeline`. |
 | `BasalScheduleSyncIntegrationTests` | `syncBasalRateSchedule` from a pump with no profile (host schedule of 0, 1, 2, 16 and 17 entries) and from a two-segment profile (1, 2 and 3 entries): the profile the pump ends up holding, `CreateIDPRequest` only when it had none, and nothing written for an empty or 17-entry schedule. `enactTempBasal` is refused, with no `SetTempRateRequest` reaching the pump, until a sync first succeeds, including after setup refuses a 17-entry schedule (#443); on a pump holding a different profile the refusal starts an update that writes the schedule, and the next temp basal goes out. |

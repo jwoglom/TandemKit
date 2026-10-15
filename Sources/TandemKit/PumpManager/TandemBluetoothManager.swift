@@ -366,8 +366,8 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
         connectStateLock.unlock()
     }
 
-    /// Called from the setup task when the pump ended the handshake or never answered it. Reported
-    /// with a second host paired to the same pump: it accepts the link, then drops it mid-handshake.
+    /// Called from the setup task when the pump may have ended the handshake or never answered it.
+    /// Reported with a second host paired to the same pump: it accepts the link, then drops it.
     func recordJpakeFailure() {
         connectStateLock.lock()
         consecutiveJpakeFailures += 1
@@ -618,7 +618,7 @@ extension TandemBluetoothManager: CBCentralManagerDelegate {
             logger.info("Bluetooth not powered on; cancelling pending operations")
             cancelReconnectRetry()
             cancelInFlightConnect()
-            peripheralManager?.cancelPendingOperations()
+            peripheralManager?.linkWentDown(.bluetooth)
             // No didDisconnectPeripheral arrives for those, so this is the only notice.
             markLinkDown()
             return
@@ -703,7 +703,7 @@ extension TandemBluetoothManager: CBCentralManagerDelegate {
         // Also release any in-flight connect attempt (e.g. a disconnect mid-performInitialSetup),
         // which would otherwise block awaitConnect for its full timeout.
         cancelInFlightConnect()
-        peripheralManager?.cancelPendingOperations()
+        peripheralManager?.linkWentDown(TandemPeripheralManager.LinkLoss(disconnectError: error))
         markLinkDown()
 
         if let pendingConnect {

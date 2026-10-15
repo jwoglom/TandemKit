@@ -221,6 +221,20 @@ public class CBATTRequest {
     }
 }
 
+/// `CBErrorDomain`, as Swift imports it, with only the codes the driver reads.
+public struct CBError: Error, Hashable {
+    public enum Code: Int, Hashable {
+        case connectionTimeout = 6
+        case peripheralDisconnected = 7
+    }
+
+    public let code: Code
+
+    public init(_ code: Code, userInfo _: [String: Any] = [:]) {
+        self.code = code
+    }
+}
+
 public enum CBATTError: Int, Error {
     case success = 0x00
     case invalidHandle = 0x01

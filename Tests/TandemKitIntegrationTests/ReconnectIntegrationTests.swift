@@ -64,6 +64,56 @@ final class ReconnectIntegrationTests: FaketandemIntegrationTestCase {
         XCTAssertNotNil(try harness.sync(driver), "the new session must serve commands")
     }
 
+    /// A weak-signal stretch cuts every handshake in a row (#565).
+    func testRadioDropsMidHandshakeDoNotStopTheAutomaticReconnects() throws {
+        let driver = makeDriver()
+        try harness.pair(driver)
+        addTeardownBlock { try self.harness.client.armFault(FaketandemFaultSpec(.radioOn)) }
+        // Unanswered, so each handshake is still waiting on round 3 when the radio goes.
+        var unanswered = FaketandemFaultSpec(.dropResponse, message: "Jpake3SessionKeyRequest")
+        unanswered.every = true
+        let fault = try XCTUnwrap(try harness.client.armFault(unanswered))
+        var logStart = try harness.client.snapshot().requestLog.lastSeq
+        try harness.control.disconnectPump()
+
+        let retryBudget = TandemBluetoothManager.reconnectRetryDelays.prefix(4).reduce(0, +) + 30
+        for _ in 0 ..< TandemBluetoothManager.jpakeFailureLimit {
+            try IntegrationWait.until("the driver's next handshake", timeout: retryBudget) {
+                try harness.requestsSeen(since: logStart).contains { $0.message == "Jpake3SessionKeyRequest" }
+            }
+            logStart = try harness.client.snapshot().requestLog.lastSeq
+            try harness.client.armFault(FaketandemFaultSpec(.radioOff))
+            try IntegrationWait.until("the pump to lose the link", timeout: 10) {
+                try !harness.client.snapshot().connection.connected
+            }
+            try harness.client.armFault(FaketandemFaultSpec(.radioOn))
+        }
+        XCTAssertFalse(driver.bluetooth.isJpakeFailureLimitReached)
+        XCTAssertNotEqual(driver.manager.connectionIssue, .handshakeFailing)
+
+        try harness.client.clearFault(id: fault.id)
+        try IntegrationWait.until("the driver to reconnect on its own", timeout: retryBudget) {
+            try driver.manager.state.isConnected && harness.client.snapshot().auth.authenticated
+        }
+    }
+
+    /// As a second host on the pump does (#400): a far-end drop at round 3, every time.
+    func testThePumpEndingEveryHandshakeStopsTheAutomaticReconnects() throws {
+        let driver = makeDriver()
+        try harness.pair(driver)
+        var cutOff = FaketandemFaultSpec(.disconnect, message: "Jpake3SessionKeyRequest")
+        cutOff.after = "request"
+        cutOff.every = true
+        try harness.client.armFault(cutOff)
+
+        try harness.control.disconnectPump()
+
+        try IntegrationWait.until("the handshake failure limit", timeout: 60) {
+            driver.bluetooth.isJpakeFailureLimitReached
+        }
+        XCTAssertEqual(driver.manager.connectionIssue, .handshakeFailing)
+    }
+
     /// Whatever the pump did out of range reaches the host only through a sync, and the host's next
     /// poll can be minutes off (#351). The reconnect retry or a job of the driver's own lands it.
     func testAReconnectAfterAnOutageSyncsAndReportsToTheHost() throws {
