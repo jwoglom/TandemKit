@@ -45,9 +45,16 @@ final class TandemKitDebugViewModel: ObservableObject {
         var sendButtonTitle: String { category.sendButtonTitle }
     }
 
+    enum Confirmation {
+        case command(Message)
+        case dangerous(Message, reason: String)
+    }
+
     @Published var lastResponseDescription: String?
+    @Published var lastResponseJSON: String?
     @Published var lastSendError: String?
     @Published var isSending = false
+    @Published private(set) var awaitingConfirmation: Confirmation?
 
     @Published var parameterInput: [String: String] = [:]
     @Published var cargoHexInput: String = ""
@@ -137,7 +144,10 @@ final class TandemKitDebugViewModel: ObservableObject {
             uniquingKeysWith: { first, _ in first }
         )
 
-        let grouped = Dictionary(grouping: MessageRegistry.all.filter { $0.messageType == .Request }) {
+        let sendable = MessageRegistry.all.filter {
+            $0.messageType == .Request && !$0.type.props.dangerousDoNotInvoke
+        }
+        let grouped = Dictionary(grouping: sendable) {
             $0.category
         }
 
@@ -425,6 +435,7 @@ final class TandemKitDebugViewModel: ObservableObject {
         parameterInput = [:]
         cargoHexInput = ""
         lastResponseDescription = nil
+        lastResponseJSON = nil
         lastSendError = nil
     }
 
@@ -438,12 +449,83 @@ final class TandemKitDebugViewModel: ObservableObject {
         return metadata.type.init(cargo: data)
     }
 
+    var isAwaitingCommandConfirmation: Bool {
+        if case .command = awaitingConfirmation { return true }
+        return false
+    }
+
+    var isAwaitingDangerousConfirmation: Bool {
+        if case .dangerous = awaitingConfirmation { return true }
+        return false
+    }
+
+    var confirmationMessage: String {
+        switch awaitingConfirmation {
+        case let .command(message):
+            return "You are sending a command which can modify the pump's state: \(String(describing: message))"
+        case let .dangerous(_, reason):
+            return "This is a dangerous command, are you sure you want to continue? Reason: \(reason)"
+        case nil:
+            return ""
+        }
+    }
+
+    /// Returns whether the message went out; false when it still waits on the dangerous-command confirmation.
+    @discardableResult
+    func confirmPendingSend() -> Bool {
+        switch awaitingConfirmation {
+        case let .command(message):
+            awaitingConfirmation = nil
+            if let reason = type(of: message).props.dangerousRequireExplicitConfirmation {
+                // SwiftUI drops an alert presented while the one before it is still animating away.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    self.awaitingConfirmation = .dangerous(message, reason: reason)
+                }
+                return false
+            }
+            dispatch(message)
+            return true
+        case let .dangerous(message, _):
+            awaitingConfirmation = nil
+            dispatch(message)
+            return true
+        case nil:
+            return false
+        }
+    }
+
+    func cancelPendingSend() {
+        awaitingConfirmation = nil
+    }
+
     private func send(_ message: Message?) {
         guard let message else {
             lastSendError = "Unable to build message"
             return
         }
 
+        guard pumpManager != nil else {
+            lastSendError = "Pump not available"
+            return
+        }
+
+        let reason = type(of: message).props.dangerousRequireExplicitConfirmation
+        switch MessageRegistry.metadata(for: message)?.category {
+        case .control,
+             .authentication:
+            lastSendError = nil
+            awaitingConfirmation = .command(message)
+        default:
+            if let reason {
+                lastSendError = nil
+                awaitingConfirmation = .dangerous(message, reason: reason)
+            } else {
+                dispatch(message)
+            }
+        }
+    }
+
+    private func dispatch(_ message: Message) {
         guard let pumpManager else {
             lastSendError = "Pump not available"
             return
@@ -453,6 +535,7 @@ final class TandemKitDebugViewModel: ObservableObject {
         isSending = true
         lastSendError = nil
         lastResponseDescription = nil
+        lastResponseJSON = nil
 
         pumpManager.sendDebugMessage(message) { [weak self] response in
             DispatchQueue.main.async {
@@ -460,6 +543,7 @@ final class TandemKitDebugViewModel: ObservableObject {
                 self.isSending = false
                 if let response {
                     self.lastResponseDescription = String(describing: response)
+                    self.lastResponseJSON = PumpProfileReadout.jsonString(for: response)
                 } else {
                     self.lastSendError = "No response received"
                 }

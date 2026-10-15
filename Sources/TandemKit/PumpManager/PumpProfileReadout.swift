@@ -78,6 +78,16 @@ public struct PumpProfileReadout {
         ]
     }
 
+    /// Pretty-printed, in the shape the profile export writes each message.
+    public static func jsonString(for message: Message) -> String {
+        guard let data = try? JSONSerialization.data(withJSONObject: jsonObject(for: message), options: [.prettyPrinted, .sortedKeys]),
+              let string = String(data: data, encoding: .utf8)
+        else {
+            return "{}"
+        }
+        return string
+    }
+
     private static func jsonObject(for message: Message) -> [String: Any] {
         var fields: [String: Any] = [:]
         for child in Mirror(reflecting: message).children {

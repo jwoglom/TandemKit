@@ -44,6 +44,10 @@ public struct MessageProps {
     public let minApi: KnownApiVersion
     public let supportedDevices: SupportedDevices
     public let modifiesInsulinDelivery: Bool
+    /// Never written to the pump: `TandemPeripheralManager` refuses it, and Debug Options leaves it out.
+    public let dangerousDoNotInvoke: Bool
+    /// Why Debug Options asks a second time before sending it.
+    public let dangerousRequireExplicitConfirmation: String?
 
     public init(
         opCode: UInt8,
@@ -55,7 +59,9 @@ public struct MessageProps {
         signed: Bool = false,
         modifiesInsulinDelivery: Bool = false,
         minApi: KnownApiVersion = .apiV2_1,
-        supportedDevices: SupportedDevices = .all
+        supportedDevices: SupportedDevices = .all,
+        dangerousDoNotInvoke: Bool = false,
+        dangerousRequireExplicitConfirmation: String? = nil
     ) {
         self.opCode = opCode
         self.size = size
@@ -67,5 +73,7 @@ public struct MessageProps {
         self.modifiesInsulinDelivery = modifiesInsulinDelivery
         self.minApi = minApi
         self.supportedDevices = supportedDevices
+        self.dangerousDoNotInvoke = dangerousDoNotInvoke
+        self.dangerousRequireExplicitConfirmation = dangerousRequireExplicitConfirmation
     }
 }
