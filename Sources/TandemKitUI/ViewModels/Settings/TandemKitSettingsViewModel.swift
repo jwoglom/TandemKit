@@ -70,6 +70,7 @@ class TandemKitSettingsViewModel: ObservableObject {
     @Published var showingDebugDetails = false
     /// Why the pump cannot be reached, or nil when it can. Drives the banner at the top.
     @Published var connectionIssue: PumpConnectionIssue?
+    @Published var lastKnownBasalDelivery: LastKnownBasalDelivery?
     @Published var isRefreshing: Bool = false
     @Published var isPlayingSound: Bool = false
     @Published var useControlIQ: Bool = false
@@ -148,6 +149,7 @@ class TandemKitSettingsViewModel: ObservableObject {
         isCGMActiveOnPump = pumpManager?.state.isCGMSensorSessionConfigured
         reservoirValue = pumpManager?.reservoirLevel
         connectionIssue = pumpManager?.connectionIssue
+        lastKnownBasalDelivery = pumpManager?.lastKnownBasalDelivery
         showPumpTimeSyncWarning = pumpManager?.state.showPumpTimeSyncWarning ?? false
         basalProfileUpdateStatus = pumpManager?.state.basalProfileUpdateStatus ?? .none
         basalDose = pumpManager?.state.basalDose
@@ -438,6 +440,7 @@ extension TandemKitSettingsViewModel: PumpManagerStatusObserver {
 
         DispatchQueue.main.async {
             self.connectionIssue = pumpManager.connectionIssue
+            self.lastKnownBasalDelivery = pumpManager.lastKnownBasalDelivery
             self.reservoirValue = pumpManager.reservoirLevel
             self.showPumpTimeSyncWarning = pumpManager.state.showPumpTimeSyncWarning
             self.basalProfileUpdateStatus = pumpManager.state.basalProfileUpdateStatus

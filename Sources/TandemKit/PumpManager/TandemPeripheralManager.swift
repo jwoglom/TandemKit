@@ -358,6 +358,11 @@ class TandemPeripheralManager: NSObject {
         expecting: any Message.Type,
         maxChunkSize: Int?
     ) -> Result<any Message, WriteFailure> {
+        guard !type(of: message).props.dangerousDoNotInvoke else {
+            logger.error("Refusing to write \(type(of: message)): marked dangerousDoNotInvoke")
+            return .failure(.notSent)
+        }
+
         guard expecting.props.type == .Response else {
             logger.error("Cannot write \(type(of: message)): \(expecting) is not a response type")
             return .failure(.notSent)

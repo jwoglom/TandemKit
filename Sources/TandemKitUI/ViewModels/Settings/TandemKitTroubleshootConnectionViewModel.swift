@@ -10,6 +10,7 @@ final class TandemKitTroubleshootConnectionViewModel: ObservableObject {
     @Published var isConnected: Bool = false
     /// Why the pump cannot be reached, named at the top so the user knows which step applies.
     @Published var connectionIssue: PumpConnectionIssue?
+    @Published var lastKnownBasalDelivery: LastKnownBasalDelivery?
     @Published var isAttemptingReconnect: Bool = false
 
     @Published var bluetoothStatusText: String = ""
@@ -52,6 +53,7 @@ final class TandemKitTroubleshootConnectionViewModel: ObservableObject {
 
         isConnected = pumpManager.state.isConnected
         connectionIssue = pumpManager.connectionIssue
+        lastKnownBasalDelivery = pumpManager.lastKnownBasalDelivery
 
         let bluetoothState = pumpManager.bluetooth.bluetoothState
         isBluetoothPoweredOn = bluetoothState == .poweredOn

@@ -1,3 +1,5 @@
+import Foundation
+import LoopKit
 @testable import TandemKit
 import XCTest
 
@@ -43,6 +45,36 @@ import XCTest
 
         XCTAssertFalse(viewModel.controlIQSupportEnabled)
         XCTAssertFalse(viewModel.quickBolusButtonSupportEnabled)
+    }
+
+    func testADroppedLinkPublishesTheTempBasalThePumpWasLastSeenRunning() {
+        let manager = TandemPumpManager(
+            state: TandemPumpManagerState(rawValue: [:]),
+            bluetooth: StubPumpBluetooth()
+        )
+        let lastContact = Date().addingTimeInterval(-.minutes(5))
+        let end = lastContact.addingTimeInterval(.minutes(20))
+        manager.state.basalRateSchedule = BasalRateSchedule(dailyItems: [RepeatingScheduleValue(startTime: 0, value: 0.8)])!
+        manager.state.hasSyncedBasalRateSchedule = true
+        manager.state.lastReconciliation = lastContact
+        manager.state.basalDose = UnfinalizedDose(
+            tempRate: 0.4,
+            duration: end.timeIntervalSince(lastContact),
+            automatic: true,
+            insulinType: .novolog,
+            startDate: lastContact
+        )
+
+        let viewModel = makeSettingsViewModel(manager)
+
+        XCTAssertEqual(viewModel.connectionIssue, .pumpUnreachable)
+        XCTAssertEqual(
+            viewModel.lastKnownBasalDelivery,
+            LastKnownBasalDelivery(
+                lastContact: lastContact,
+                delivery: .tempBasal(unitsPerHour: 0.4, endDate: end, profileUnitsPerHourAfter: 0.8)
+            )
+        )
     }
 
     private func makeSettingsViewModel(_ pumpManager: TandemPumpManager) -> TandemKitSettingsViewModel {

@@ -9,7 +9,8 @@ public class ActivateShelfModeRequest: PumpRequest {
         size: 0,
         type: .Request,
         characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
-        signed: true
+        signed: true,
+        dangerousDoNotInvoke: true
     )
 
     public var cargo: Data

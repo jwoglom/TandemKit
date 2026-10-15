@@ -1,5 +1,6 @@
 import CoreBluetooth
 import Foundation
+import LoopKit
 @testable import TandemKit
 import XCTest
 
@@ -114,6 +115,54 @@ import XCTest
 
         XCTAssertTrue(viewModel.isConnected)
         XCTAssertNil(viewModel.connectionIssue)
+    }
+
+    // MARK: - What the pump was last seen delivering
+
+    func testADroppedLinkIsDescribedByWhatThePumpWasLastSeenDelivering() {
+        let lastContact = Date().addingTimeInterval(-.minutes(5))
+        manager.state.basalRateSchedule = BasalRateSchedule(dailyItems: [RepeatingScheduleValue(startTime: 0, value: 0.8)])!
+        manager.state.hasSyncedBasalRateSchedule = true
+        manager.state.lastReconciliation = lastContact
+        manager.state.basalDose = UnfinalizedDose(basalRate: 0.8, insulinType: .novolog, startDate: lastContact)
+
+        let viewModel = ViewModel(pumpManager: manager)
+
+        XCTAssertEqual(viewModel.connectionIssue, .pumpUnreachable)
+        XCTAssertEqual(
+            viewModel.lastKnownBasalDelivery,
+            LastKnownBasalDelivery(lastContact: lastContact, delivery: .profile(unitsPerHour: 0.8))
+        )
+        XCTAssertEqual(
+            PumpConnectionIssue.pumpUnreachable.detail(
+                appName: "Trio",
+                lastKnownDelivery: viewModel.lastKnownBasalDelivery,
+                now: lastContact.addingTimeInterval(.minutes(5))
+            ),
+            "Trio last connected to your pump 5 minutes ago. At that time, the pump was delivering basal at the profile basal rate of 0.80 U/hr and will continue to deliver basal as programmed until reconnected."
+        )
+    }
+
+    func testAPumpThatHasNeverSyncedKeepsTheGeneralDisconnectedDetail() {
+        let viewModel = ViewModel(pumpManager: manager)
+
+        XCTAssertNil(viewModel.lastKnownBasalDelivery)
+        XCTAssertTrue(
+            PumpConnectionIssue.pumpUnreachable.detail(appName: "Trio", lastKnownDelivery: nil)
+                .hasPrefix("Trio is not connected to your pump")
+        )
+    }
+
+    func testAStatusUpdateRefreshesWhatThePumpWasLastSeenDelivering() {
+        let viewModel = ViewModel(pumpManager: manager)
+        XCTAssertNil(viewModel.lastKnownBasalDelivery)
+
+        manager.state.lastReconciliation = Date()
+        manager.state.basalDose = UnfinalizedDose(suspendStartTime: Date())
+        manager.notifyDelegateStateUpdated()
+        drainMainQueue(hops: 2)
+
+        XCTAssertEqual(viewModel.lastKnownBasalDelivery?.delivery, .suspended)
     }
 
     // MARK: - Reconnecting

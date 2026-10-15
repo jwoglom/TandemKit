@@ -150,7 +150,7 @@ doesn't use waits for the next state change instead of notifying: `fetchInsulinO
 every `iobChange`, about once a minute (#567). Status pushes are not skipped when the status is
 unchanged: Trio dates its pump battery and pump status from each one, and its Nightscout upload
 leaves out a battery reading older than 30 minutes. TandemKitUI's settings, troubleshooting and HUD
-views re-read `connectionIssue` and the reservoir on each.
+views re-read `connectionIssue` and the reservoir on each, and the first two `lastKnownBasalDelivery`.
 
 Bolus progress observers are called on the queue the host passed
 `createBolusProgressReporter(reportingOn:)`, which Trio relies on to serialize its own reporter
