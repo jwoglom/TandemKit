@@ -182,13 +182,15 @@ final class FaketandemHarness {
     /// (bolus estimated end, sync throttles) without waiting; the emulator stays on its own clock.
     /// `poweredOnBeforeAttach` lands Bluetooth's poweredOn, and the connect attempts it queues, before the
     /// manager is attached to the Bluetooth manager, the order a relaunch on a phone can take.
+    /// `via` reaches the emulator through something in between, such as `SecondClientProxy`.
     func makeDriver(
         state: TandemPumpManagerState = TandemPumpManagerState(rawValue: [:]),
         clock: TandemClock = ManualClock(Date()),
         attachDelegate: Bool = true,
-        poweredOnBeforeAttach: Bool = false
+        poweredOnBeforeAttach: Bool = false,
+        via relay: SocketPumpEndpoint? = nil
     ) -> Driver {
-        VirtualPump.endpoint = endpoint
+        VirtualPump.endpoint = relay ?? endpoint
         VirtualPump.scanInterval = 0.5
         VirtualPump.responseTimeout = .milliseconds(Int(Self.responseTimeout * 1000))
         VirtualPump.connectTimeout = .seconds(15)

@@ -214,6 +214,7 @@ jobs:
             -only-testing:TandemKitTests/VirtualPumpControlTests \
             -only-testing:TandemKitTests/SocketListenerTests \
             -only-testing:TandemKitTests/JpakeLinkLossTests \
+            -only-testing:TandemKitTests/UnsolicitedNotificationTests \
             -disableAutomaticPackageResolution \
             2>&1 | tee "xcodebuild-test-virtual-pump.log"
 

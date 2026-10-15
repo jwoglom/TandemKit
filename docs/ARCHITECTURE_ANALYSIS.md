@@ -43,7 +43,8 @@ PumpBluetoothConnection           ← StubPumpBluetooth in unit tests
   └─ TandemBluetoothManager       CBCentralManager, the command queue, connect and reconnect
        └─ TandemPeripheralManager CBPeripheral, session setup, write/response, notification routing
             ├─ Packetize          request → signed, CRC'd packets
-            ├─ BTResponseParser   packets → typed response via MessageRegistry
+            ├─ PacketAssembler    packets → one checked message, by txId and countdown
+            ├─ BTResponseParser   message → typed response via MessageRegistry
             └─ JpakeAuthBuilder   pairing and per-connection authentication
   ▼
 CoreBluetooth                     ← VirtualPump/ shims under TANDEMKIT_VIRTUAL_PUMP
@@ -172,21 +173,26 @@ each write acknowledgement, then up to `responseTimeout` (30 s) for the reply. T
 sized for `EnterChangeCartridgeMode`, which can take 20 s to answer; timing out early would invite
 re-sending an insulin-affecting request.
 
-### Receiving (`BTResponseParser.parse`)
+### Receiving (`PacketAssembler`, `BTResponseParser.decode`)
 
-Reassembly is driven by the low nibble of the first byte (packets remaining), never by fragment
-length. The first packet's opcode is at byte 2 and its cargo starts at byte 5; continuation
-packets carry cargo from byte 2. Once complete, the opcode and characteristic select the response
-type in `MessageRegistry.findResponse`. A fixed-size message whose cargo is shorter than
-`props.size` is dropped rather than parsed, because the parsers slice at fixed offsets and would
-trap. JPAKE responses are allowed a short scalar.
+Each notification is `[remaining][txId]` and a piece of the message. Reassembly is driven by the
+low nibble of the first byte (packets remaining), never by fragment length: the first piece
+carries the txId again at byte 3, after the opcode at byte 2, and each later piece must carry the
+same txId and the next count down. A complete message must be as long as its header declares and
+carry a matching CRC, as pumpX2's `PacketArrayList` requires. Then the opcode and characteristic
+select the response type in `MessageRegistry.findResponse`. A fixed-size message whose cargo is
+shorter than `props.size` is dropped rather than parsed, because the parsers slice at fixed
+offsets and would trap. JPAKE responses are allowed a short scalar.
 
-Neither the CRC nor the HMAC of a received message is verified. The assembled cargo still has the
-CRC (and, for signed responses, the 24-byte trailer) on the end; the parsers ignore those bytes.
+The HMAC of a received message is not verified. The cargo handed to a parser still has the CRC
+(and, for signed responses, the 24-byte trailer) on the end; the parsers ignore those bytes.
 
-When the pump refuses a request, it sends an `ErrorResponse` on `CURRENT_STATUS` naming the
-refused opcode. The waiting write ends immediately and returns `nil`, the same result as a
-timeout.
+The pending write takes only its own answer: on the request's characteristic, under the txId the
+request went out with, starting with the response opcode. The pump's link to the phone is shared
+by every app on it, and iOS notifies each subscribed app of every response, so another app's
+responses arrive too. When the pump refuses a request, it sends an `ErrorResponse` under the
+request's txId naming the refused opcode. The waiting write ends immediately and returns `nil`,
+the same result as a timeout.
 
 ### Notification routing
 
@@ -194,16 +200,20 @@ timeout.
 order:
 
 1. A pending characteristic read (DIS during setup).
-2. `HISTORY_LOG`: reassembled and published on `pumpManager.historyLogStream`. This is checked
-   before the pending write so a continuation packet cannot alias an expected opcode.
-3. The pending write's response, claimed by characteristic and opcode.
-4. `QUALIFYING_EVENTS`: decoded by `QualifyingEvent.fromRawBytes` and passed to
-   `handleQualifyingEvents`. The pump is acknowledged afterwards by writing four zero bytes.
-5. `CONTROL_STREAM` progress messages: published on the manager's Combine subjects
-   (`fillTubingStateStream`, `pumpingStateStream`, …), which the cartridge and fill view models
-   observe. Two pairs share an opcode and are told apart by length: opcode −29 is
-   Detecting/LoadCartridge and −23 is ExitFillTubingMode/PumpingState.
-6. `ErrorResponse`, as above.
+2. By characteristic, before the pending write, since none of these answers a write and pieces of
+   their messages can match an expected opcode at byte 2:
+   - `HISTORY_LOG`: reassembled and published on `pumpManager.historyLogStream`.
+   - `CONTROL_STREAM`: reassembled and published on the manager's Combine subjects
+     (`fillTubingStateStream`, `pumpingStateStream`, …), which the cartridge and fill view models
+     observe. Two pairs share an opcode and are told apart by the declared payload length
+     (`ControlStreamMessages.responseType`): opcode −29 is Detecting/LoadCartridge and −23 is
+     PumpingState/ExitFillTubingMode.
+   - `QUALIFYING_EVENTS`: decoded by `QualifyingEvent.fromRawBytes` and passed to
+     `handleQualifyingEvents`. The pump is acknowledged afterwards by writing four zero bytes.
+3. The pending write's answer or refusal, as above.
+4. Anything else is reassembled per characteristic and logged once by
+   `UnsolicitedNotificationLog`: as the late answer of a write that timed out under its txId, or
+   as another app's response, at info for the first of a burst.
 
 ## Messages
 

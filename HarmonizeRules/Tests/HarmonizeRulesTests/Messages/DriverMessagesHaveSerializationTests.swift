@@ -46,7 +46,6 @@ final class DriverMessagesHaveSerializationTests: XCTestCase {
         "CGMStatusV2Request",
         "ControlIQInfoV2Request",
         "LastBolusStatusV3Request",
-        "LoadCartridgeStateStreamResponse",
         "MalfunctionStatusRequest",
         "OtherNotification2StatusResponse",
         "OtherNotificationStatusResponse",

@@ -95,26 +95,39 @@ class TandemPeripheralManager: NSObject {
             queueLock.unlock() }
     }
 
-    /// The write whose response is awaited, reassembled here on the notification path. Only the
-    /// first packet of a response carries the opcode; continuation packets carry cargo from byte 2
-    /// and can land before the writing thread has even woken for the first one, so they are claimed
-    /// by characteristic alone (as pumpX2 does) and the writer is released once, when the message
-    /// is complete.
+    /// The write whose answer is awaited, reassembled here on the notification path. The answer
+    /// comes on the request's characteristic under the request's txId and starts with the response
+    /// opcode; a refusal is an ErrorResponse under that txId, on CURRENT_STATUS or the request's
+    /// characteristic. Every other piece is left to the caller, another app's response on the link
+    /// the phone shares included, as is a late answer to an earlier write.
     private final class PendingWrite {
+        enum Taken {
+            case needsMore
+            /// nil when the answer does not decode as the response type.
+            case answered(Message?)
+            case refused(ErrorResponse)
+            /// A message under the txId arrived whole but is not the answer; the write still waits.
+            case discarded(String)
+        }
+
         let group: TandemDispatchGroup
         let requestOpCode: UInt8
         let opCode: UInt8
         let characteristic: CBUUID
+        let txId: UInt8
         private let lock = NSLock()
-        private var response = ResponseMessage()
-        private var packetsReceived = 0
+        private var assembler = PacketAssembler()
+        private var assemblingOn: CBUUID?
+        private var isFinished = false
+        private var _message: Message?
         private var _refusal: ErrorResponse?
 
-        init(group: TandemDispatchGroup, requestOpCode: UInt8, opCode: UInt8, characteristic: CBUUID) {
+        init(group: TandemDispatchGroup, requestOpCode: UInt8, opCode: UInt8, characteristic: CBUUID, txId: UInt8) {
             self.group = group
             self.requestOpCode = requestOpCode
             self.opCode = opCode
             self.characteristic = characteristic
+            self.txId = txId
         }
 
         var refusal: ErrorResponse? {
@@ -123,41 +136,62 @@ class TandemPeripheralManager: NSObject {
             return _refusal
         }
 
-        /// Ends the wait the way a timeout does, but at once: the pump said it will not answer.
-        /// Ignored once the response has started arriving, since the pump sends one or the other.
-        func refuse(_ error: ErrorResponse) {
-            lock.lock()
-            defer { lock.unlock() }
-            guard _refusal == nil, packetsReceived == 0 else { return }
-            _refusal = error
-            group.leave(Data())
-        }
-
         var message: Message? {
             lock.lock()
             defer { lock.unlock() }
-            return response.message
+            return _message
         }
 
-        func accepts(_ data: Data, on characteristic: CBUUID) -> Bool {
+        /// nil when `data` is not a piece of the answer.
+        func take(_ data: Data, on characteristic: CBUUID) -> Taken? {
             lock.lock()
             defer { lock.unlock() }
-            if packetsReceived > 0 {
-                return characteristic == self.characteristic && response.needsMorePacket
+            guard !isFinished else { return nil }
+            if assembler.isEmpty {
+                guard let start = PacketAssembler.start(of: data), start.txId == txId,
+                      accepts(start.opCode, on: characteristic)
+                else {
+                    return nil
+                }
+                assemblingOn = characteristic
+            } else {
+                guard characteristic == assemblingOn, assembler.continues(with: data) else { return nil }
             }
-            return data.count > 2 && data[2] == opCode
+
+            switch assembler.take(data) {
+            case .notPart: return nil
+            case .needsMore: return .needsMore
+            case let .corrupt(reason): return .discarded(reason)
+            case let .complete(message): return finish(message)
+            }
         }
 
-        /// Returns whether the response still needs packets.
-        func append(_ data: Data) -> Bool {
-            lock.lock()
-            defer { lock.unlock() }
-            packetsReceived += 1
-            BTResponseParser.parse(data: data, characteristic: characteristic, authKey: nil, response: &response)
-            if !response.needsMorePacket {
+        private func accepts(_ opCode: UInt8, on characteristic: CBUUID) -> Bool {
+            if opCode == self.opCode {
+                return characteristic == self.characteristic
+            }
+            return opCode == ErrorResponse.props.opCode
+                && (characteristic == self.characteristic || characteristic == CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS)
+        }
+
+        private func finish(_ message: AssembledMessage) -> Taken {
+            if message.opCode != opCode {
+                guard message.payloadLength >= 2 else { return .discarded("ErrorResponse with no request in it") }
+                let refusal = ErrorResponse(cargo: message.cargo)
+                guard refusal.requestCodeId == Int(requestOpCode) else {
+                    return .discarded("ErrorResponse refusing opcode \(refusal.requestCodeId)")
+                }
+                _refusal = refusal
+                isFinished = true
                 group.leave(Data())
+                return .refused(refusal)
             }
-            return response.needsMorePacket
+
+            let decoded = BTResponseParser.decode(message, characteristic: characteristic)
+            _message = decoded
+            isFinished = true
+            group.leave(Data())
+            return .answered(decoded)
         }
     }
 
@@ -196,10 +230,19 @@ class TandemPeripheralManager: NSObject {
 
     private var authBuilder: JpakeAuthBuilder
 
-    // Reassembles the (possibly multi-packet) unsolicited HistoryLogStreamResponse
-    // notifications that arrive on the history log characteristic. Only touched on the
-    // CB delegate queue (didUpdateValueFor / linkWentDown callers' queue).
-    private var historyLogStreamAccumulator: ResponseMessage?
+    // Only touched on the CB delegate queue (didUpdateValueFor / linkWentDown callers' queue).
+    private var historyLogStream = PacketAssembler()
+    private var controlStream = PacketAssembler()
+    private var unsolicited: [CBUUID: PacketAssembler] = [:]
+
+    // Under queueLock: a write that times out records itself on the command thread.
+    private var _unsolicitedLog = UnsolicitedNotificationLog()
+
+    private static let requestCharacteristics: Set<CBUUID> = [
+        CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS,
+        CharacteristicUUID.CONTROL_CHARACTERISTICS,
+        CharacteristicUUID.AUTHORIZATION_CHARACTERISTICS,
+    ]
 
     init(
         _ bluetoothManager: TandemBluetoothManager,
@@ -355,7 +398,8 @@ class TandemPeripheralManager: NSObject {
             group: writeQ,
             requestOpCode: requestProps.opCode,
             opCode: expecting.props.opCode,
-            characteristic: characteristic.uuid
+            characteristic: characteristic.uuid,
+            txId: currentTxId
         )
         guard begin({ _writeQueue = pending }) else {
             logger.error("Link is gone; not writing \(message.description)")
@@ -409,6 +453,15 @@ class TandemPeripheralManager: NSObject {
                 return .failure(.linkLost(loss))
             }
             logger.error("Timeout hit, no response from pump... (\(waited))")
+            queueLock.lock()
+            _unsolicitedLog.recordUnanswered(
+                request: String(describing: type(of: message)),
+                txId: pending.txId,
+                responseOpCode: pending.opCode,
+                characteristic: pending.characteristic,
+                at: Date()
+            )
+            queueLock.unlock()
             return .failure(.unanswered)
         }
 
@@ -438,8 +491,10 @@ class TandemPeripheralManager: NSObject {
         inFlight.command?.cancel()
         inFlight.write?.group.cancel()
         inFlight.read?.0.cancel()
-        // A partially assembled stream message can never complete once the connection drops.
-        historyLogStreamAccumulator = nil
+        // A partially assembled message can never complete once the connection drops.
+        historyLogStream.reset()
+        controlStream.reset()
+        unsolicited = [:]
     }
 
     func startNotify(service serviceUUID: CBUUID, characteristic characteristicUUID: CBUUID) {
@@ -534,141 +589,169 @@ extension TandemPeripheralManager: CBPeripheralDelegate {
             return
         }
 
-        // The history log characteristic only ever carries unsolicited HistoryLogStreamResponse
-        // notifications, so route it before the write-queue check: continuation packets of a
-        // multi-packet stream message carry cargo at data[2] that could otherwise alias a
-        // pending write's expected opcode.
-        if characteristic.uuid == CharacteristicUUID.HISTORY_LOG_CHARACTERISTICS {
+        // The stream and event characteristics carry nothing any write waits for, and pieces of
+        // their messages can match a pending write's opcode at byte 2.
+        switch characteristic.uuid {
+        case CharacteristicUUID.HISTORY_LOG_CHARACTERISTICS:
             handleHistoryLogStreamPacket(data)
-            return
-        }
-
-        if let pending = writeQueue, pending.accepts(data, on: characteristic.uuid) {
-            if pending.append(Data(data)) {
-                logger.info("Waiting for more data...")
-            }
-            return
-        }
-
-        if characteristic.uuid == CharacteristicUUID.QUALIFYING_EVENTS_CHARACTERISTICS {
-            let events = QualifyingEvent.fromRawBytes(data)
-            guard !events.isEmpty else {
-                logger.info("Received empty qualifying events")
-                return
-            }
-
-            let acknowledge = { self.peripheral.writeValue(Data([0, 0, 0, 0]), for: characteristic, type: .withResponse) }
-            if deferUntilSessionEstablished(events) {
-                logger.info("Deferring qualifying events until setup finishes: \(events)")
-                acknowledge()
-                return
-            }
-            pumpManager.handleQualifyingEvents(events: events, completion: acknowledge)
-            return
-        }
-
-        if characteristic.uuid == FillTubingStateStreamResponse.props.characteristic,
-           data[2] == FillTubingStateStreamResponse.props.opCode
-        {
-            let response = FillTubingStateStreamResponse(cargo: Data(data.dropFirst(5)))
-            logger.info("Received stream message: \(response.description)")
-            pumpManager.fillTubingStateStream.send(response)
-            return
-        }
-
-        if characteristic.uuid == FillCannulaStateStreamResponse.props.characteristic,
-           data[2] == FillCannulaStateStreamResponse.props.opCode
-        {
-            let response = FillCannulaStateStreamResponse(cargo: Data(data.dropFirst(5)))
-            logger.info("Received stream message: \(response.description)")
-            pumpManager.fillCannulaStateStream.send(response)
-            return
-        }
-
-        if characteristic.uuid == EnterChangeCartridgeModeStateStreamResponse.props.characteristic,
-           data[2] == EnterChangeCartridgeModeStateStreamResponse.props.opCode
-        {
-            let response = EnterChangeCartridgeModeStateStreamResponse(cargo: Data(data.dropFirst(5)))
-            logger.info("Received stream message: \(response.description)")
-            pumpManager.changeCartridgeStateStream.send(response)
-            return
-        }
-
-        // DetectingCartridgeStateStreamResponse and LoadCartridgeStateStreamResponse share opcode
-        // -29 and are told apart by total packet length, the same split ControlStreamMessages makes.
-        if characteristic.uuid == DetectingCartridgeStateStreamResponse.props.characteristic,
-           data[2] == DetectingCartridgeStateStreamResponse.props.opCode
-        {
-            if data.count >= 26 {
-                let response = DetectingCartridgeStateStreamResponse(cargo: Data(data.dropFirst(5)))
-                logger.info("Received stream message: \(response.description)")
-                pumpManager.detectingCartridgeStateStream.send(response)
+        case CharacteristicUUID.CONTROL_STREAM_CHARACTERISTICS:
+            handleControlStreamPacket(data)
+        case CharacteristicUUID.QUALIFYING_EVENTS_CHARACTERISTICS:
+            handleQualifyingEvents(data, on: characteristic)
+        default:
+            if let pending = writeQueue, let taken = pending.take(data, on: characteristic.uuid) {
+                report(taken, for: pending, on: characteristic.uuid)
             } else {
-                let response = LoadCartridgeStateStreamResponse(cargo: Data(data.dropFirst(5)))
-                logger.info("Received stream message: \(response.description)")
+                handleUnsolicited(data, on: characteristic.uuid)
             }
-            return
         }
-
-        // ExitFillTubingModeStateStreamResponse and PumpingStateStreamResponse are the same wire
-        // message under opcode -23, told apart only by payload size. The packet header carries it
-        // at data[4] as the cargo size plus the 24-byte trailer every signed message has.
-        if characteristic.uuid == ExitFillTubingModeStateStreamResponse.props.characteristic,
-           data[2] == ExitFillTubingModeStateStreamResponse.props.opCode,
-           data.count > 5
-        {
-            let cargo = Data(data.dropFirst(5))
-            if Int(data[4]) == Int(PumpingStateStreamResponse.props.size) + 24 {
-                let response = PumpingStateStreamResponse(cargo: cargo)
-                logger.info("Received stream message: \(response.description)")
-                pumpManager.pumpingStateStream.send(response)
-            } else {
-                let response = ExitFillTubingModeStateStreamResponse(cargo: cargo)
-                logger.info("Received stream message: \(response.description)")
-                pumpManager.exitFillTubingModeStateStream.send(response)
-            }
-            return
-        }
-
-        if characteristic.uuid == CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS,
-           data[2] == ErrorResponse.props.opCode
-        {
-            let response = ErrorResponse(cargo: Data(data.dropFirst(5)))
-            logger.error("Received error message: \(response.description)")
-            // The pump sends it in place of the response, naming the request it refused; left
-            // unmatched, the write waited out its whole response timeout.
-            if let pending = writeQueue, Int(pending.requestOpCode) == response.requestCodeId {
-                pending.refuse(response)
-            }
-            return
-        }
-
-        logger.warning("Not handler for message - data: \(data.hexadecimalString) characteristic: \(characteristic.uuid)")
     }
 
-    /// Accumulates history log stream packets until a full message is assembled, then
-    /// publishes the parsed HistoryLogStreamResponse to the pump manager's stream.
+    private func report(_ taken: PendingWrite.Taken, for pending: PendingWrite, on characteristic: CBUUID) {
+        switch taken {
+        case .needsMore:
+            logger.info("Waiting for more data...")
+        case .answered:
+            break
+        case let .refused(refusal):
+            logger.error("Received error message: \(refusal.description)")
+        case let .discarded(reason):
+            let channel = MessageCategory(characteristic: characteristic).rawValue
+            logger.warning("Discarded a message under txId \(pending.txId) on \(channel): \(reason); the write still waits")
+        }
+    }
+
+    private func handleQualifyingEvents(_ data: Data, on characteristic: CBCharacteristic) {
+        let events = QualifyingEvent.fromRawBytes(data)
+        guard !events.isEmpty else {
+            logger.info("Received empty qualifying events")
+            return
+        }
+
+        let acknowledge = { self.peripheral.writeValue(Data([0, 0, 0, 0]), for: characteristic, type: .withResponse) }
+        if deferUntilSessionEstablished(events) {
+            logger.info("Deferring qualifying events until setup finishes: \(events)")
+            acknowledge()
+            return
+        }
+        pumpManager.handleQualifyingEvents(events: events, completion: acknowledge)
+    }
+
+    /// A stream's messages follow one another, so a piece that starts a message while another is
+    /// under way means that one lost a piece, and it is dropped for the new one.
+    private static func takeStartingOver(_ data: Data, into assembler: inout PacketAssembler) -> (PacketAssembler.Step, abandoned: Bool) {
+        let abandoned = !assembler.isEmpty && !assembler.continues(with: data) && PacketAssembler.start(of: data) != nil
+        if abandoned {
+            assembler.reset()
+        }
+        return (assembler.take(data), abandoned)
+    }
+
+    private func takeStreamPacket(_ data: Data, into assembler: inout PacketAssembler, stream: String) -> AssembledMessage? {
+        let (step, abandoned) = Self.takeStartingOver(data, into: &assembler)
+        if abandoned {
+            logger.warning("A \(stream) stream message lost a piece and was dropped")
+        }
+        switch step {
+        case let .complete(message):
+            return message
+        case .needsMore:
+            return nil
+        case .notPart:
+            logger.warning("Not part of a \(stream) stream message: \(data.hexadecimalString)")
+            return nil
+        case let .corrupt(reason):
+            logger.warning("Dropped a \(stream) stream message: \(reason)")
+            return nil
+        }
+    }
+
     private func handleHistoryLogStreamPacket(_ data: Data) {
-        var response = historyLogStreamAccumulator ?? ResponseMessage()
-        BTResponseParser.parse(
-            data: data,
-            characteristic: CharacteristicUUID.HISTORY_LOG_CHARACTERISTICS,
-            authKey: nil,
-            response: &response
-        )
+        guard let message = takeStreamPacket(data, into: &historyLogStream, stream: "history log") else { return }
+        guard let response = BTResponseParser.decode(message, characteristic: CharacteristicUUID.HISTORY_LOG_CHARACTERISTICS)
+            as? HistoryLogStreamResponse
+        else {
+            logger.warning("Unparseable history log stream message: opCode \(message.opCode), cargo \(message.cargo.hexadecimalString)")
+            return
+        }
+        logger.info("Received stream message: \(response.description)")
+        pumpManager.historyLogStream.send(response)
+    }
 
-        if response.needsMorePacket {
-            historyLogStreamAccumulator = response
+    private func handleControlStreamPacket(_ data: Data) {
+        guard let message = takeStreamPacket(data, into: &controlStream, stream: "control") else { return }
+        guard let type = ControlStreamMessages.responseType(opCode: message.opCode, payloadLength: message.payloadLength),
+              message.cargo.count >= Int(type.props.size)
+        else {
+            logger.warning("Unknown control stream message: opCode \(message.opCode), cargo \(message.cargo.hexadecimalString)")
             return
         }
 
-        historyLogStreamAccumulator = nil
-        guard let message = response.message as? HistoryLogStreamResponse else {
-            logger.warning("Unparseable history log stream message: \(data.hexadecimalString)")
+        let response = type.init(cargo: message.cargo)
+        logger.info("Received stream message: \(response.description)")
+        switch response {
+        case let response as FillTubingStateStreamResponse:
+            pumpManager.fillTubingStateStream.send(response)
+        case let response as FillCannulaStateStreamResponse:
+            pumpManager.fillCannulaStateStream.send(response)
+        case let response as EnterChangeCartridgeModeStateStreamResponse:
+            pumpManager.changeCartridgeStateStream.send(response)
+        case let response as DetectingCartridgeStateStreamResponse:
+            pumpManager.detectingCartridgeStateStream.send(response)
+        case let response as PumpingStateStreamResponse:
+            pumpManager.pumpingStateStream.send(response)
+        case let response as ExitFillTubingModeStateStreamResponse:
+            pumpManager.exitFillTubingModeStateStream.send(response)
+        default:
+            break
+        }
+    }
+
+    /// Responses no write was waiting for, reassembled per characteristic so that each is logged
+    /// once, by name.
+    private func handleUnsolicited(_ data: Data, on characteristic: CBUUID) {
+        guard Self.requestCharacteristics.contains(characteristic) else {
+            logger.warning("Not handler for message - data: \(data.hexadecimalString) characteristic: \(characteristic)")
             return
         }
-        logger.info("Received stream message: \(message.description)")
-        pumpManager.historyLogStream.send(message)
+
+        let channel = MessageCategory(characteristic: characteristic).rawValue
+        var assembler = unsolicited[characteristic] ?? PacketAssembler()
+        let (step, _) = Self.takeStartingOver(data, into: &assembler)
+        unsolicited[characteristic] = assembler
+        switch step {
+        case let .complete(message):
+            logUnsolicited(message, on: characteristic)
+        case .needsMore:
+            break
+        case .notPart:
+            logger.debug("Unsolicited fragment on \(channel): \(data.hexadecimalString)")
+        case let .corrupt(reason):
+            logger.debug("Unsolicited message on \(channel) dropped: \(reason)")
+        }
+    }
+
+    private func logUnsolicited(_ message: AssembledMessage, on characteristic: CBUUID) {
+        let name: String
+        if message.opCode == ErrorResponse.props.opCode, message.payloadLength >= 2 {
+            name = ErrorResponse(cargo: message.cargo).description
+        } else {
+            name = MessageRegistry.findResponse(opCode: message.opCode, characteristic: characteristic)
+                .map { String(describing: $0) } ?? "opCode \(message.opCode)"
+        }
+        let what = "\(name) (txId \(message.txId)) on \(MessageCategory(characteristic: characteristic).rawValue)"
+
+        queueLock.lock()
+        let kind = _unsolicitedLog.classify(message, on: characteristic, at: Date())
+        queueLock.unlock()
+        switch kind {
+        case let .lateAnswer(request, seconds):
+            logger.info("Late answer to \(request), \(String(format: "%.1f", seconds)) s after it timed out: \(what)")
+        case .startsBurst:
+            logger.info("Unsolicited \(what): no write was waiting for it, so another app on the phone is likely talking to the pump; more within \(Int(UnsolicitedNotificationLog.quietGap)) s are logged at debug")
+        case let .inBurst(count):
+            logger.debug("Unsolicited \(what), #\(count) of this burst")
+        }
     }
 
     func peripheral(_: CBPeripheral, didWriteValueFor _: CBCharacteristic, error: (any Error)?) {

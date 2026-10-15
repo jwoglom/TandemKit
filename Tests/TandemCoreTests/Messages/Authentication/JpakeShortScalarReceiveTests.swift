@@ -9,8 +9,6 @@ import XCTest
 /// ends in `Message.init(cargo:)`, where an over-long `subdata` range traps instead of throwing.
 final class JpakeShortScalarReceiveTests: XCTestCase {
     private static let pointLength = 65
-    /// The parser leaves the packet CRC on the assembled cargo; its value is never checked.
-    private static let crc = Data([0x9B, 0xE8])
 
     /// `[1][65-byte X][1][65-byte V][1][scalar]`, the layout `EcJpake.writeZkp` emits.
     private func group(scalarLength: Int, seed: UInt8 = 0x10) -> Data {
@@ -32,7 +30,8 @@ final class JpakeShortScalarReceiveTests: XCTestCase {
     /// The BLE notifications a pump sends for one message, framed exactly as `Packetize` frames a
     /// request: `[packetsRemaining][txId]` over `[opCode][txId][length]` + cargo + CRC.
     private func notifications(opCode: UInt8, cargo: Data, txId: UInt8 = 0x02, chunkSize: Int = 18) -> [Data] {
-        let body = Data([opCode, txId, UInt8(cargo.count)]) + cargo + Self.crc
+        let header = Data([opCode, txId, UInt8(cargo.count)]) + cargo
+        let body = header + CalculateCRC16(header)
         var chunks: [Data] = []
         var index = body.startIndex
         while index < body.endIndex {
@@ -40,30 +39,19 @@ final class JpakeShortScalarReceiveTests: XCTestCase {
             chunks.append(body.subdata(in: index ..< end))
             index = end
         }
-        // BTResponseParser drops notifications of 4 bytes or fewer, so never leave a 1-byte tail.
-        if chunks.count > 1, chunks[chunks.count - 1].count < 3 {
-            let tail = chunks.removeLast()
-            let previous = chunks.removeLast()
-            let split = previous.startIndex + previous.count - 3
-            chunks.append(previous.subdata(in: previous.startIndex ..< split))
-            chunks.append(previous.subdata(in: split ..< previous.endIndex) + tail)
-        }
         return chunks.enumerated().map { offset, chunk in
             Data([UInt8(chunks.count - 1 - offset), txId]) + chunk
         }
     }
 
     private func parse(_ packets: [Data]) -> Message? {
-        var response = ResponseMessage()
+        var assembler = PacketAssembler()
         for packet in packets {
-            BTResponseParser.parse(
-                data: packet,
-                characteristic: CharacteristicUUID.AUTHORIZATION_CHARACTERISTICS,
-                authKey: nil,
-                response: &response
-            )
+            if case let .complete(message) = assembler.take(packet) {
+                return BTResponseParser.decode(message, characteristic: CharacteristicUUID.AUTHORIZATION_CHARACTERISTICS)
+            }
         }
-        return response.message
+        return nil
     }
 
     private func receiveJpake2(payload: Data) -> Jpake2Response? {
@@ -112,7 +100,7 @@ final class JpakeShortScalarReceiveTests: XCTestCase {
     /// 170 bytes even after the CRC, which is where `cargo.subdata(in: 2 ..< 170)` used to trap.
     func testRound2ShorterThanTheDeclaredSizeParsesRatherThanTrapping() throws {
         let payload = round2Payload(scalarLength: 29)
-        XCTAssertEqual(Data([0x00, 0x00]).count + payload.count + Self.crc.count, 169)
+        XCTAssertEqual(Data([0x00, 0x00]).count + payload.count + 2, 169, "with the CRC")
 
         let response = try XCTUnwrap(receiveJpake2(payload: payload))
 
