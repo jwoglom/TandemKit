@@ -214,9 +214,10 @@ unsolicited streams and deliberately do not conform to `PumpRequest`.
 
 `MessageProps` carries the opcode, size, characteristic, and the `signed`, `variableSize`,
 `stream` and `modifiesInsulinDelivery` flags. It also carries `minApi` and `supportedDevices`,
-and two flags for requests that can wreck a pump: `dangerousDoNotInvoke` (factory resets, shelf
-mode), which `TandemPeripheralManager` refuses to write, and `dangerousRequireExplicitConfirmation`
-(those, and `DisconnectPumpRequest`), which keeps a request out of Debug Options.
+and two marks for requests that can wreck a pump: `dangerousDoNotInvoke` (factory resets, shelf
+mode), which `TandemPeripheralManager` refuses to write and Debug Options leaves out, and
+`dangerousRequireExplicitConfirmation` (`DisconnectPumpRequest`), a reason Debug Options shows in
+a second confirmation before sending.
 `props.isSupported(pumpModel:apiVersion:)` and `TandemPumpManager.supports(_:)` use those two
 fields to skip requests the connected pump cannot answer, such as the Mobi-only
 `CGMStatusV2Request`. The API version and model come from `ApiVersionRequest` and

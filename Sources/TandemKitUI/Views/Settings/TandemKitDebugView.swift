@@ -180,7 +180,7 @@ private struct CategoryRequestSheet: View {
                         } else {
                             Button(entry.name) {
                                 viewModel.sendSimpleEntry(entry)
-                                if viewModel.messageAwaitingConfirmation == nil {
+                                if viewModel.awaitingConfirmation == nil {
                                     dismiss()
                                 }
                             }
@@ -210,21 +210,36 @@ private struct SendConfirmationAlert: ViewModifier {
     var onConfirm: () -> Void = {}
 
     func body(content: Content) -> some View {
-        content.alert("Confirm Command", isPresented: Binding(
-            get: { isEnabled && viewModel.messageAwaitingConfirmation != nil },
-            // The buttons settle the pending send; clearing it here could run before Continue's action.
-            set: { _ in }
-        )) {
-            Button("Cancel", role: .cancel) {
-                viewModel.cancelPendingSend()
+        content
+            .alert("Confirm Command", isPresented: presented(viewModel.isAwaitingCommandConfirmation)) {
+                Button("Cancel", role: .cancel) {
+                    viewModel.cancelPendingSend()
+                }
+                Button("Continue", role: .destructive) {
+                    if viewModel.confirmPendingSend() {
+                        onConfirm()
+                    }
+                }
+            } message: {
+                Text(viewModel.confirmationMessage)
             }
-            Button("Continue", role: .destructive) {
-                viewModel.confirmPendingSend()
-                onConfirm()
+            .alert("Dangerous Command", isPresented: presented(viewModel.isAwaitingDangerousConfirmation)) {
+                Button("Cancel", role: .cancel) {
+                    viewModel.cancelPendingSend()
+                }
+                Button("Run Dangerous Command", role: .destructive) {
+                    if viewModel.confirmPendingSend() {
+                        onConfirm()
+                    }
+                }
+            } message: {
+                Text(viewModel.confirmationMessage)
             }
-        } message: {
-            Text(viewModel.confirmationMessage)
-        }
+    }
+
+    // The buttons settle the pending send; clearing it in the setter could run before Continue's action.
+    private func presented(_ isAwaiting: Bool) -> Binding<Bool> {
+        Binding(get: { isEnabled && isAwaiting }, set: { _ in })
     }
 }
 
@@ -277,7 +292,7 @@ private struct RequestDetailView: View {
             Section {
                 Button("Send") {
                     viewModel.sendEntry(entry)
-                    if viewModel.lastSendError == nil, viewModel.messageAwaitingConfirmation == nil {
+                    if viewModel.lastSendError == nil, viewModel.awaitingConfirmation == nil {
                         onSent()
                     }
                 }

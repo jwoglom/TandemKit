@@ -13,10 +13,11 @@ final class DangerousRequestTests: XCTestCase {
         )
     }
 
-    func testRequestsKeptOutOfDebugOptions() {
+    func testOnlyDisconnectPumpAsksForExplicitConfirmation() {
+        XCTAssertEqual(names { $0.dangerousRequireExplicitConfirmation != nil }, ["DisconnectPumpRequest"])
         XCTAssertEqual(
-            names { $0.dangerousRequireExplicitConfirmation },
-            ["ActivateShelfModeRequest", "FactoryResetRequest", "FactoryResetBRequest", "DisconnectPumpRequest"]
+            DisconnectPumpRequest.props.dangerousRequireExplicitConfirmation,
+            "this will disconnect your pump from your phone"
         )
     }
 }

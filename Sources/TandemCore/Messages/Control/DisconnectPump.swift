@@ -11,7 +11,7 @@ public class DisconnectPumpRequest: PumpRequest {
         characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true,
         minApi: .mobiApiV3_5,
-        dangerousRequireExplicitConfirmation: true
+        dangerousRequireExplicitConfirmation: "this will disconnect your pump from your phone"
     )
 
     public var cargo: Data

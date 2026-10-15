@@ -45,11 +45,16 @@ final class TandemKitDebugViewModel: ObservableObject {
         var sendButtonTitle: String { category.sendButtonTitle }
     }
 
+    enum Confirmation {
+        case command(Message)
+        case dangerous(Message, reason: String)
+    }
+
     @Published var lastResponseDescription: String?
     @Published var lastResponseJSON: String?
     @Published var lastSendError: String?
     @Published var isSending = false
-    @Published private(set) var messageAwaitingConfirmation: Message?
+    @Published private(set) var awaitingConfirmation: Confirmation?
 
     @Published var parameterInput: [String: String] = [:]
     @Published var cargoHexInput: String = ""
@@ -140,7 +145,7 @@ final class TandemKitDebugViewModel: ObservableObject {
         )
 
         let sendable = MessageRegistry.all.filter {
-            $0.messageType == .Request && !$0.type.props.dangerousRequireExplicitConfirmation
+            $0.messageType == .Request && !$0.type.props.dangerousDoNotInvoke
         }
         let grouped = Dictionary(grouping: sendable) {
             $0.category
@@ -444,19 +449,53 @@ final class TandemKitDebugViewModel: ObservableObject {
         return metadata.type.init(cargo: data)
     }
 
-    var confirmationMessage: String {
-        guard let messageAwaitingConfirmation else { return "" }
-        return "You are sending a command which can modify the pump's state: \(String(describing: messageAwaitingConfirmation))"
+    var isAwaitingCommandConfirmation: Bool {
+        if case .command = awaitingConfirmation { return true }
+        return false
     }
 
-    func confirmPendingSend() {
-        guard let message = messageAwaitingConfirmation else { return }
-        messageAwaitingConfirmation = nil
-        dispatch(message)
+    var isAwaitingDangerousConfirmation: Bool {
+        if case .dangerous = awaitingConfirmation { return true }
+        return false
+    }
+
+    var confirmationMessage: String {
+        switch awaitingConfirmation {
+        case let .command(message):
+            return "You are sending a command which can modify the pump's state: \(String(describing: message))"
+        case let .dangerous(_, reason):
+            return "This is a dangerous command, are you sure you want to continue? Reason: \(reason)"
+        case nil:
+            return ""
+        }
+    }
+
+    /// Returns whether the message went out; false when it still waits on the dangerous-command confirmation.
+    @discardableResult
+    func confirmPendingSend() -> Bool {
+        switch awaitingConfirmation {
+        case let .command(message):
+            awaitingConfirmation = nil
+            if let reason = type(of: message).props.dangerousRequireExplicitConfirmation {
+                // SwiftUI drops an alert presented while the one before it is still animating away.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    self.awaitingConfirmation = .dangerous(message, reason: reason)
+                }
+                return false
+            }
+            dispatch(message)
+            return true
+        case let .dangerous(message, _):
+            awaitingConfirmation = nil
+            dispatch(message)
+            return true
+        case nil:
+            return false
+        }
     }
 
     func cancelPendingSend() {
-        messageAwaitingConfirmation = nil
+        awaitingConfirmation = nil
     }
 
     private func send(_ message: Message?) {
@@ -470,13 +509,19 @@ final class TandemKitDebugViewModel: ObservableObject {
             return
         }
 
+        let reason = type(of: message).props.dangerousRequireExplicitConfirmation
         switch MessageRegistry.metadata(for: message)?.category {
         case .control,
              .authentication:
             lastSendError = nil
-            messageAwaitingConfirmation = message
+            awaitingConfirmation = .command(message)
         default:
-            dispatch(message)
+            if let reason {
+                lastSendError = nil
+                awaitingConfirmation = .dangerous(message, reason: reason)
+            } else {
+                dispatch(message)
+            }
         }
     }
 

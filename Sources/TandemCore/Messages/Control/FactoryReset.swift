@@ -10,8 +10,7 @@ public class FactoryResetRequest: PumpRequest {
         type: .Request,
         characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true,
-        dangerousDoNotInvoke: true,
-        dangerousRequireExplicitConfirmation: true
+        dangerousDoNotInvoke: true
     )
 
     public var cargo: Data
