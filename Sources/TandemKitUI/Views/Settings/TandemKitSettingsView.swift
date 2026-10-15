@@ -257,9 +257,15 @@ struct TandemKitSettingsView: View {
                                 Text(connectionIssue.title)
                                     .font(Font.subheadline.weight(.bold))
                                     .foregroundColor(guidanceColors.critical)
-                                Text(connectionIssue.detail(appName: viewModel.appName))
+                                TimelineView(.everyMinute) { context in
+                                    Text(connectionIssue.detail(
+                                        appName: viewModel.appName,
+                                        lastKnownDelivery: viewModel.lastKnownBasalDelivery,
+                                        now: context.date
+                                    ))
                                     .font(Font.footnote.weight(.semibold))
                                     .fixedSize(horizontal: false, vertical: true)
+                                }
                                 Text("Troubleshoot connection", comment: "subtitle linking to the connection troubleshooter")
                                     .font(Font.caption)
                                     .foregroundColor(.accentColor)
