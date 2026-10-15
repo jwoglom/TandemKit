@@ -245,6 +245,57 @@ import XCTest
         XCTAssertTrue(viewModel.failedExitMode)
     }
 
+    // MARK: - Starting the fill
+
+    func testTheFillCannotStartBeforeTheNotificationReadLands() {
+        stubAlerts()
+        viewModel.isSuspended = true
+        viewModel.currentStep = .enterMode
+
+        viewModel.checkNotificationsBeforeFill()
+        XCTAssertFalse(viewModel.canStartFill)
+
+        drainMainQueue()
+        XCTAssertTrue(viewModel.canStartFill)
+    }
+
+    func testAfterACartridgeChangeWithNothingToClearTheFillStartsUnprompted() {
+        useViewModelFollowingCartridgeChange()
+        stubAlerts()
+        bluetooth.stub(EnterFillTubingModeRequest.self, with: EnterFillTubingModeResponse(status: 0))
+
+        viewModel.checkNotificationsBeforeFill()
+        drainMainQueue()
+        drainMainQueue()
+
+        XCTAssertEqual(bluetooth.sent(EnterFillTubingModeRequest.self).count, 1)
+        XCTAssertEqual(viewModel.currentStep, .filling)
+    }
+
+    func testAfterACartridgeChangeANotificationToClearHoldsThePrepareStep() {
+        useViewModelFollowingCartridgeChange()
+        stubAlerts(.LOW_INSULIN_ALERT)
+
+        viewModel.checkNotificationsBeforeFill()
+        drainMainQueue()
+
+        XCTAssertEqual(bluetooth.sent(EnterFillTubingModeRequest.self).count, 0)
+        XCTAssertEqual(viewModel.currentStep, .enterMode)
+        XCTAssertFalse(viewModel.canStartFill)
+    }
+
+    func testOpenedOnItsOwnThePrepareStepWaitsForTheUser() {
+        stubAlerts()
+        viewModel.isSuspended = true
+        viewModel.currentStep = .enterMode
+
+        viewModel.checkNotificationsBeforeFill()
+        drainMainQueue()
+
+        XCTAssertEqual(bluetooth.sent(EnterFillTubingModeRequest.self).count, 0)
+        XCTAssertEqual(viewModel.currentStep, .enterMode)
+    }
+
     // MARK: - Which reports warrant a read
 
     func testAReleaseIsRead() {
@@ -268,6 +319,17 @@ import XCTest
     }
 
     // MARK: - Helpers
+
+    private func useViewModelFollowingCartridgeChange() {
+        viewModel = TandemKitFillTubingViewModel(
+            pumpManager: manager,
+            done: {},
+            toFillingCannula: {},
+            followsCartridgeChange: true
+        )
+        viewModel.isSuspended = true
+        viewModel.currentStep = .enterMode
+    }
 
     private func attachDelegate() -> MockPumpManagerDelegate {
         let delegate = MockPumpManagerDelegate()

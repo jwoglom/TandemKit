@@ -236,7 +236,7 @@
       }
     },
     "Active Notifications" : {
-      "comment" : "Notifications section header\nThe title of the active notifications section",
+      "comment" : "The title of the active notifications section",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -658,13 +658,13 @@
         }
       }
     },
-    "Clear all notifications before starting tubing fill" : {
+    "Clear all notifications before starting tubing fill by swiping them away" : {
       "comment" : "Warning message",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Clear all notifications before starting tubing fill"
+            "value" : "Clear all notifications before starting tubing fill by swiping them away"
           }
         }
       }
@@ -1029,6 +1029,17 @@
         }
       }
     },
+    "Detection" : {
+      "comment" : "Step header",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Detection"
+          }
+        }
+      }
+    },
     "Dexcom G6 Setup" : {
       "comment" : "Title for G6 setup wizard",
       "localizations" : {
@@ -1128,6 +1139,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Enabled"
+          }
+        }
+      }
+    },
+    "Ensure the infusion set is disconnected from your body." : {
+      "comment" : "Instruction",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ensure the infusion set is disconnected from your body."
+          }
+        }
+      }
+    },
+    "Ensure you have disconnected the infusion set from your body before filling tubing." : {
+      "comment" : "Warning shown on the fill tubing step",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ensure you have disconnected the infusion set from your body before filling tubing."
           }
         }
       }
@@ -1312,6 +1345,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Failed to enter change cartridge mode."
+          }
+        }
+      }
+    },
+    "Prepare Pump" : {
+      "comment" : "Step header",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prepare Pump"
           }
         }
       }
@@ -1518,7 +1562,7 @@
       }
     },
     "Fill Tubing" : {
-      "comment" : "Button text\nLabel for fill tubing\nTitle for fill tubing",
+      "comment" : "Button text\nLabel for fill tubing\nStep header\nTitle for fill tubing",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2101,7 +2145,7 @@
       }
     },
     "Notifications" : {
-      "comment" : "Notifications view title",
+      "comment" : "Notifications section header\nNotifications view title",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2752,6 +2796,17 @@
         }
       }
     },
+    "Replace Cartridge" : {
+      "comment" : "Step header",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Replace Cartridge"
+          }
+        }
+      }
+    },
     "Resume" : {
 
     },
@@ -3124,61 +3179,6 @@
         }
       }
     },
-    "Step 1: Suspend Insulin" : {
-      "comment" : "Step header",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Step 1: Suspend Insulin"
-          }
-        }
-      }
-    },
-    "Step 2: Prepare Pump" : {
-      "comment" : "Step header",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Step 2: Prepare Pump"
-          }
-        }
-      }
-    },
-    "Step 3: Fill Tubing" : {
-      "comment" : "Step header",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Step 3: Fill Tubing"
-          }
-        }
-      }
-    },
-    "Step 3: Replace Cartridge" : {
-      "comment" : "Step header",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Step 3: Replace Cartridge"
-          }
-        }
-      }
-    },
-    "Step 4: Detection" : {
-      "comment" : "Step header",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Step 4: Detection"
-          }
-        }
-      }
-    },
     "Stop CGM Sensor" : {
       "comment" : "Button to stop CGM sensor\nTitle for stop CGM confirmation",
       "localizations" : {
@@ -3236,6 +3236,17 @@
     },
     "Suspend" : {
 
+    },
+    "Suspend Insulin" : {
+      "comment" : "Step header",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suspend Insulin"
+          }
+        }
+      }
     },
     "Suspend insulin delivery" : {
       "comment" : "Button to suspend",

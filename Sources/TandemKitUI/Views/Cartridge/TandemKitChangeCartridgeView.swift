@@ -148,27 +148,29 @@ struct TandemKitChangeCartridgeView: View {
 
     private var suspendStepContent: some View {
         VStack(alignment: .leading, spacing: 20) {
-            // Warning banner
-            HStack(spacing: 12) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundColor(guidanceColors.warning)
-                    .font(.title2)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Important", comment: "Important section header")
-                        .font(.headline)
+            if !viewModel.isCheckingSuspendStatus {
+                // Warning banner
+                HStack(spacing: 12) {
+                    Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundColor(guidanceColors.warning)
-                    Text(
-                        "Changing your cartridge will require suspending insulin delivery.",
-                        comment: "Warning message for cartridge change"
-                    )
-                    .font(.subheadline)
+                        .font(.title2)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Important", comment: "Important section header")
+                            .font(.headline)
+                            .foregroundColor(guidanceColors.warning)
+                        Text(
+                            "Changing your cartridge will require suspending insulin delivery.",
+                            comment: "Warning message for cartridge change"
+                        )
+                        .font(.subheadline)
+                    }
                 }
+                .wizardCard(background: guidanceColors.warning.opacity(0.1))
             }
-            .wizardCard(background: guidanceColors.warning.opacity(0.1))
 
             // Step header
             VStack(alignment: .leading, spacing: 8) {
-                Text("Step 1: Suspend Insulin", comment: "Step header")
+                Text("Suspend Insulin", comment: "Step header")
                     .font(.title2)
                     .fontWeight(.bold)
                 Text("First, suspend insulin delivery", comment: "Step description")
@@ -201,7 +203,7 @@ struct TandemKitChangeCartridgeView: View {
     private var enterModeStepContent: some View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Step 2: Prepare Pump", comment: "Step header")
+                Text("Prepare Pump", comment: "Step header")
                     .font(.title2)
                     .fontWeight(.bold)
                 Text("Swipe away any active pump notifications below", comment: "Step description")
@@ -209,22 +211,32 @@ struct TandemKitChangeCartridgeView: View {
                     .foregroundColor(.secondary)
             }
 
+            if viewModel.hasActiveNotifications {
+                Label(
+                    String(
+                        localized:
+                        "Clear all notifications before starting cartridge change",
+                        comment: "Warning message"
+                    ),
+                    systemImage: "exclamationmark.triangle.fill"
+                )
+                .foregroundColor(guidanceColors.warning)
+                .wizardCard(background: guidanceColors.warning.opacity(0.1))
+            }
+
             // Embedded notifications check
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text("Active Notifications", comment: "Notifications section header")
+                    Text("Notifications", comment: "Notifications section header")
                         .font(.headline)
                     Spacer()
-                    Button(action: {
-                        viewModel.notificationsViewModel.refreshNotifications()
-                    }) {
-                        if viewModel.notificationsViewModel.isRefreshing {
-                            ActivityIndicator(isAnimating: .constant(true), style: .medium)
-                        } else {
+                    if !viewModel.notificationsViewModel.isRefreshing {
+                        Button(action: {
+                            viewModel.notificationsViewModel.refreshNotifications()
+                        }) {
                             Image(systemName: "arrow.clockwise")
                         }
                     }
-                    .disabled(viewModel.notificationsViewModel.isRefreshing)
                 }
 
                 if viewModel.notificationsViewModel.isRefreshing && viewModel.notificationsViewModel.notifications.isEmpty {
@@ -268,19 +280,6 @@ struct TandemKitChangeCartridgeView: View {
                 }
             }
             .wizardCard(background: Color(.secondarySystemGroupedBackground))
-
-            if viewModel.hasActiveNotifications {
-                Label(
-                    String(
-                        localized:
-                        "Clear all notifications before starting cartridge change",
-                        comment: "Warning message"
-                    ),
-                    systemImage: "exclamationmark.triangle.fill"
-                )
-                .foregroundColor(guidanceColors.warning)
-                .wizardCard(background: guidanceColors.warning.opacity(0.1))
-            }
 
             if viewModel.failedEnterMode {
                 Label(
@@ -349,7 +348,7 @@ struct TandemKitChangeCartridgeView: View {
     private var physicalChangeStepContent: some View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Step 3: Replace Cartridge", comment: "Step header")
+                Text("Replace Cartridge", comment: "Step header")
                     .font(.title2)
                     .fontWeight(.bold)
                 Text("Follow these steps to replace your cartridge", comment: "Step description")
@@ -360,15 +359,20 @@ struct TandemKitChangeCartridgeView: View {
             VStack(alignment: .leading, spacing: 12) {
                 instructionRow(number: 1, text: String(
                     localized:
-                    "Remove the old cartridge from the pump by twisting it off",
+                    "Ensure the infusion set is disconnected from your body.",
                     comment: "Instruction"
                 ))
                 instructionRow(number: 2, text: String(
                     localized:
-                    "Insert a new cartridge and ensure it is securely in place",
+                    "Remove the old cartridge from the pump by twisting it off",
                     comment: "Instruction"
                 ))
                 instructionRow(number: 3, text: String(
+                    localized:
+                    "Insert a new cartridge and ensure it is securely in place",
+                    comment: "Instruction"
+                ))
+                instructionRow(number: 4, text: String(
                     localized:
                     "Press the button below when complete",
                     comment: "Instruction"
@@ -378,9 +382,20 @@ struct TandemKitChangeCartridgeView: View {
 
             // Show active notifications warning during cartridge change
             if viewModel.hasActiveNotifications {
+                Label(
+                    String(
+                        localized:
+                        "Clear all notifications before continuing",
+                        comment: "Warning message"
+                    ),
+                    systemImage: "exclamationmark.triangle.fill"
+                )
+                .foregroundColor(guidanceColors.warning)
+                .wizardCard(background: guidanceColors.warning.opacity(0.1))
+
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
-                        Text("Active Notifications", comment: "Notifications section header")
+                        Text("Notifications", comment: "Notifications section header")
                             .font(.headline)
                         Spacer()
                     }
@@ -398,17 +413,6 @@ struct TandemKitChangeCartridgeView: View {
                     }
                 }
                 .wizardCard(background: Color(.secondarySystemGroupedBackground))
-
-                Label(
-                    String(
-                        localized:
-                        "Clear all notifications before continuing",
-                        comment: "Warning message"
-                    ),
-                    systemImage: "exclamationmark.triangle.fill"
-                )
-                .foregroundColor(guidanceColors.warning)
-                .wizardCard(background: guidanceColors.warning.opacity(0.1))
             }
         }
         .task {
@@ -424,7 +428,7 @@ struct TandemKitChangeCartridgeView: View {
     private var detectingStepContent: some View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Step 4: Detection", comment: "Step header")
+                Text("Detection", comment: "Step header")
                     .font(.title2)
                     .fontWeight(.bold)
                 Text("The pump is detecting insulin in the cartridge", comment: "Step description")

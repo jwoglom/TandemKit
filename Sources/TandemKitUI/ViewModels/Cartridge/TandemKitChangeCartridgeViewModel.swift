@@ -37,6 +37,7 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
 
     @Published var currentStep: CartridgeChangeStep = .suspend
     @Published var isSuspended: Bool? = nil
+    @Published var isCheckingSuspendStatus = true
     @Published var isProcessing = false
 
     @Published var loadingSuspend = false
@@ -129,8 +130,14 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
     }
 
     func checkSuspendedStatus() {
-        pumpManager?.fetchSuspendStatus { isSuspended in
+        guard let pumpManager else {
+            isCheckingSuspendStatus = false
+            return
+        }
+        isCheckingSuspendStatus = true
+        pumpManager.fetchSuspendStatus { isSuspended in
             DispatchQueue.main.async {
+                self.isCheckingSuspendStatus = false
                 self.isSuspended = isSuspended
 
                 if self.isSuspended == true, self.currentStep == .suspend {
