@@ -135,13 +135,13 @@ extension TandemPumpManager {
                     now: now,
                     isExempt: isOverReportedNearASegmentChange
                 )
-                guard case let .differs(host) = verdict else {
+                guard case let .differs(host, from) = verdict else {
                     if case let .matches(residual) = verdict {
                         basalResidualDays.add(residual, of: chunk)
                     }
                     break
                 }
-                let difference = BasalReconciler.Difference(chunk: chunk, host: host)
+                let difference = BasalReconciler.Difference(chunk: chunk, host: host, from: from)
                 if loggedBasalDifferences.insert(chunk.sequenceNum).inserted {
                     logger.warning("Basal difference: \(describe(difference, reporting: reporting))")
                 }
@@ -218,7 +218,7 @@ extension TandemPumpManager {
 
         switch difference.host.source {
         case .schedule:
-            let start = correctionStart(for: chunk, ledger: pass.ledger)
+            let start = correctionStart(at: difference.from, ledger: pass.ledger)
             if let held, start > held.startDate {
                 // Neither host may hear of a dose after a temp basal it still holds as running.
                 guard endHeldTemp(held, pass: &pass, batch: &batch) else { return .wait }
@@ -237,10 +237,10 @@ extension TandemPumpManager {
             if endHeldTemp(held, pass: &pass, batch: &batch) {
                 return .again
             }
-            return restate(held, at: chunk, pass: &pass, batch: &batch) ? .done : .wait
+            return restate(held, at: chunk, from: difference.from, pass: &pass, batch: &batch) ? .done : .wait
 
         case let .tempBasal(row):
-            return correctFinalized(row, from: chunk, pass: &pass, batch: &batch) ? .done : .wait
+            return correctFinalized(row, from: chunk, at: difference.from, pass: &pass, batch: &batch) ? .done : .wait
 
         case .suspended:
             return .done
@@ -264,33 +264,66 @@ extension TandemPumpManager {
         return true
     }
 
-    /// The pump runs `held` at another rate from `chunk`: the part before it finishes at the old
-    /// rate, and the rest runs on, mutable, at the pump's, as at a segment change.
-    private func restate(_ held: UnfinalizedDose, at chunk: PumpBasalTimeline.Chunk, pass: inout BasalReportingPass, batch: inout HistoryReportBatch) -> Bool {
-        let start = correctionStart(for: chunk, ledger: pass.ledger)
+    /// The pump runs `held` at another rate from `chunk`: finished at the old rate before it, then
+    /// mutable at the pump's, or only to the next BasalDelivery record when that runs `held` again.
+    private func restate(
+        _ held: UnfinalizedDose,
+        at chunk: PumpBasalTimeline.Chunk,
+        from: Date,
+        pass: inout BasalReportingPass,
+        batch: inout HistoryReportBatch
+    ) -> Bool {
+        let start = correctionStart(at: from, ledger: pass.ledger)
         guard start < held.estimatedEndDate else {
             logger.info("The temp basal from \(held.startDate) has run out with no completion in pump history yet")
             return false
         }
         let (finished, running) = splitAtSegmentChanges(held, through: start)
-        let entry = running.toDoseEntry(isMutable: false, endDate: start, now: pass.now)
-        let continuation = UnfinalizedDose(
-            tempRate: chunk.unitsPerHour,
-            duration: held.estimatedEndDate.timeIntervalSince(start),
-            automatic: held.automatic,
-            insulinType: held.insulinType,
-            startDate: start,
-            tempRateId: held.tempRateId,
-            tempPercent: held.tempPercent
-        )
-        logger.info("Pump history runs the temp basal from \(held.startDate) at \(chunk.unitsPerHour) U/hr from \(start)")
+        func part(_ rate: Double, from start: Date, to end: Date) -> UnfinalizedDose {
+            UnfinalizedDose(
+                tempRate: rate,
+                duration: end.timeIntervalSince(start),
+                automatic: held.automatic,
+                insulinType: held.insulinType,
+                startDate: start,
+                tempRateId: held.tempRateId,
+                tempPercent: held.tempPercent
+            )
+        }
+        var events = finished + [NewPumpEvent.tempBasal(dose: running.toDoseEntry(isMutable: false, endDate: start, now: pass.now), of: running)]
+        let continuation: UnfinalizedDose
+        if let resumed = recordResuming(running, after: chunk, pass: pass), start < resumed, resumed < held.estimatedEndDate {
+            let atPumpRate = part(chunk.unitsPerHour, from: start, to: resumed)
+            events.append(NewPumpEvent.tempBasal(dose: atPumpRate.toDoseEntry(isMutable: false, endDate: resumed, now: pass.now), of: atPumpRate))
+            continuation = part(running.value, from: resumed, to: held.estimatedEndDate)
+            logger.info("Pump history runs the temp basal from \(held.startDate) at \(chunk.unitsPerHour) U/hr from \(start) to \(resumed)")
+        } else {
+            continuation = part(chunk.unitsPerHour, from: start, to: held.estimatedEndDate)
+            logger.info("Pump history runs the temp basal from \(held.startDate) at \(chunk.unitsPerHour) U/hr from \(start)")
+        }
         state.basalDose = continuation
-        pass.add(finished + [
-            NewPumpEvent.tempBasal(dose: entry, of: running),
-            NewPumpEvent.tempBasal(dose: continuation.toDoseEntry(isMutable: true, now: pass.now), of: continuation)
-        ], to: &batch)
+        events.append(NewPumpEvent.tempBasal(dose: continuation.toDoseEntry(isMutable: true, now: pass.now), of: continuation))
+        pass.add(events, to: &batch)
         batch.replacesHeldTemp = true
         return true
+    }
+
+    /// When the BasalDelivery record that ends `chunk` runs `dose` as a temp at its rate.
+    private func recordResuming(_ dose: UnfinalizedDose, after chunk: PumpBasalTimeline.Chunk, pass: BasalReportingPass) -> Date? {
+        let next = pass.logs
+            .compactMap { $0 as? BasalDeliveryHistoryLog }
+            .filter { $0.sequenceNum > chunk.sequenceNum }
+            .min { $0.sequenceNum < $1.sequenceNum }
+        guard let next, next.commandedRateSourceEnum == .tempRate,
+              abs(next.commandedRate - Int((dose.value * 1000).rounded())) <= BasalReconciler.rateTolerance + next.profileBasalRate / 100
+        else {
+            return nil
+        }
+        let date = pass.dates.phoneDate(of: next)
+        guard abs(date.timeIntervalSince(chunk.end)) < 1 else {
+            return nil
+        }
+        return correctionStart(at: date, ledger: pass.ledger)
     }
 
     /// The host never revises a finalized temp basal, but Trio's IOB cuts it at the next row and does
@@ -299,10 +332,11 @@ extension TandemPumpManager {
     private func correctFinalized(
         _ row: ReportedBasalLedger.Row,
         from chunk: PumpBasalTimeline.Chunk,
+        at from: Date,
         pass: inout BasalReportingPass,
         batch: inout HistoryReportBatch
     ) -> Bool {
-        let end = pass.ledger.rows.map(\.date).filter { chunk.start < $0 && $0 < row.end }.min() ?? row.end
+        let end = pass.ledger.rows.map(\.date).filter { from < $0 && $0 < row.end }.min() ?? row.end
         let span = pass.timeline.chunks.filter { $0.sequenceNum >= chunk.sequenceNum && $0.start < end }
         guard !pass.timeline.openChunks.contains(where: { $0.sequenceNum > chunk.sequenceNum && $0.start < end }),
               span.allSatisfy({ part in pass.stop.map { part.sequenceNum < $0 } ?? true }),
@@ -315,23 +349,28 @@ extension TandemPumpManager {
             logger.warning("Not correcting the temp basal from \(row.date): its chunks fail the pump history's checks")
             return true
         }
-        logger.info("Reporting the pump's basal over the finalized temp basal from \(row.date) to \(end)")
+        let before = pass.corrections
         for part in span {
-            let start = max(correctionStart(for: part, ledger: pass.ledger), row.date.addingTimeInterval(1))
+            let start = max(correctionStart(at: max(part.start, from), ledger: pass.ledger), row.date.addingTimeInterval(1))
             guard let correction = correction(for: part, from: start, until: end, pass: pass) else { continue }
             pass.add([correction], to: &batch)
             pass.corrections += 1
+        }
+        if pass.corrections > before {
+            logger.info("Reporting the pump's basal over the finalized temp basal from \(row.date), \(from) to \(end)")
+        } else {
+            logger.info("Nothing left to correct over the finalized temp basal from \(row.date) between \(from) and \(end)")
         }
         return true
     }
 
     /// Never in the same second as a row the host holds, whose order against it Trio leaves open.
-    private func correctionStart(for chunk: PumpBasalTimeline.Chunk, ledger: ReportedBasalLedger) -> Date {
+    private func correctionStart(at date: Date, ledger: ReportedBasalLedger) -> Date {
         let second = { (date: Date) in date.timeIntervalSinceReferenceDate.rounded(.down) }
         return ledger.rows
-            .filter { second($0.date) == second(chunk.start) }
+            .filter { second($0.date) == second(date) }
             .map { $0.date.addingTimeInterval(1) }
-            .reduce(chunk.start, max)
+            .reduce(date, max)
     }
 
     private func correction(

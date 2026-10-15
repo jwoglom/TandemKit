@@ -155,9 +155,13 @@ public struct ReportedBasalLedger: Equatable {
 
     /// Where what the host counts may change inside `interval`: row edges and schedule changes.
     public func changes(in interval: DateInterval, schedule: HostBasalSchedule, includingCorrections: Bool = true) -> [Date] {
+        Set(rowEdges(in: interval, includingCorrections: includingCorrections) + schedule.changes(in: interval)).sorted()
+    }
+
+    public func rowEdges(in interval: DateInterval, includingCorrections: Bool = true) -> [Date] {
         let edges = rows
             .filter { includingCorrections || correctedSequenceNum(of: $0) == nil }
-            .flatMap { [$0.date, $0.end] } + schedule.changes(in: interval)
+            .flatMap { [$0.date, $0.end] }
         return Set(edges.filter { interval.start < $0 && $0 < interval.end }).sorted()
     }
 
