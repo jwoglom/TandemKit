@@ -79,6 +79,15 @@ come back, with tests of their own: the packet layer `TandemBLE` held is `Packet
 `HistoryToDoseMapper` and `HistoryTimestampReconciler` are back, and `BolusReportLedger`,
 `DeliveryTransitionLedger` and `BasalReconciler` match history against what the host was told.
 
+### Commit stamp
+The `Stamp Git Commit` phase on the `TandemKit` framework target writes the short commit, with
+`-dirty` for a modified tree, into the built framework's Info.plist as `TandemKitGitCommit`, which
+`TandemPumpManager` logs at init so a field log can be tied to a build. It reads the git directory
+(a submodule's lives in the host's) and edits the built plist, neither of which the script sandbox
+allows, so that target sets `ENABLE_USER_SCRIPT_SANDBOXING = NO`. A phase runs only if the target
+lists it: the first version of this one was never listed, and every log read `commit unknown`
+(#568). SwiftPM builds have no Info.plist and log `unknown`.
+
 ### Doc references
 `scripts/check_doc_references.py` fails when a markdown doc names a code identifier, a path or a
 `.swift` file the repository does not have, or links to a file or heading that is not there. The
