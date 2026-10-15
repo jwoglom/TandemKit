@@ -57,10 +57,21 @@ extension TandemPumpManager {
             logger.warning("Reporting the \(pending.observed) seen at \(pending.detectedAt) at detection; the pump now reports \(observed)")
             reportTransition(pending)
         }
+        if observed == .basal {
+            state.deliveryTransitions.interruptedTemp = nil
+        }
 
         let held = state.basalDose
         if Self.isSameDelivery(observed, as: held.type) {
             state.deliveryTransitions.lastConfirmedObservation = now
+            return false
+        }
+        if observed == .tempBasal, held.type == .resume, let resumed = resumedTempBasal(after: held.startDate) {
+            state.deliveryTransitions.lastConfirmedObservation = now
+            state.basalDose = resumed
+            state.lastReconciliation = now
+            notifyDelegateStateUpdated()
+            emitPumpEvents([NewPumpEvent.tempBasal(dose: resumed.toDoseEntry(isMutable: true, now: now), of: resumed)])
             return false
         }
         // A temp rate the app did not set is not reported.
@@ -122,6 +133,40 @@ extension TandemPumpManager {
             )
         )
         notifyDelegateStateUpdated()
+    }
+
+    /// A reading of a temp rate other than the one a stop interrupted: the pump did not resume it.
+    func forgetInterruptedTempUnlessRunning(_ status: CurrentBasalStatusResponse) {
+        guard status.basalType == .tempBasal, let interrupted = state.deliveryTransitions.interruptedTemp,
+              let percent = interrupted.tempPercent
+        else {
+            return
+        }
+        if !Self.tempBasalReadbackMatches(status, percent: percent) {
+            logger.info("The pump runs \(status.currentBasalRate) U/hr, not the \(percent)% temp basal its stop interrupted")
+            state.deliveryTransitions.interruptedTemp = nil
+        }
+    }
+
+    /// The rest of the temp a stop interrupted, which the pump runs again from a resume at
+    /// `resumedAt` until its programmed end, under a `raw` of its own. Takes it.
+    func resumedTempBasal(after resumedAt: Date) -> UnfinalizedDose? {
+        guard let interrupted = state.deliveryTransitions.interruptedTemp else { return nil }
+        state.deliveryTransitions.interruptedTemp = nil
+        // Trio orders two rows in one second arbitrarily.
+        let start = resumedAt.addingTimeInterval(1)
+        guard start < interrupted.estimatedEndDate else { return nil }
+        let running = splitAtSegmentChanges(interrupted, through: start).running
+        logger.warning("The pump resumed the temp basal its stop interrupted; reporting it from \(start) to \(interrupted.estimatedEndDate)")
+        return UnfinalizedDose(
+            tempRate: running.value,
+            duration: interrupted.estimatedEndDate.timeIntervalSince(start),
+            automatic: interrupted.automatic,
+            insulinType: interrupted.insulinType,
+            startDate: start,
+            tempRateId: interrupted.tempRateId,
+            tempPercent: interrupted.tempPercent
+        )
     }
 
     /// The temp that replaced `pending.prior` from its start, at its percent of the pump's rate:
@@ -241,13 +286,15 @@ extension TandemPumpManager {
             events += finished
             events.append(NewPumpEvent.tempBasal(dose: entry, of: last))
             tempBasalEnd = entry.endDate
+            if pending.observed == .suspend {
+                state.deliveryTransitions.interruptedTemp = last
+            }
             // Loop keeps the mutable row it holds over a non-replacing report with the same raw.
             batch.replacesHeldTemp = true
         }
 
-        let final: UnfinalizedDose
         if let replacement = pending.replacement {
-            final = closeReplacement(replacement, of: pending, adopted: adopted, after: tempBasalEnd, into: &events)
+            let final = closeReplacement(replacement, of: pending, adopted: adopted, after: tempBasalEnd, into: &events)
             logger.info("Reporting the temp basal that replaced the one reported at \(prior.startDate): \(events.count) event(s)")
             state.deliveryTransitions.pending = nil
             state.basalDose = final
@@ -255,6 +302,7 @@ extension TandemPumpManager {
             batch.events += events
             return
         }
+        var final: UnfinalizedDose
         switch (pending.observed == .suspend, hostTransition(before: .distantFuture)) {
         case let (true, host?) where host.kind == .suspend:
             final = UnfinalizedDose(suspendStartTime: host.date)
@@ -272,6 +320,11 @@ extension TandemPumpManager {
             let start = tempBasalEnd ?? pending.detectedAt
             final = UnfinalizedDose(basalRate: scheduledBasalRateInForce(at: start), insulinType: state.insulinType, startDate: start)
             events.append(NewPumpEvent.basal(dose: final.toDoseEntry(), date: final.startDate))
+        }
+        if final.type == .resume, pending.observed == .tempBasal, let resumed = resumedTempBasal(after: final.startDate) {
+            events.append(NewPumpEvent.tempBasal(dose: resumed.toDoseEntry(isMutable: true, now: now), of: resumed))
+            final = resumed
+            batch.replacesHeldTemp = true
         }
 
         logger.info("Reporting the \(pending.observed) seen at \(pending.detectedAt): \(events.count) event(s)")
@@ -500,9 +553,13 @@ extension TandemPumpManager {
         }
 
         let window = pending.lastConfirmed.addingTimeInterval(-tolerance) ... pending.detectedAt.addingTimeInterval(tolerance)
-        let end = tempRateEnd(of: pending.prior, in: stored, dates: dates)
+        let completedAt = tempRateEnd(of: pending.prior, in: stored, dates: dates)
+        let end = completedAt
             ?? records.first { $0.kind == .suspend && $0.date > pending.prior.startDate && window.contains($0.date) }?.date
         closeTransition(pending, tempRateEnd: end, into: &batch)
+        if completedAt != nil {
+            state.deliveryTransitions.interruptedTemp = nil
+        }
         return batch
     }
 
