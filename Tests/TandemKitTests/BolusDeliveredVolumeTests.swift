@@ -2,9 +2,9 @@ import LoopKit
 @testable import TandemKit
 import XCTest
 
-/// The pump reports a partial delivery in milliunits (e.g. 1041 mU), and it has to reach the host
-/// at that resolution — flooring to the 0.05 U command grid understates IOB. Pins the rounding of
-/// `queryLastBolusDeliveredVolume` and of both paths that use it: cancel, and natural completion.
+/// The pump takes and reports bolus volumes in milliunits, and a partial delivery (e.g. 1041 mU) has
+/// to reach the host at that resolution — flooring to the 0.05 U command grid understates IOB. Pins
+/// `queryLastBolusDeliveredVolume`, both paths that use it, and the volume `enactBolus` sends.
 @available(macOS 13.0, iOS 14.0, *) final class BolusDeliveredVolumeTests: XCTestCase {
     private var bluetooth: StubPumpBluetooth!
     private var manager: TandemPumpManager!
@@ -68,6 +68,28 @@ import XCTest
         wait(for: [enacted], timeout: 5.0)
         delegateQueue.sync {}
         XCTAssertEqual(manager.state.bolusDose?.bolusId, Self.bolusId)
+    }
+
+    private func initiateBolusRequests(enacting amounts: [Double]) -> [InitiateBolusRequest] {
+        bluetooth.stub(BolusPermissionRequest.self, with: BolusPermissionResponse(
+            status: 0,
+            bolusId: Self.bolusId,
+            nackReasonId: 0
+        ))
+        // Refused, so no bolus is left in flight to refuse the next amount.
+        bluetooth.stub(InitiateBolusRequest.self, with: InitiateBolusResponse(
+            status: 1,
+            bolusId: Self.bolusId,
+            statusTypeId: 0
+        ))
+        bluetooth.stub(BolusPermissionReleaseRequest.self, with: BolusPermissionReleaseResponse(status: 0))
+
+        for units in amounts {
+            let enacted = expectation(description: "enactBolus \(units) U")
+            manager.enactBolus(units: units, activationType: .manualNoRecommendation) { _ in enacted.fulfill() }
+            wait(for: [enacted], timeout: 5.0)
+        }
+        return bluetooth.sent(InitiateBolusRequest.self)
     }
 
     /// The delivered volume of the last finalized (immutable) bolus the host was told about.
@@ -170,5 +192,50 @@ import XCTest
 
         XCTAssertEqual(lastFinalizedBolusDeliveredUnits(), 1.949)
         XCTAssertNil(manager.state.bolusDose)
+    }
+
+    // MARK: - Commanded volume
+
+    func testABolusOffTheCommandGridIsSentInExactMilliunits() {
+        startBolus(units: 0.13)
+
+        let sent = bluetooth.sent(InitiateBolusRequest.self)
+        XCTAssertEqual(sent.map(\.totalVolume), [130])
+        XCTAssertEqual(sent.map(\.foodVolume), [130])
+        XCTAssertEqual(sent.map(\.correctionVolume), [0])
+    }
+
+    func testEverySupportedBolusVolumeIsSentAsItsExactMilliunits() {
+        let volumes = manager.supportedBolusVolumes
+
+        let sent = initiateBolusRequests(enacting: volumes)
+
+        XCTAssertEqual(sent.count, volumes.count)
+        for (index, (units, request)) in zip(volumes, sent).enumerated() {
+            let milliunits = UInt32(50 * (index + 1))
+            XCTAssertEqual(request.totalVolume, milliunits, "\(units) U")
+            XCTAssertEqual(request.foodVolume, milliunits, "\(units) U")
+        }
+    }
+
+    func testAVolumeJustUnderAMilliunitInBinaryIsSentAsThatMilliunit() {
+        let volumes: [(units: Double, milliunits: UInt32)] = [
+            (2.01, 2010),
+            (4.02, 4020),
+            (8.03, 8030),
+            (16.06, 16060),
+            (16.15, 16150),
+            (1.001, 1001),
+            (2.002, 2002)
+        ]
+
+        let sent = initiateBolusRequests(enacting: volumes.map(\.units))
+
+        XCTAssertEqual(sent.count, volumes.count)
+        for ((units, milliunits), request) in zip(volumes, sent) {
+            XCTAssertLessThan(units * 1000, Double(milliunits))
+            XCTAssertEqual(request.totalVolume, milliunits, "\(units) U")
+            XCTAssertEqual(request.foodVolume, milliunits, "\(units) U")
+        }
     }
 }
