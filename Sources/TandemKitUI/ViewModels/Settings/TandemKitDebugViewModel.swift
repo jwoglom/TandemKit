@@ -139,7 +139,10 @@ final class TandemKitDebugViewModel: ObservableObject {
             uniquingKeysWith: { first, _ in first }
         )
 
-        let grouped = Dictionary(grouping: MessageRegistry.all.filter { $0.messageType == .Request }) {
+        let sendable = MessageRegistry.all.filter {
+            $0.messageType == .Request && !$0.type.props.dangerousRequireExplicitConfirmation
+        }
+        let grouped = Dictionary(grouping: sendable) {
             $0.category
         }
 

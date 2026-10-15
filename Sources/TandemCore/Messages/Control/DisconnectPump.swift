@@ -10,7 +10,8 @@ public class DisconnectPumpRequest: PumpRequest {
         type: .Request,
         characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true,
-        minApi: .mobiApiV3_5
+        minApi: .mobiApiV3_5,
+        dangerousRequireExplicitConfirmation: true
     )
 
     public var cargo: Data
