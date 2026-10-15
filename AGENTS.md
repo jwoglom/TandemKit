@@ -552,12 +552,14 @@ edit instead of at the next sync.
     edges don't count as changes: they are the pump's cycles, and H before one is the previous
     chunk's, so a run of cycles at one rate would otherwise get only its first corrected. A matching
     chunk never differs, whatever H does later inside it: the host counts a change from its command,
-    the pump from its next cycle, and that residual is only logged, per day.
+    the pump from its next cycle, and that residual is only logged, once each day is over: net, the
+    host's insulin less the pump's, and gross, since a temp's early start and early end cancel.
   - Skipped: suspended time (the pump's or the host's), chunks before the latest of
     `firstSeenFloor`, 24 hours ago and `trackingSince`, chunks still running, and temp chunks within
     `segmentChangeWindow` before a segment change, which the driver reports at the request on
     purpose.
-  - Each difference is logged once a session, with the action it calls for. Only with
+  - Each difference is logged once a session, with the action it calls for, and each record that
+    fails the cross-check once a session, from past `reconciledThrough` and the floor. Only with
     `basalHistoryReporting`, and only for a trusted chunk, is anything reported:
     - H from the host's schedule: a correction, an immutable `.tempBasal` at the pump's rate over
       the chunk (cut at the host's next row inside it), with `deliveredUnits` to 0.001 U, under
@@ -606,7 +608,11 @@ edit instead of at the next sync.
   BasalDelivery record, or a resume inside the suspend's own cycle, delivers nothing until the next.
   `PumpBasalTimeline` reads this back: one chunk per BasalDelivery record, used once closed, and
   trusted only if it, the chunks either side, and its `DailyBasal` stretch agree with the pump's
-  other records.
+  other records. Whether a temp or a suspend is in force is unknown where the replay starts and past
+  a store gap, until a record says: the session's store starts mid-temp after a relaunch, and a lost
+  `TempRateActivated` or `PumpingResumed` failed every record after it, so their real differences
+  went uncorrected (#563). Meanwhile a BasalDelivery record consistent with itself passes: source 0
+  at 0, 1 at its `profileBasalRate`, 2 at its own `tempRate`.
 - `enactBolus` rejects non-positive amounts and anything above `state.settings.maxBolus`
   (seeded from `PumpManagerSetupSettings` at setup, then whatever the host app last synced).
   The pump enforces the same ceiling in firmware, because `syncDeliveryLimits` pushes it down

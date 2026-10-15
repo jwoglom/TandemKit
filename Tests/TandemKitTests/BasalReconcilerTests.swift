@@ -110,7 +110,10 @@ final class BasalReconcilerTests: XCTestCase {
 
         XCTAssertEqual(differing(result), [])
         XCTAssertEqual(result.matched, 6)
-        XCTAssertEqual(result.residualByDay.values.reduce(0, +), (200 * 0.5 + 200 * 0.5) / 3600, accuracy: 1e-9, "the change at 100 and the cancel at 1000 each count 200 s early")
+        XCTAssertEqual(result.residualByDay.count, 1)
+        let residual = result.residualByDay.values.first
+        XCTAssertEqual(residual?.gross ?? 0, (200 * 0.5 + 200 * 0.5) / 3600, accuracy: 1e-9, "the change at 100 and the cancel at 1000 each count 200 s early")
+        XCTAssertEqual(residual?.net ?? 1, 0, accuracy: 1e-9, "one 0.5 U/hr over, the other under")
     }
 
     func testATempReplacedWithinACycleMatches() {

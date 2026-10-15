@@ -57,11 +57,18 @@ struct PumpBasalTimeline: Equatable {
         let start: Date
     }
 
+    /// Why a chunk is untrusted, for the log.
+    struct Problem: Equatable {
+        /// The failing BasalDelivery record, or the last record of a failing `DailyBasal` stretch.
+        let sequenceNum: UInt32
+        let date: Date
+        let description: String
+    }
+
     /// Closed chunks, ascending.
     private(set) var chunks: [Chunk] = []
     private(set) var openChunks: [OpenChunk] = []
-    /// Why a chunk is untrusted, for the log.
-    private(set) var problems: [String] = []
+    private(set) var problems: [Problem] = []
 
     /// - Parameters:
     ///   - logs: The records one pass read, any types, in any order.
@@ -81,13 +88,23 @@ struct PumpBasalTimeline: Equatable {
         var replay = Replay()
         var deliveries: [(index: Int, record: Record, delivery: BasalDeliveryHistoryLog, passes: Bool, tempRateId: Int?)] = []
         for (index, record) in records.enumerated() {
+            if index > 0, hasGap(after: records[index - 1].log.sequenceNum, through: record.log.sequenceNum) {
+                replay.forget()
+            }
             if let delivery = record.log as? BasalDeliveryHistoryLog {
                 let sameSecond = records[(index + 1)...].prefix { $0.log.pumpTimeSec == record.log.pumpTimeSec }
                 let (passes, problem) = replay.check(delivery, at: record.date, sameSecond: sameSecond.map(\.log))
                 if let problem {
-                    problems.append("BasalDelivery #\(delivery.sequenceNum) at \(record.date): \(problem)")
+                    problems.append(Problem(
+                        sequenceNum: delivery.sequenceNum,
+                        date: record.date,
+                        description: "BasalDelivery #\(delivery.sequenceNum) at \(record.date): \(problem)"
+                    ))
                 }
                 deliveries.append((index, record, delivery, passes, replay.tempInForce(at: record.date, includingEnding: true)?.log.tempRateId))
+                if passes {
+                    replay.learn(from: delivery)
+                }
             }
             replay.apply(record)
         }
@@ -104,7 +121,7 @@ struct PumpBasalTimeline: Equatable {
         }
         let stretches = Self.dailyBasalStretches(records, hasGap: hasGap)
         for stretch in stretches where !stretch.passes {
-            problems.append(stretch.description)
+            problems.append(Problem(sequenceNum: stretch.to.sequenceNum, date: stretch.toDate, description: stretch.description))
             for delivery in deliveries where stretch.holds(delivery.delivery.sequenceNum) {
                 untrusted.insert(delivery.delivery.sequenceNum)
             }
@@ -170,18 +187,42 @@ struct PumpBasalTimeline: Equatable {
 
     // MARK: - Cross-check
 
-    /// What the pump's other records say it was doing, replayed in sequence order.
+    /// What the pump's other records say it was doing, replayed in sequence order. Whether a temp or
+    /// a suspend is in force is unknown at the start and after a store gap, until a record says.
     private struct Replay {
         var isSuspended: Bool?
         var temp: (log: TempRateActivatedHistoryLog, start: Date)?
+        var knowsTemp = false
         var pcm: Int?
+
+        mutating func forget() {
+            self = Replay()
+        }
+
+        /// From a BasalDelivery record that passed.
+        mutating func learn(from delivery: BasalDeliveryHistoryLog) {
+            switch delivery.commandedRateSourceEnum {
+            case .profile:
+                isSuspended = false
+                if !knowsTemp {
+                    temp = nil
+                    knowsTemp = true
+                }
+            case .tempRate, .algorithm, .tempRateAndAlgorithm:
+                isSuspended = false
+            case .suspended, nil:
+                break
+            }
+        }
 
         mutating func apply(_ record: Record) {
             switch record.log {
             case let activated as TempRateActivatedHistoryLog:
                 temp = (activated, record.date)
-            case let completed as TempRateCompletedHistoryLog where temp?.log.tempRateId == completed.tempRateId:
+                knowsTemp = true
+            case let completed as TempRateCompletedHistoryLog where !knowsTemp || temp?.log.tempRateId == completed.tempRateId:
                 temp = nil
+                knowsTemp = true
             case is PumpingSuspendedHistoryLog:
                 isSuspended = true
             case is PumpingResumedHistoryLog:
@@ -203,7 +244,7 @@ struct PumpBasalTimeline: Equatable {
 
         /// Source 3 or 4 passes unless the PCM in force is open loop or none. Anything else must be
         /// what the replay expects, at the BasalDelivery record's own `profileBasalRate`, before or
-        /// after the records sharing its second.
+        /// after the records sharing its second; where it doesn't know, consistent with itself.
         func check(_ delivery: BasalDeliveryHistoryLog, at date: Date, sameSecond: [HistoryLog]) -> (passes: Bool, problem: String?) {
             if delivery.commandedRate == PumpBasalTimeline.notAvailable {
                 return (true, nil)
@@ -224,8 +265,7 @@ struct PumpBasalTimeline: Equatable {
             for log in sameSecond {
                 after.apply(Record(log: log, date: date))
             }
-            let expected = expectations(at: date, profileRate: delivery.profileBasalRate)
-                + after.expectations(at: date, profileRate: delivery.profileBasalRate)
+            let expected = expectations(at: date, for: delivery) + after.expectations(at: date, for: delivery)
             let matches = expected.contains { source, rate in
                 source == delivery.commandedRateSource && abs(rate - delivery.commandedRate) <= 1
             }
@@ -234,11 +274,16 @@ struct PumpBasalTimeline: Equatable {
             return (false, "source \(delivery.commandedRateSource) at \(delivery.commandedRate) mU/h; expected \(described)")
         }
 
-        private func expectations(at date: Date, profileRate: Int) -> [(source: Int, rate: Int)] {
+        private func expectations(at date: Date, for delivery: BasalDeliveryHistoryLog) -> [(source: Int, rate: Int)] {
             if isSuspended == true {
                 return [(0, 0)]
             }
-            var expected: [(source: Int, rate: Int)] = []
+            let profileRate = delivery.profileBasalRate
+            var expected: [(source: Int, rate: Int)] = isSuspended == nil ? [(0, 0)] : []
+            guard knowsTemp else {
+                // Source 2 records `commandedRate` equal to `tempRate` in every capture.
+                return expected + [(1, profileRate), (2, delivery.tempRate)]
+            }
             if let temp = tempInForce(at: date, includingEnding: true) {
                 expected.append((2, Int((Double(temp.log.percent) / 100 * Double(profileRate)).rounded())))
             }
