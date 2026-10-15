@@ -48,6 +48,7 @@ final class TandemKitDebugViewModel: ObservableObject {
     @Published var lastResponseDescription: String?
     @Published var lastSendError: String?
     @Published var isSending = false
+    @Published private(set) var messageAwaitingConfirmation: Message?
 
     @Published var parameterInput: [String: String] = [:]
     @Published var cargoHexInput: String = ""
@@ -438,12 +439,43 @@ final class TandemKitDebugViewModel: ObservableObject {
         return metadata.type.init(cargo: data)
     }
 
+    var confirmationMessage: String {
+        guard let messageAwaitingConfirmation else { return "" }
+        return "You are sending a command which can modify the pump's state: \(String(describing: messageAwaitingConfirmation))"
+    }
+
+    func confirmPendingSend() {
+        guard let message = messageAwaitingConfirmation else { return }
+        messageAwaitingConfirmation = nil
+        dispatch(message)
+    }
+
+    func cancelPendingSend() {
+        messageAwaitingConfirmation = nil
+    }
+
     private func send(_ message: Message?) {
         guard let message else {
             lastSendError = "Unable to build message"
             return
         }
 
+        guard pumpManager != nil else {
+            lastSendError = "Pump not available"
+            return
+        }
+
+        switch MessageRegistry.metadata(for: message)?.category {
+        case .control,
+             .authentication:
+            lastSendError = nil
+            messageAwaitingConfirmation = message
+        default:
+            dispatch(message)
+        }
+    }
+
+    private func dispatch(_ message: Message) {
         guard let pumpManager else {
             lastSendError = "Pump not available"
             return

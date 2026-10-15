@@ -11,6 +11,42 @@ struct TandemKitDebugView: View {
 
     var body: some View {
         List {
+            Section(header: Text("History Logs")) {
+                Button {
+                    viewModel.openHistoryLogViewer?()
+                } label: {
+                    Label("History Log Viewer", systemImage: "list.bullet.rectangle")
+                }
+                .disabled(viewModel.openHistoryLogViewer == nil)
+            }
+
+            Section(header: Text("Profiles")) {
+                Button {
+                    viewModel.openPumpProfileViewer?()
+                } label: {
+                    Label("Pump Profile Viewer", systemImage: "list.bullet.indent")
+                }
+                .disabled(viewModel.openPumpProfileViewer == nil)
+            }
+
+            Section(header: Text("PumpState")) {
+                Button("View PumpState") {
+                    showingPumpState = true
+                }
+                .sheet(isPresented: $showingPumpState) {
+                    DebugTextView(title: "PumpState", contents: viewModel.pumpStateJsonDebugDescription)
+                }
+            }
+
+            Section(header: Text("TandemPumpManagerState")) {
+                Button("View TandemPumpManagerState") {
+                    showingManagerState = true
+                }
+                .sheet(isPresented: $showingManagerState) {
+                    DebugTextView(title: "TandemPumpManagerState", contents: viewModel.managerStateJsonDebugDescription)
+                }
+            }
+
             Section(header: Text("Send Pump Message")) {
                 ForEach(viewModel.categories) { group in
                     Button {
@@ -59,42 +95,6 @@ struct TandemKitDebugView: View {
                 }
             }
 
-            Section(header: Text("History Logs")) {
-                Button {
-                    viewModel.openHistoryLogViewer?()
-                } label: {
-                    Label("History Log Viewer", systemImage: "list.bullet.rectangle")
-                }
-                .disabled(viewModel.openHistoryLogViewer == nil)
-            }
-
-            Section(header: Text("Profiles")) {
-                Button {
-                    viewModel.openPumpProfileViewer?()
-                } label: {
-                    Label("Pump Profile Viewer", systemImage: "list.bullet.indent")
-                }
-                .disabled(viewModel.openPumpProfileViewer == nil)
-            }
-
-            Section(header: Text("PumpState")) {
-                Button("View PumpState") {
-                    showingPumpState = true
-                }
-                .sheet(isPresented: $showingPumpState) {
-                    DebugTextView(title: "PumpState", contents: viewModel.pumpStateJsonDebugDescription)
-                }
-            }
-
-            Section(header: Text("TandemPumpManagerState")) {
-                Button("View TandemPumpManagerState") {
-                    showingManagerState = true
-                }
-                .sheet(isPresented: $showingManagerState) {
-                    DebugTextView(title: "TandemPumpManagerState", contents: viewModel.managerStateJsonDebugDescription)
-                }
-            }
-
             Section {
                 Button {
                     viewModel.openFeatureFlags?()
@@ -127,6 +127,8 @@ struct TandemKitDebugView: View {
         .sheet(item: $activeCategory) { group in
             CategoryRequestSheet(viewModel: viewModel, group: group)
         }
+        // While a category sheet is up it presents the confirmation itself; this one covers Resend.
+        .modifier(SendConfirmationAlert(viewModel: viewModel, isEnabled: activeCategory == nil))
         .alert("Re-run Pump Setup?", isPresented: $showingRerunSetupConfirmation) {
             Button("Cancel", role: .cancel) {}
             Button("Re-run Setup") {
@@ -167,7 +169,9 @@ private struct CategoryRequestSheet: View {
                         } else {
                             Button(entry.name) {
                                 viewModel.sendSimpleEntry(entry)
-                                dismiss()
+                                if viewModel.messageAwaitingConfirmation == nil {
+                                    dismiss()
+                                }
                             }
                         }
                     }
@@ -182,6 +186,33 @@ private struct CategoryRequestSheet: View {
                     Button("Close") { dismiss() }
                 }
             }
+        }
+        .modifier(SendConfirmationAlert(viewModel: viewModel, isEnabled: true) {
+            dismiss()
+        })
+    }
+}
+
+private struct SendConfirmationAlert: ViewModifier {
+    @ObservedObject var viewModel: TandemKitDebugViewModel
+    let isEnabled: Bool
+    var onConfirm: () -> Void = {}
+
+    func body(content: Content) -> some View {
+        content.alert("Confirm Command", isPresented: Binding(
+            get: { isEnabled && viewModel.messageAwaitingConfirmation != nil },
+            // The buttons settle the pending send; clearing it here could run before Continue's action.
+            set: { _ in }
+        )) {
+            Button("Cancel", role: .cancel) {
+                viewModel.cancelPendingSend()
+            }
+            Button("Continue", role: .destructive) {
+                viewModel.confirmPendingSend()
+                onConfirm()
+            }
+        } message: {
+            Text(viewModel.confirmationMessage)
         }
     }
 }
@@ -235,7 +266,7 @@ private struct RequestDetailView: View {
             Section {
                 Button("Send") {
                     viewModel.sendEntry(entry)
-                    if viewModel.lastSendError == nil {
+                    if viewModel.lastSendError == nil, viewModel.messageAwaitingConfirmation == nil {
                         onSent()
                     }
                 }
