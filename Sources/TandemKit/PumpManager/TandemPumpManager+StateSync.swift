@@ -164,6 +164,7 @@ extension TandemPumpManager {
         verifyDeliveredBasalRate(response)
 
         observeReplacedTempBasal(response)
+        forgetInterruptedTempUnlessRunning(response)
         observeDeliveryState(response.basalType)
 
         if response.basalType == .tempBasal {

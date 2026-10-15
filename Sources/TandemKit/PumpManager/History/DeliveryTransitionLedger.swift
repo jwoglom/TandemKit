@@ -80,19 +80,25 @@ public struct DeliveryTransitionLedger: Equatable {
     /// The last reading that saw the pump in the state the host holds, or will once `pending` is
     /// reported.
     public var lastConfirmedObservation: Date?
+    /// The part of a temp basal a pump stop ended, as the host was told. An occlusion leaves the
+    /// temp set, and the pump runs it again at a resume before its programmed end, which the stop
+    /// does not move.
+    public var interruptedTemp: UnfinalizedDose?
 
     public init(
         pumpSerial: UInt32? = nil,
         trackedAfter: UInt32? = nil,
         entries: [Entry] = [],
         pending: PendingTransition? = nil,
-        lastConfirmedObservation: Date? = nil
+        lastConfirmedObservation: Date? = nil,
+        interruptedTemp: UnfinalizedDose? = nil
     ) {
         self.pumpSerial = pumpSerial
         self.trackedAfter = trackedAfter
         self.entries = entries
         self.pending = pending
         self.lastConfirmedObservation = lastConfirmedObservation
+        self.interruptedTemp = interruptedTemp
     }
 
     /// Starts tracking `pumpSerial` after `lastSequenceNum`: on first sight, a replacement pump, or
@@ -153,7 +159,8 @@ extension DeliveryTransitionLedger: RawRepresentable {
             entries: (rawValue["entries"] as? [[String: Any]] ?? []).compactMap(Entry.init(rawValue:)),
             pending: (rawValue["pending"] as? [String: Any]).flatMap(PendingTransition.init(rawValue:)),
             lastConfirmedObservation: (rawValue["lastConfirmedObservation"] as? TimeInterval)
-                .map(Date.init(timeIntervalSinceReferenceDate:))
+                .map(Date.init(timeIntervalSinceReferenceDate:)),
+            interruptedTemp: (rawValue["interruptedTemp"] as? UnfinalizedDose.RawValue).flatMap(UnfinalizedDose.init(rawValue:))
         )
     }
 
@@ -163,6 +170,7 @@ extension DeliveryTransitionLedger: RawRepresentable {
         raw["trackedAfter"] = trackedAfter
         raw["pending"] = pending?.rawValue
         raw["lastConfirmedObservation"] = lastConfirmedObservation?.timeIntervalSinceReferenceDate
+        raw["interruptedTemp"] = interruptedTemp?.rawValue
         return raw
     }
 }

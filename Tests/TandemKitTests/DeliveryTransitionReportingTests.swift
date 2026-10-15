@@ -1301,6 +1301,168 @@ import XCTest
         XCTAssertEqual(manager.state.basalDose.type, .basal)
     }
 
+    // MARK: - A temp basal the pump resumes after a stop
+
+    /// The pump's temp 7 at 200% of its 1 U/hr from `start` for 30 minutes, stopped at `stoppedAt`
+    /// by an occlusion, which writes no `TempRateCompleted` for it.
+    private func occlusionStopsTheTempBasal(at stoppedAt: Date, detectedAt: Date) {
+        runningTempBasal(2.0, percent: 200)
+        advance(to: detectedAt)
+        observe(1)
+        pass([suspended(at: stoppedAt)])
+    }
+
+    private func observeTempRate(_ unitsPerHour: Double) {
+        bluetooth.stub(CurrentBasalStatusRequest.self, with: CurrentBasalStatusResponse(
+            profileBasalRate: 1000,
+            currentBasalRate: UInt32(unitsPerHour * 1000),
+            basalModifiedBitmask: 2
+        ))
+        manager.fetchBasalStatus()
+        delegateQueue.sync {}
+    }
+
+    private func resumedTemps() -> [NewPumpEvent] {
+        events(.tempBasal).filter { $0.dose?.startDate != start }
+    }
+
+    func testATempBasalAnOcclusionInterruptedIsReportedAgainFromAnAppResume() throws {
+        occlusionStopsTheTempBasal(at: minutes(5), detectedAt: minutes(6))
+        let interrupted = try XCTUnwrap(events(.tempBasal).first)
+        XCTAssertEqual(interrupted.dose?.endDate, minutes(5))
+
+        advance(to: minutes(8))
+        stubBasalStatus(1)
+        appResume()
+        advance(to: minutes(8).addingTimeInterval(1))
+        observeTempRate(2.0)
+
+        let resumed = try XCTUnwrap(resumedTemps().last)
+        XCTAssertEqual(resumedTemps().count, 1)
+        XCTAssertNotEqual(resumed.raw, interrupted.raw, "neither host would store a second row under the finished one's raw")
+        XCTAssertEqual(resumed.dose?.isMutable, true)
+        XCTAssertEqual(resumed.dose?.startDate, minutes(8).addingTimeInterval(1), "a second after the resume, which Trio would otherwise order arbitrarily")
+        XCTAssertEqual(resumed.dose?.endDate, minutes(30), "the stop does not move the temp's programmed end")
+        XCTAssertEqual(resumed.dose?.unitsPerHour, 2.0)
+        XCTAssertEqual(manager.state.basalDose.type, .tempBasal)
+        XCTAssertEqual(manager.state.basalDose.tempRateId, 7)
+        XCTAssertNil(manager.state.deliveryTransitions.interruptedTemp)
+
+        let segments = try feedTrio().basalSegments(clock: minutes(10))
+        XCTAssertEqual(segments.last { $0.start <= minutes(9) }?.rate, 2.0, "Trio counts the rate the pump runs")
+        XCTAssertTrue(feedLoop().deletedDoses.isEmpty)
+    }
+
+    func testATempBasalAStopInterruptedIsReportedAgainOnlyOnce() {
+        occlusionStopsTheTempBasal(at: minutes(5), detectedAt: minutes(6))
+        advance(to: minutes(8))
+        stubBasalStatus(1)
+        appResume()
+        observeTempRate(2.0)
+        advance(to: minutes(9))
+        observeTempRate(2.0)
+
+        XCTAssertEqual(resumedTemps().count, 1)
+    }
+
+    func testATempBasalAPumpSideResumeRestartsIsReportedFromTheResume() throws {
+        occlusionStopsTheTempBasal(at: minutes(5), detectedAt: minutes(6))
+        advance(to: minutes(12))
+        observeTempRate(2.0)
+        XCTAssertTrue(resumedTemps().isEmpty, "the resume is dated from history first")
+
+        pass([resumed(at: minutes(10))])
+
+        XCTAssertEqual(events(.resume).map(\.date), [minutes(10)])
+        let resumed = try XCTUnwrap(resumedTemps().last)
+        XCTAssertEqual(resumed.dose?.startDate, minutes(10).addingTimeInterval(1))
+        XCTAssertEqual(resumed.dose?.endDate, minutes(30))
+        XCTAssertEqual(resumed.dose?.isMutable, true)
+        XCTAssertTrue(try XCTUnwrap(batches.last).replacePendingEvents, "the host holds the resumed temp as mutable")
+        XCTAssertEqual(manager.state.basalDose.type, .tempBasal)
+    }
+
+    func testWithTheFlagOffATempBasalAStopInterruptedIsReportedAgainFromTheResume() throws {
+        manager.state.featureFlags[.historyBackfill] = false
+        runningTempBasal(2.0, percent: 200)
+        advance(to: minutes(6))
+        observe(1)
+        advance(to: minutes(8))
+        appResume()
+        observeTempRate(2.0)
+
+        let resumed = try XCTUnwrap(resumedTemps().last { $0.dose?.isMutable == true })
+        XCTAssertEqual(resumed.dose?.startDate, minutes(8).addingTimeInterval(1))
+        XCTAssertEqual(resumed.dose?.endDate, minutes(30))
+    }
+
+    func testATempBasalTheStopCompletedIsNotReportedAgain() {
+        runningTempBasal(2.0, percent: 200)
+        advance(to: minutes(6))
+        observe(1)
+        pass([tempRateCompleted(7, at: minutes(5), timeLeft: 25 * 60), suspended(at: minutes(5))])
+        advance(to: minutes(8))
+        stubBasalStatus(1)
+        appResume()
+        observeTempRate(2.0)
+
+        XCTAssertTrue(resumedTemps().isEmpty, "the pump ended it, so the temp it runs is not the app's")
+    }
+
+    func testAStopPastTheTempsProgrammedEndResumesNothing() {
+        occlusionStopsTheTempBasal(at: minutes(5), detectedAt: minutes(6))
+        advance(to: minutes(31))
+        stubBasalStatus(1)
+        appResume()
+        observeTempRate(2.0)
+
+        XCTAssertTrue(resumedTemps().isEmpty)
+    }
+
+    func testATempAtAnotherRateAfterTheResumeIsNotTakenForTheInterruptedOne() {
+        occlusionStopsTheTempBasal(at: minutes(5), detectedAt: minutes(6))
+        advance(to: minutes(8))
+        stubBasalStatus(1)
+        appResume()
+        observeTempRate(3.0)
+
+        XCTAssertTrue(resumedTemps().isEmpty)
+        XCTAssertNil(manager.state.deliveryTransitions.interruptedTemp)
+    }
+
+    func testScheduledBasalAfterTheResumeForgetsTheInterruptedTemp() {
+        occlusionStopsTheTempBasal(at: minutes(5), detectedAt: minutes(6))
+        advance(to: minutes(8))
+        stubBasalStatus(1)
+        appResume()
+        observe(0)
+        observeTempRate(2.0)
+
+        XCTAssertTrue(resumedTemps().isEmpty)
+    }
+
+    func testAnAppCancelForgetsTheInterruptedTemp() {
+        occlusionStopsTheTempBasal(at: minutes(5), detectedAt: minutes(6))
+        advance(to: minutes(8))
+        stubBasalStatus(1)
+        appResume()
+        XCTAssertNotNil(manager.state.deliveryTransitions.interruptedTemp)
+        manager.startScheduledBasalDose()
+
+        XCTAssertNil(manager.state.deliveryTransitions.interruptedTemp)
+    }
+
+    func testTheInterruptedTempSurvivesARelaunch() throws {
+        occlusionStopsTheTempBasal(at: minutes(5), detectedAt: minutes(6))
+        manager = makeManager(state: try XCTUnwrap(TandemPumpManagerState(rawValue: manager.state.rawValue)))
+        advance(to: minutes(8))
+        stubBasalStatus(1)
+        appResume()
+        observeTempRate(2.0)
+
+        XCTAssertEqual(resumedTemps().count, 1)
+    }
+
     // MARK: - What history never reports
 
     func testAResumeWithNoSuspendBeforeItIsNotReported() {
@@ -1511,7 +1673,16 @@ import XCTest
                 lastConfirmed: minutes(2),
                 replacement: DeliveryTransitionLedger.PendingTransition.ReplacingTemp(start: minutes(5), percent: 120, rate: 1.2)
             ),
-            lastConfirmedObservation: minutes(2)
+            lastConfirmedObservation: minutes(2),
+            interruptedTemp: UnfinalizedDose(
+                tempRate: 2.0,
+                duration: .minutes(30),
+                automatic: true,
+                insulinType: .novolog,
+                startDate: minutes(0),
+                tempRateId: 7,
+                tempPercent: 200
+            )
         )
         ledger.record(DeliveryTransitionLedger.Entry(
             kind: .suspend,

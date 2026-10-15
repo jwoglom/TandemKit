@@ -237,9 +237,10 @@ Control-IQ support in the context is whether the pump has answered a Control-IQ 
 Control-IQ opcode. Three deliberate additions to pumpX2's table: `pumpSuspend`/`pumpResume` refresh
 the basal status, since that is what emits the suspend/resume dose to LoopKit; `alarm`/`malfunction`
 refresh it, so a stop the pump makes on an occlusion, empty cartridge, auto-off or malfunction is
-seen at its alarm, not at the next sync, whether or not the pump also raises `pumpSuspend`
-(unconfirmed on hardware); and `profileChange`/`activeProfileSegmentChange` refresh it so the basal
-rate check runs on a profile edit instead of at the next sync.
+seen at its alarm, not at the next sync, whether or not the pump also raises `pumpSuspend` (a Mobi
+raised it with the alarm for an occlusion; other stops are unconfirmed on hardware); and
+`profileChange`/`activeProfileSegmentChange` refresh it so the basal rate check runs on a profile
+edit instead of at the next sync.
 
 ### Pairing
 - Only `pairPump` starts a first pairing. `connectIfNeeded` refuses a pump with no derived secret: the
@@ -455,6 +456,13 @@ rate check runs on a profile edit instead of at the next sync.
     flag off everything is reported this way. A temp basal whose `TempRateCompleted` has
     `timeLeft` 0, within a minute of its programmed end, ends exactly then: it ran its whole
     programmed duration.
+  - An occlusion stop leaves the running temp basal set: the pump writes no `TempRateCompleted` for
+    it, keeps its programmed end, and runs it again from a resume before then (seen on a Mobi; other
+    stops and the t:slim X2 unconfirmed). The host is told it ended at the stop, so the part a stop
+    ended is kept as `interruptedTemp` (persisted), and the first reading of a temp at its rate after
+    the resume reports the rest, mutable, from a second after the resume to the programmed end under
+    a `raw` of its own. A `TempRateCompleted` at the stop, scheduled basal or another temp rate after the
+    resume, or an app temp basal, cancel or suspend forgets it.
   - The history pass also reports suspend/resume pairs that fell inside an outage, which no
     reading can see. The ledger records every suspend and resume the driver reports with the
     span its pump record can fall in, so a record is matched rather than reported twice. It

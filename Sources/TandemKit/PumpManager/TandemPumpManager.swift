@@ -1192,6 +1192,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         var events = getActivePumpEvents(endDate: dose.startDate)
         events.append(NewPumpEvent.tempBasal(dose: dose.toDoseEntry(isMutable: true), of: dose))
 
+        state.deliveryTransitions.interruptedTemp = nil
         state.basalDose = dose
         state.lastReconciliation = dose.startDate
 
@@ -1327,6 +1328,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         var events = getActivePumpEvents(endDate: suspendDose.startDate)
         events.append(NewPumpEvent.suspend(dose: suspendDose.toDoseEntry(), date: suspendDose.startDate))
 
+        state.deliveryTransitions.interruptedTemp = nil
         state.basalDose = suspendDose
         state.lastReconciliation = now
         recordReportedTransition(
@@ -2501,6 +2503,7 @@ extension TandemPumpManager {
         var events = getActivePumpEvents(endDate: dose.startDate)
         events.append(NewPumpEvent.basal(dose: dose.toDoseEntry(isMutable: false), date: dose.startDate))
 
+        state.deliveryTransitions.interruptedTemp = nil
         state.basalDose = dose
         state.lastReconciliation = now
 
