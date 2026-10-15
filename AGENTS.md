@@ -168,6 +168,17 @@ then `connectionIssue` is `.handshakeFailing`, shown at once on the status highl
 troubleshooting screens. The count is not persisted, so a relaunch tries afresh. A first pairing is
 not counted: its attempts are the user's own, and a refused code is theirs to fix (see Pairing).
 
+Only a round the pump may have ended counts (`WriteFailure.countsAsJpakeFailure`, #565). The
+disconnect's reason reaches the setup task through `linkWentDown`, before any wait is cancelled. A
+link lost to `CBError.connectionTimeout` (the phone stopped hearing the pump, as in a weak-signal
+stretch) or to Bluetooth going off is not counted, and neither is a write that never went out. A
+far-end drop (`peripheralDisconnected`, the signature of a second host on the pump, #400), a
+disconnect the driver made itself (a connect out of time), an unanswered round on a live link, a
+refusal and an answered but invalid handshake all count. Once its link is gone a setup task stops at
+its next step: every operation after `linkWentDown` is refused, so it never writes to the peripheral
+the next connect reuses. Whether a Mobi refusing a stored key ever drops as `connectionTimeout` is
+unconfirmed (hardware test plan P4).
+
 ### Reconnect
 - Every connect job that brings a session up queues `syncPumpData(onlyIfIdle: true)` through
   `didReconnect` (#351), whoever started it: the reconnect retry, a history tick or report, a host

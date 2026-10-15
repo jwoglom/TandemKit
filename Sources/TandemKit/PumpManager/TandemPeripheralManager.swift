@@ -13,7 +13,7 @@ class TandemPeripheralManager: NSObject {
     private var _connectCompletion: ((Error?) -> Void)?
 
     // These three handoff slots are written on the command thread (write/read/startNotify) and read
-    // on the CB delegate queue (didUpdateValueFor / didWriteValueFor / cancelPendingOperations).
+    // on the CB delegate queue (didUpdateValueFor / didWriteValueFor / linkWentDown).
     // They are guarded by queueLock so the cross-thread reference access can't tear (the previous
     // unsynchronized access was undefined behavior). The lock only protects the get/set of the
     // reference itself — blocking waits on the referenced group happen outside the lock.
@@ -23,12 +23,67 @@ class TandemPeripheralManager: NSObject {
     private var _commandLock: TandemDispatchGroup?
     private var _isSessionEstablished = false
     private var _eventsBeforeSession: Set<QualifyingEvent> = []
+    private var _linkLoss: LinkLoss?
+
+    /// Why the link under this peripheral manager went away. Each connection has its own, so it is
+    /// set once and stays.
+    enum LinkLoss: Equatable {
+        /// `CBError.connectionTimeout`: the phone stopped hearing the pump, as in a weak-signal
+        /// stretch. A pump that ends the link sends a terminate, reported as `peripheralDisconnected`.
+        case radio
+        /// Bluetooth on the phone went off or is resetting.
+        case bluetooth
+        /// Any other drop, the pump's own and one the driver asked for among them.
+        case other
+
+        init(disconnectError error: Error?) {
+            self = (error as? CBError)?.code == .connectionTimeout ? .radio : .other
+        }
+    }
+
+    /// Why a write has no response to return.
+    enum WriteFailure: Error, Equatable {
+        /// Never reached the pump: the link was already gone, or the characteristic was not found.
+        case notSent
+        /// The link went away while the answer was awaited.
+        case linkLost(LinkLoss)
+        /// Timed out with the link up, refused, or answered with nothing that parses.
+        case unanswered
+
+        /// Whether a JPAKE round that failed this way counts towards `jpakeFailureLimit`: only what
+        /// the pump may have done, so not a write it never got nor a link lost on the phone's side.
+        var countsAsJpakeFailure: Bool {
+            switch self {
+            case .notSent: false
+            case let .linkLost(loss): loss == .other
+            case .unanswered: true
+            }
+        }
+    }
 
     /// True once setup has authenticated this connection and its first request was answered.
     var isSessionEstablished: Bool {
         queueLock.lock()
         defer { queueLock.unlock() }
         return _isSessionEstablished
+    }
+
+    var linkLoss: LinkLoss? {
+        queueLock.lock()
+        defer { queueLock.unlock() }
+        return _linkLoss
+    }
+
+    /// Makes an operation the one in flight, unless the link is already gone. Atomic with
+    /// `linkWentDown`, so an operation is either refused here or cancelled there.
+    private func begin(_ install: () -> Void) -> Bool {
+        queueLock.lock()
+        defer { queueLock.unlock() }
+        guard _linkLoss == nil else {
+            return false
+        }
+        install()
+        return true
     }
 
     private var readQueue: (TandemDispatchGroup, CBUUID)? {
@@ -143,7 +198,7 @@ class TandemPeripheralManager: NSObject {
 
     // Reassembles the (possibly multi-packet) unsolicited HistoryLogStreamResponse
     // notifications that arrive on the history log characteristic. Only touched on the
-    // CB delegate queue (didUpdateValueFor / cancelPendingOperations callers' queue).
+    // CB delegate queue (didUpdateValueFor / linkWentDown callers' queue).
     private var historyLogStreamAccumulator: ResponseMessage?
 
     init(
@@ -223,7 +278,10 @@ class TandemPeripheralManager: NSObject {
 
         let readQ = TandemDispatchGroup()
         readQ.enter()
-        readQueue = (readQ, characteristicUUID)
+        guard begin({ _readQueue = (readQ, characteristicUUID) }) else {
+            logger.error("Link is gone; not reading \(characteristicUUID)")
+            return nil
+        }
 
         defer {
             readQueue = nil
@@ -244,9 +302,22 @@ class TandemPeripheralManager: NSObject {
     /// pick one by name out of `MessageRegistry`. Everything else goes through the generic `write`,
     /// which takes the reply type from the request itself.
     func writeUntyped(_ message: any Message, expecting: any Message.Type, maxChunkSize: Int? = nil) -> (any Message)? {
+        try? sendUntyped(message, expecting: expecting, maxChunkSize: maxChunkSize).get()
+    }
+
+    /// `write`, saying why there is no response.
+    func send<R: PumpRequest>(_ request: R) -> Result<any Message, WriteFailure> {
+        sendUntyped(request, expecting: R.Response.self, maxChunkSize: nil)
+    }
+
+    private func sendUntyped(
+        _ message: any Message,
+        expecting: any Message.Type,
+        maxChunkSize: Int?
+    ) -> Result<any Message, WriteFailure> {
         guard expecting.props.type == .Response else {
             logger.error("Cannot write \(type(of: message)): \(expecting) is not a response type")
-            return nil
+            return .failure(.notSent)
         }
 
         // Pump I/O is already serialized by TandemBluetoothManager.commandQueue, so this lock
@@ -257,7 +328,7 @@ class TandemPeripheralManager: NSObject {
         // timeout path we never acquired the lock, so we must not signal.
         guard writeSemaphore.wait(wallTimeout: Self.writeLockTimeout) == .success else {
             logger.error("Timed out acquiring write lock; pump I/O unexpectedly contended")
-            return nil
+            return .failure(.notSent)
         }
         defer { writeSemaphore.signal() }
 
@@ -270,7 +341,7 @@ class TandemPeripheralManager: NSObject {
                 .error(
                     "Could not find characteristic - Service: \(ServiceUUID.PUMP_SERVICE), Characteristic: \(requestProps.characteristic)"
                 )
-            return nil
+            return .failure(.notSent)
         }
 
         let writeQ = TandemDispatchGroup()
@@ -281,7 +352,10 @@ class TandemPeripheralManager: NSObject {
             opCode: expecting.props.opCode,
             characteristic: characteristic.uuid
         )
-        writeQueue = pending
+        guard begin({ _writeQueue = pending }) else {
+            logger.error("Link is gone; not writing \(message.description)")
+            return .failure(.notSent)
+        }
 
         defer {
             writeQueue = nil
@@ -293,6 +367,7 @@ class TandemPeripheralManager: NSObject {
         }
 
         logger.info("Writing message: \(message.description)")
+        var packetsWritten = 0
         for item in Packetize.parse(
             message: message,
             authenticationKey: authKey,
@@ -300,11 +375,18 @@ class TandemPeripheralManager: NSObject {
             timeSinceReset: pumpManager.state.pumpState.timeSinceReset,
             maxChunkSize: maxChunkSize
         ) {
-            commandLock = TandemDispatchGroup()
-            commandLock?.enter()
+            let acknowledged = TandemDispatchGroup()
+            acknowledged.enter()
+            // The next connect reuses this CBPeripheral, so the rest of a request must not follow
+            // a lost link onto the new one.
+            guard begin({ _commandLock = acknowledged }) else {
+                logger.error("Link is gone after \(packetsWritten) packets of \(message.description)")
+                return .failure(packetsWritten == 0 ? .notSent : .linkLost(linkLoss ?? .other))
+            }
 
             peripheral.writeValue(item.build(), for: characteristic, type: .withResponse)
-            commandLock?.wait(timeout: .seconds(2))
+            packetsWritten += 1
+            acknowledged.wait(timeout: .seconds(2))
         }
 
         currentTxId = currentTxId &+ 1
@@ -317,38 +399,40 @@ class TandemPeripheralManager: NSObject {
         let waited = String(format: "waited %.1fs wall, %.1fs uptime", wallElapsed, uptimeElapsed)
         guard case .completed = outcome else {
             if outcome == .cancelled {
-                // Torn down by cancelPendingOperations, not the pump going quiet.
-                logger.error("Write cancelled before a response arrived; link or Bluetooth went away")
-            } else {
-                logger.error("Timeout hit, no response from pump... (\(waited))")
+                let loss = linkLoss ?? .other
+                logger.error("Write cancelled before a response arrived; link lost (\(loss))")
+                return .failure(.linkLost(loss))
             }
-            return nil
+            logger.error("Timeout hit, no response from pump... (\(waited))")
+            return .failure(.unanswered)
         }
 
         if let refusal = pending.refusal {
-            // nil, as for a timeout: callers treat both as a failed command, and a refused
+            // No answer, as for a timeout: callers treat both as a failed command, and a refused
             // insulin-affecting request is reported no less cautiously than a lost one.
             logger.error("Pump refused \(message.description): \(refusal.description)")
-            return nil
+            return .failure(.unanswered)
         }
 
         let message = pending.message
         logger.info("Received message: \(message?.description ?? "nil") (\(waited))")
-        return message
+        return message.map { .success($0) } ?? .failure(.unanswered)
     }
 
-    /// Cancels any in-flight read/write/notify command waits so a thread blocked
-    /// inside `read`/`write` returns promptly (with `nil`), allowing its calling
-    /// closure to finish and release the connection/write locks. Invoked when the
-    /// peripheral disconnects or Bluetooth is no longer powered on, where the
-    /// matching BLE callbacks that would normally `leave()` these groups will
-    /// never arrive. `cancel()` is idempotent, so this is safe to call at any
-    /// time and regardless of whether an operation is actually in flight.
-    func cancelPendingOperations() {
-        logger.info("Cancelling pending operations")
-        commandLock?.cancel()
-        writeQueue?.group.cancel()
-        readQueue?.0.cancel()
+    /// Records why the link went away, then cancels the waits in flight, whose BLE callbacks can no
+    /// longer arrive. Every operation begun afterwards is refused.
+    func linkWentDown(_ loss: LinkLoss) {
+        queueLock.lock()
+        if _linkLoss == nil {
+            _linkLoss = loss
+        }
+        let inFlight = (command: _commandLock, write: _writeQueue, read: _readQueue)
+        queueLock.unlock()
+
+        logger.info("Link lost (\(loss)); cancelling pending operations")
+        inFlight.command?.cancel()
+        inFlight.write?.group.cancel()
+        inFlight.read?.0.cancel()
         // A partially assembled stream message can never complete once the connection drops.
         historyLogStreamAccumulator = nil
     }
@@ -358,11 +442,14 @@ class TandemPeripheralManager: NSObject {
             return
         }
 
-        commandLock = TandemDispatchGroup()
-        commandLock?.enter()
+        let acknowledged = TandemDispatchGroup()
+        acknowledged.enter()
+        guard begin({ _commandLock = acknowledged }) else {
+            return
+        }
 
         peripheral.setNotifyValue(true, for: characteristic)
-        commandLock?.wait(timeout: .seconds(2))
+        acknowledged.wait(timeout: .seconds(2))
     }
 
     private func getCharacteristic(serviceUUID: CBUUID, characteristicUUID: CBUUID) -> CBCharacteristic? {
@@ -651,6 +738,12 @@ extension TandemPeripheralManager {
             // Step 4: Authenticate
             Thread.sleep(forTimeInterval: .milliseconds(500))
 
+            if let loss = linkLoss {
+                logger.error("Link lost (\(loss)) before authenticating")
+                failSetup(PumpCommError.noResponse)
+                return
+            }
+
             if !authBuilder.done() {
                 logger.info("Doing jpake pairing")
                 JpakeAuthBuilder.clearInstance()
@@ -664,21 +757,31 @@ extension TandemPeripheralManager {
                 }
 
                 // Only a paired pump's reconnects are limited; a first pairing is the user's own attempt.
-                func failHandshake(_ error: PumpCommError) {
+                func failHandshake(_ error: PumpCommError, counted: Bool = true) {
                     if !isFirstPairing {
-                        bluetoothManager.recordJpakeFailure()
+                        if counted {
+                            bluetoothManager.recordJpakeFailure()
+                        } else {
+                            logger.info("Not counted as the pump ending the handshake")
+                        }
                     }
                     failSetup(error)
                 }
 
                 while let request = authBuilder.nextRequest() {
-                    guard let response = write(request) else {
-                        logger.error("No answer to \(type(of: request)) during JPAKE")
+                    let response: any Message
+                    switch send(request) {
+                    case let .success(answer):
+                        response = answer
+                    case let .failure(failure):
+                        logger.error("No answer to \(type(of: request)) during JPAKE: \(failure)")
                         // The pump checks the code only at key confirmation, and a Mobi answers a wrong
                         // one by dropping the link.
-                        failHandshake(isFirstPairing && request is Jpake4KeyConfirmationRequest
-                            ? PumpCommError.pairingCodeRejected
-                            : PumpCommError.noResponse)
+                        let rejected = isFirstPairing && request is Jpake4KeyConfirmationRequest && failure != .notSent
+                        failHandshake(
+                            rejected ? PumpCommError.pairingCodeRejected : PumpCommError.noResponse,
+                            counted: failure.countsAsJpakeFailure
+                        )
                         return
                     }
 

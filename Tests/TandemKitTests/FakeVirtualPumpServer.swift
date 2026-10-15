@@ -69,8 +69,12 @@ final class FakeVirtualPumpServer {
         CharacteristicUUID.DIS_MANUFACTURER_NAME: Data("Tandem Diabetes Care".utf8),
         CharacteristicUUID.DIS_MODEL_NUMBER: Data("Mobi".utf8),
     ]
+    /// Left out of the GATT table `hello` announces.
+    var omittedCharacteristics: Set<CBUUID> = []
     /// Called after the write has been acknowledged, from the connection's thread.
     var onWrite: ((Connection, CBUUID, Data) -> Void)?
+    /// Called after the subscription has been acknowledged, from the connection's thread.
+    var onSubscribe: ((Connection, CBUUID) -> Void)?
     var onAttach: ((Connection) -> Void)?
 
     private let lock = NSLock()
@@ -126,7 +130,7 @@ final class FakeVirtualPumpServer {
             "services": [
                 [
                     "uuid": ServiceUUID.PUMP_SERVICE.virtualPumpString,
-                    "characteristics": CharacteristicUUID.allPumpCharacteristics.map {
+                    "characteristics": CharacteristicUUID.allPumpCharacteristics.filter { !omittedCharacteristics.contains($0) }.map {
                         [
                             "uuid": $0.virtualPumpString,
                             "properties": ["write", "write_without_response", "notify", "indicate"],
@@ -195,6 +199,7 @@ final class FakeVirtualPumpServer {
                 if let characteristic {
                     connection.setSubscribed(message["enabled"] as? Bool ?? true, characteristic)
                     try? link.send(["type": "subscribe_ack", "id": id ?? 0])
+                    onSubscribe?(connection, characteristic)
                 } else {
                     try? link.send(["type": "subscribe_ack", "id": id ?? 0, "error": "unknown characteristic"])
                 }

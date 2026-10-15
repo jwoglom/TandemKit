@@ -46,7 +46,8 @@ insulin, stops delivery or changes basal, and some steps deliberately cause erro
 |---|---|---|---|
 | P1 | Pair with a wrong 6-digit code. | The alert "The pump did not accept the pairing code." appears, pairing goes back to the step before the code, and scanning restarts once the alert is dismissed. The app doesn't retry the code on its own. Record whether a Mobi drops the link at that point. | `PairingIntegrationTests`, `PairingFailureTests` |
 | P2 | Pair with the right code and finish onboarding. | The pump holds the host's basal schedule, max bolus and max basal. Its clock reads the phone's time, its sounds are the ones chosen during onboarding, and its quick bolus is off. Check each on the pump. | `OnboardingIntegrationTests`, `TrioOnboardingTests` |
-| P3 | Take the phone out of range for 10 minutes, then bring it back. | While out of range, the status says the pump can't be reached. Back in range, the driver reconnects and syncs on its own, with nothing done in the app. | `ReconnectIntegrationTests`, conformance D6 and F5 |
+| P3 | Take the phone out of range for 10 minutes, then bring it back. | While out of range, the status says the pump can't be reached. Back in range, the driver reconnects and syncs on its own, with nothing done in the app. "Pump Pairing Problem" never appears, even when the edge of range cuts a reconnect short. | `ReconnectIntegrationTests`, conformance D6 and F5 |
+| P4 | With the phone out of range, pair the pump to a second phone or to Tandem's app, so it no longer accepts TandemKit's key. Bring TandemKit's phone back. | After three failed reconnects, "Pump Pairing Problem" appears and the driver stops reconnecting on its own. For each failed reconnect, record the error the log gives with "Device disconnected" and the JPAKE round it came after. | `ReconnectIntegrationTests`, `JpakeLinkLossTests` |
 | B1 | Give a 0.5 U bolus from the host. | Progress shows while the pump delivers. The host then holds one bolus at the amount the pump's history delivered, dated when the pump started it. | `BolusIntegrationTests`, `TrioBolusTests`, `LoopBolusTests` |
 | B2 | Give a 3 U bolus from the host and cancel it after about 1 U. | The pump stops. The host holds the amount the pump's history delivered: not 3 U, and not 0. Record both figures. | conformance B1, `TrioBolusTests` |
 | B3 | Start a 3 U bolus, then ask the host for another. | The host refuses the second: "A bolus is still being delivered". Only one bolus runs on the pump. | `BolusInFlightTests`, `DeliveryLimitIntegrationTests` |
@@ -82,6 +83,11 @@ the run's notes, and correct AGENTS.md if a pump says otherwise.
 
 - **P1, P2.** `JpakeRound1Framing` against firmware. Also whether a Mobi drops the link to refuse a
   code at key confirmation.
+- **P4.** Which error a Mobi's drop gives when it refuses a stored key. The driver counts
+  `CBError.peripheralDisconnected` ("The specified device has disconnected from us.") towards the
+  handshake failure limit, and not `connectionTimeout` ("The connection has timed out
+  unexpectedly."), which a weak signal gives. If a refusal shows as `connectionTimeout`, the limit
+  is never reached for it.
 - **B2.** Whether `LastBolusStatus` reports a cancelled bolus's delivered volume as soon as the
   cancel is acknowledged, on both pumps.
 - **K2.** Whether firmware accepts an explicit 100% temp.

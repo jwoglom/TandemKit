@@ -215,7 +215,7 @@ jobs:
       - name: Run the virtual CoreBluetooth tests
         run: |
           swift test --skip-build --build-path .build-virtual -Xswiftc -DTANDEMKIT_VIRTUAL_PUMP \
-            --filter 'VirtualCoreBluetoothTests|VirtualPumpControlTests|SocketListenerTests' 2>&1 | tee swift-test-virtual-pump.log
+            --filter 'VirtualCoreBluetoothTests|VirtualPumpControlTests|SocketListenerTests|JpakeLinkLossTests' 2>&1 | tee swift-test-virtual-pump.log
 
       - name: Check that the virtual CoreBluetooth tests actually ran
         run: scripts/ci/check-test-count.py swift-test-virtual-pump.log --label "Linux virtual pump tests"
