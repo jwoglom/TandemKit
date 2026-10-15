@@ -10,7 +10,7 @@ pieces fit together. Paths are relative to the repository root.
 | `TandemPumpManager.swift` | The `PumpManager` conformance, including the dosing commands (`enactBolus`, `cancelBolus`, `enactTempBasal`, `suspendDelivery`, `resumeDelivery`), `syncPumpData`, `handleQualifyingEvents`, alert acknowledgement, pump event delivery to the host (`emitPumpEvents`) and `CommandWatchdog`. |
 | `TandemPumpManager+StateSync.swift` | The `fetch…` status reads applied to state on every sync, bolus finalization, and the basal rate check (`verifyDeliveredBasalRate`). |
 | `TandemPumpManager+SyncBasal.swift` | Writes the basal schedule to the pump's IDP profile through `IDPManager` and reads it back, for the host's sync and for the update a mismatch starts (`updatePumpBasalProfile`). |
-| `TandemPumpManager+Onboarding.swift` | `applyOnboardingSettings`: delivery limits, basal schedule and clock for a newly paired pump (#206). |
+| `TandemPumpManager+Onboarding.swift` | `applyOnboardingSettings`: delivery limits, basal schedule and clock for a newly paired pump (#206). `controlIQNeedsTurningOffForSetup` and `turnOffControlIQForSetup`: the Control-IQ check that comes before them. |
 | `TandemPumpManager+Alerts.swift` | Maps pump notifications to LoopKit `Alert`s and reconciles them, and reports alarms and malfunctions as `.alarm` / `.alarmClear` pump events. |
 | `TandemPumpManager+HistoryStore.swift` | Stores and prunes streamed history logs in the session store. |
 | `TandemPumpManager+HistoryDoseReporting.swift` | Reports boluses found in pump history that the live path missed. |

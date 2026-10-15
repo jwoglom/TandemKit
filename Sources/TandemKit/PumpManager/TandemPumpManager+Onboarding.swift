@@ -36,6 +36,67 @@ public extension TandemPumpManager {
             }
         }
     }
+
+    /// Under Control-IQ the pump refuses the host's automatic doses, and its basal reaches the host
+    /// only with History Basal Reporting, so setup asks to turn it off unless `controlIQSupport` is
+    /// on. False when the pump does not answer: the first sync reads it again, but turns nothing off.
+    func controlIQNeedsTurningOffForSetup(completion: @escaping (Bool) -> Void) {
+        guard !state.featureFlags.controlIQSupport else {
+            completion(false)
+            return
+        }
+
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.warning("Control-IQ not checked during setup: \(error.localizedDescription)")
+                completion(false)
+                return
+            }
+            guard let response = self.fetchControlIQStatus() else {
+                self.logger.warning("Control-IQ not checked during setup: no response")
+                completion(false)
+                return
+            }
+            completion(response.getClosedLoopEnabled())
+        }
+    }
+
+    /// Not `configureControlIQMode`, whose sync would read the pump's basal profile before
+    /// `applyOnboardingSettings` writes the host's, and queue a profile update over it.
+    func turnOffControlIQForSetup(completion: @escaping (Error?) -> Void) {
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Control-IQ not turned off during setup: \(error.localizedDescription)")
+                completion(error)
+                return
+            }
+
+            // Turning Control-IQ off carries weight and TDI but does not depend on them.
+            let request = ChangeControlIQSettingsRequest(
+                enabled: false,
+                weightLbs: self.state.controlIQWeightLbs ?? 0,
+                totalDailyInsulinUnits: self.state.controlIQTotalDailyInsulin ?? 0
+            )
+            guard let response = self.bluetooth.write(request) else {
+                self.logger.error("Control-IQ not turned off during setup: no response")
+                completion(ControlIQConfigurationError.noResponse)
+                return
+            }
+            guard response.isStatusOK else {
+                self.logger.error("Control-IQ not turned off during setup: status \(response.status)")
+                completion(ControlIQConfigurationError.pumpRejected(status: response.status))
+                return
+            }
+
+            self.logger.info("Turned Control-IQ off during setup")
+            // No hand-back (`controlIQEndedAt`): the host has not dosed with this pump yet, so its
+            // first syncs need not wait for Control-IQ's history.
+            self.state.useControlIQ = false
+            self.state.controlIQEnabled = false
+            self.notifyDelegateStateUpdated()
+            completion(nil)
+        }
+    }
 }
 
 private extension TandemPumpManager {
