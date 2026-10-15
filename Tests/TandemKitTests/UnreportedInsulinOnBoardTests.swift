@@ -86,6 +86,26 @@ import XCTest
         XCTAssertEqual(manager.state.latestInsulinOnBoard ?? 0, 0.5, accuracy: 0.0001)
     }
 
+    /// #567
+    func testIobChangeDoesNotPushStateToTheHost() {
+        let manager = makeManager(controlIQEnabled: false)
+        stubInsulinOnBoard(milliunits: 500, type: .MUDALIAR)
+        let delegate = MockPumpManagerDelegate()
+        manager.delegateQueue = DispatchQueue(label: "iob-change-test")
+        manager.pumpManagerDelegate = delegate
+        manager.delegateQueue.sync {}
+        let statusUpdatesBefore = delegate.statusUpdates.count
+
+        let acknowledged = expectation(description: "qualifying events acknowledged")
+        manager.handleQualifyingEvents(events: [.iobChange]) { acknowledged.fulfill() }
+        wait(for: [acknowledged], timeout: 1)
+        manager.delegateQueue.sync {}
+
+        XCTAssertEqual(bluetooth.sent(ControlIQIOBRequest.self).count, 1)
+        XCTAssertEqual(delegate.didUpdateStateCount, 0)
+        XCTAssertEqual(delegate.statusUpdates.count, statusUpdatesBefore)
+    }
+
     func testSyncReadsInsulinOnBoard() {
         let manager = makeManager(controlIQEnabled: false)
         manager.state.lastSettingsCheckedAt = now
