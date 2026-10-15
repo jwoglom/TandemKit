@@ -173,13 +173,20 @@ struct TandemKitChangeCartridgeView: View {
                 Text("Suspend Insulin", comment: "Step header")
                     .font(.title2)
                     .fontWeight(.bold)
-                Text("First, suspend insulin delivery", comment: "Step description")
+                Text("Insulin delivery will be suspended during the cartridge change.", comment: "Step description")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }
 
             // Step content
-            if viewModel.isSuspended == true {
+            if viewModel.isCheckingSuspendStatus {
+                HStack(spacing: 12) {
+                    ActivityIndicator(isAnimating: .constant(true), style: .medium)
+                    Text("Checking insulin delivery status...", comment: "Status text")
+                        .font(.headline)
+                }
+                .wizardCard(background: Color.blue.opacity(0.1))
+            } else if viewModel.isSuspended == true {
                 Label(
                     String(localized: "Insulin suspended", comment: "Status text"),
                     systemImage: "checkmark.circle.fill"
@@ -215,7 +222,7 @@ struct TandemKitChangeCartridgeView: View {
                 Label(
                     String(
                         localized:
-                        "Clear all notifications before starting cartridge change",
+                        "Clear all notifications before starting cartridge change by swiping them away",
                         comment: "Warning message"
                     ),
                     systemImage: "exclamationmark.triangle.fill"
@@ -385,7 +392,7 @@ struct TandemKitChangeCartridgeView: View {
                 Label(
                     String(
                         localized:
-                        "Clear all notifications before continuing",
+                        "Clear all notifications before continuing by swiping them away",
                         comment: "Warning message"
                     ),
                     systemImage: "exclamationmark.triangle.fill"
