@@ -76,28 +76,29 @@ import XCTest
 
     // MARK: - Control-IQ at setup
 
+    private func controlIQInfo(on: Bool) -> ControlIQInfoV2Response {
+        ControlIQInfoV2Response(
+            closedLoopEnabled: on,
+            weight: 150,
+            weightUnit: ControlIQInfoAbstractResponse.WeightUnit.pounds.rawValue,
+            totalDailyInsulin: 40,
+            currentUserModeType: 0,
+            byte6: 0,
+            byte7: 0,
+            byte8: 0,
+            controlStateType: 0,
+            exerciseChoice: 0,
+            exerciseDuration: 0,
+            exerciseTimeRemaining: 0
+        )
+    }
+
     private func pairedViewModel(
         controlIQOn: Bool,
         controlIQSupport: Bool = false
     ) -> (TandemKitScanViewModel, StubPumpBluetooth) {
         let bluetooth = StubPumpBluetooth()
-        bluetooth.stub(
-            ControlIQInfoV2Request.self,
-            with: ControlIQInfoV2Response(
-                closedLoopEnabled: controlIQOn,
-                weight: 150,
-                weightUnit: ControlIQInfoAbstractResponse.WeightUnit.pounds.rawValue,
-                totalDailyInsulin: 40,
-                currentUserModeType: 0,
-                byte6: 0,
-                byte7: 0,
-                byte8: 0,
-                controlStateType: 0,
-                exerciseChoice: 0,
-                exerciseDuration: 0,
-                exerciseTimeRemaining: 0
-            )
-        )
+        bluetooth.stub(ControlIQInfoV2Request.self, with: controlIQInfo(on: controlIQOn))
         bluetooth.stub(ChangeControlIQSettingsRequest.self, with: ChangeControlIQSettingsResponse(status: 0))
         let manager = TandemPumpManager(state: TandemPumpManagerState(rawValue: [:]), bluetooth: bluetooth)
         manager.state.pumpState.apiVersion = KnownApiVersion.apiV3_4.value
@@ -171,6 +172,20 @@ import XCTest
 
         XCTAssertFalse(viewModel.isControlIQOffError)
         XCTAssertEqual(bluetooth.sent(ChangeControlIQSettingsRequest.self).count, 2)
+        XCTAssertTrue(bluetooth.didSend(ChangeTimeDateRequest.self))
+    }
+
+    func testARefusedTurnOffOfAPumpThatReadsOffGoesOnWithSetup() {
+        let (viewModel, bluetooth) = pairedViewModel(controlIQOn: true)
+        bluetooth.stub(ChangeControlIQSettingsRequest.self, with: ChangeControlIQSettingsResponse(status: 1))
+        viewModel.onPairSuccess()
+        drainMainQueue()
+        bluetooth.stub(ControlIQInfoV2Request.self, with: controlIQInfo(on: false))
+
+        viewModel.turnOffControlIQ()
+        drainMainQueue()
+
+        XCTAssertFalse(viewModel.isControlIQOffError)
         XCTAssertTrue(bluetooth.didSend(ChangeTimeDateRequest.self))
     }
 

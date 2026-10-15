@@ -228,7 +228,8 @@ rate check runs on a profile edit instead of at the next sync.
   an alert says Control-IQ will be turned off, and its OK runs `turnOffControlIQForSetup`: one
   `ChangeControlIQSettingsRequest`, no sync (a sync would read the pump's profile before the
   host's is written) and no hand-back, since the host has not dosed with this pump yet. A refused
-  or unanswered write offers only Try Again: setup does not finish with Control-IQ on. An
+  or unanswered write is read back, and a pump that reads Control-IQ off goes on with setup;
+  otherwise the alert offers only Try Again, so setup does not finish with Control-IQ on. An
   unanswered read asks nothing, and the first sync only reads Control-IQ.
 - `syncBasalRateSchedule` fails with `BasalScheduleSyncError.tooManyEntries`, before connecting,
   when the schedule has more entries than `maximumBasalScheduleEntryCount` (16). Trio's editor

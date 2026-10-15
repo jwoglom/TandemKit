@@ -72,15 +72,21 @@ public extension TandemPumpManager {
                 weightLbs: self.state.controlIQWeightLbs ?? 0,
                 totalDailyInsulinUnits: self.state.controlIQTotalDailyInsulin ?? 0
             )
-            guard let response = self.bluetooth.write(request) else {
-                self.logger.error("Control-IQ not turned off during setup: no response")
-                completion(ControlIQConfigurationError.noResponse)
-                return
-            }
-            guard response.isStatusOK else {
-                self.logger.error("Control-IQ not turned off during setup: status \(response.status)")
-                completion(ControlIQConfigurationError.pumpRejected(status: response.status))
-                return
+            let response = self.bluetooth.write(request)
+            if response?.isStatusOK != true {
+                let failure = response.map { ControlIQConfigurationError.pumpRejected(status: $0.status) }
+                    ?? .noResponse
+                // An answer lost after the pump turned it off, or a refusal from a pump already off,
+                // leaves nothing to retry. Not `fetchControlIQStatus`, which would start a hand-back.
+                let readBack = self.bluetooth.write(
+                    ControlIQInfoRequestBuilder.create(apiVersion: self.state.pumpState.apiVersion)
+                ) as? ControlIQInfoAbstractResponse
+                guard readBack?.getClosedLoopEnabled() == false else {
+                    self.logger.error("Control-IQ not turned off during setup: \(failure)")
+                    completion(failure)
+                    return
+                }
+                self.logger.warning("Control-IQ turn-off during setup got \(failure), but the pump reads Control-IQ off")
             }
 
             self.logger.info("Turned Control-IQ off during setup")
