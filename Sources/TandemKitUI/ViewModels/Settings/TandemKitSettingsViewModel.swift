@@ -216,10 +216,7 @@ class TandemKitSettingsViewModel: ObservableObject {
         }
 
         if wasSuspended {
-            // Resuming clears the pump's "insulin isn't being delivered" alarms on the user's
-            // behalf and retries once before failing, so the error sheet is only shown when the
-            // resume genuinely could not be completed.
-            pumpManager.resumeDeliveryAcknowledgingResumeAlarms(completion: handleCompletion)
+            pumpManager.resumeDelivery(completion: handleCompletion)
         } else {
             pumpManager.suspendDelivery(completion: handleCompletion)
         }
@@ -448,7 +445,7 @@ extension TandemKitSettingsViewModel: PumpManagerStatusObserver {
             self.controlIQSupportEnabled = pumpManager.state.featureFlags.controlIQSupport
             self.quickBolusButtonSupportEnabled = pumpManager.state.featureFlags.quickBolusButtonSupport
             self.isCGMActiveOnPump = pumpManager.state.isCGMSensorSessionConfigured
-            self.scheduledBasal = pumpManager.getScheduledBasalRate()
+            self.scheduledBasal = pumpManager.scheduledBasalRateInForce()
             self.pumpState = pumpManager.state.pumpState
             self.controlIQEnabled = pumpManager.state.controlIQEnabled ?? false
             self.isClosedLoopEnabled = pumpManager.pumpManagerDelegate?.automaticDosingEnabled ?? false

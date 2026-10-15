@@ -85,7 +85,7 @@ struct TandemKitSettingsView: View {
                 ),
                 message: String(
                     localized:
-                    "The pump rejected starting insulin delivery. Check \"View Notifications\" to see the pump's current status and swipe away all active pump notifications. This may have occurred due to active pump notifications, invalid settings, empty cartridge, or not filling the tubing.",
+                    "The pump rejected starting insulin delivery. Check \"View Notifications\" to see the pump's current status and dismiss all active pump notifications. This may have occurred due to active pump notifications, invalid settings, empty cartridge, or not filling the tubing.",
                     comment: "Message for failed to resume insulin delivery"
                 )
             )
@@ -97,7 +97,7 @@ struct TandemKitSettingsView: View {
                 ),
                 message: String(
                     localized:
-                    "The pump rejected suspending insulin delivery. Check \"View Notifications\" to see the pump's current status and swipe away all active pump notifications. This may have occurred due to an active bolus. To urgently suspend insulin delivery, detach from your site.",
+                    "The pump rejected suspending insulin delivery. Check \"View Notifications\" to see the pump's current status and dismiss all active pump notifications. This may have occurred due to an active bolus. To urgently suspend insulin delivery, detach from your site.",
                     comment: "Message for failed to suspend insulin delivery"
                 )
             )
@@ -857,7 +857,8 @@ struct TandemKitSettingsView: View {
                     }
                 default:
                     HStack(alignment: .firstTextBaseline, spacing: 3) {
-                        Text(String(format: "%.2f", dose.value))
+                        // A resume carries no rate, and a `.basal` marker the rate when it was reported.
+                        Text(String(format: "%.2f", dose.type == .tempBasal ? dose.value : viewModel.scheduledBasal))
                             .font(.system(size: 28))
                             .fontWeight(.heavy)
                             .fixedSize()

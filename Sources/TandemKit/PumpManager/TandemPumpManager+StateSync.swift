@@ -983,10 +983,18 @@ extension TandemPumpManager {
 
         // Look the schedule up at the pump's time of day. The offset, not `currentPumpTime`, which
         // is a snapshot from the last clock read.
-        let expected = getScheduledBasalRate(at: now.addingTimeInterval(state.pumpClockOffset))
+        let pumpNow = now.addingTimeInterval(state.pumpClockOffset)
+        let expected = getScheduledBasalRate(at: pumpNow)
+
+        // The offset trails the pump's clock by up to a second plus the read's latency, and the read
+        // a segment change triggers lands in that gap. A real mismatch lasts the whole segment.
+        let tolerance = Self.basalRateCheckTolerance
+        let nearbyRates = [pumpNow.addingTimeInterval(-tolerance), pumpNow, pumpNow.addingTimeInterval(tolerance)]
+            .map { getScheduledBasalRate(at: $0) }
 
         // Compare whole milliunits, as the pump stores them, so float noise isn't a mismatch.
-        guard Int((pumpRate * 1000).rounded()) != Int((expected * 1000).rounded()) else {
+        let pumpMilliunits = Int((pumpRate * 1000).rounded())
+        guard !nearbyRates.contains(where: { Int(($0 * 1000).rounded()) == pumpMilliunits }) else {
             return nil
         }
         return (pumpRate, expected)

@@ -138,6 +138,37 @@ import XCTest
         }
     }
 
+    func testAPumpWithNoProfileGetsOneInThePumpsUnits() throws {
+        stubProfile([.init(startTime: 0, basalRate: 650)])
+        var created = false
+        bluetooth.stub(ProfileStatusRequest.self) { _ in
+            ProfileStatusResponse(
+                numberOfProfiles: created ? 1 : 0,
+                idpSlot0Id: created ? self.idpId : 0,
+                idpSlot1Id: 0,
+                idpSlot2Id: 0,
+                idpSlot3Id: 0,
+                idpSlot4Id: 0,
+                idpSlot5Id: 0,
+                activeSegmentIndex: 0
+            )
+        }
+        bluetooth.stub(CreateIDPRequest.self) { _ in
+            created = true
+            return CreateIDPResponse(status: 0, newIdpId: self.idpId)
+        }
+
+        XCTAssertNoThrow(try syncBasal([RepeatingScheduleValue(startTime: 0, value: 0.65)]).get())
+
+        let request = try XCTUnwrap(bluetooth.sent(CreateIDPRequest.self).first)
+        XCTAssertEqual(request.firstSegmentProfileBasalRate, 650)
+        XCTAssertEqual(request.firstSegmentProfileCarbRatio, 30000)
+        XCTAssertEqual(request.firstSegmentProfileTargetBG, 140)
+        XCTAssertEqual(request.firstSegmentProfileISF, 100)
+        XCTAssertEqual(request.profileInsulinDuration, 300)
+        XCTAssertEqual(request.profileCarbEntry, 0)
+    }
+
     // MARK: - Delivered rate on every sync
 
     private func basalStatus(rate: Double, type: Int, profileRate: Double? = nil) -> CurrentBasalStatusResponse {
@@ -521,6 +552,27 @@ import XCTest
         manager.verifyDeliveredBasalRate(basalStatus(rate: 0.65, type: 0))
 
         XCTAssertNil(manager.state.basalRateMismatchDetectedAt)
+    }
+
+    /// The pump has moved to the 06:00 segment; the offset puts it a second short of 06:00.
+    func testNewSegmentsRateReadJustBeforeItsEstimatedStartIsNotAMismatch() {
+        setSchedule([(0, 0.65), (3600.0 * 6, 0.85)])
+        let startOfDay = Calendar.current.startOfDay(for: Self.referenceDate)
+        setPumpClock(offsetFrom: startOfDay.addingTimeInterval(3600.0 * 6 - 1), by: 0)
+
+        manager.verifyDeliveredBasalRate(basalStatus(rate: 0.85, type: 0))
+
+        XCTAssertNil(manager.state.basalRateMismatchDetectedAt)
+    }
+
+    func testPreviousSegmentsRateTwoMinutesIntoTheNextIsAMismatch() {
+        setSchedule([(0, 0.65), (3600.0 * 6, 0.85)])
+        let startOfDay = Calendar.current.startOfDay(for: Self.referenceDate)
+        setPumpClock(offsetFrom: startOfDay.addingTimeInterval(3600.0 * 6 + 120), by: 0)
+
+        manager.verifyDeliveredBasalRate(basalStatus(rate: 0.65, type: 0))
+
+        XCTAssertNotNil(manager.state.basalRateMismatchDetectedAt)
     }
 
     func testPhoneClockIsUsedWhenThePumpOffsetIsUnknown() {

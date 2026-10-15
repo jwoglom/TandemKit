@@ -74,7 +74,7 @@ struct TandemKitNotificationsView: View {
             if !viewModel.notifications.isEmpty {
                 Section {
                     Text(
-                        "To dismiss a pump notification, swipe it away.",
+                        "To dismiss a pump notification, tap Dismiss or swipe it to the left.",
                         comment: "Hint for dismissing notifications"
                     )
                     .font(.caption)
@@ -165,7 +165,13 @@ struct NotificationRow: View {
                 }
                 Spacer()
 
-                if !item.canDismiss {
+                if item.canDismiss {
+                    // The swipe alone was not found by users who had to clear an alarm to resume.
+                    Button(action: onDismiss) {
+                        Text("Dismiss", comment: "Button that dismisses a pump notification")
+                    }
+                    .buttonStyle(.borderless)
+                } else {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundColor(guidanceColors.warning)
                         .font(.system(size: 20))

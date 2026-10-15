@@ -1221,6 +1221,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
     /// two rates, about one host loop cycle.
     static let segmentChangeWindow: TimeInterval = .minutes(5)
 
+    static let basalRateCheckTolerance: TimeInterval = .minutes(1)
+
     /// `pumpRate` is the rate the pump has in force. Within `segmentChangeWindow` of a change, the
     /// larger of it and the next: the temp then runs at most the request on either side, and the
     /// host, told the request, can only over-count until the change.
@@ -1358,11 +1360,23 @@ public class TandemPumpManager: PumpManager, Pluggable {
         return status.basalType == .suspend
     }
 
+    /// The pump can refuse a resume while its resume-pump alarms are unacknowledged, and a resume is
+    /// what they ask for, so a refused one acknowledges them and retries once; other alarms are the user's.
     public func resumeDelivery(completion: @escaping (_ error: Error?) -> Void) {
         let completion = watchdogged(timeoutResult: PumpCommError.pumpNotConnected as Error?, completion)
         logger.info("Resume Insulin Delivery...")
 
-        resumeAfterReadingPump(completion: completion) { self.sendResumePumping() }
+        resumeAfterReadingPump(completion: completion) {
+            ResumeWithAlarmAcknowledgement(
+                sendResume: { self.sendResumePumping() },
+                reloadNotifications: { self.fetchNotifications() },
+                activeResumeAlarms: { self.notificationBundle.activeResumePumpAlarms() },
+                acknowledgeAlarm: { alarm in
+                    _ = self.acknowledgeNotification(type: .alarm, id: UInt32(alarm.rawValue))
+                },
+                log: { self.logger.info($0) }
+            ).run()
+        }
     }
 
     /// A stop the driver missed has to reach the host before the resume, or the host counts its temp
@@ -1391,37 +1405,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 }
             }
             self.historyBackfillCoordinator.runTick()
-        }
-    }
-
-    /// Resumes delivery, first clearing the pump's "resume pump" alarms if they are what stands
-    /// in the way.
-    ///
-    /// While delivery is suspended the pump raises `RESUME_PUMP_ALARM`/`RESUME_PUMP_ALARM2` to
-    /// tell the user insulin is not being delivered, and a resume can be refused while either is
-    /// still unacknowledged. A user pressing "Resume Insulin Delivery" is already acting on what
-    /// those alarms ask for, so when the first attempt fails we re-read the pump's notification
-    /// state, acknowledge whichever of the two are active, and retry once — instead of making the
-    /// user go clear them by hand from the notifications screen.
-    ///
-    /// Only those two alarms are acknowledged on the user's behalf. If neither is active, or the
-    /// retry fails too, the original/retry error is surfaced so the caller still reports the
-    /// failure. The sequence itself lives in `ResumeWithAlarmAcknowledgement`, which is where it is
-    /// unit-tested; this method just binds it to the pump.
-    func resumeDeliveryAcknowledgingResumeAlarms(completion: @escaping (_ error: Error?) -> Void) {
-        let completion = watchdogged(timeoutResult: PumpCommError.pumpNotConnected as Error?, completion)
-        logger.info("Resume Insulin Delivery (clearing resume-pump alarms if needed)...")
-
-        resumeAfterReadingPump(completion: completion) {
-            ResumeWithAlarmAcknowledgement(
-                sendResume: { self.sendResumePumping() },
-                reloadNotifications: { self.fetchNotifications() },
-                activeResumeAlarms: { self.notificationBundle.activeResumePumpAlarms() },
-                acknowledgeAlarm: { alarm in
-                    _ = self.acknowledgeNotification(type: .alarm, id: UInt32(alarm.rawValue))
-                },
-                log: { self.logger.info($0) }
-            ).run()
         }
     }
 
@@ -2954,13 +2937,12 @@ extension TandemPumpManager {
     }
 }
 
-/// The resume-with-alarm-acknowledgement sequence used by the settings screen's
-/// "Resume Insulin Delivery" button.
+/// The resume-with-alarm-acknowledgement sequence `resumeDelivery` runs.
 ///
 /// Split out of `TandemPumpManager` so the branching — the ways a resume can end — is unit-testable
-/// without a BLE stack; `TandemPumpManager.resumeDeliveryAcknowledgingResumeAlarms` supplies the
-/// real pump operations. Like the manager's own command bodies, every operation here is synchronous
-/// and must run on the pump command queue with the pump already connected.
+/// without a BLE stack; `TandemPumpManager.resumeDelivery` supplies the real pump operations. Like
+/// the manager's own command bodies, every operation here is synchronous and must run on the pump
+/// command queue with the pump already connected.
 struct ResumeWithAlarmAcknowledgement {
     /// Sends one `ResumePumpingRequest`. Returns nil once the pump has resumed, otherwise the error
     /// to report.

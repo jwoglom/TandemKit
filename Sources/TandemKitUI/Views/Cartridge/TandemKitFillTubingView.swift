@@ -209,7 +209,7 @@ struct TandemKitFillTubingView: View {
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                 if !viewModel.skipsNotificationsCheck {
-                    Text("Swipe away any active pump notifications below", comment: "Step description")
+                    Text("Dismiss any active pump notifications below", comment: "Step description")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
@@ -244,7 +244,7 @@ struct TandemKitFillTubingView: View {
             Label(
                 String(
                     localized:
-                    "Clear all notifications before starting tubing fill by swiping them away",
+                    "Dismiss all notifications before starting tubing fill",
                     comment: "Warning message"
                 ),
                 systemImage: "exclamationmark.triangle.fill"
@@ -371,7 +371,7 @@ struct TandemKitFillTubingView: View {
                 Label(
                     String(
                         localized:
-                        "Clear all notifications before completing tubing fill by swiping them away",
+                        "Dismiss all notifications before completing tubing fill",
                         comment: "Warning message"
                     ),
                     systemImage: "exclamationmark.triangle.fill"
