@@ -217,7 +217,7 @@ struct TandemKitSettingsView: View {
                     .padding(.horizontal, 4)
                 }
 
-                HStack(alignment: .firstTextBaseline) {
+                HStack(alignment: viewModel.isDeliverySuspended ? .top : .firstTextBaseline) {
                     deliveryStatus
 
                     if viewModel.isDeliverySuspended {
@@ -248,6 +248,7 @@ struct TandemKitSettingsView: View {
 
                     reservoirStatus
                 }
+                .fixedSize(horizontal: false, vertical: viewModel.isDeliverySuspended)
                 .padding(.bottom, 5)
 
                 if let connectionIssue = viewModel.connectionIssue {
@@ -784,31 +785,37 @@ struct TandemKitSettingsView: View {
     }
 
     // With the algorithm column hidden while suspended, the two columns sit at the card's edges, so
-    // their headers align to those edges rather than centering over values of a different width.
+    // their headers align to those edges rather than centering over values of a different width,
+    // and the level fills the taller suspended block's height so it centers on the pause icon.
     var reservoirStatus: some View {
         VStack(alignment: viewModel.isDeliverySuspended ? .trailing : .center, spacing: 5) {
             Text("Cartridge", comment: "Header for insulin remaining")
                 .foregroundColor(Color(UIColor.secondaryLabel))
 
-            if let unitsText = viewModel.reservoirUnitsText, let reservoirLevel = viewModel.reservoirValue?.unitVolume {
-                HStack(alignment: .firstTextBaseline, spacing: 5) {
-                    ReservoirView(reservoirLevel: reservoirLevel, fillColor: reservoirColor(reservoirLevel))
-                        .frame(width: 19, height: 26)
+            reservoirAmount
+                .frame(maxHeight: viewModel.isDeliverySuspended ? .infinity : nil)
+        }
+    }
 
-                    HStack(alignment: .lastTextBaseline, spacing: 3) {
-                        Text(unitsText)
-                            .font(.system(size: 28))
-                            .fontWeight(.heavy)
-                            .fixedSize()
-                        Text("U", comment: "Insulin units after the cartridge's remaining insulin")
-                            .foregroundColor(.secondary)
-                    }
+    @ViewBuilder private var reservoirAmount: some View {
+        if let unitsText = viewModel.reservoirUnitsText, let reservoirLevel = viewModel.reservoirValue?.unitVolume {
+            HStack(alignment: .firstTextBaseline, spacing: 5) {
+                ReservoirView(reservoirLevel: reservoirLevel, fillColor: reservoirColor(reservoirLevel))
+                    .frame(width: 19, height: 26)
+
+                HStack(alignment: .lastTextBaseline, spacing: 3) {
+                    Text(unitsText)
+                        .font(.system(size: 28))
+                        .fontWeight(.heavy)
+                        .fixedSize()
+                    Text("U", comment: "Insulin units after the cartridge's remaining insulin")
+                        .foregroundColor(.secondary)
                 }
-            } else {
-                Text("--")
-                    .font(.system(size: 28))
-                    .fontWeight(.heavy)
             }
+        } else {
+            Text("--")
+                .font(.system(size: 28))
+                .fontWeight(.heavy)
         }
     }
 
