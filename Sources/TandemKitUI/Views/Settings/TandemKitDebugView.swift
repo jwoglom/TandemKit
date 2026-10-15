@@ -8,57 +8,15 @@ struct TandemKitDebugView: View {
     @State private var showingPumpState = false
     @State private var showingManagerState = false
     @State private var showingRerunSetupConfirmation = false
+    @State private var responseFormat: ResponseFormat = .response
+
+    private enum ResponseFormat: String, CaseIterable {
+        case response = "Response"
+        case json = "JSON"
+    }
 
     var body: some View {
         List {
-            Section(header: Text("Send Pump Message")) {
-                ForEach(viewModel.categories) { group in
-                    Button {
-                        activeCategory = group
-                    } label: {
-                        HStack {
-                            Label(group.sendButtonTitle, systemImage: "paperplane")
-                            Spacer()
-                            Text("\(group.requests.count)")
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                }
-
-                if viewModel.isSending {
-                    ProgressView("Sending…")
-                }
-
-                if let response = viewModel.lastResponseDescription {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Response")
-                            .font(.headline)
-                        Text(response)
-                            .font(.system(.footnote, design: .monospaced))
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .accessibilityLabel("Pump response")
-                    }
-
-                    Button("Copy Response") {
-                        UIPasteboard.general.string = response
-                    }
-                    .buttonStyle(.borderless)
-
-                    Button("Resend") {
-                        viewModel.resendLastMessage()
-                    }
-                    .buttonStyle(.borderless)
-                    .disabled(viewModel.isSending)
-                }
-
-                if let error = viewModel.lastSendError {
-                    Text(error)
-                        .foregroundColor(.red)
-                        .font(.footnote)
-                }
-            }
-
             Section(header: Text("History Logs")) {
                 Button {
                     viewModel.openHistoryLogViewer?()
@@ -95,6 +53,59 @@ struct TandemKitDebugView: View {
                 }
             }
 
+            Section(header: Text("Send Pump Message")) {
+                ForEach(viewModel.categories) { group in
+                    Button {
+                        activeCategory = group
+                    } label: {
+                        HStack {
+                            Label(group.sendButtonTitle, systemImage: "paperplane")
+                            Spacer()
+                            Text("\(group.requests.count)")
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+
+                if viewModel.isSending {
+                    ProgressView("Sending…")
+                }
+
+                if let response = viewModel.lastResponseDescription {
+                    let shown = responseFormat == .json ? viewModel.lastResponseJSON ?? response : response
+                    VStack(alignment: .leading, spacing: 8) {
+                        Picker("Response format", selection: $responseFormat) {
+                            ForEach(ResponseFormat.allCases, id: \.self) { format in
+                                Text(format.rawValue).tag(format)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        Text(shown)
+                            .font(.system(.footnote, design: .monospaced))
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .accessibilityLabel("Pump response")
+                    }
+
+                    Button("Copy \(responseFormat.rawValue)") {
+                        UIPasteboard.general.string = shown
+                    }
+                    .buttonStyle(.borderless)
+
+                    Button("Resend") {
+                        viewModel.resendLastMessage()
+                    }
+                    .buttonStyle(.borderless)
+                    .disabled(viewModel.isSending)
+                }
+
+                if let error = viewModel.lastSendError {
+                    Text(error)
+                        .foregroundColor(.red)
+                        .font(.footnote)
+                }
+            }
+
             Section {
                 Button {
                     viewModel.openFeatureFlags?()
@@ -127,6 +138,8 @@ struct TandemKitDebugView: View {
         .sheet(item: $activeCategory) { group in
             CategoryRequestSheet(viewModel: viewModel, group: group)
         }
+        // While a category sheet is up it presents the confirmation itself; this one covers Resend.
+        .modifier(SendConfirmationAlert(viewModel: viewModel, isEnabled: activeCategory == nil))
         .alert("Re-run Pump Setup?", isPresented: $showingRerunSetupConfirmation) {
             Button("Cancel", role: .cancel) {}
             Button("Re-run Setup") {
@@ -167,7 +180,9 @@ private struct CategoryRequestSheet: View {
                         } else {
                             Button(entry.name) {
                                 viewModel.sendSimpleEntry(entry)
-                                dismiss()
+                                if viewModel.awaitingConfirmation == nil {
+                                    dismiss()
+                                }
                             }
                         }
                     }
@@ -183,6 +198,48 @@ private struct CategoryRequestSheet: View {
                 }
             }
         }
+        .modifier(SendConfirmationAlert(viewModel: viewModel, isEnabled: true) {
+            dismiss()
+        })
+    }
+}
+
+private struct SendConfirmationAlert: ViewModifier {
+    @ObservedObject var viewModel: TandemKitDebugViewModel
+    let isEnabled: Bool
+    var onConfirm: () -> Void = {}
+
+    func body(content: Content) -> some View {
+        content
+            .alert("Confirm Command", isPresented: presented(viewModel.isAwaitingCommandConfirmation)) {
+                Button("Cancel", role: .cancel) {
+                    viewModel.cancelPendingSend()
+                }
+                Button("Continue", role: .destructive) {
+                    if viewModel.confirmPendingSend() {
+                        onConfirm()
+                    }
+                }
+            } message: {
+                Text(viewModel.confirmationMessage)
+            }
+            .alert("Dangerous Command", isPresented: presented(viewModel.isAwaitingDangerousConfirmation)) {
+                Button("Cancel", role: .cancel) {
+                    viewModel.cancelPendingSend()
+                }
+                Button("Run Dangerous Command", role: .destructive) {
+                    if viewModel.confirmPendingSend() {
+                        onConfirm()
+                    }
+                }
+            } message: {
+                Text(viewModel.confirmationMessage)
+            }
+    }
+
+    // The buttons settle the pending send; clearing it in the setter could run before Continue's action.
+    private func presented(_ isAwaiting: Bool) -> Binding<Bool> {
+        Binding(get: { isEnabled && isAwaiting }, set: { _ in })
     }
 }
 
@@ -235,7 +292,7 @@ private struct RequestDetailView: View {
             Section {
                 Button("Send") {
                     viewModel.sendEntry(entry)
-                    if viewModel.lastSendError == nil {
+                    if viewModel.lastSendError == nil, viewModel.awaitingConfirmation == nil {
                         onSent()
                     }
                 }

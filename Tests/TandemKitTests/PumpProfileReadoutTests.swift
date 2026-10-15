@@ -149,6 +149,27 @@ final class PumpProfileReadoutTests: XCTestCase {
         XCTAssertEqual(fields.map(\.value), ["2", "Weekday", "4", "300", "10000", "true"])
     }
 
+    func testJsonStringOfOneMessageMatchesItsExportEntry() throws {
+        let response = IDPSegmentResponse(
+            idpId: 3,
+            segmentIndex: 0,
+            profileStartTime: 0,
+            profileBasalRate: 800,
+            profileCarbRatio: 10000,
+            profileTargetBG: 110,
+            profileISF: 50,
+            idpStatusId: 31
+        )
+
+        let data = try XCTUnwrap(PumpProfileReadout.jsonString(for: response).data(using: .utf8))
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+        XCTAssertEqual(json["name"] as? String, "IDPSegmentResponse")
+        XCTAssertEqual(json["opCode"] as? Int, 67)
+        XCTAssertEqual(json["cargoHex"] as? String, response.cargo.hexadecimalString)
+        XCTAssertEqual((json["fields"] as? [String: Any])?["profileBasalRate"] as? Int, 800)
+    }
+
     func testExportCarriesEveryRequestAndResponseWithCargoAndTypedFields() throws {
         stubProfiles(segmentCounts: [3: 1])
 
