@@ -205,82 +205,18 @@ struct TandemKitFillTubingView: View {
                 Text("Prepare Pump", comment: "Step header")
                     .font(.title2)
                     .fontWeight(.bold)
-                Text("Clear all pump notifications before continuing", comment: "Step description")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-            }
-
-            if viewModel.hasActiveNotifications {
-                Label(
-                    String(
-                        localized:
-                        "Clear all notifications before starting tubing fill by swiping them away",
-                        comment: "Warning message"
-                    ),
-                    systemImage: "exclamationmark.triangle.fill"
-                )
-                .foregroundColor(guidanceColors.warning)
-                .wizardCard(background: guidanceColors.warning.opacity(0.1))
-            }
-
-            // Embedded notifications check
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Text("Notifications", comment: "Notifications section header")
-                        .font(.headline)
-                    Spacer()
-                    if !viewModel.notificationsViewModel.isRefreshing, !viewModel.isCheckingNotificationsBeforeFill {
-                        Button(action: {
-                            viewModel.notificationsViewModel.refreshNotifications()
-                        }) {
-                            Image(systemName: "arrow.clockwise")
-                        }
-                    }
-                }
-
-                if viewModel.notificationsViewModel.isRefreshing || viewModel.isCheckingNotificationsBeforeFill,
-                   viewModel.notificationsViewModel.notifications.isEmpty
-                {
-                    HStack {
-                        Spacer()
-                        VStack(spacing: 12) {
-                            ActivityIndicator(isAnimating: .constant(true), style: .medium)
-                            Text("Checking notifications...", comment: "Loading notifications message")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                        }
-                        Spacer()
-                    }
-                    .padding(.vertical, WizardLayout.cardPadding)
-                } else if viewModel.notificationsViewModel.notifications.isEmpty {
-                    HStack {
-                        Spacer()
-                        VStack(spacing: 12) {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 40))
-                                .foregroundColor(.green)
-                            Text("No active notifications", comment: "No notifications message")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                        }
-                        Spacer()
-                    }
-                    .padding(.vertical, WizardLayout.cardPadding)
-                } else {
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(viewModel.notificationsViewModel.notifications) { item in
-                            NotificationRow(
-                                item: item,
-                                onDismiss: {
-                                    viewModel.notificationsViewModel.dismissNotification(item)
-                                },
-                                backgroundColor: Color(UIColor.tertiarySystemGroupedBackground)
-                            )
-                        }
-                    }
+                if !viewModel.skipsNotificationsCheck {
+                    Text("Clear all pump notifications before continuing", comment: "Step description")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
                 }
             }
-            .wizardCard(background: Color(.secondarySystemGroupedBackground))
+
+            if viewModel.skipsNotificationsCheck {
+                disconnectInfusionSetWarning
+            } else {
+                notificationsCheck
+            }
 
             if viewModel.failedEnterMode {
                 Label(
@@ -300,6 +236,91 @@ struct TandemKitFillTubingView: View {
         }
     }
 
+    @ViewBuilder private var notificationsCheck: some View {
+        if viewModel.hasActiveNotifications {
+            Label(
+                String(
+                    localized:
+                    "Clear all notifications before starting tubing fill by swiping them away",
+                    comment: "Warning message"
+                ),
+                systemImage: "exclamationmark.triangle.fill"
+            )
+            .foregroundColor(guidanceColors.warning)
+            .wizardCard(background: guidanceColors.warning.opacity(0.1))
+        }
+
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Notifications", comment: "Notifications section header")
+                    .font(.headline)
+                Spacer()
+                if !viewModel.notificationsViewModel.isRefreshing, !viewModel.isCheckingNotificationsBeforeFill {
+                    Button(action: {
+                        viewModel.notificationsViewModel.refreshNotifications()
+                    }) {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                }
+            }
+
+            if viewModel.notificationsViewModel.isRefreshing || viewModel.isCheckingNotificationsBeforeFill,
+               viewModel.notificationsViewModel.notifications.isEmpty
+            {
+                HStack {
+                    Spacer()
+                    VStack(spacing: 12) {
+                        ActivityIndicator(isAnimating: .constant(true), style: .medium)
+                        Text("Checking notifications...", comment: "Loading notifications message")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
+                }
+                .padding(.vertical, WizardLayout.cardPadding)
+            } else if viewModel.notificationsViewModel.notifications.isEmpty {
+                HStack {
+                    Spacer()
+                    VStack(spacing: 12) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 40))
+                            .foregroundColor(.green)
+                        Text("No active notifications", comment: "No notifications message")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
+                }
+                .padding(.vertical, WizardLayout.cardPadding)
+            } else {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(viewModel.notificationsViewModel.notifications) { item in
+                        NotificationRow(
+                            item: item,
+                            onDismiss: {
+                                viewModel.notificationsViewModel.dismissNotification(item)
+                            },
+                            backgroundColor: Color(UIColor.tertiarySystemGroupedBackground)
+                        )
+                    }
+                }
+            }
+        }
+        .wizardCard(background: Color(.secondarySystemGroupedBackground))
+    }
+
+    private var disconnectInfusionSetWarning: some View {
+        Label(
+            String(
+                localized: "Ensure you have disconnected the infusion set from your body before filling tubing.",
+                comment: "Warning shown before and during the tubing fill"
+            ),
+            systemImage: "exclamationmark.triangle.fill"
+        )
+        .foregroundColor(guidanceColors.warning)
+        .wizardCard(background: guidanceColors.warning.opacity(0.1))
+    }
+
     private var fillingStepContent: some View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 8) {
@@ -311,15 +332,7 @@ struct TandemKitFillTubingView: View {
                     .foregroundColor(.secondary)
             }
 
-            Label(
-                String(
-                    localized: "Ensure you have disconnected the infusion set from your body before filling tubing.",
-                    comment: "Warning shown on the fill tubing step"
-                ),
-                systemImage: "exclamationmark.triangle.fill"
-            )
-            .foregroundColor(guidanceColors.warning)
-            .wizardCard(background: guidanceColors.warning.opacity(0.1))
+            disconnectInfusionSetWarning
 
             if !viewModel.hasActiveNotifications, !(viewModel.hasDisplayedFlow && viewModel.isCheckingNotifications) {
                 VStack(alignment: .leading, spacing: 12) {

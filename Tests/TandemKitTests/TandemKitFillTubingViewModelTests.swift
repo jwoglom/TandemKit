@@ -259,7 +259,47 @@ import XCTest
         XCTAssertTrue(viewModel.canStartFill)
     }
 
-    func testAfterACartridgeChangeWithNothingToClearTheFillStartsUnprompted() {
+    func testTheFillCannotStartWhileARefreshIsInFlight() {
+        stubAlerts()
+        viewModel.isSuspended = true
+        viewModel.currentStep = .enterMode
+        viewModel.checkNotificationsBeforeFill()
+        drainMainQueue()
+
+        viewModel.notificationsViewModel.refreshNotifications()
+        XCTAssertFalse(viewModel.canStartFill)
+
+        drainMainQueue()
+        XCTAssertTrue(viewModel.canStartFill)
+    }
+
+    func testOpenedOnItsOwnThePrepareStepShowsTheNotificationsCheck() {
+        stubAlerts()
+        viewModel.isSuspended = true
+        viewModel.currentStep = .enterMode
+
+        viewModel.checkNotificationsBeforeFill()
+        drainMainQueue()
+
+        XCTAssertFalse(viewModel.skipsNotificationsCheck)
+        XCTAssertEqual(bluetooth.sent(EnterFillTubingModeRequest.self).count, 0)
+        XCTAssertEqual(viewModel.currentStep, .enterMode)
+    }
+
+    func testAfterACartridgeChangeWithNothingToClearOnlyTheDisconnectReminderShows() {
+        useViewModelFollowingCartridgeChange()
+        stubAlerts()
+
+        viewModel.checkNotificationsBeforeFill()
+        XCTAssertFalse(viewModel.skipsNotificationsCheck, "Nothing is known until the read lands")
+
+        drainMainQueue()
+
+        XCTAssertTrue(viewModel.skipsNotificationsCheck)
+        XCTAssertTrue(viewModel.canStartFill)
+    }
+
+    func testAfterACartridgeChangeTheFillStillWaitsForTheUser() {
         useViewModelFollowingCartridgeChange()
         stubAlerts()
         bluetooth.stub(EnterFillTubingModeRequest.self, with: EnterFillTubingModeResponse(status: 0))
@@ -268,32 +308,85 @@ import XCTest
         drainMainQueue()
         drainMainQueue()
 
-        XCTAssertEqual(bluetooth.sent(EnterFillTubingModeRequest.self).count, 1)
-        XCTAssertEqual(viewModel.currentStep, .filling)
+        XCTAssertEqual(bluetooth.sent(EnterFillTubingModeRequest.self).count, 0)
+        XCTAssertEqual(viewModel.currentStep, .enterMode)
     }
 
-    func testAfterACartridgeChangeANotificationToClearHoldsThePrepareStep() {
+    func testStartingTheFillFromTheDisconnectReminderEntersFillMode() {
+        useViewModelFollowingCartridgeChange()
+        stubAlerts()
+        bluetooth.stub(EnterFillTubingModeRequest.self, with: EnterFillTubingModeResponse(status: 0))
+        viewModel.checkNotificationsBeforeFill()
+        drainMainQueue()
+
+        viewModel.enterFillTubingMode()
+        drainMainQueue()
+
+        XCTAssertEqual(bluetooth.sent(EnterFillTubingModeRequest.self).count, 1)
+        XCTAssertEqual(viewModel.currentStep, .filling)
+        XCTAssertFalse(viewModel.failedEnterMode)
+    }
+
+    func testARefusedEnterKeepsThePrepareStep() {
+        useViewModelFollowingCartridgeChange()
+        stubAlerts()
+        bluetooth.stub(EnterFillTubingModeRequest.self, with: EnterFillTubingModeResponse(status: 1))
+        viewModel.checkNotificationsBeforeFill()
+        drainMainQueue()
+
+        viewModel.enterFillTubingMode()
+        drainMainQueue()
+
+        XCTAssertEqual(viewModel.currentStep, .enterMode)
+        XCTAssertTrue(viewModel.failedEnterMode)
+        XCTAssertFalse(viewModel.isProcessing)
+    }
+
+    func testAfterACartridgeChangeANotificationToClearKeepsTheNotificationsCheck() {
         useViewModelFollowingCartridgeChange()
         stubAlerts(.LOW_INSULIN_ALERT)
 
         viewModel.checkNotificationsBeforeFill()
         drainMainQueue()
 
-        XCTAssertEqual(bluetooth.sent(EnterFillTubingModeRequest.self).count, 0)
-        XCTAssertEqual(viewModel.currentStep, .enterMode)
+        XCTAssertFalse(viewModel.skipsNotificationsCheck)
         XCTAssertFalse(viewModel.canStartFill)
     }
 
-    func testOpenedOnItsOwnThePrepareStepWaitsForTheUser() {
+    func testClearingTheNotificationsAfterACartridgeChangeKeepsTheNotificationsCheck() {
+        useViewModelFollowingCartridgeChange()
+        stubAlerts(.LOW_INSULIN_ALERT)
+        viewModel.checkNotificationsBeforeFill()
+        drainMainQueue()
+
         stubAlerts()
-        viewModel.isSuspended = true
-        viewModel.currentStep = .enterMode
+        refreshNotifications()
+
+        XCTAssertFalse(viewModel.skipsNotificationsCheck, "The user should see the list they cleared come up empty")
+        XCTAssertTrue(viewModel.canStartFill)
+    }
+
+    func testANotificationRaisedAfterTheReadBringsTheNotificationsCheckBack() {
+        useViewModelFollowingCartridgeChange()
+        stubAlerts()
+        viewModel.checkNotificationsBeforeFill()
+        drainMainQueue()
+
+        stubAlerts(.LOW_INSULIN_ALERT)
+        refreshNotifications()
+
+        XCTAssertFalse(viewModel.skipsNotificationsCheck)
+        XCTAssertFalse(viewModel.canStartFill)
+    }
+
+    func testAFailedReadAfterACartridgeChangeKeepsTheNotificationsCheck() {
+        useViewModelFollowingCartridgeChange()
+        bluetooth.connectError = PumpCommError.pumpNotConnected
 
         viewModel.checkNotificationsBeforeFill()
         drainMainQueue()
 
-        XCTAssertEqual(bluetooth.sent(EnterFillTubingModeRequest.self).count, 0)
-        XCTAssertEqual(viewModel.currentStep, .enterMode)
+        XCTAssertFalse(viewModel.skipsNotificationsCheck)
     }
 
     // MARK: - Which reports warrant a read

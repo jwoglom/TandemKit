@@ -53,10 +53,8 @@ class TandemKitFillTubingViewModel: ObservableObject {
     /// True until the read made as the prepare step appears lands; the fill can't start before it.
     @Published var isCheckingNotificationsBeforeFill = true
 
-    /// The cartridge change before this wizard already had the user confirm the pump was off their
-    /// body, so with nothing to clear the prepare step enters fill tubing mode on its own, once.
     private let followsCartridgeChange: Bool
-    private var hasCheckedNotificationsBeforeFill = false
+    private var foundNothingToClearAfterCartridgeChange = false
 
     /// Last button state the pump reported, or nil before it has reported any. Used to spot the
     /// moment the button is released rather than reacting to every repeat of the same state.
@@ -177,17 +175,20 @@ class TandemKitFillTubingViewModel: ObservableObject {
 
     func checkNotificationsBeforeFill() {
         isCheckingNotificationsBeforeFill = true
+        let requestedAt = Date()
         notificationsViewModel.refreshNotifications { [weak self] in
             guard let self else { return }
             isCheckingNotificationsBeforeFill = false
-            let isFirstCheck = !hasCheckedNotificationsBeforeFill
-            hasCheckedNotificationsBeforeFill = true
-            if followsCartridgeChange, isFirstCheck, currentStep == .enterMode, isSuspended == true,
-               !hasActiveNotifications, !loadingEnterMode
-            {
-                enterFillTubingMode()
-            }
+            // A failed read leaves the last list in place, which says nothing about the pump now.
+            let readSucceeded = (notificationsViewModel.lastRefreshTime ?? .distantPast) >= requestedAt
+            foundNothingToClearAfterCartridgeChange = followsCartridgeChange && readSucceeded && !hasActiveNotifications
         }
+    }
+
+    /// After a cartridge change with nothing to clear, the prepare step shows only the disconnect
+    /// reminder; the user still starts the fill and confirms the pump is off their body.
+    var skipsNotificationsCheck: Bool {
+        foundNothingToClearAfterCartridgeChange && !hasActiveNotifications
     }
 
     var canStartFill: Bool {
