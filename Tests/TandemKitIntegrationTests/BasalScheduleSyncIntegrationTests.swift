@@ -234,7 +234,9 @@ final class BasalScheduleSyncIntegrationTests: FaketandemIntegrationTestCase {
     }
 
     private func enactTempBasal(_ driver: FaketandemHarness.Driver) throws -> PumpManagerError? {
-        let rate = driver.manager.getScheduledBasalRate() * 2
+        // Below the rate in force: within five minutes of a segment change the percent is worked out
+        // against the larger of the two rates, and a request equal to it sends no temp at all.
+        let rate = driver.manager.getScheduledBasalRate() / 2
         let box = ResultBox<PumpManagerError?>()
         driver.manager.enactTempBasal(unitsPerHour: rate, for: .minutes(30)) { box.set($0) }
         let error = try box.wait("enactTempBasal completion", timeout: 60)
