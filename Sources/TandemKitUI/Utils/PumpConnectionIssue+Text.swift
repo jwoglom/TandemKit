@@ -37,7 +37,7 @@ extension PumpConnectionIssue {
     }
 
     /// What it means and what to do, for the screens with room for a sentence or two.
-    func detail(appName: String) -> String {
+    func detail(appName: String, lastKnownDelivery: LastKnownBasalDelivery? = nil, now: Date = Date()) -> String {
         switch self {
         case .bluetoothOff:
             return String(
@@ -61,6 +61,9 @@ extension PumpConnectionIssue {
                 comment: "detail for the Bluetooth unavailable notice"
             )
         case .pumpUnreachable:
+            if let lastKnownDelivery {
+                return lastKnownDelivery.localizedDescription(appName: appName, now: now)
+            }
             return String(
                 format: String(
                     localized: "%@ is not connected to your pump, so it cannot read from it or send it anything. Your pump keeps delivering insulin from its own settings. Keep the pump nearby and powered on — reconnection is automatic.",

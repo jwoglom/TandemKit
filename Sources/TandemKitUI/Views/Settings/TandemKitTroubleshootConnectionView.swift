@@ -13,9 +13,15 @@ struct TandemKitTroubleshootConnectionView: View {
                         Text(connectionIssue.title)
                             .font(Font.subheadline.weight(.bold))
                             .foregroundColor(guidanceColors.critical)
-                        Text(connectionIssue.detail(appName: viewModel.appName))
+                        TimelineView(.everyMinute) { context in
+                            Text(connectionIssue.detail(
+                                appName: viewModel.appName,
+                                lastKnownDelivery: viewModel.lastKnownBasalDelivery,
+                                now: context.date
+                            ))
                             .font(.footnote)
                             .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                     .padding(.vertical, 4)
                 }
