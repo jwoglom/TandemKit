@@ -807,6 +807,39 @@
         }
       }
     },
+    "Control-IQ Is On" : {
+      "comment" : "Title of the setup prompt when the paired pump is running Control-IQ",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Control-IQ Is On"
+          }
+        }
+      }
+    },
+    "Control-IQ is still on, and setup can't finish until it is off so that %@ can control insulin delivery. Keep the pump near your phone and try again." : {
+      "comment" : "Setup error when turning Control-IQ off did not reach the pump (1: app name)",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Control-IQ is still on, and setup can't finish until it is off so that %@ can control insulin delivery. Keep the pump near your phone and try again."
+          }
+        }
+      }
+    },
+    "Control-IQ Not Turned Off" : {
+      "comment" : "Title of the setup error when turning Control-IQ off failed",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Control-IQ Not Turned Off"
+          }
+        }
+      }
+    },
     "Control-IQ pump algorithm enabled" : {
       "comment" : "title for CIQ active notice",
       "localizations" : {
@@ -3438,6 +3471,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "The pairing code is located on the inside of the cartridge area labeled as 'PIN' and consists of six numbers."
+          }
+        }
+      }
+    },
+    "The pump currently has Control-IQ on. Continuing will turn Control-IQ off, so that %@ uses its own algorithm to control insulin delivery." : {
+      "comment" : "Setup message when the paired pump is running Control-IQ (1: app name)",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The pump currently has Control-IQ on. Continuing will turn Control-IQ off, so that %@ uses its own algorithm to control insulin delivery."
           }
         }
       }

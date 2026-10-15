@@ -518,4 +518,159 @@ import XCTest
         XCTAssertEqual(manager.state.quickBolusEnabled, true, "the first sync tries again")
         XCTAssertTrue(bluetooth.didSend(ChangeTimeDateRequest.self))
     }
+
+    // MARK: - Control-IQ
+
+    private func controlIQInfo(on: Bool) -> ControlIQInfoV2Response {
+        ControlIQInfoV2Response(
+            closedLoopEnabled: on,
+            weight: 150,
+            weightUnit: ControlIQInfoAbstractResponse.WeightUnit.pounds.rawValue,
+            totalDailyInsulin: 40,
+            currentUserModeType: 0,
+            byte6: 0,
+            byte7: 0,
+            byte8: 0,
+            controlStateType: 0,
+            exerciseChoice: 0,
+            exerciseDuration: 0,
+            exerciseTimeRemaining: 0
+        )
+    }
+
+    private func makeManager(controlIQOn: Bool) -> TandemPumpManager {
+        let manager = makeManager(schedule: schedule([(0, 0.65)]))
+        manager.state.pumpState.apiVersion = KnownApiVersion.apiV3_4.value
+        bluetooth.stub(ControlIQInfoV2Request.self, with: controlIQInfo(on: controlIQOn))
+        return manager
+    }
+
+    /// A pump whose Control-IQ goes off once the turn-off reaches it, however that is answered.
+    private func stubControlIQOffOnceTurnedOff() {
+        bluetooth.stub(ControlIQInfoV2Request.self) { [unowned self] _ in
+            controlIQInfo(on: !bluetooth.didSend(ChangeControlIQSettingsRequest.self))
+        }
+    }
+
+    private func controlIQNeedsTurningOff(_ manager: TandemPumpManager) -> Bool {
+        var result = false
+        let expectation = expectation(description: "controlIQNeedsTurningOffForSetup")
+        manager.controlIQNeedsTurningOffForSetup {
+            result = $0
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: 5.0)
+        return result
+    }
+
+    private func turnOffControlIQ(_ manager: TandemPumpManager) -> Error? {
+        var result: Error?
+        let expectation = expectation(description: "turnOffControlIQForSetup")
+        manager.turnOffControlIQForSetup {
+            result = $0
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: 5.0)
+        return result
+    }
+
+    func testSetupAsksToTurnOffControlIQThePumpIsRunning() {
+        let manager = makeManager(controlIQOn: true)
+
+        XCTAssertTrue(controlIQNeedsTurningOff(manager))
+
+        XCTAssertFalse(bluetooth.didSend(ChangeControlIQSettingsRequest.self))
+    }
+
+    func testSetupHasNothingToTurnOffWhenControlIQIsOff() {
+        let manager = makeManager(controlIQOn: false)
+
+        XCTAssertFalse(controlIQNeedsTurningOff(manager))
+    }
+
+    func testSetupAsksToTurnOffControlIQEvenWithControlIQSupport() {
+        let manager = makeManager(controlIQOn: true)
+        manager.state.featureFlags[.controlIQSupport] = true
+
+        XCTAssertTrue(controlIQNeedsTurningOff(manager))
+    }
+
+    func testAnUnansweredControlIQReadAsksNothing() {
+        let manager = makeManager(controlIQOn: true)
+        bluetooth.stub(ControlIQInfoV2Request.self) { _ in nil }
+
+        XCTAssertFalse(controlIQNeedsTurningOff(manager))
+    }
+
+    func testTurningControlIQOffForSetupSendsTheDisableAndSyncsNothing() throws {
+        let manager = makeManager(controlIQOn: true)
+        bluetooth.stub(ChangeControlIQSettingsRequest.self, with: ChangeControlIQSettingsResponse(status: 0))
+        XCTAssertTrue(controlIQNeedsTurningOff(manager))
+
+        XCTAssertNil(turnOffControlIQ(manager))
+
+        let request = try XCTUnwrap(bluetooth.sent(ChangeControlIQSettingsRequest.self).first)
+        XCTAssertFalse(request.enabled)
+        XCTAssertEqual(request.weightLbs, 150)
+        XCTAssertEqual(request.totalDailyInsulinUnits, 40)
+        XCTAssertFalse(manager.state.useControlIQ)
+        XCTAssertEqual(manager.state.controlIQEnabled, false)
+        XCTAssertNil(manager.state.controlIQEndedAt)
+        XCTAssertFalse(bluetooth.didSend(CurrentBasalStatusRequest.self))
+    }
+
+    func testARefusedControlIQTurnOffLeavesControlIQOn() {
+        let manager = makeManager(controlIQOn: true)
+        bluetooth.stub(ChangeControlIQSettingsRequest.self, with: ChangeControlIQSettingsResponse(status: 1))
+        XCTAssertTrue(controlIQNeedsTurningOff(manager))
+
+        let error = turnOffControlIQ(manager)
+
+        XCTAssertEqual(error as? ControlIQConfigurationError, .pumpRejected(status: 1))
+        XCTAssertTrue(manager.state.useControlIQ)
+        XCTAssertEqual(bluetooth.sent(ControlIQInfoV2Request.self).count, 2, "read back after the refusal")
+    }
+
+    func testAnUnansweredControlIQTurnOffSaysSo() {
+        let manager = makeManager(controlIQOn: true)
+        XCTAssertTrue(controlIQNeedsTurningOff(manager))
+
+        let error = turnOffControlIQ(manager)
+
+        XCTAssertEqual(error as? ControlIQConfigurationError, .noResponse)
+        XCTAssertTrue(manager.state.useControlIQ)
+    }
+
+    func testAnUnansweredTurnOffThatReadsBackOffSucceeds() {
+        let manager = makeManager(controlIQOn: true)
+        XCTAssertTrue(controlIQNeedsTurningOff(manager))
+        stubControlIQOffOnceTurnedOff()
+
+        XCTAssertNil(turnOffControlIQ(manager))
+
+        XCTAssertFalse(manager.state.useControlIQ)
+        XCTAssertEqual(manager.state.controlIQEnabled, false)
+        XCTAssertNil(manager.state.controlIQEndedAt)
+    }
+
+    func testARefusedTurnOffOfAPumpThatReadsOffSucceeds() {
+        let manager = makeManager(controlIQOn: true)
+        bluetooth.stub(ChangeControlIQSettingsRequest.self, with: ChangeControlIQSettingsResponse(status: 1))
+        XCTAssertTrue(controlIQNeedsTurningOff(manager))
+        stubControlIQOffOnceTurnedOff()
+
+        XCTAssertNil(turnOffControlIQ(manager))
+
+        XCTAssertFalse(manager.state.useControlIQ)
+        XCTAssertNil(manager.state.controlIQEndedAt)
+    }
+
+    func testATurnOffWhoseReadBackGoesUnansweredFails() {
+        let manager = makeManager(controlIQOn: true)
+        XCTAssertTrue(controlIQNeedsTurningOff(manager))
+        bluetooth.stub(ControlIQInfoV2Request.self) { _ in nil }
+
+        XCTAssertEqual(turnOffControlIQ(manager) as? ControlIQConfigurationError, .noResponse)
+        XCTAssertTrue(manager.state.useControlIQ)
+    }
 }

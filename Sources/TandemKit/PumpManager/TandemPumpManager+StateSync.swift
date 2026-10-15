@@ -21,11 +21,11 @@ extension TandemPumpManager {
         reconcilePumpClockSkewAlert()
     }
 
-    func fetchControlIQStatus() {
+    @discardableResult func fetchControlIQStatus() -> ControlIQInfoAbstractResponse? {
         let request = ControlIQInfoRequestBuilder.create(apiVersion: state.pumpState.apiVersion)
         guard let response = bluetooth.write(request) as? ControlIQInfoAbstractResponse else {
             logger.error("Failed to fetch ControlIQ info: \(type(of: request))")
-            return
+            return nil
         }
 
         let closedLoopEnabled = response.getClosedLoopEnabled()
@@ -62,6 +62,7 @@ extension TandemPumpManager {
         state.lastControlIQUpdate = now
 
         notifyDelegateStateUpdated()
+        return response
     }
 
     /// Reads the pump's CGM sensor session status into `state.cgmSessionState`.

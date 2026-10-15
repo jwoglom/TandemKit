@@ -63,8 +63,9 @@ insulin, stops delivery or changes basal, and some steps deliberately cause erro
 
 ## Conditional configurations
 
-These configurations change what the pump can do without the host. Each one depends on feature
-flags that are off by default.
+These configurations change what the pump can do without the host. Control-IQ can be on at the
+pump when it is paired, and setup turns it off (C5); the rest depend on feature flags that are off
+by default.
 
 | ID | Do | Expect | Automated |
 |---|---|---|---|
@@ -75,6 +76,7 @@ flags that are off by default.
 | C2 | As C1, with History Dose Reporting on. Wait for Control-IQ to give an automatic bolus. It gives one only when it predicts high glucose, so this step may have to wait. | Nothing is reported while the bolus runs. Once it finishes, the host holds it once, as automatic and programmed on the pump. | conformance D16 |
 | C3 | As C1, with History Basal Reporting on. Leave Control-IQ running for 30 minutes. | For each 5-minute cycle that Control-IQ ran off the profile, the host gets a temp basal correction at the pump's rate. Each one arrives some minutes after its cycle ends, never while the cycle runs. | conformance H1, `BasalHistoryConformanceTests` |
 | C4 | As C3, then switch back from Control-IQ. | The host's temp basals are accepted again. Syncs wait until history has reported Control-IQ's basal up to the switch. | conformance H1, `TandemPumpManagerControlIQTests` |
+| C5 | Before pairing, turn Control-IQ on at the pump (in Tandem's app, or on a t:slim X2's screen), then pair (P2). Repeat with Control-IQ Support on (rerun the initial setup from Debug Options). | Right after pairing, both times, the alert "Control-IQ Is On" says Control-IQ will be turned off so that the host uses its own algorithm. OK is its only button. After OK, onboarding finishes, Control-IQ is off at the pump, and the "Control-IQ On" status never appears. | `TandemPumpManagerOnboardingTests`, `TandemKitScanViewModelTests` |
 
 ## What this plan settles
 

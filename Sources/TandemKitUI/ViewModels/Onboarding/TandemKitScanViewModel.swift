@@ -17,6 +17,9 @@ class TandemKitScanViewModel: ObservableObject {
     @Published var isConnectionError = false
     @Published var isSettingsError = false
     @Published var settingsErrorMessage: String?
+    @Published var isPromptingControlIQOff = false
+    @Published var isControlIQOffError = false
+    @Published var controlIQOffErrorMessage: String?
     @Published var connectionErrorTitle = String(
         localized: "Error while connecting to device",
         comment: "Connection error message"
@@ -96,7 +99,53 @@ class TandemKitScanViewModel: ObservableObject {
     }
 
     func onPairSuccess() {
-        applyOnboardingSettings()
+        guard let pumpManager else {
+            applyOnboardingSettings()
+            return
+        }
+
+        pumpManager.controlIQNeedsTurningOffForSetup { needsTurningOff in
+            DispatchQueue.main.async {
+                if needsTurningOff {
+                    self.isPromptingControlIQOff = true
+                } else {
+                    self.applyOnboardingSettings()
+                }
+            }
+        }
+    }
+
+    var controlIQOffPromptMessage: String {
+        String(format: String(
+            localized: "The pump currently has Control-IQ on. Continuing will turn Control-IQ off, so that %@ uses its own algorithm to control insulin delivery.",
+            comment: "Setup message when the paired pump is running Control-IQ (1: app name)"
+        ), HostApp.current.appName)
+    }
+
+    func turnOffControlIQ() {
+        guard let pumpManager else {
+            applyOnboardingSettings()
+            return
+        }
+
+        pumpManager.turnOffControlIQForSetup { error in
+            DispatchQueue.main.async {
+                guard let error else {
+                    self.applyOnboardingSettings()
+                    return
+                }
+                self.controlIQOffErrorMessage = Self.controlIQOffFailureMessage(for: error)
+                self.isControlIQOffError = true
+            }
+        }
+    }
+
+    static func controlIQOffFailureMessage(for error: Error) -> String {
+        let summary = String(format: String(
+            localized: "Control-IQ is still on, and setup can't finish until it is off so that %@ can control insulin delivery. Keep the pump near your phone and try again.",
+            comment: "Setup error when turning Control-IQ off did not reach the pump (1: app name)"
+        ), HostApp.current.appName)
+        return "\(summary)\n\n\(error.localizedDescription)"
     }
 
     /// On failure, setup waits on the alert instead of advancing, because the pump would otherwise
