@@ -384,10 +384,10 @@ final class InterruptConformanceTests: ConformanceTestCase {
         let (loop, trio) = feedOracles()
         loop.assertNoDuplicates()
         trio.assertNoDuplicates()
-        let boluses = loop.doses.filter { $0.dose.type == .bolus }
-        XCTAssertEqual(boluses.map(\.isMutable), [false])
-        XCTAssertEqual(boluses.map(\.dose.deliveredUnits), [0])
+        loop.assertDeleted(raw: registered.raw)
+        XCTAssertTrue(loop.doses.filter { $0.dose.type == .bolus }.isEmpty, "Loop stores no dose for a 0 U bolus")
         XCTAssertEqual(trio.boluses.map(\.bolusAmount), [0])
+        XCTAssertEqual(trio.boluses.map(\.isMutable), [false])
         let timeline = try timeline()
         XCTAssertTrue(timeline.boluses.isEmpty, "the pump has no bolus: \(timeline.boluses)")
         let diff = timeline.diff(against: loop)

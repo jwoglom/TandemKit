@@ -152,8 +152,6 @@ import XCTest
 
     // MARK: - Zero delivery
 
-    /// Retracting instead would leave Trio holding the programmed amount: it never purges mutable
-    /// rows and only shrinks a stored bolus when a smaller one arrives.
     func testZeroDeliveryIsReportedRatherThanRetracted() throws {
         startBolus()
         stubLastBolus(deliveredVolume: 0)

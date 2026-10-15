@@ -155,7 +155,6 @@ final class CancelConformanceTests: ConformanceTestCase {
 
     // MARK: - B1. Cancel a bolus at three points
 
-    /// Requires the 0 U finalized dose that B2 marks as a defect; #455 decides which of the two stays.
     func testB1CancelBolusImmediatelyReportsZeroDelivered() throws {
         try runCancelBolus(deliverUnits: 0)
     }
@@ -241,15 +240,17 @@ final class CancelConformanceTests: ConformanceTestCase {
             line: line
         )
 
-        // Hosts: one dose, permanent, at the pump's amount.
+        // Hosts: one dose, permanent, at the pump's amount, which Loop does not store at 0 U.
         let (loop, trio) = feedOracles()
         loop.assertNoDuplicates(what, file: file, line: line)
-        let stored = try XCTUnwrap(loop.assertPermanent(raw: finalized.raw, what, file: file, line: line), file: file, line: line)
-        XCTAssertEqual(stored.dose.deliveredUnits ?? -1, lastBolus.deliveredUnits, accuracy: Self.reportingIncrement, "\(what): Loop stored the pump's amount", file: file, line: line)
-        XCTAssertEqual(loop.callCount, batchesFedToOracles, "\(what): every batch reached the oracle", file: file, line: line)
         if lastBolus.deliveredUnits > 0 {
+            let stored = try XCTUnwrap(loop.assertPermanent(raw: finalized.raw, what, file: file, line: line), file: file, line: line)
+            XCTAssertEqual(stored.dose.deliveredUnits ?? -1, lastBolus.deliveredUnits, accuracy: Self.reportingIncrement, "\(what): Loop stored the pump's amount", file: file, line: line)
             XCTAssertGreaterThan(loop.iob(at: clock.now), 0, "\(what): the partial delivery counts towards IOB", file: file, line: line)
+        } else {
+            loop.assertDeleted(raw: finalized.raw, what, file: file, line: line)
         }
+        XCTAssertEqual(loop.callCount, batchesFedToOracles, "\(what): every batch reached the oracle", file: file, line: line)
 
         trio.assertNoDuplicates(what, file: file, line: line)
         trio.assertSingleBolus(at: mutable.date, amount: lastBolus.deliveredUnits, accuracy: 0.051, what, file: file, line: line)
@@ -263,8 +264,6 @@ final class CancelConformanceTests: ConformanceTestCase {
         // disagree (see the report), so the raw id from the pump's own record is the check.
         XCTAssertNotEqual(lastBolus.endReasonId, 3, "\(what): the pump recorded a completion, not a stop", file: file, line: line)
 
-        // The pump's volume is a continuous simulation and the driver reports on the 0.001 U grid,
-        // so the ledgers are compared at that resolution rather than at the diff's default 0.0005.
         if deliverUnits > 0 {
             XCTAssertEqual(
                 (finalized.dose?.endDate).map { $0.timeIntervalSince(pumpEnd) } ?? .nan,
@@ -274,36 +273,23 @@ final class CancelConformanceTests: ConformanceTestCase {
                 file: file,
                 line: line
             )
-            timeline.assertMatches(
-                loop,
-                tolerance: PumpTimeline.Tolerance(time: 2, units: Self.reportingIncrement, rate: 0.005),
-                what,
-                file: file,
-                line: line
-            )
-        } else {
-            // Nothing was delivered, so `BolusEndDate` has only the start and the 15 s initiation
-            // lead-in to work with; the ledgers can differ by no more than that window.
-            timeline.assertMatches(
-                loop,
-                tolerance: PumpTimeline.Tolerance(
-                    time: TandemPumpCapabilities.bolusInitiationDelay + 2,
-                    units: Self.reportingIncrement,
-                    rate: 0.005
-                ),
-                what,
-                file: file,
-                line: line
-            )
         }
+        // The pump's volume is a continuous simulation and the driver reports on the 0.001 U grid,
+        // so the ledgers are compared at that resolution rather than at the diff's default 0.0005.
+        timeline.assertMatches(
+            loop,
+            tolerance: PumpTimeline.Tolerance(time: 2, units: Self.reportingIncrement, rate: 0.005),
+            what,
+            file: file,
+            line: line
+        )
     }
 
     // MARK: - B2. Cancel with zero delivery
 
-    /// Plan B2 (audit P23, #455): a bolus the pump confirms delivered nothing never happened. It has
-    /// to stop being sent in a `replacePendingEvents: true` batch so LoopKit removes it, rather than
-    /// being frozen as a 0 U immutable dose that can never be revised.
-    func testB2CancelWithZeroDeliveryRetractsTheDose() throws {
+    /// Plan B2 (audit P23, #455): not withdrawn, as LoopKit's guide has it, but finalized at 0 U in a
+    /// replacing batch, which reaches the guide's end state in Loop even when the batch has nothing else.
+    func testB2CancelWithZeroDeliveryLeavesNoInsulinInEitherHost() throws {
         let driver = try startCancelDriver()
         let start = allPumpEventBatches.count
 
@@ -324,50 +310,35 @@ final class CancelConformanceTests: ConformanceTestCase {
         XCTAssertEqual(lastBolus.bolusId, bolusId)
         XCTAssertEqual(lastBolus.deliveredUnits, 0, "the pump confirms nothing was delivered")
 
-        // The retraction has to arrive in a complete batch, or LoopKit has no reason to purge.
         let after = batches(after: start)
         XCTAssertTrue(
-            after.contains { $0.replacePendingEvents },
-            "the cancel must be reported in a complete (replacePendingEvents: true) batch: \(describe(after))"
+            after.contains { batch in
+                batch.replacePendingEvents && batch.events.contains { $0.raw == raw && $0.dose?.isMutable == false && $0.dose?.deliveredUnits == 0 }
+            },
+            "the bolus must be finalized at 0 U under its raw in a complete (replacePendingEvents: true) batch: \(describe(after))"
         )
 
         let (loop, trio) = feedOracles()
-
-        XCTExpectFailure(
-            "jwoglom/TandemKit#455: a cancel the pump confirms delivered 0 U is finalized as a 0 U immutable dose instead of being withdrawn (audit P23)",
-            strict: true
-        ) {
-            let zero = self.events(ofType: .bolus, after: start).filter { $0.dose?.isMutable == false }
-            XCTAssertTrue(
-                zero.isEmpty,
-                "a dose that never happened must stop being reported, not be finalized at 0 U: \(self.describe(after))"
-            )
-            loop.assertDeleted(raw: raw, "zero-delivery cancel")
-            XCTAssertTrue(
-                loop.doses.filter { $0.dose.type == .bolus }.isEmpty,
-                "Loop still holds a bolus for a delivery that never happened: \(loop.doses.map(LoopDoseStoreOracle.describe))"
-            )
-        }
-
-        // Whatever the driver reports, it must not report it twice or under two identities.
         loop.assertNoDuplicates("zero-delivery cancel")
         trio.assertNoDuplicates("zero-delivery cancel")
         XCTAssertEqual(loop.callCount, batchesFedToOracles)
 
-        // The pump's own ledger: a 3 U bolus that stopped with nothing delivered.
+        loop.assertDeleted(raw: raw, "zero-delivery cancel")
+        XCTAssertTrue(
+            loop.doses.filter { $0.dose.type == .bolus }.isEmpty,
+            "Loop still holds a bolus for a delivery that never happened: \(loop.doses.map(LoopDoseStoreOracle.describe))"
+        )
+        XCTAssertEqual(loop.iob(at: clock.now), 0, accuracy: 1e-9, "Loop counts insulin that was never delivered")
+        trio.assertSingleBolus(at: mutable.date, amount: 0, "zero-delivery cancel")
+        XCTAssertEqual(trio.boluses.map(\.isMutable), [false], "Trio still holds the bolus as mutable")
+
         let timeline = try timeline()
         let pumpBolus = try XCTUnwrap(timeline.boluses.first { $0.bolusId == bolusId }, "timeline \(timeline)")
         XCTAssertEqual(pumpBolus.deliveredUnits, 0)
         XCTAssertNotEqual(lastBolus.endReasonId, 3, "the pump recorded a completion, not a stop")
-        // Today the driver reports the 0 U dose, so the ledgers agree; once #455's withdrawal lands
-        // the pump will hold a 0 U record with no dose against it, which is the correct end state.
         timeline.assertMatches(
             loop,
-            tolerance: PumpTimeline.Tolerance(
-                time: TandemPumpCapabilities.bolusInitiationDelay + 2,
-                units: Self.reportingIncrement,
-                rate: 0.005
-            ),
+            tolerance: PumpTimeline.Tolerance(time: 2, units: Self.reportingIncrement, rate: 0.005),
             "zero-delivery cancel"
         )
     }

@@ -22,9 +22,10 @@ pure-Swift folds live in `Conformance/Oracles/`:
 - **`LoopDoseStoreOracle`** — replays `hasNewPumpEvents` batches with LoopKit's `addPumpEvents`
   semantics (guide §3, §5, §8): `replacePendingEvents == true` purges every stored mutable dose,
   incoming entries match existing doses by `raw`, matched doses are updated and un-deleted,
-  `isMutable == false` makes a dose permanent, `lastReconciliation` is set on every call including
-  empty batches. Exposes `doses`, `deletedDoses`, `lastReconciliation`, and `iob(at:)` using a simple
-  linear model good enough to detect drift.
+  `isMutable == false` makes a dose permanent, a 0 U bolus is never stored (LoopKit makes no
+  HealthKit sample for it), `lastReconciliation` is set on every call including empty batches.
+  Exposes `doses`, `deletedDoses`, `lastReconciliation`, and `iob(at:)` using a simple linear model
+  good enough to detect drift.
 - **`TrioDoseStoreOracle`** — replays the same batches the way Trio consumes them since
   nightscout/Trio#1300: a temp basal above `maxBasal` dropped, `lastReconciliation` ignored, rows
   matched by `syncIdentifier` then `(timestamp, type, isScheduledBasal)`, a matched mutable row
@@ -95,7 +96,7 @@ oracle one rule at a time.
 | ID | Scenario | Stage | Assert |
 |---|---|---|---|
 | B1 | Cancel bolus at three points | enact 3 U; `cancelBolus` immediately / after 1 U / after 2.9 U (advance clock between); after 1 U again with `pump_offset_seconds: 900` | finalized dose `deliveredUnits` == pump's `last_bolus.delivered` (0.0 / ~1.0 / ~2.9), `raw` identical to the mutable report, `value` == 3 U programmed; `endDate` == the pump's stop in phone time, skewed or not (#339) |
-| B2 | Cancel with zero delivery | cancel before any delivery (pump `delivered == 0`) | the dose disappears: next `replacePendingEvents: true` batch omits it; oracle shows it deleted; no 0 U immutable dose (P23). B1's first case expects the opposite; #455 decides |
+| B2 | Cancel with zero delivery | cancel before any delivery (pump `delivered == 0`) | finalized at 0 U under its `raw` in a `replacePendingEvents: true` batch, not withdrawn as §3 has it (P23, #455): Loop stores no 0 U bolus, so its mutable copy stays deleted, the guide's end state; Trio keeps one finalized 0 U row; neither counts any insulin |
 | B3 | Cancel temp basal early | enact 60 min TBR; advance 12 min; `enactTempBasal(duration: 0)` | one dose, same `raw`, `isMutable false`, `endDate` == cancel time on the pump, `deliveredUnits` == rate × 12 min rounded; Trio oracle shows a truncation record (#329) |
 | B4 | Replace temp basal early | enact TBR A; advance 7 min; enact TBR B | A finalized with real end and delivered units in the same batch that introduces mutable B; B has a new `raw`; no `replacePendingEvents: true` batch omits B while it runs |
 | B5 | Neutral / profile-rate temp | enact a 100% temp basal (the profile rate) for 30 min, first with none running, then over a running TBR | no phantom dose; running TBR is finalized, not silently dropped |

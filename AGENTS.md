@@ -290,6 +290,10 @@ rate check runs on a profile edit instead of at the next sync.
   `getActivePumpEvents`.
 - Loop's `DoseStore` keeps a stored `PumpEvent` row over a non-replacing report with the same
   `raw`, so finalizing a dose the host holds as mutable takes a replacing batch (#452).
+- A bolus the pump confirms delivered nothing is finalized at 0 U, not withdrawn as LoopKit's guide
+  has it (#455). Loop stores no dose for a 0 U bolus, so its mutable copy stays deleted, the guide's
+  end state, and Trio keeps a 0 U row. Withdrawn, it would stay in Loop at its programmed amount
+  whenever the batch held nothing else, since an empty batch purges nothing there.
 - A temp basal keeps one `raw` from its first report to its last, however it ends (#344):
   `NewPumpEvent.tempBasal(dose:of:)` takes it from the `UnfinalizedDose`, not the entry. A temp the
   app set or history adopted carries `eventRaw` (persisted), `HistoryLogSyncIdentifier.tempRate`

@@ -574,9 +574,10 @@ struct PumpTimeline {
     ///
     /// Matching is by type and start time within `tolerance.time` (a bolus's driver-side start is
     /// when it was programmed; the pump's is when it began — the same second in lock-step). A
-    /// finished pump bolus expects an immutable dose with its delivered volume and end; a running
-    /// one expects a mutable dose. A temp rate expects `value` == its rate and the scheduled end
-    /// while running, the actual end (and rate × duration delivered) once finished.
+    /// finished pump bolus expects an immutable dose with its delivered volume and end, or none at
+    /// 0 U, which Loop never stores; a running one expects a mutable dose. A temp rate expects
+    /// `value` == its rate and the scheduled end while running, the actual end (and rate × duration
+    /// delivered) once finished.
     func diff(against oracle: LoopDoseStoreOracle, tolerance: Tolerance = .exact) -> Diff {
         var diff = Diff()
         var claimed = Set<String>() // syncIdentifiers already matched to a pump record
@@ -591,7 +592,9 @@ struct PumpTimeline {
             let label = "\(kind) \(bolus.bolusId) (\(bolus.programmedUnits.map { "\($0) U" } ?? "? U"))"
             let matches = doses.filter { $0.dose.type == .bolus && near($0.dose.startDate, bolus.start) }
             guard let match = matches.first else {
-                diff.missing.append(label)
+                if !(bolus.isFinished && bolus.deliveredUnits == 0) {
+                    diff.missing.append(label)
+                }
                 continue
             }
             if matches.count > 1 {

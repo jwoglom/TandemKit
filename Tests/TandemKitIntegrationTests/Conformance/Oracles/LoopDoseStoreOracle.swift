@@ -26,9 +26,8 @@ import XCTest
 ///   doses with the schedule's rate. Those entries move `lastImmutableBasalEndDate`, so Loop in the
 ///   simulator needs them; the conformance groups leave them out.
 /// - The cache window purge (DS:714). Tests run over minutes, not days.
-/// - IDS skipping a temp basal with no duration or a 0 U bolus, as it does a basal (HKQS:56-77). On a
-///   conformance run's manual clock a temp can end where it started, and `PumpTimeline` wants a dose
-///   for it, as for group B's 0 U bolus.
+/// - IDS skipping a temp basal with no duration, as it does a basal (HKQS:56-60). On a conformance
+///   run's manual clock a temp can end where it started, and `PumpTimeline` wants a dose for it.
 /// - Core Data itself. The two uniqueness constraints that matter are modelled explicitly (see
 ///   `insertPumpEventRow` and `insertCachedDose`) because they decide whether a re-report updates or
 ///   is dropped.
@@ -484,6 +483,9 @@ final class LoopDoseStoreOracle: DoseOracle {
             // IDS:443-452 — nor is one that makes no HealthKit sample: a basal with no duration (HKQS:56-60),
             // such as the driver's scheduled-basal marker before a suspend.
             if entry.type == .basal, entry.endDate.timeIntervalSince(entry.startDate) <= .ulpOfOne { continue }
+            // HKQS:73-77 — or a 0 U bolus, whose mutable copy stays deleted: Loop's end state for a dose
+            // that never happened.
+            if entry.type == .bolus, entry.unitsInDeliverableIncrements <= .ulpOfOne { continue }
 
             // IDS:455-459 — a mutable object with the same provenance + syncIdentifier is updated,
             // which also un-deletes it (CIDO:245 `deletedAt = nil`).

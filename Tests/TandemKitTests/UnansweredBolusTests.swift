@@ -277,8 +277,8 @@ import XCTest
         let (loop, trio) = (LoopDoseStoreOracle(), TrioDoseStoreOracle())
         delegate.feed(loop)
         delegate.feed(trio)
-        XCTAssertEqual(loop.doses.filter { $0.dose.type == .bolus }.map { $0.dose.deliveredUnits }, [0])
-        XCTAssertTrue(loop.mutableDoses.isEmpty)
+        loop.assertDeleted(raw: registered.raw)
+        XCTAssertTrue(loop.doses.filter { $0.dose.type == .bolus }.isEmpty)
         trio.assertNoDuplicates()
     }
 
