@@ -8,6 +8,12 @@ struct TandemKitDebugView: View {
     @State private var showingPumpState = false
     @State private var showingManagerState = false
     @State private var showingRerunSetupConfirmation = false
+    @State private var responseFormat: ResponseFormat = .response
+
+    private enum ResponseFormat: String, CaseIterable {
+        case response = "Response"
+        case json = "JSON"
+    }
 
     var body: some View {
         List {
@@ -66,18 +72,23 @@ struct TandemKitDebugView: View {
                 }
 
                 if let response = viewModel.lastResponseDescription {
+                    let shown = responseFormat == .json ? viewModel.lastResponseJSON ?? response : response
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Response")
-                            .font(.headline)
-                        Text(response)
+                        Picker("Response format", selection: $responseFormat) {
+                            ForEach(ResponseFormat.allCases, id: \.self) { format in
+                                Text(format.rawValue).tag(format)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        Text(shown)
                             .font(.system(.footnote, design: .monospaced))
                             .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .accessibilityLabel("Pump response")
                     }
 
-                    Button("Copy Response") {
-                        UIPasteboard.general.string = response
+                    Button("Copy \(responseFormat.rawValue)") {
+                        UIPasteboard.general.string = shown
                     }
                     .buttonStyle(.borderless)
 

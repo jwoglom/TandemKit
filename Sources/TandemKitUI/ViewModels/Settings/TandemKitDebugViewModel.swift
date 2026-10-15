@@ -46,6 +46,7 @@ final class TandemKitDebugViewModel: ObservableObject {
     }
 
     @Published var lastResponseDescription: String?
+    @Published var lastResponseJSON: String?
     @Published var lastSendError: String?
     @Published var isSending = false
     @Published private(set) var messageAwaitingConfirmation: Message?
@@ -426,6 +427,7 @@ final class TandemKitDebugViewModel: ObservableObject {
         parameterInput = [:]
         cargoHexInput = ""
         lastResponseDescription = nil
+        lastResponseJSON = nil
         lastSendError = nil
     }
 
@@ -485,6 +487,7 @@ final class TandemKitDebugViewModel: ObservableObject {
         isSending = true
         lastSendError = nil
         lastResponseDescription = nil
+        lastResponseJSON = nil
 
         pumpManager.sendDebugMessage(message) { [weak self] response in
             DispatchQueue.main.async {
@@ -492,6 +495,7 @@ final class TandemKitDebugViewModel: ObservableObject {
                 self.isSending = false
                 if let response {
                     self.lastResponseDescription = String(describing: response)
+                    self.lastResponseJSON = PumpProfileReadout.jsonString(for: response)
                 } else {
                     self.lastSendError = "No response received"
                 }
