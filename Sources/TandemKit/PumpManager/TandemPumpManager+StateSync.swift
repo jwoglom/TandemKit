@@ -627,9 +627,13 @@ extension TandemPumpManager {
     /// the manager — would strand the host on a stale value. Hold the reading for the flush below
     /// instead.
     func reportReservoirReading(_ reading: ReservoirValue) {
-        pumpDelegate.notify { delegate in
+        afterPumpEventBatchesAreDelivered { delegate in
             guard let delegate = delegate else {
                 self.logger.warning("No pump delegate; holding reservoir reading until one attaches")
+                return
+            }
+            // A reading held for a delegate waits with the held batches, and the attach's flush asks again.
+            guard self.state.lastReservoirReadingNeedsReport || self.state.lastReservoirReading?.startDate != reading.startDate else {
                 return
             }
 

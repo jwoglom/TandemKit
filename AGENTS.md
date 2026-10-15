@@ -152,6 +152,15 @@ unchanged: Trio dates its pump battery and pump status from each one, and its Ni
 leaves out a battery reading older than 30 minutes. TandemKitUI's settings, troubleshooting and HUD
 views re-read `connectionIssue` and the reservoir on each, and the first two `lastKnownBasalDelivery`.
 
+Pump event batches reach the host one at a time (`deliverPumpEventBatches`): the next waits for the
+last one's completion, or for `pumpEventBatchCompletionTimeout` (30 s). Loop's `DoseStore` saves a
+batch in steps across its queues and starts the next before the last has finished. While it holds no
+finished basal from the past 24 hours, two overlapping saves both fill the gap from 24 hours back, as
+two rows when their clocks fall either side of a second: a duplicate scheduled basal in Apple Health,
+and the Loop simulator flake. Trio already queues its own. A host that completes inside the call gets
+the next batch in the same pass. The reservoir reading and `pumpManagerWillDeactivate` wait for the
+batches emitted before them (`afterPumpEventBatchesAreDelivered`).
+
 Bolus progress observers are called on the queue the host passed
 `createBolusProgressReporter(reportingOn:)`, which Trio relies on to serialize its own reporter
 state. `TandemDoseProgressReporter` is shared by the command queue, the telemetry queue and every

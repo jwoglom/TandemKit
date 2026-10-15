@@ -884,6 +884,7 @@
 		CC99B0EBA1DAEF51E1C480DC /* LastBolusStatusResponseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51E38BFB8AC37FA45D57377A /* LastBolusStatusResponseTests.swift */; };
 		CCBA44C35B70D9700B678FFA /* UnansweredBolusTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F26A8013890E2BE10D0B09D /* UnansweredBolusTests.swift */; };
 		CCBD0D0C716ACCA427D9B93A /* ExitChangeCartridgeModeResponseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0C939FBE0E480CB21222BDD /* ExitChangeCartridgeModeResponseTests.swift */; };
+		CD3E0FBD0B79EC48B99C2146 /* PumpEventBatchDeliveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7ABA3A1DC2C3DA345A7FFD28 /* PumpEventBatchDeliveryTests.swift */; };
 		CD6F9ACB111D847F1D0D5992 /* FaketandemIntegrationTestCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = E12EB9739E975AF7305E2F59 /* FaketandemIntegrationTestCase.swift */; };
 		CEAF4217C5494CB36E974824 /* ScanIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23BE8319BF1F6557A5A1423C /* ScanIntegrationTests.swift */; };
 		CEE29E86C8044CA902AE4FDC /* BolusRequestedMsg3HistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE6914E2447FB997A91FEDC6 /* BolusRequestedMsg3HistoryLogTests.swift */; };
@@ -1691,6 +1692,7 @@
 		7A3BD69326FEF81E976CFC74 /* AntDailyStatus1HistoryLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AntDailyStatus1HistoryLogTests.swift; sourceTree = "<group>"; };
 		7A41EA6088AA57A8517A9E6E /* CentralChallengeResponseTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CentralChallengeResponseTests.swift; sourceTree = "<group>"; };
 		7AB7F82B7ED6EB5BD2DAAF71 /* TempRateRequestTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TempRateRequestTests.swift; sourceTree = "<group>"; };
+		7ABA3A1DC2C3DA345A7FFD28 /* PumpEventBatchDeliveryTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PumpEventBatchDeliveryTests.swift; sourceTree = "<group>"; };
 		7ACDF08B6FC3BF834F678713 /* TandemPumpManagerValidationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TandemPumpManagerValidationTests.swift; sourceTree = "<group>"; };
 		7AE60F67BDD4F4248945795B /* CgmAlertClearedHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmAlertClearedHistoryLog.swift; sourceTree = "<group>"; };
 		7B23AE00FB77F0B0B565C594 /* CgmAlertActivatedDexHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmAlertActivatedDexHistoryLog.swift; sourceTree = "<group>"; };
@@ -3360,6 +3362,7 @@
 				3A1D0B7137368473019DE6B3 /* UnsolicitedNotificationTests.swift */,
 				1DE9795FFEC71191DEBDA00A /* UnsolicitedNotificationLogTests.swift */,
 				4B8E11962B70DDF66771FBAC /* LastKnownBasalDeliveryTests.swift */,
+				7ABA3A1DC2C3DA345A7FFD28 /* PumpEventBatchDeliveryTests.swift */,
 			);
 			name = TandemKitTests;
 			path = Tests/TandemKitTests;
@@ -4834,6 +4837,7 @@
 				88D41E2F07C2A36CDD8957D8 /* UnsolicitedNotificationLogTests.swift in Sources */,
 				DA69575B1EE5FCE7161D421F /* LastKnownBasalDeliveryTests.swift in Sources */,
 				DFD75E977FE8CAD7B52C541B /* DangerousRequestTests.swift in Sources */,
+				CD3E0FBD0B79EC48B99C2146 /* PumpEventBatchDeliveryTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

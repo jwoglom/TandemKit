@@ -111,6 +111,23 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
     var didUpdateStateExpectation: XCTestExpectation?
     /// Fulfilled on every `hasNewPumpEvents`, when set.
     var didReceivePumpEventsExpectation: XCTestExpectation?
+
+    /// When set, `hasNewPumpEvents` keeps its completion for `finishHeldPumpEventBatch()`, as a host
+    /// still storing the batch does.
+    var holdsPumpEventCompletions: Bool {
+        get { synchronized { _holdsPumpEventCompletions } }
+        set { synchronized { _holdsPumpEventCompletions = newValue } }
+    }
+
+    var heldPumpEventCompletionCount: Int { synchronized { _heldPumpEventCompletions.count } }
+
+    func finishHeldPumpEventBatch() {
+        let completion = synchronized { _heldPumpEventCompletions.removeFirst() }
+        completion(nil)
+    }
+
+    private var _holdsPumpEventCompletions = false
+    private var _heldPumpEventCompletions: [(Error?) -> Void] = []
     /// Fulfilled on every `didReadReservoirValue`, when set.
     var didReadReservoirExpectation: XCTestExpectation?
 
@@ -320,7 +337,15 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
             record(.pumpEvents(batch))
         }
         didReceivePumpEventsExpectation?.fulfill()
-        completion(nil)
+        let holds = synchronized { () -> Bool in
+            if _holdsPumpEventCompletions {
+                _heldPumpEventCompletions.append(completion)
+            }
+            return _holdsPumpEventCompletions
+        }
+        if !holds {
+            completion(nil)
+        }
     }
 
     func pumpManager(

@@ -55,10 +55,24 @@ public class TandemPumpManager: PumpManager, Pluggable {
         let replacePendingEvents: Bool
     }
 
-    /// `pumpDelegate.notify` hops onto a queue that is `.main` until the host sets one, so the
-    /// decision to hold rather than send has to be made synchronously.
+    /// One batch handed to the host, under `pendingPumpEventLock`.
+    final class PumpEventBatchDelivery {
+        var finished = false
+        /// The host's `hasNewPumpEvents` call has returned.
+        var returned = false
+    }
+
+    /// Batches the host has not been handed yet, oldest first. `pumpDelegate.notify` hops onto a
+    /// queue that is `.main` until the host sets one, so the decision to hold rather than send has to
+    /// be made synchronously.
     private var pendingPumpEventBatches: [PendingPumpEventBatch] = []
+    private var pumpEventBatchInFlight: PumpEventBatchDelivery?
+    private var emittedPumpEventBatchCount = 0
+    private var finishedPumpEventBatchCount = 0
+    private var pumpEventBatchWaiters: [(through: Int, run: (PumpManagerDelegate?) -> Void)] = []
     private let pendingPumpEventLock = NSLock()
+    /// Loop calls a batch's completion once its save has finished; past this the next goes out anyway.
+    var pumpEventBatchCompletionTimeout: TimeInterval = 30
 
     /// Setup sets the pump's clock before the host adopts the manager.
     private var pendingPumpClockAdjustments: [TimeInterval] = []
@@ -1742,8 +1756,13 @@ public class TandemPumpManager: PumpManager, Pluggable {
         telemetryScheduler.cancelAll()
         finalizeHeldDosesForDeactivation()
 
-        notifyDelegateOfDeactivation {
-            completion(nil)
+        // The host stops listening once told, so the batch that finalizes its held doses is stored first.
+        guard canNotifyDelegate else {
+            notifyDelegateOfDeactivation { completion(nil) }
+            return
+        }
+        afterPumpEventBatchesAreDelivered { _ in
+            self.notifyDelegateOfDeactivation { completion(nil) }
         }
     }
 
@@ -2598,13 +2617,13 @@ extension TandemPumpManager {
     }
 
     private func emitPumpEvents(_ batch: PendingPumpEventBatch) {
+        holdPumpEventBatch(batch)
         guard canNotifyDelegate else {
             logger.warning("No pump delegate; holding \(batch.events.count) pump event(s) until one attaches")
-            holdPumpEventBatches([batch])
             return
         }
 
-        deliverPumpEventBatches(takePendingPumpEventBatches() + [batch])
+        deliverPumpEventBatches()
     }
 
     /// How far the driver moved the pump's clock, in seconds: negative when it ran ahead. MinimedKit
@@ -2636,11 +2655,11 @@ extension TandemPumpManager {
     func flushPendingPumpEvents() {
         guard canNotifyDelegate else { return }
 
-        let batches = takePendingPumpEventBatches()
-        guard !batches.isEmpty else { return }
+        let held = heldPumpEventBatchCount
+        guard held > 0 else { return }
 
-        logger.info("Delegate attached; replaying \(batches.count) held pump event batch(es)")
-        deliverPumpEventBatches(batches)
+        logger.info("Delegate attached; replaying \(held) held pump event batch(es)")
+        deliverPumpEventBatches()
     }
 
     /// The host asserts its delegate methods run on the queue it set, so a delegate without a
@@ -2649,63 +2668,150 @@ extension TandemPumpManager {
         pumpDelegate.delegate != nil && hasDelegateQueue
     }
 
-    private func deliverPumpEventBatches(_ batches: [PendingPumpEventBatch]) {
+    /// Runs `body` on the delegate queue once the host has stored every batch emitted so far.
+    func afterPumpEventBatchesAreDelivered(_ body: @escaping (PumpManagerDelegate?) -> Void) {
+        pendingPumpEventLock.lock()
+        let through = emittedPumpEventBatchCount
+        guard finishedPumpEventBatchCount < through else {
+            pendingPumpEventLock.unlock()
+            pumpDelegate.notify(body)
+            return
+        }
+        pumpEventBatchWaiters.append((through, body))
+        pendingPumpEventLock.unlock()
+    }
+
+    /// One batch at a time: Loop's `DoseStore` saves a batch in steps across its queues and starts the
+    /// next before the last has finished, so two overlapping saves can fill one schedule gap twice.
+    private func deliverPumpEventBatches() {
+        pendingPumpEventLock.lock()
+        guard pumpEventBatchInFlight == nil, !pendingPumpEventBatches.isEmpty else {
+            pendingPumpEventLock.unlock()
+            return
+        }
+        let first = PumpEventBatchDelivery()
+        pumpEventBatchInFlight = first
+        pendingPumpEventLock.unlock()
+
         pumpDelegate.notify { delegate in
-            guard let delegate = delegate else {
-                // Front, to keep the emission order.
-                self.holdPumpEventBatches(batches, atFront: true)
+            guard let delegate else {
+                self.pendingPumpEventLock.lock()
+                self.pumpEventBatchInFlight = nil
+                self.pendingPumpEventLock.unlock()
                 return
             }
 
-            for batch in batches {
-                #if TANDEMKIT_VIRTUAL_PUMP
-                let logged = VirtualPumpControl.willDeliver(
-                    batch.events,
-                    lastReconciliation: batch.lastReconciliation,
-                    replacePendingEvents: batch.replacePendingEvents,
-                    hostNow: self.clock.now,
-                    from: self
-                )
-                let completion: (Error?) -> Void = { VirtualPumpControl.delegateDidFinish(logged, error: $0, from: self) }
-                #else
-                let completion: (Error?) -> Void = { _ in }
-                #endif
-                delegate.pumpManager(
-                    self,
-                    hasNewPumpEvents: batch.events,
-                    lastReconciliation: batch.lastReconciliation,
-                    replacePendingEvents: batch.replacePendingEvents,
-                    completion: completion
-                )
+            var delivery = first
+            while true {
+                self.pendingPumpEventLock.lock()
+                guard !self.pendingPumpEventBatches.isEmpty else {
+                    self.pumpEventBatchInFlight = nil
+                    self.pendingPumpEventLock.unlock()
+                    return
+                }
+                let batch = self.pendingPumpEventBatches.removeFirst()
+                self.pendingPumpEventLock.unlock()
+
+                self.hand(batch, to: delegate, as: delivery)
+
+                // A host that completes inside the call is still on this queue: carry on in this pass.
+                self.pendingPumpEventLock.lock()
+                delivery.returned = true
+                guard delivery.finished else {
+                    self.pendingPumpEventLock.unlock()
+                    return
+                }
+                let ready = self.takeReadyPumpEventBatchWaiters()
+                delivery = PumpEventBatchDelivery()
+                self.pumpEventBatchInFlight = delivery
+                self.pendingPumpEventLock.unlock()
+                ready.forEach { $0(delegate) }
             }
         }
     }
 
-    private func holdPumpEventBatches(_ batches: [PendingPumpEventBatch], atFront: Bool = false) {
-        pendingPumpEventLock.lock()
-        defer { pendingPumpEventLock.unlock() }
-
-        if atFront {
-            pendingPumpEventBatches.insert(contentsOf: batches, at: 0)
-        } else {
-            pendingPumpEventBatches += batches
+    private func hand(_ batch: PendingPumpEventBatch, to delegate: PumpManagerDelegate, as delivery: PumpEventBatchDelivery) {
+        #if TANDEMKIT_VIRTUAL_PUMP
+        let logged = VirtualPumpControl.willDeliver(
+            batch.events,
+            lastReconciliation: batch.lastReconciliation,
+            replacePendingEvents: batch.replacePendingEvents,
+            hostNow: clock.now,
+            from: self
+        )
+        #endif
+        let timeout = pumpEventBatchCompletionTimeout
+        DispatchQueue.global().asyncAfter(deadline: .now() + timeout) { [weak self] in
+            self?.finishPumpEventBatch(delivery, timedOut: true)
         }
+        delegate.pumpManager(
+            self,
+            hasNewPumpEvents: batch.events,
+            lastReconciliation: batch.lastReconciliation,
+            replacePendingEvents: batch.replacePendingEvents,
+            completion: { error in
+                #if TANDEMKIT_VIRTUAL_PUMP
+                VirtualPumpControl.delegateDidFinish(logged, error: error, from: self)
+                #endif
+                self.finishPumpEventBatch(delivery, timedOut: false)
+            }
+        )
+    }
+
+    private func finishPumpEventBatch(_ delivery: PumpEventBatchDelivery, timedOut: Bool) {
+        pendingPumpEventLock.lock()
+        guard !delivery.finished else {
+            pendingPumpEventLock.unlock()
+            return
+        }
+        delivery.finished = true
+        finishedPumpEventBatchCount += 1
+        // Within the delegate call, the delivery pass goes on and runs the waiters itself.
+        guard delivery.returned else {
+            pendingPumpEventLock.unlock()
+            return
+        }
+        pumpEventBatchInFlight = nil
+        let ready = takeReadyPumpEventBatchWaiters()
+        pendingPumpEventLock.unlock()
+
+        if timedOut {
+            logger.warning("The host did not finish storing a pump event batch in \(self.pumpEventBatchCompletionTimeout) s; sending the next")
+        }
+        for body in ready {
+            pumpDelegate.notify(body)
+        }
+        deliverPumpEventBatches()
+    }
+
+    /// Under `pendingPumpEventLock`.
+    private func takeReadyPumpEventBatchWaiters() -> [(PumpManagerDelegate?) -> Void] {
+        let ready = pumpEventBatchWaiters.filter { $0.through <= finishedPumpEventBatchCount }
+        pumpEventBatchWaiters.removeAll { $0.through <= finishedPumpEventBatchCount }
+        return ready.map(\.run)
+    }
+
+    private func holdPumpEventBatch(_ batch: PendingPumpEventBatch) {
+        pendingPumpEventLock.lock()
+        pendingPumpEventBatches.append(batch)
+        emittedPumpEventBatchCount += 1
 
         // Drop the oldest: a later batch is the more current picture of delivery.
         let overflow = pendingPumpEventBatches.count - TandemPumpManager.maximumHeldPumpEventBatches
+        var ready: [(PumpManagerDelegate?) -> Void] = []
+        if overflow > 0 {
+            pendingPumpEventBatches.removeFirst(overflow)
+            finishedPumpEventBatchCount += overflow
+            ready = takeReadyPumpEventBatchWaiters()
+        }
+        pendingPumpEventLock.unlock()
+
         if overflow > 0 {
             logger.error("Held pump event batches overflowed; dropping the \(overflow) oldest")
-            pendingPumpEventBatches.removeFirst(overflow)
         }
-    }
-
-    private func takePendingPumpEventBatches() -> [PendingPumpEventBatch] {
-        pendingPumpEventLock.lock()
-        defer { pendingPumpEventLock.unlock() }
-
-        let batches = pendingPumpEventBatches
-        pendingPumpEventBatches = []
-        return batches
+        for body in ready {
+            pumpDelegate.notify(body)
+        }
     }
 
     /// Test seam.
