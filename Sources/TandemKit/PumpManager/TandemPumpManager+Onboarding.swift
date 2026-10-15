@@ -38,14 +38,9 @@ public extension TandemPumpManager {
     }
 
     /// Under Control-IQ the pump refuses the host's automatic doses, and its basal reaches the host
-    /// only with History Basal Reporting, so setup asks to turn it off unless `controlIQSupport` is
-    /// on. False when the pump does not answer: the first sync reads it again, but turns nothing off.
+    /// only with History Basal Reporting, so setup turns it off whatever the feature flags say.
+    /// False when the pump does not answer: the first sync reads it again, but turns nothing off.
     func controlIQNeedsTurningOffForSetup(completion: @escaping (Bool) -> Void) {
-        guard !state.featureFlags.controlIQSupport else {
-            completion(false)
-            return
-        }
-
         bluetooth.ensureConnected { error in
             if let error {
                 self.logger.warning("Control-IQ not checked during setup: \(error.localizedDescription)")

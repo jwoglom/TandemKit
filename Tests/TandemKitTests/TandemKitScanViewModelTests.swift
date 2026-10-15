@@ -150,7 +150,7 @@ import XCTest
         XCTAssertTrue(bluetooth.didSend(ChangeTimeDateRequest.self))
     }
 
-    func testARefusedTurnOffOffersToContinueWithControlIQOn() throws {
+    func testARefusedTurnOffHoldsSetupUntilATryAgainSucceeds() throws {
         let (viewModel, bluetooth) = pairedViewModel(controlIQOn: true)
         bluetooth.stub(ChangeControlIQSettingsRequest.self, with: ChangeControlIQSettingsResponse(status: 1))
         viewModel.onPairSuccess()
@@ -164,20 +164,23 @@ import XCTest
         XCTAssertTrue(message.hasSuffix(ControlIQConfigurationError.pumpRejected(status: 1).localizedDescription))
         XCTAssertFalse(bluetooth.didSend(ChangeTimeDateRequest.self))
 
-        viewModel.continueWithControlIQOn()
+        bluetooth.stub(ChangeControlIQSettingsRequest.self, with: ChangeControlIQSettingsResponse(status: 0))
+        viewModel.isControlIQOffError = false // as the alert does when Try Again is tapped
+        viewModel.turnOffControlIQ()
         drainMainQueue()
 
+        XCTAssertFalse(viewModel.isControlIQOffError)
+        XCTAssertEqual(bluetooth.sent(ChangeControlIQSettingsRequest.self).count, 2)
         XCTAssertTrue(bluetooth.didSend(ChangeTimeDateRequest.self))
     }
 
-    func testControlIQSupportLeavesControlIQOnWithoutAsking() {
+    func testControlIQSupportStillAsksToTurnControlIQOff() {
         let (viewModel, bluetooth) = pairedViewModel(controlIQOn: true, controlIQSupport: true)
 
         viewModel.onPairSuccess()
         drainMainQueue()
 
-        XCTAssertFalse(viewModel.isPromptingControlIQOff)
-        XCTAssertFalse(bluetooth.didSend(ControlIQInfoV2Request.self))
-        XCTAssertTrue(bluetooth.didSend(ChangeTimeDateRequest.self))
+        XCTAssertTrue(viewModel.isPromptingControlIQOff)
+        XCTAssertFalse(bluetooth.didSend(ChangeTimeDateRequest.self))
     }
 }

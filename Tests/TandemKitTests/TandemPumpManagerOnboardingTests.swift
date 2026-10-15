@@ -580,13 +580,11 @@ import XCTest
         XCTAssertFalse(controlIQNeedsTurningOff(manager))
     }
 
-    func testSetupLeavesControlIQAloneWithControlIQSupport() {
+    func testSetupAsksToTurnOffControlIQEvenWithControlIQSupport() {
         let manager = makeManager(controlIQOn: true)
         manager.state.featureFlags[.controlIQSupport] = true
 
-        XCTAssertFalse(controlIQNeedsTurningOff(manager))
-
-        XCTAssertFalse(bluetooth.didSend(ControlIQInfoV2Request.self))
+        XCTAssertTrue(controlIQNeedsTurningOff(manager))
     }
 
     func testAnUnansweredControlIQReadAsksNothing() {

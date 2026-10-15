@@ -140,14 +140,9 @@ class TandemKitScanViewModel: ObservableObject {
         }
     }
 
-    func continueWithControlIQOn() {
-        log.error("Continuing setup with Control-IQ still on at the pump")
-        applyOnboardingSettings()
-    }
-
     static func controlIQOffFailureMessage(for error: Error) -> String {
         let summary = String(format: String(
-            localized: "Control-IQ is still on, so the pump will refuse the temporary basal rates and automatic boluses %1$@ asks for. You can turn Control-IQ off later from the pump settings in %1$@.",
+            localized: "Control-IQ is still on, and setup can't finish until it is off so that %@ can control insulin delivery. Keep the pump near your phone and try again.",
             comment: "Setup error when turning Control-IQ off did not reach the pump (1: app name)"
         ), HostApp.current.appName)
         return "\(summary)\n\n\(error.localizedDescription)"

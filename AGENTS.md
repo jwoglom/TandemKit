@@ -222,14 +222,14 @@ rate check runs on a profile edit instead of at the next sync.
 - Then, with `quickBolusButtonSupport` off, it reads the pump globals and turns the quick bolus
   button off, which otherwise stayed live until the first sync (#353 P20-1). A failed read or a
   refused write is logged, doesn't stop setup, and is left to the first sync.
-- Before `applyOnboardingSettings`, with `controlIQSupport` off, `TandemKitScanViewModel` asks
+- Before `applyOnboardingSettings`, whatever the feature flags, `TandemKitScanViewModel` asks
   `controlIQNeedsTurningOffForSetup` whether the pump runs Control-IQ, which refuses the host's
   automatic doses and whose basal reaches the host only with `basalHistoryReporting`. If it does,
   an alert says Control-IQ will be turned off, and its OK runs `turnOffControlIQForSetup`: one
   `ChangeControlIQSettingsRequest`, no sync (a sync would read the pump's profile before the
-  host's is written) and no hand-back, since the host has not dosed with this pump yet. A refusal
-  offers Try Again or Continue Anyway, which leaves Control-IQ on. An unanswered read asks
-  nothing, and the first sync only reads Control-IQ.
+  host's is written) and no hand-back, since the host has not dosed with this pump yet. A refused
+  or unanswered write offers only Try Again: setup does not finish with Control-IQ on. An
+  unanswered read asks nothing, and the first sync only reads Control-IQ.
 - `syncBasalRateSchedule` fails with `BasalScheduleSyncError.tooManyEntries`, before connecting,
   when the schedule has more entries than `maximumBasalScheduleEntryCount` (16). Trio's editor
   doesn't enforce the limit, and a schedule migrated from another pump can exceed it (#443).

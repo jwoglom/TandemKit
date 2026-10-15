@@ -88,9 +88,6 @@ struct TandemKitScanView: View {
                 Button(String(localized: "Try Again", comment: "Retry button")) {
                     viewModel.turnOffControlIQ()
                 }
-                Button(String(localized: "Continue Anyway", comment: "Continue button"), role: .destructive) {
-                    viewModel.continueWithControlIQOn()
-                }
             },
             message: { detail in Text(detail.wrappedValue ?? "") }
         )
