@@ -384,8 +384,10 @@ real thing as well as the driver against the oracle.
   starts, so `DoseStore` fills each gap before a basal dose with Loop's schedule
   (`BasalRateSchedule …` identifiers). The oracle models the fill when given the schedule
   (`basalSchedule:`), since it moves `lastImmutableBasalEndDate`. A fill's first piece starts a day
-  before the save, on Loop's clock where the oracle has the driver's, so it is compared to a minute;
-  no piece may overlap a basal dose the driver reported.
+  before the save, on Loop's clock where the oracle has the driver's, so it is compared to a minute.
+  `DoseStore` overlays a save before `InsulinDeliveryStore` has stored the last one's, so saves either
+  side of a second store that piece twice, under each start; the repeat is not compared. No piece may
+  overlap a basal dose the driver reported.
 
 Journeys covered, each checked against the oracle: an app bolus, an automatic one, one cancelled
 part-way, one running across a relaunch of Loop, one through a dropped link, and one programmed on the
