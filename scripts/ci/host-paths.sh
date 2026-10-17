@@ -2,9 +2,12 @@
 # Put a host app's checkout and its derived data at the same absolute paths on every runner, which
 # the derived data cache needs: Xcode's build database records absolute paths, and on the
 # self-hosted runners github.workspace is under a directory named for the VM. Both go under $HOME,
-# the same on every VM, the checkout through a symlink at the workspace path actions/checkout
-# requires. When $HOME cannot take them they stay in the workspace, where the job still works but
-# a restored build is rebuilt whole.
+# the same on every VM. Run after the checkout, which has to be made at the workspace path:
+# actions/checkout grants its token to the repository by that path (an includeIf on the git dir),
+# and git names a git dir by its real path, so a checkout made through a symlink fetches with no
+# credentials. The checkout is moved under $HOME and a symlink left at the workspace path for the
+# steps that still name it there. When $HOME cannot take them they stay in the workspace, where the
+# job still works but a restored build is rebuilt whole.
 #
 #   scripts/ci/host-paths.sh CHECKOUT PREFIX DERIVED
 #     CHECKOUT  checkout directory, relative to the workspace (trio)
@@ -20,13 +23,14 @@ derived="${3:?${usage}}"
 workspace="${GITHUB_WORKSPACE:?}"
 
 root="${HOME:-}/tandemkit-ci"
-if [[ -n "${HOME:-}" ]] && mkdir -p "${root}/${checkout}" 2>/dev/null && [[ -w "${root}/${checkout}" ]]; then
-  rm -rf "${workspace:?}/${checkout}"
+if [[ -n "${HOME:-}" && -d "${workspace}/${checkout}" && ! -L "${workspace}/${checkout}" ]] \
+  && mkdir -p "${root}" 2>/dev/null && [[ -w "${root}" && ! -e "${root}/${checkout}" ]] \
+  && mv "${workspace}/${checkout}" "${root}/${checkout}"; then
   ln -s "${root}/${checkout}" "${workspace}/${checkout}"
-  echo "${checkout}/ and ${derived}/ under ${root}, the same path on every runner"
+  echo "${checkout}/ moved under ${root}, with ${derived}/, the same path on every runner"
 else
   root="${workspace}"
-  echo "::warning::${HOME:-\$HOME}/tandemkit-ci is not writable: ${checkout}/ and ${derived}/ stay in the workspace, whose path differs between runners, so a restored derived data cache is rebuilt whole"
+  echo "::warning::${HOME:-\$HOME}/tandemkit-ci cannot take ${checkout}/: it and ${derived}/ stay in the workspace, whose path differs between runners, so a restored derived data cache is rebuilt whole"
 fi
 
 {

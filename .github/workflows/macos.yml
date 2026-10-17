@@ -299,17 +299,17 @@ jobs:
           destination: ${{ env.SIMULATOR_DESTINATION }}
           xcode-version: ${{ env.XCODE_VERSION }}
 
-      # Sets TRIO_DIR and TRIO_DERIVED_DATA, under $HOME so they are the same absolute paths on
-      # every runner, which the restored build is only good for (scripts/ci/host-paths.sh).
-      - name: Choose where Trio checks out and builds
-        id: paths
-        run: TandemKit/scripts/ci/host-paths.sh trio TRIO TrioDerivedData
-
       - name: Check out Trio with this TandemKit
         id: trio
         uses: ./TandemKit/.github/actions/checkout-trio
         with:
           tandemkit-ref: ${{ github.sha }}
+
+      # Sets TRIO_DIR and TRIO_DERIVED_DATA, under $HOME so they are the same absolute paths on
+      # every runner, which the restored build is only good for (scripts/ci/host-paths.sh).
+      - name: Move Trio where every runner builds it
+        id: paths
+        run: TandemKit/scripts/ci/host-paths.sh trio TRIO TrioDerivedData
 
       # Build/ holds the compiled objects and the build database, SourcePackages/ the resolved
       # packages; Index.noindex, Logs and ModuleCache.noindex are big and remade in seconds. Not
@@ -403,16 +403,16 @@ jobs:
           destination: ${{ env.SIMULATOR_DESTINATION }}
           xcode-version: ${{ env.XCODE_VERSION }}
 
-      # As in trio: LOOP_DIR and LOOP_DERIVED_DATA under $HOME, the same on every runner.
-      - name: Choose where LoopWorkspace checks out and builds
-        id: paths
-        run: TandemKit/scripts/ci/host-paths.sh loop LOOP LoopDerivedData
-
       - name: Check out LoopWorkspace with this TandemKit
         id: loop
         uses: ./TandemKit/.github/actions/checkout-loop
         with:
           tandemkit-ref: ${{ github.sha }}
+
+      # As in trio: LOOP_DIR and LOOP_DERIVED_DATA under $HOME, the same on every runner.
+      - name: Move LoopWorkspace where every runner builds it
+        id: paths
+        run: TandemKit/scripts/ci/host-paths.sh loop LOOP LoopDerivedData
 
       # As trio's: Build/ and SourcePackages/, keyed without the TandemKit commit, LoopWorkspace's
       # files dated at its commit (checkout-loop) so a hit for the same one keeps their objects.
