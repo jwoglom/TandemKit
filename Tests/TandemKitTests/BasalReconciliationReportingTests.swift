@@ -352,6 +352,91 @@ import XCTest
         XCTAssertTrue(manager.loggedBasalProblems.isEmpty)
     }
 
+    // MARK: - A change just after a BasalDelivery record
+
+    /// The app's stop reached the pump just before the BasalDelivery record at 310 and its 0% temp
+    /// just after, so the pump ran its profile until the record at 610.
+    private func stopRacingTheNextTemp() -> PumpBasalHistory {
+        var log = PumpBasalHistory()
+        log.tempStarted(0, percent: 116, minutes: 30, id: 5)
+        log.delivery(10, source: 2, rate: 1160)
+        log.tempEnded(309, id: 5, timeLeft: 1_501_000)
+        log.profile(310)
+        log.tempStarted(311, percent: 0, minutes: 30, id: 6)
+        log.delivery(610, source: 2, rate: 0)
+        return log
+    }
+
+    private func appTemp(_ rate: Double, from start: TimeInterval, to end: TimeInterval? = nil, id: Int) -> UnfinalizedDose {
+        UnfinalizedDose(
+            tempRate: rate,
+            duration: .minutes(30),
+            automatic: true,
+            insulinType: .novolog,
+            startDate: at(start),
+            tempRateId: id,
+            tempPercent: Int((rate * 100).rounded())
+        )
+    }
+
+    private func told(_ temps: [(dose: UnfinalizedDose, end: TimeInterval?)], markerAt marker: TimeInterval? = nil) {
+        var events = temps.map { dose, end in
+            NewPumpEvent.tempBasal(dose: dose.toDoseEntry(isMutable: end == nil, endDate: end.map(at), now: at(end ?? 0)), of: dose)
+        }
+        if let marker {
+            let dose = UnfinalizedDose(basalRate: 1, insulinType: .novolog, startDate: at(marker))
+            events.append(NewPumpEvent.basal(dose: dose.toDoseEntry(), date: at(marker)))
+        }
+        manager.emitPumpEvents(events, replacePendingEvents: false)
+        delegateQueue.sync {}
+        setupBatches = delegate.pumpEventBatches.count
+    }
+
+    /// #564
+    func testACycleTheNextFinishedTempMissedIsCorrectedOverThatTemp() {
+        enableReporting()
+        told([(appTemp(1.16, from: 0, id: 5), 310.5), (appTemp(0, from: 310.5, id: 6), 621)], markerAt: 621)
+        var log = stopRacingTheNextTemp()
+        log.tempEnded(621, id: 6, timeLeft: 1_489_000)
+        log.profile(910)
+        log.profile(1210)
+
+        pass(log)
+
+        XCTAssertEqual(events.map(\.date), [at(311.5), at(610)])
+        XCTAssertEqual(events.map { $0.dose?.endDate }, [at(610), at(621)])
+        XCTAssertEqual(events.map { $0.dose?.unitsPerHour }, [1.0, 0])
+        XCTAssertEqual(events.first?.dose?.deliveredUnits, 0.083)
+
+        pass(log)
+        XCTAssertEqual(events.count, 2, "a second pass reports nothing")
+    }
+
+    func testACycleTheHeldTempMissedIsRestatedForThatCycleOnly() {
+        enableReporting()
+        let held = appTemp(0, from: 310.5, id: 6)
+        manager.state.basalDose = held
+        told([(appTemp(1.16, from: 0, id: 5), 310.5), (held, nil)])
+        var log = stopRacingTheNextTemp()
+
+        pass(log)
+
+        XCTAssertEqual(batches.count, 1)
+        XCTAssertEqual(batches.first?.replacePendingEvents, true)
+        let temps = events.compactMap(\.dose).filter { $0.type == .tempBasal }
+        XCTAssertEqual(temps.map(\.startDate), [at(310.5), at(311.5), at(610)])
+        XCTAssertEqual(temps.map(\.endDate), [at(311.5), at(610), at(2110.5)])
+        XCTAssertEqual(temps.map(\.unitsPerHour), [0, 1.0, 0])
+        XCTAssertEqual(temps.map(\.isMutable), [false, false, true])
+        XCTAssertEqual(manager.state.basalDose.startDate, at(610))
+        XCTAssertEqual(manager.state.basalDose.value, 0)
+        XCTAssertEqual(manager.state.basalDose.tempRateId, 6)
+
+        log.delivery(910, source: 2, rate: 0)
+        pass(log)
+        XCTAssertEqual(batches.count, 1, "the held temp runs at its own rate again")
+    }
+
     func testAnUntrustedChunkIsNotCorrected() {
         enableReporting()
         var log = PumpBasalHistory()

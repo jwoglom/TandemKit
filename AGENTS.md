@@ -554,6 +554,11 @@ edit instead of at the next sync.
     chunk never differs, whatever H does later inside it: the host counts a change from its command,
     the pump from its next cycle, and that residual is only logged, once each day is over: net, the
     host's insulin less the pump's, and gross, since a temp's early start and early end cancel.
+  - H for a chunk that differs is the row in force from the last change the host was commanded within
+    `transitionMatchTolerance` after its BasalDelivery record, and the action starts there; with none,
+    the row at the record. A stop that reached the pump just before a record and the next temp just
+    after left the pump on its profile for the cycle, while the row the stop ended held a second of
+    it: built against that row, the correction was empty and the chunk was passed for good (#564).
   - Skipped: suspended time (the pump's or the host's), chunks before the latest of
     `firstSeenFloor`, 24 hours ago and `trackingSince`, chunks still running, and temp chunks within
     `segmentChangeWindow` before a segment change, which the driver reports at the request on
@@ -568,7 +573,10 @@ edit instead of at the next sync.
       (309) record; `wasProgrammedByPumpUI` for Control-IQ chunks and temps without one.
     - H from the temp basal the driver holds: ended at its `TempRateCompleted` through
       `closeTransition`, or, if the pump runs it at another rate, re-stated as at a segment
-      change: finished at the old rate, a mutable continuation at the pump's.
+      change: finished at the old rate, a mutable continuation at the pump's. When the BasalDelivery
+      record that ends the chunk runs it at its own rate again, the pump's rate is a finished part up
+      to that record and the continuation resumes the temp's rate there, so the host never projects
+      the pump's rate past the chunk.
     - H from a finalized temp basal: the pump's chunks reported in its place, from the
       difference through its end, the first a second after its start. Neither host revises a
       finalized row, but Trio's IOB cuts one at the next row and does not resume it; Loop counts no

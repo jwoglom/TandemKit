@@ -262,6 +262,23 @@ final class BasalReconcilerTests: XCTestCase {
             return XCTFail("the host counts its held temp basal")
         }
         XCTAssertTrue(row.isMutable)
+        XCTAssertEqual(result.differences.first?.from, at(310))
+    }
+
+    /// #564: the app's stop reached the pump just before the BasalDelivery record, its 0% temp just after.
+    func testAChunkAcrossAChangeJustAfterItsRecordDiffersFromTheRowAfterIt() {
+        var log = PumpLog()
+        log.tempStarted(0, percent: 116, minutes: 30, id: 5)
+        log.delivery(10, source: 2, rate: 1160)
+        log.tempEnded(309, id: 5, timeLeft: 1_500_000)
+        log.profile(310)
+        log.tempStarted(311, percent: 0, minutes: 30, id: 6)
+        log.delivery(610, source: 2, rate: 0)
+
+        let result = reconcile(log, told([temp(1.16, at: 0, endingAt: 310.5)], [temp(0, at: 310.5)]))
+
+        XCTAssertEqual(differing(result), ["310 1000 0.0"])
+        XCTAssertEqual(result.differences.first?.from, at(310.5))
     }
 
     // MARK: - Skipped

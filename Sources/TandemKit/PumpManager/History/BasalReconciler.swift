@@ -12,8 +12,11 @@ enum BasalReconciler {
 
     struct Difference: Equatable {
         let chunk: PumpBasalTimeline.Chunk
-        /// What the host counts at the chunk's start.
+        /// What the host counts from `from`.
         let host: ReportedBasalLedger.HostBasal
+        /// The chunk's start, or a change the host was commanded within `transitionMatchTolerance`
+        /// after it, which the pump takes up only at its next BasalDelivery record.
+        let from: Date
     }
 
     /// The host's insulin less the pump's over chunks that matched, in units: the cycle timing no
@@ -66,7 +69,7 @@ enum BasalReconciler {
     enum Verdict: Equatable {
         /// The host's insulin less the pump's over the chunk, in units.
         case matches(residual: Double)
-        case differs(ReportedBasalLedger.HostBasal)
+        case differs(ReportedBasalLedger.HostBasal, from: Date)
         case skipped
     }
 
@@ -89,8 +92,8 @@ enum BasalReconciler {
             case let .matches(residual):
                 result.matched += 1
                 result.residualByDay[calendar.startOfDay(for: chunk.start), default: Residual()].add(residual)
-            case let .differs(host):
-                result.differences.append(Difference(chunk: chunk, host: host))
+            case let .differs(host, from):
+                result.differences.append(Difference(chunk: chunk, host: host, from: from))
             case .skipped:
                 result.skipped += 1
             }
@@ -114,7 +117,12 @@ enum BasalReconciler {
             return .skipped
         }
         guard matches(chunk, ledger: ledger, schedule: schedule) else {
-            return .differs(host)
+            // The row a change just after the record ended may hold only a second of the chunk.
+            let from = ledger.rowEdges(
+                in: DateInterval(start: chunk.start, end: min(chunk.end, chunk.start.addingTimeInterval(TandemPumpManager.transitionMatchTolerance))),
+                includingCorrections: false
+            ).last ?? chunk.start
+            return .differs(ledger.hostBasal(at: from, schedule: schedule), from: from)
         }
         let interval = DateInterval(start: chunk.start, end: chunk.end)
         return .matches(residual: ledger.hostUnits(in: interval, schedule: schedule) - chunk.units)
