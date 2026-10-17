@@ -69,12 +69,12 @@ final class TandemKitReconciliationViewModel: ObservableObject {
             id: "history",
             title: String(localized: "Pump history", comment: "Reconciliation screen: how far the pump's history log has been read"),
             value: (state.historyBackfill?.watermark).map {
-                String(localized: "Read to record #\($0)", comment: "Reconciliation screen: the last history record read")
+                String(localized: "Read to record #\(String($0))", comment: "Reconciliation screen: the last history record read")
             } ?? String(localized: "Not read", comment: "Reconciliation screen: no pump history has been read")
         )
         var details: [String] = []
         if let through = state.reportedBasal.reconciledThrough {
-            details.append(String(localized: "Basal reconciled through record #\(through).", comment: "Reconciliation screen: the last basal record reconciled"))
+            details.append(String(localized: "Basal reconciled through record #\(String(through)).", comment: "Reconciliation screen: the last basal record reconciled"))
         }
         if let last = log.passes.last, last.skipped == nil, !last.readsThroughPumpEnd {
             details.append(String(localized: "The last pass stopped short of the pump's newest record.", comment: "Reconciliation screen: the last history pass did not read to the end"))
@@ -108,12 +108,9 @@ final class TandemKitReconciliationViewModel: ObservableObject {
             rows.append(Row(
                 id: "residual",
                 title: String(localized: "Cycle timing today", comment: "Reconciliation screen: the basal residual from the pump's 5-minute cycles"),
-                value: String(
-                    localized: "\(signedUnits(today.net)) over ^[\(today.cycles) cycle](inflect: true)",
-                    comment: "Reconciliation screen: net residual and the number of matched cycles"
-                ),
+                value: signedUnits(today.net),
                 detail: String(
-                    localized: "What the app counts less what the pump delivered over cycles whose rates matched: the app counts a change from its command, the pump from its next cycle. Not corrected.",
+                    localized: "Over \(today.cycles) matched cycle(s): what the app counts less what the pump delivered, since the app counts a change from its command and the pump from its next cycle. Not corrected.",
                     comment: "Reconciliation screen: what the cycle timing residual is"
                 )
             ))
@@ -219,7 +216,7 @@ final class TandemKitReconciliationViewModel: ObservableObject {
         for bolus in state.bolusReportLedger.unreported {
             rows.append(Row(
                 id: "unreported-\(bolus.bolusId)",
-                title: String(localized: "Pump bolus #\(bolus.bolusId) not yet reported", comment: "Reconciliation screen: a bolus the app did not start is waiting for history"),
+                title: String(localized: "Pump bolus #\(String(bolus.bolusId)) not yet reported", comment: "Reconciliation screen: a bolus the app did not start is waiting for history"),
                 detail: String(
                     localized: "Seen running at \(when(bolus.startDate, now: now)). The app's boundary is held at \(when(bolus.holdsBoundaryAt, now: now)) until history reports it.",
                     comment: "Reconciliation screen: details of an unreported pump bolus"
@@ -255,7 +252,7 @@ final class TandemKitReconciliationViewModel: ObservableObject {
         for part in state.bolusReportLedger.heldExtendedParts {
             rows.append(Row(
                 id: "extended-\(part.bolusId)",
-                title: String(localized: "Extended bolus #\(part.bolusId) running", comment: "Reconciliation screen: an extended bolus programmed off the app"),
+                title: String(localized: "Extended bolus #\(String(part.bolusId)) running", comment: "Reconciliation screen: an extended bolus programmed off the app"),
                 detail: String(
                     localized: "\(units(part.units ?? 0)) from \(when(part.eventDate, now: now)) to \(when(part.programmedEndDate ?? part.eventDate, now: now)), held open until history reads its completion.",
                     comment: "Reconciliation screen: details of a running extended bolus"
@@ -312,22 +309,22 @@ final class TandemKitReconciliationViewModel: ObservableObject {
         let open: [(ReconciliationLog.Outcome, String, String)] = [
             (
                 .reportingOff,
-                String(localized: "^[\(differences.count(of: .reportingOff)) basal cycle](inflect: true) differ, not corrected", comment: "Reconciliation screen: differences left because basal reporting is off"),
+                String(localized: "Basal cycles differ, not corrected", comment: "Reconciliation screen: differences left because basal reporting is off"),
                 String(localized: "History Basal Reporting is off.", comment: "Reconciliation screen: why differences are not corrected")
             ),
             (
                 .untrusted,
-                String(localized: "^[\(differences.count(of: .untrusted)) basal cycle](inflect: true) differ in records that fail their cross-check", comment: "Reconciliation screen: differences in untrusted records"),
+                String(localized: "Basal cycles differ in untrusted records", comment: "Reconciliation screen: differences in untrusted records"),
                 String(localized: "Not corrected: the pump's own records disagree about them.", comment: "Reconciliation screen: why untrusted differences are not corrected")
             ),
             (
                 .waiting,
-                String(localized: "^[\(differences.count(of: .waiting)) basal cycle](inflect: true) differ and wait for a later pass", comment: "Reconciliation screen: differences waiting"),
+                String(localized: "Basal cycles differ, waiting for a later pass", comment: "Reconciliation screen: differences waiting"),
                 String(localized: "Corrections go out in order, so these wait behind what comes before them.", comment: "Reconciliation screen: why differences wait")
             ),
             (
                 .notCorrected,
-                String(localized: "^[\(differences.count(of: .notCorrected)) basal cycle](inflect: true) differ with nothing to send", comment: "Reconciliation screen: differences acted on without a correction"),
+                String(localized: "Basal cycles differ with nothing to send", comment: "Reconciliation screen: differences acted on without a correction"),
                 String(localized: "Nothing was left to correct, or the app holds a temp basal the driver does not.", comment: "Reconciliation screen: why a difference produced no correction")
             )
         ]
@@ -339,7 +336,7 @@ final class TandemKitReconciliationViewModel: ObservableObject {
                 localized: "\(reason) Over them the app counts \(signedUnits(net)) against the pump.",
                 comment: "Reconciliation screen: a group of differences and the insulin the app counts over them"
             )
-            return Row(id: "differences-\(outcome)", title: title, detail: detail, isWarning: true)
+            return Row(id: "differences-\(outcome)", title: title, value: String(group.count), detail: detail, isWarning: true)
         }
     }
 
@@ -347,7 +344,7 @@ final class TandemKitReconciliationViewModel: ObservableObject {
         switch heldBack {
         case let .storeGap(gap):
             return String(
-                localized: "Records \(gap.lowerBound)–\(gap.upperBound) are missing from the session store. Nothing after them is corrected until they are read or given up.",
+                localized: "Records \(String(gap.lowerBound))–\(String(gap.upperBound)) are missing from the session store. Nothing after them is corrected until they are read or given up.",
                 comment: "Reconciliation screen: a store gap holds reconciliation back"
             )
         case let .heldTempBasal(start):
@@ -379,23 +376,24 @@ final class TandemKitReconciliationViewModel: ObservableObject {
         }
         var parts: [String] = []
         if let covered = pass.covered {
+            let span = "\(String(covered.lowerBound))–\(String(covered.upperBound))"
             parts.append(pass.readsThroughPumpEnd
-                ? String(localized: "Records \(covered.lowerBound)–\(covered.upperBound).", comment: "Reconciliation screen: the records a pass compared")
-                : String(localized: "Records \(covered.lowerBound)–\(covered.upperBound), short of the pump's newest.", comment: "Reconciliation screen: the records a pass compared, not to the end"))
+                ? String(localized: "Records \(span).", comment: "Reconciliation screen: the records a pass compared")
+                : String(localized: "Records \(span), short of the pump's newest.", comment: "Reconciliation screen: the records a pass compared, not to the end"))
         } else {
             parts.append(String(localized: "Pump history not read.", comment: "Reconciliation screen: a pass whose tick did not read the log"))
         }
         if let basal = pass.basal {
             parts.append(String(
-                localized: "^[\(basal.matched) cycle](inflect: true) matched, \(basal.differed) differ, \(basal.corrections) corrected.",
+                localized: "Cycles: \(basal.matched) matched, \(basal.differed) differ, \(basal.corrections) corrected.",
                 comment: "Reconciliation screen: a pass's basal counts"
             ))
         }
         if pass.transitionsReported > 0 {
-            parts.append(String(localized: "^[\(pass.transitionsReported) delivery change](inflect: true) reported.", comment: "Reconciliation screen: suspends, resumes and temp basal ends a pass reported"))
+            parts.append(String(localized: "Delivery changes reported: \(pass.transitionsReported).", comment: "Reconciliation screen: suspends, resumes and temp basal ends a pass reported"))
         }
         if pass.bolusesReported > 0 {
-            parts.append(String(localized: "^[\(pass.bolusesReported) bolus](inflect: true) reported.", comment: "Reconciliation screen: boluses a pass reported"))
+            parts.append(String(localized: "Boluses reported: \(pass.bolusesReported).", comment: "Reconciliation screen: boluses a pass reported"))
         }
         if let heldBack = pass.basal?.heldBack {
             parts.append(String(localized: "Held back by \(name(heldBack)).", comment: "Reconciliation screen: what stopped a pass short"))
@@ -476,9 +474,9 @@ final class TandemKitReconciliationViewModel: ObservableObject {
     private static func name(_ heldBack: ReconciliationLog.Basal.HeldBack) -> String {
         switch heldBack {
         case let .storeGap(gap):
-            String(localized: "missing records \(gap.lowerBound)–\(gap.upperBound)", comment: "Reconciliation screen: a store gap")
+            String(localized: "missing records \(String(gap.lowerBound))–\(String(gap.upperBound))", comment: "Reconciliation screen: a store gap")
         case let .openChunk(sequenceNum):
-            String(localized: "the open cycle at record #\(sequenceNum)", comment: "Reconciliation screen: a basal cycle not closed yet")
+            String(localized: "the open cycle at record #\(String(sequenceNum))", comment: "Reconciliation screen: a basal cycle not closed yet")
         case .pendingDeliveryChange:
             String(localized: "the pending delivery change", comment: "Reconciliation screen: a delivery change awaiting history")
         case .heldTempBasal:
@@ -553,11 +551,5 @@ extension TandemKitReconciliationViewModel: PumpManagerStatusObserver {
         DispatchQueue.main.async {
             self.refresh()
         }
-    }
-}
-
-private extension [ReconciliationLog.Difference] {
-    func count(of outcome: ReconciliationLog.Outcome) -> Int {
-        filter { $0.outcome == outcome }.count
     }
 }

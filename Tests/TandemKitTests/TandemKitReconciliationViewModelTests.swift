@@ -88,7 +88,8 @@ import XCTest
         let viewModel = ViewModel(pumpManager: manager)
 
         XCTAssertEqual(viewModel.discrepancies.map(\.id), ["differences-reportingOff"])
-        XCTAssertEqual(viewModel.discrepancies[0].title, "6 basal cycles differ, not corrected")
+        XCTAssertEqual(viewModel.discrepancies[0].title, "Basal cycles differ, not corrected")
+        XCTAssertEqual(viewModel.discrepancies[0].value, "6")
         XCTAssertTrue(viewModel.discrepancies[0].isWarning)
         XCTAssertTrue(try XCTUnwrap(viewModel.discrepancies[0].detail).contains("-0.600 U"))
 
@@ -98,7 +99,7 @@ import XCTest
         XCTAssertTrue(try XCTUnwrap(viewModel.differences[0].detail).hasPrefix("Pump: Control-IQ at 2.20 U/hr. App: 1.00 U/hr from its schedule"))
 
         XCTAssertEqual(viewModel.passes.count, 1)
-        XCTAssertEqual(viewModel.passes[0].detail, "Records 1001–1013. 6 cycles matched, 6 differ, 0 corrected.")
+        XCTAssertEqual(viewModel.passes[0].detail, "Records 1001–1013. Cycles: 6 matched, 6 differ, 0 corrected.")
         XCTAssertEqual(viewModel.status.last?.id, "residual")
     }
 
