@@ -54,6 +54,19 @@ final class HistoryBackfillPlannerTests: XCTestCase {
         XCTAssertNil(plan.incremental)
     }
 
+    func testEmptyLogPlansNoReadWhateverItsRange() {
+        let plan = HistoryBackfillPlanner.plan(
+            firstSequenceNum: 0,
+            lastSequenceNum: 0,
+            isPumpLogEmpty: true,
+            watermark: nil,
+            isDeepTargetCovered: false
+        )
+
+        XCTAssertTrue(plan.isEmpty)
+        XCTAssertTrue(plan.isDeepBackfillComplete)
+    }
+
     /// After a relaunch the watermark survives but the session store is empty. The tick must
     /// read only what is new — treating the watermark's span as store coverage would report the
     /// whole of it as one hole and re-read history the driver deliberately did not keep.

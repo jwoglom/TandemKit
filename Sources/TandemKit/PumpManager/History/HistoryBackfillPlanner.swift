@@ -105,6 +105,9 @@ enum HistoryBackfillPlanner {
     /// - Parameters:
     ///   - firstSequenceNum: Oldest entry the pump still holds (`HistoryLogStatusResponse`).
     ///   - lastSequenceNum: Newest entry the pump holds.
+    ///   - isPumpLogEmpty: Whether the status reported `numEntries` 0. Its range then names no
+    ///     entry (faketandem gives 0...0 for an erased log), and a read of it waits out the chunk
+    ///     timeout twice for nothing.
     ///   - watermark: Highest sequence number ever read from this pump, already validated
     ///     against its serial. Nil if none has been.
     ///   - sessionCovered: The span this session has read into the store, nil if none.
@@ -116,12 +119,13 @@ enum HistoryBackfillPlanner {
     static func plan(
         firstSequenceNum: UInt32,
         lastSequenceNum: UInt32,
+        isPumpLogEmpty: Bool = false,
         watermark: UInt32?,
         sessionCovered: ClosedRange<UInt32>? = nil,
         storeGaps: [ClosedRange<UInt32>] = [],
         isDeepTargetCovered: Bool
     ) -> Plan {
-        guard lastSequenceNum >= firstSequenceNum else {
+        guard !isPumpLogEmpty, lastSequenceNum >= firstSequenceNum else {
             return Plan(incremental: nil, gaps: [], deep: nil, isDeepBackfillComplete: true)
         }
 
