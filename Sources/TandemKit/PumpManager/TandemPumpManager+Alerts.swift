@@ -155,6 +155,17 @@ extension TandemPumpManager {
         state.alertsIssuedUnderLegacyIdentifier = false
     }
 
+    /// Loop and Trio record an acknowledgement whether or not it reached the pump, so an alert whose
+    /// dismissal failed is forgotten as issued: the reconciler issues it again while the pump raises it.
+    func issueAgainAfterFailedAcknowledgement(_ alertIdentifier: String) {
+        logger.warning("Acknowledgement of \(alertIdentifier) did not reach the pump; issuing it again while the pump raises it")
+        pumpDelegate.notify { _ in
+            guard self.state.issuedAlertIdentifiers.remove(alertIdentifier) != nil else { return }
+            self.notifyDelegateStateUpdated()
+        }
+        reconcileLoopKitAlerts()
+    }
+
     /// Notification categories currently forwarded to LoopKit as alerts. Alarms and
     /// malfunctions mean stopped/compromised delivery; alerts are actionable. CGM alerts
     /// are opt-in and reminders stay in-app only.

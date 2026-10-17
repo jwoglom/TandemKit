@@ -339,6 +339,11 @@ edit instead of at the next sync.
 - Builds before that issued alerts under `"Tandem"`. `retractLegacyAlerts` retracts those once,
   the first time the delegate is attached (`alertsIssuedUnderLegacyIdentifier`), and clears what it
   retracted so the reconcilers issue anything still standing under the new identifier.
+- Both hosts record an acknowledgement whether or not it reached the pump, and Trio only logs a
+  failure. So a failed `acknowledgeAlert` forgets the alert as issued
+  (`issueAgainAfterFailedAcknowledgement`), and the reconciler issues it again from the last read
+  while the pump still raises it, out of range included. A malfunction, which the pump cannot
+  dismiss, stays acknowledged.
 
 ### Pump event batches
 - A `replacePendingEvents: true` batch makes both hosts delete every mutable dose it leaves out,

@@ -126,6 +126,57 @@ import XCTest
         XCTAssertEqual(manager.state.issuedAlertIdentifiers, [])
     }
 
+    private func issueLowInsulinAlert() throws -> Alert {
+        stubAlerts([Self.lowInsulin])
+        stubAlarms([])
+        fetchNotifications()
+        return try XCTUnwrap(delegate.issuedAlerts.first)
+    }
+
+    private func acknowledge(_ alert: Alert) -> Error? {
+        var result: Error?
+        XCTAssertTrue(delegate.acknowledgeAlert(alert.identifier) { result = $0 }, "the host found no responder for \(alert.identifier)")
+        delegateQueue.sync {}
+        delegateQueue.sync {}
+        return result
+    }
+
+    func testARefusedDismissalIssuesTheAlertAgainWhileThePumpStillRaisesIt() throws {
+        attach()
+        let alert = try issueLowInsulinAlert()
+        bluetooth.stub(DismissNotificationRequest.self, with: DismissNotificationResponse(status: 1))
+
+        XCTAssertNotNil(acknowledge(alert))
+
+        XCTAssertEqual(delegate.issuedAlerts.map(\.identifier), [alert.identifier, alert.identifier])
+        XCTAssertEqual(manager.state.issuedAlertIdentifiers, [alert.identifier.alertIdentifier])
+    }
+
+    func testAnAcknowledgementThatCannotReachThePumpIssuesTheAlertAgain() throws {
+        attach()
+        let alert = try issueLowInsulinAlert()
+        bluetooth.connectError = PumpCommError.pumpNotConnected
+
+        XCTAssertNotNil(acknowledge(alert))
+
+        XCTAssertEqual(delegate.issuedAlerts.map(\.identifier), [alert.identifier, alert.identifier])
+        XCTAssertFalse(bluetooth.didSend(DismissNotificationRequest.self))
+    }
+
+    func testARefusedDismissalOfAnAlertThePumpAlreadyClearedIssuesNothing() throws {
+        attach()
+        let alert = try issueLowInsulinAlert()
+        bluetooth.stub(DismissNotificationRequest.self) { _ in
+            self.stubAlerts([])
+            return DismissNotificationResponse(status: 1)
+        }
+
+        XCTAssertNil(acknowledge(alert))
+
+        XCTAssertEqual(delegate.issuedAlerts.map(\.identifier), [alert.identifier])
+        XCTAssertEqual(delegate.retractedAlerts, [alert.identifier])
+    }
+
     func testAlertsIssuedUnderTheLegacyIdentifierAreRetractedOnceAtAttach() {
         attach(state: legacyState(issued: ["alarm.occlusion.2", "alert.lowInsulin.0"], clockSkewAlertIssued: true))
 
