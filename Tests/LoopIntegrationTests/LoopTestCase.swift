@@ -150,8 +150,9 @@ class LoopTestCase: FaketandemIntegrationTestCase {
     /// What the pump does on its own reaches Loop through its history log, which the driver starts
     /// reading on a sync after pairing.
     func waitForTheDriversFirstHistoryRead() throws {
+        let sync = IntegrationWait.Throttle(interval: 1)
         try IntegrationWait.until("the driver to have read the pump's history", timeout: 180) {
-            try self.control.send(.init(command: .sync))
+            try sync.run { _ = try self.control.send(.init(command: .sync)) }
             return try self.loop.savedPumpManagerState()?.historyBackfill != nil
         }
     }
@@ -170,7 +171,8 @@ class LoopTestCase: FaketandemIntegrationTestCase {
     }
 
     /// Every batch the driver gave Loop, once `condition` holds of their events and Loop has saved them
-    /// all to both tables, which DoseStore does before it completes a batch. `syncing` syncs first.
+    /// all to both tables, which DoseStore does before it completes a batch. `syncing` syncs at most
+    /// once a second between looks.
     @discardableResult
     func loopStored(
         _ what: String,
@@ -179,9 +181,10 @@ class LoopTestCase: FaketandemIntegrationTestCase {
         until condition: @escaping ([NewPumpEvent]) -> Bool
     ) throws -> [VirtualPumpControl.Batch] {
         let control = try XCTUnwrap(control)
+        let sync = IntegrationWait.Throttle(interval: 1)
         let batches = try IntegrationWait.value("Loop to have stored \(what)", timeout: timeout) { () -> [VirtualPumpControl.Batch]? in
             if syncing {
-                try control.send(.init(command: .sync))
+                try sync.run { _ = try control.send(.init(command: .sync)) }
             }
             let batches = try self.allBatches()
             return condition(batches.flatMap(\.pumpEvents)) && batches.allSatisfy(\.completed) ? batches : nil
