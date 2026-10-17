@@ -314,9 +314,14 @@ Nothing in Trio changes for it:
   ThreadSanitizer, see below) and the test bundle.
 - `scripts/trio-test.sh test` starts faketandem and `scripts/app-launcher.py --host trio`, and hands
   the launcher's address to the bundle. The tests run in the simulator and cannot reach `simctl`, so
-  before each test `TrioTestCase` asks the launcher to install Trio anew (`/install`) and launch it
-  (`/launch`, with any launch arguments), and a test can stop and start it again on the same data
-  and arguments (`/relaunch`). The launcher seeds the data container with what a set-up install
+  before each test `TrioTestCase` asks the launcher for a fresh install of Trio (`/install`) and to
+  launch it (`/launch`, with any launch arguments), and a test can stop and start it again on the
+  same data and arguments (`/relaunch`). The first `/install` of a run uninstalls and installs the
+  app; the later ones keep the install the launcher made and put its data container back to what a
+  new one holds (every file gone, the container's metadata and empty directories kept) and restart
+  the simulator's `cfprefsd`, which would otherwise answer the last test's UserDefaults from memory.
+  `/install?fresh=1`, a rebuilt app at `--app` and a container that cannot be emptied each
+  uninstall and install again. The launcher then seeds the data container with what a set-up install
   holds: `onboardingCompleted`, an unpaired Tandem pump manager (`PumpManagerState.plist`:
   `managerIdentifier` `TandemPumpManager`, empty `state`) and both telemetry streams off (Trio's
   default is on). The test writes Trio's own settings over that (`seededFiles`): Trio's default
