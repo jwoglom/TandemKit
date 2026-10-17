@@ -227,8 +227,8 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
     }
 
     func retractAlert(identifier: Alert.Identifier) {
-        if ![TandemPumpManager.pluginIdentifier, TandemPumpManager.legacyAlertManagerIdentifier].contains(identifier.managerIdentifier) {
-            XCTFail("\(identifier) was retracted under a managerIdentifier no alert was issued under")
+        if identifier.managerIdentifier != TandemPumpManager.pluginIdentifier {
+            XCTFail("\(identifier) was retracted under a managerIdentifier no alert is issued under")
         }
         synchronized {
             _retractedAlerts.append(identifier)

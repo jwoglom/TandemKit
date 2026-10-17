@@ -39,10 +39,6 @@ import XCTest
         delegateQueue.sync {}
     }
 
-    private func relaunch() {
-        attach(state: TandemPumpManagerState(rawValue: manager.state.rawValue))
-    }
-
     private func stubAlerts(_ alerts: [AlertStatusResponse.AlertResponseType]) {
         let mask = alerts.reduce(UInt64(0)) { $0 | (UInt64(1) << UInt64($1.rawValue)) }
         bluetooth.stub(AlertStatusRequest.self, with: AlertStatusResponse(intMap: mask))
@@ -61,19 +57,6 @@ import XCTest
     private func skewPumpClock(minutes: Double) {
         manager.state.lastPumpTimeCheckDate = manager.now
         manager.state.currentPumpTime = manager.now.addingTimeInterval(.minutes(minutes))
-    }
-
-    /// State as a build before the identifier change saved it.
-    private func legacyState(issued: Set<String>, clockSkewAlertIssued: Bool) -> TandemPumpManagerState {
-        var raw = TandemPumpManagerState(rawValue: [:]).rawValue
-        raw["issuedAlertIdentifiers"] = Array(issued)
-        raw["pumpClockSkewAlertIssued"] = clockSkewAlertIssued
-        raw.removeValue(forKey: "alertsIssuedUnderLegacyIdentifier")
-        return TandemPumpManagerState(rawValue: raw)
-    }
-
-    private func legacyIdentifier(_ alertIdentifier: String) -> Alert.Identifier {
-        Alert.Identifier(managerIdentifier: TandemPumpManager.legacyAlertManagerIdentifier, alertIdentifier: alertIdentifier)
     }
 
     func testEveryIssuedAndRetractedAlertCarriesThePluginIdentifier() {
@@ -175,57 +158,5 @@ import XCTest
 
         XCTAssertEqual(delegate.issuedAlerts.map(\.identifier), [alert.identifier])
         XCTAssertEqual(delegate.retractedAlerts, [alert.identifier])
-    }
-
-    func testAlertsIssuedUnderTheLegacyIdentifierAreRetractedOnceAtAttach() {
-        attach(state: legacyState(issued: ["alarm.occlusion.2", "alert.lowInsulin.0"], clockSkewAlertIssued: true))
-
-        XCTAssertEqual(delegate.retractedAlerts, [
-            legacyIdentifier("alarm.occlusion.2"),
-            legacyIdentifier("alert.lowInsulin.0"),
-            legacyIdentifier(TandemPumpManager.pumpClockSkewAlertIdentifier),
-        ])
-        XCTAssertEqual(delegate.issuedAlerts.count, 0)
-        XCTAssertEqual(manager.state.issuedAlertIdentifiers, [])
-        XCTAssertFalse(manager.state.pumpClockSkewAlertIssued)
-        XCTAssertFalse(manager.state.alertsIssuedUnderLegacyIdentifier)
-
-        relaunch()
-
-        XCTAssertEqual(delegate.retractedAlerts, [])
-    }
-
-    func testAnAlertStillStandingAfterTheMigrationIsIssuedAgainUnderThePluginIdentifier() {
-        attach(state: legacyState(issued: ["alarm.occlusion.2"], clockSkewAlertIssued: false))
-        stubAlerts([])
-        stubAlarms([.OCCLUSION_ALARM])
-
-        fetchNotifications()
-
-        XCTAssertEqual(delegate.issuedAlerts.map(\.identifier), [TandemPumpManager.alertIdentifier("alarm.occlusion.2")])
-        XCTAssertEqual(manager.state.issuedAlertIdentifiers, ["alarm.occlusion.2"])
-    }
-
-    func testTheClockSkewAlertIsIssuedAgainWhileThePumpClockIsStillSkewed() {
-        attach(state: legacyState(issued: [], clockSkewAlertIssued: true))
-        skewPumpClock(minutes: 11)
-
-        manager.reconcilePumpClockSkewAlert()
-        delegateQueue.sync {}
-
-        XCTAssertEqual(delegate.retractedAlerts, [legacyIdentifier(TandemPumpManager.pumpClockSkewAlertIdentifier)])
-        XCTAssertEqual(
-            delegate.issuedAlerts.map(\.identifier),
-            [TandemPumpManager.alertIdentifier(TandemPumpManager.pumpClockSkewAlertIdentifier)]
-        )
-    }
-
-    func testStateWithNoAlertsHasNothingToMigrate() {
-        XCTAssertFalse(legacyState(issued: [], clockSkewAlertIssued: false).alertsIssuedUnderLegacyIdentifier)
-        XCTAssertFalse(TandemPumpManagerState(rawValue: [:]).alertsIssuedUnderLegacyIdentifier)
-
-        attach()
-
-        XCTAssertEqual(delegate.retractedAlerts, [])
     }
 }

@@ -129,32 +129,6 @@ extension TandemPumpManager {
         LoopKit.Alert.Identifier(managerIdentifier: pluginIdentifier, alertIdentifier: alertIdentifier)
     }
 
-    /// What builds before `alertsIssuedUnderLegacyIdentifier` issued alerts under.
-    static let legacyAlertManagerIdentifier = "Tandem"
-
-    /// Retracts what the host holds under the legacy identifier, and forgets it was issued, so the
-    /// reconcilers issue whatever still stands again under `pluginIdentifier`. Loop plays an
-    /// unacknowledged, unretracted alert back at every launch. On the delegate queue.
-    func retractLegacyAlerts(_ delegate: PumpManagerDelegate) {
-        let issued = state
-        guard issued.alertsIssuedUnderLegacyIdentifier else { return }
-
-        var identifiers = issued.issuedAlertIdentifiers
-        if issued.pumpClockSkewAlertIssued {
-            identifiers.insert(Self.pumpClockSkewAlertIdentifier)
-        }
-        logger.info("Retracting alerts issued under \(Self.legacyAlertManagerIdentifier): \(identifiers.sorted())")
-        for identifier in identifiers.sorted() {
-            delegate.retractAlert(identifier: LoopKit.Alert.Identifier(
-                managerIdentifier: Self.legacyAlertManagerIdentifier,
-                alertIdentifier: identifier
-            ))
-        }
-        state.issuedAlertIdentifiers = []
-        state.pumpClockSkewAlertIssued = false
-        state.alertsIssuedUnderLegacyIdentifier = false
-    }
-
     /// Loop and Trio record an acknowledgement whether or not it reached the pump, so an alert whose
     /// dismissal failed is forgotten as issued: the reconciler issues it again while the pump raises it.
     func issueAgainAfterFailedAcknowledgement(_ alertIdentifier: String) {
@@ -221,7 +195,6 @@ extension TandemPumpManager {
                 self.logger.warning("No pump delegate; deferring alert reconciliation")
                 return
             }
-            self.retractLegacyAlerts(delegate)
 
             let reconciliation = TandemAlertReconciler.reconcile(
                 activeItems: activeItems,

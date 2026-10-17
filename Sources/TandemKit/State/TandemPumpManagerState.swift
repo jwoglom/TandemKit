@@ -170,10 +170,6 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
     public var issuedAlertIdentifiers: Set<String> = []
     /// Persisted, like `issuedAlertIdentifiers`, so a relaunch retracts the alert rather than re-issuing it.
     public var pumpClockSkewAlertIssued = false
-    /// Whether the alerts above were issued under `TandemPumpManager.legacyAlertManagerIdentifier`, which
-    /// hosts cannot route an acknowledgement back from. Read true from state saved before the field
-    /// existed that holds any, until `retractLegacyAlerts` retracts them.
-    public var alertsIssuedUnderLegacyIdentifier = false
     /// `stableIdentifier`s of the alarms and malfunctions reported as `.alarm` pump events and not yet
     /// cleared. Persisted so a relaunch neither reports a standing alarm again nor misses its clearing.
     public var reportedPumpAlarmIdentifiers: Set<String> = []
@@ -261,7 +257,6 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
               lhs.lastNotificationUpdate == rhs.lastNotificationUpdate,
               lhs.issuedAlertIdentifiers == rhs.issuedAlertIdentifiers,
               lhs.pumpClockSkewAlertIssued == rhs.pumpClockSkewAlertIssued,
-              lhs.alertsIssuedUnderLegacyIdentifier == rhs.alertsIssuedUnderLegacyIdentifier,
               lhs.reportedPumpAlarmIdentifiers == rhs.reportedPumpAlarmIdentifiers,
               lhs.forwardCGMAlerts == rhs.forwardCGMAlerts,
               lhs.lastSiteChangeDate == rhs.lastSiteChangeDate,
@@ -318,8 +313,6 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         notificationCount = rawValue["notificationCount"] as? Int
         issuedAlertIdentifiers = Set(rawValue["issuedAlertIdentifiers"] as? [String] ?? [])
         pumpClockSkewAlertIssued = rawValue["pumpClockSkewAlertIssued"] as? Bool ?? false
-        alertsIssuedUnderLegacyIdentifier = rawValue["alertsIssuedUnderLegacyIdentifier"] as? Bool
-            ?? (!issuedAlertIdentifiers.isEmpty || pumpClockSkewAlertIssued)
         reportedPumpAlarmIdentifiers = Set(rawValue["reportedPumpAlarmIdentifiers"] as? [String] ?? [])
         forwardCGMAlerts = rawValue["forwardCGMAlerts"] as? Bool ?? false
         currentPumpTime = rawValue["currentPumpTime"] as? Date
@@ -569,7 +562,6 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         raw["lastNotificationUpdate"] = lastNotificationUpdate?.timeIntervalSinceReferenceDate
         raw["issuedAlertIdentifiers"] = Array(issuedAlertIdentifiers).sorted()
         raw["pumpClockSkewAlertIssued"] = pumpClockSkewAlertIssued
-        raw["alertsIssuedUnderLegacyIdentifier"] = alertsIssuedUnderLegacyIdentifier
         raw["reportedPumpAlarmIdentifiers"] = Array(reportedPumpAlarmIdentifiers).sorted()
         raw["forwardCGMAlerts"] = forwardCGMAlerts
         raw["lastSiteChangeDate"] = lastSiteChangeDate
@@ -730,7 +722,6 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
             "* lastNotificationUpdate: \(String(describing: lastNotificationUpdate))",
             "* issuedAlertIdentifiers: \(issuedAlertIdentifiers.sorted())",
             "* pumpClockSkewAlertIssued: \(pumpClockSkewAlertIssued)",
-            "* alertsIssuedUnderLegacyIdentifier: \(alertsIssuedUnderLegacyIdentifier)",
             "* reportedPumpAlarmIdentifiers: \(reportedPumpAlarmIdentifiers.sorted())",
             "* forwardCGMAlerts: \(forwardCGMAlerts)",
             "* lastSiteChangeDate: \(String(describing: lastSiteChangeDate))",

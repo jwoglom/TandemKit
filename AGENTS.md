@@ -336,9 +336,6 @@ edit instead of at the next sync.
   one under `managerIdentifier` (`"Tandem"`, which is the HUD provider's) was acknowledged on the
   phone alone and stayed on the pump (#592). `MockPumpManagerDelegate` fails a test that issues one
   under any other, and the Harmonize rule `AlertsCarryThePluginIdentifier` any code that builds one.
-- Builds before that issued alerts under `"Tandem"`. `retractLegacyAlerts` retracts those once,
-  the first time the delegate is attached (`alertsIssuedUnderLegacyIdentifier`), and clears what it
-  retracted so the reconcilers issue anything still standing under the new identifier.
 - Both hosts record an acknowledgement whether or not it reached the pump, and Trio only logs a
   failure. So a failed `acknowledgeAlert` forgets the alert as issued
   (`issueAgainAfterFailedAcknowledgement`), and the reconciler issues it again from the last read

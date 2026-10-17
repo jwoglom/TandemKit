@@ -19,22 +19,11 @@ final class AlertsCarryThePluginIdentifier: XCTestCase {
         "pluginIdentifier", "self.pluginIdentifier", "Self.pluginIdentifier", "TandemPumpManager.pluginIdentifier"
     ]
 
-    private static let legacyIdentifier: Set<String> = [
-        "legacyAlertManagerIdentifier", "Self.legacyAlertManagerIdentifier", "TandemPumpManager.legacyAlertManagerIdentifier"
-    ]
-
     private static func isRoutable(_ call: FunctionCallExprSyntax) -> Bool {
         guard let manager = call.arguments.first(where: { $0.label?.text == "managerIdentifier" })?.expression.trimmedDescription else {
             return false
         }
-        return pluginIdentifier.contains(manager) || (legacyIdentifier.contains(manager) && isRetracted(call))
-    }
-
-    private static func isRetracted(_ call: FunctionCallExprSyntax) -> Bool {
-        guard let argument = call.parent?.as(LabeledExprSyntax.self), argument.label?.text == "identifier",
-              let retract = argument.parent?.parent?.as(FunctionCallExprSyntax.self)
-        else { return false }
-        return retract.calledExpression.trimmedDescription.hasSuffix("retractAlert")
+        return pluginIdentifier.contains(manager)
     }
 
     private static let rule = Rule(
@@ -42,8 +31,7 @@ final class AlertsCarryThePluginIdentifier: XCTestCase {
         rationale: """
             Loop and Trio register the pump manager as alert responder and sound vendor under its pluginIdentifier, and
             look either up by an alert's managerIdentifier. An alert under any other string is acknowledged on the phone
-            alone: the pump keeps its notification, and a sound the driver ships is never found. Alerts once went out
-            under managerIdentifier ("Tandem"); only retracting those, under legacyAlertManagerIdentifier, may name it.
+            alone: the pump keeps its notification, and a sound the driver ships is never found.
             """,
         fixHint: "Build the identifier with TandemPumpManager.alertIdentifier(_:).",
         badExample: "LoopKit.Alert.Identifier(managerIdentifier: TandemPumpManager.managerIdentifier, alertIdentifier: id)",
