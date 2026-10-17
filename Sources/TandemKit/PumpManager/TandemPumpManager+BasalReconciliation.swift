@@ -97,6 +97,14 @@ extension TandemPumpManager {
             .filter { loggedBasalProblems.insert($0.sequenceNum).inserted }
         if !problems.isEmpty {
             logger.warning("Pump basal history fails its checks; not correcting around: \(problems.map(\.description).joined(separator: "; "))")
+            for problem in problems {
+                reconciliationLog.record(ReconciliationLog.Problem(
+                    sequenceNum: problem.sequenceNum,
+                    date: problem.date,
+                    description: problem.description,
+                    noticedAt: now
+                ))
+            }
         }
 
         // What the host counts once this pass's other reports reach it.
@@ -118,15 +126,21 @@ extension TandemPumpManager {
         )
         pass.ledger.record(batch.events, replacePendingEvents: batch.replacesHeldTemp)
 
+        var summary = ReconciliationLog.Basal()
         var firstUnresolved: Date?
         var resolvedThrough: UInt32?
         chunks: for chunk in timeline.chunks where resumeAfter.map({ chunk.sequenceNum > $0 }) ?? true {
             if stop.map({ chunk.sequenceNum > $0 }) ?? false || chunk.end > now {
                 firstUnresolved = chunk.start
+                if let waitingGap, chunk.sequenceNum > waitingGap.lowerBound {
+                    summary.heldBack = .storeGap(waitingGap)
+                } else if let open = blockingOpen.first, chunk.sequenceNum > open.sequenceNum {
+                    summary.heldBack = .openChunk(open.sequenceNum)
+                }
                 break
             }
             // Twice at most: once the held temp basal ends, the chunk is compared with what follows it.
-            for _ in 0 ..< 2 {
+            for attempt in 0 ..< 2 {
                 let verdict = BasalReconciler.verdict(
                     for: chunk,
                     against: pass.ledger,
@@ -138,6 +152,9 @@ extension TandemPumpManager {
                 guard case let .differs(host, from) = verdict else {
                     if case let .matches(residual) = verdict {
                         basalResidualDays.add(residual, of: chunk)
+                        if attempt == 0 {
+                            summary.matched += 1
+                        }
                     }
                     break
                 }
@@ -145,14 +162,24 @@ extension TandemPumpManager {
                 if loggedBasalDifferences.insert(chunk.sequenceNum).inserted {
                     logger.warning("Basal difference: \(describe(difference, reporting: reporting))")
                 }
-                guard reporting, chunk.isTrusted else { break }
+                if attempt == 0 {
+                    summary.differed += 1
+                }
+                guard reporting, chunk.isTrusted else {
+                    record(difference, outcome: chunk.isTrusted ? .reportingOff : .untrusted, at: now)
+                    break
+                }
 
+                let corrections = pass.corrections
                 switch act(on: difference, pass: &pass, batch: &batch) {
                 case .done:
-                    break
+                    record(difference, outcome: pass.corrections > corrections ? .corrected : outcomeWithoutACorrection(difference), at: now)
                 case .again:
+                    record(difference, outcome: .heldTempEnded, at: now)
                     continue
                 case .wait:
+                    record(difference, outcome: .waiting, at: now)
+                    summary.heldBack = heldBack(by: difference)
                     firstUnresolved = chunk.start
                     break chunks
                 }
@@ -169,6 +196,12 @@ extension TandemPumpManager {
         }
         if pass.corrections > 0 {
             logger.info("Reporting \(pass.corrections) basal correction(s) from pump history")
+        }
+        summary.corrections = pass.corrections
+        summary.reconciledThrough = state.reportedBasal.reconciledThrough
+        reconciliationLog.current?.basal = summary
+        reconciliationLog.residualDays = basalResidualDays.current.map {
+            ReconciliationLog.ResidualDay(day: $0.day, net: $0.residual.net, gross: $0.residual.gross, cycles: $0.cycles)
         }
 
         if let endedAt = state.controlIQEndedAt, outcome.startedAt > endedAt, outcome.readsThroughPumpEnd,
@@ -445,6 +478,44 @@ extension TandemPumpManager {
     }
 
     // MARK: - Logging
+
+    private func record(_ difference: BasalReconciler.Difference, outcome: ReconciliationLog.Outcome, at now: Date) {
+        let chunk = difference.chunk
+        let source: ReconciliationLog.HostSource = switch difference.host.source {
+        case .schedule, .suspended: .schedule
+        case let .tempBasal(row): row.isMutable ? .heldTempBasal : .finalizedTempBasal
+        }
+        reconciliationLog.record(ReconciliationLog.Difference(
+            sequenceNum: chunk.sequenceNum,
+            start: chunk.start,
+            end: chunk.end,
+            pumpKind: chunk.kind,
+            pumpRate: chunk.unitsPerHour,
+            hostRate: difference.host.rate,
+            hostSource: source,
+            outcome: outcome,
+            noticedAt: now
+        ))
+    }
+
+    /// `act` returned `.done` without a correction.
+    private func outcomeWithoutACorrection(_ difference: BasalReconciler.Difference) -> ReconciliationLog.Outcome {
+        if case let .tempBasal(row) = difference.host.source, row.isMutable, state.basalDose.type == .tempBasal {
+            return .heldTempRestated
+        }
+        return .notCorrected
+    }
+
+    /// `act` returned `.wait`.
+    private func heldBack(by difference: BasalReconciler.Difference) -> ReconciliationLog.Basal.HeldBack {
+        if state.deliveryTransitions.pending != nil {
+            return .pendingDeliveryChange
+        }
+        if case let .tempBasal(row) = difference.host.source, !row.isMutable {
+            return .finalizedTempBasal(row.date)
+        }
+        return .heldTempBasal(state.basalDose.startDate)
+    }
 
     /// A temp worked out against the next segment's rate is reported at the request on purpose.
     func isOverReportedNearASegmentChange(_ chunk: PumpBasalTimeline.Chunk) -> Bool {

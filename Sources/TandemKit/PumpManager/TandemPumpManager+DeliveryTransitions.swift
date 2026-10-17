@@ -196,6 +196,7 @@ extension TandemPumpManager {
     }
 
     func historyTickFailed(startedAt: Date) {
+        reconciliationLog.recordSkippedPass(startedAt: startedAt, reason: "Pump history could not be read", at: now)
         bluetooth.ensureConnected { _ in
             if let pending = self.state.deliveryTransitions.pending, startedAt >= pending.detectedAt {
                 self.logger.warning("Pump history could not be read; reporting the \(pending.observed) seen at \(pending.detectedAt) at detection")

@@ -52,6 +52,7 @@ pieces fit together. Paths are relative to the repository root.
 | `HistoryLogSyncIdentifier.swift` | Stable `raw` identifiers for history-derived doses and the temp basals the app sets (#344). |
 | `BolusReportLedger.swift` | Persisted record of recent boluses, so history does not report app boluses a second time. |
 | `DeliveryTransitionLedger.swift` | Persisted record of every suspend and resume reported, and the delivery change waiting for history to date it. |
+| `ReconciliationLog.swift` | In memory: the recent history passes, each basal difference and its outcome, and the pump records that fail their cross-check, for the Reconciliation debug screen. |
 
 ## State — `Sources/TandemKit/State/`
 
@@ -97,7 +98,7 @@ pieces fit together. Paths are relative to the repository root.
 | `TandemPumpManager+UI.swift` | `PumpManagerUI`: setup, settings and delivery-uncertainty view controllers, HUD, status highlights. |
 | `TandemUICoordinator.swift` | `TandemScreen` and navigation between the SwiftUI screens. |
 | `TandemKitHUDProvider.swift` | The HUD shown in the host's status bar. |
-| `Views/`, `ViewModels/` | Onboarding (scan and pair), settings, cartridge/tubing/cannula wizards, CGM setup, notifications, Control-IQ, quick bolus, debug tools, the history log viewer. |
+| `Views/`, `ViewModels/` | Onboarding (scan and pair), settings, cartridge/tubing/cannula wizards, CGM setup, notifications, Control-IQ, quick bolus, debug tools, the history log viewer, the Reconciliation screen (`TandemKitReconciliationViewModel`: what the driver holds against the pump's history and what it found that the app was not told). |
 | `Sources/TandemKitPlugin/TandemKitPlugin.swift` | Loop-style plugin entry point. Not used by Trio. |
 
 ## Tests

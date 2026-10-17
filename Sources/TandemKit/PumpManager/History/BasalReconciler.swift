@@ -44,6 +44,11 @@ enum BasalReconciler {
             open[day]?.residual.add(residual)
         }
 
+        /// The days not closed yet, oldest first.
+        var current: [(day: Date, residual: Residual, cycles: Int)] {
+            open.sorted { $0.key < $1.key }.map { ($0.key, $0.value.residual, $0.value.chunks.count) }
+        }
+
         /// The days before `now`'s, each once.
         mutating func close(before now: Date, calendar: Calendar = .current) -> [(day: Date, residual: Residual, cycles: Int)] {
             let today = calendar.startOfDay(for: now)
