@@ -262,15 +262,14 @@ jobs:
     name: Trio in the simulator (faketandem)
     needs: unit
     runs-on: [self-hosted, macOS]
-    # Trio, its LoopKit and the other kits build from source on every run.
+    # Trio, its LoopKit and the other kits build from source, incrementally from the derived data
+    # cache when its key hits; the time covers a build from nothing.
     timeout-minutes: 120
     env:
       FAKETANDEM_DIR: ${{ github.workspace }}/faketandem
       FAKETANDEM_BIN: ${{ github.workspace }}/trio-logs/faketandem
       FAKETANDEM_REF: ${{ github.event.inputs.faketandem_ref || '' }}
       LOG_DIR: ${{ github.workspace }}/trio-logs
-      TRIO_DIR: ${{ github.workspace }}/trio
-      TRIO_DERIVED_DATA: ${{ github.workspace }}/TrioDerivedData
     steps:
       - name: Checkout TandemKit
         uses: actions/checkout@v6
@@ -300,10 +299,33 @@ jobs:
           destination: ${{ env.SIMULATOR_DESTINATION }}
           xcode-version: ${{ env.XCODE_VERSION }}
 
+      # Sets TRIO_DIR and TRIO_DERIVED_DATA, under $HOME so they are the same absolute paths on
+      # every runner, which the restored build is only good for (scripts/ci/host-paths.sh).
+      - name: Choose where Trio checks out and builds
+        id: paths
+        run: TandemKit/scripts/ci/host-paths.sh trio TRIO TrioDerivedData
+
       - name: Check out Trio with this TandemKit
+        id: trio
         uses: ./TandemKit/.github/actions/checkout-trio
         with:
           tandemkit-ref: ${{ github.sha }}
+
+      # Build/ holds the compiled objects and the build database, SourcePackages/ the resolved
+      # packages; Index.noindex, Logs and ModuleCache.noindex are big and remade in seconds. Not
+      # keyed on the TandemKit commit: its files carry the checkout's dates, so Xcode rebuilds that
+      # target from any hit, while Trio's files are dated at Trio's commit (checkout-trio) and are
+      # taken as unchanged on a hit for the same one. A fallback to another Trio commit dates them
+      # differently and rebuilds them, which is why the date is the commit's and never a constant.
+      - name: Cache Trio's derived data
+        uses: actions/cache@v6
+        with:
+          path: |
+            ${{ steps.paths.outputs.derived-data }}/Build
+            ${{ steps.paths.outputs.derived-data }}/SourcePackages
+          key: ${{ runner.os }}-${{ runner.arch }}-xcode-${{ env.XCODE_VERSION }}-trio-derived-data-${{ steps.trio.outputs.commit }}-${{ hashFiles('trio/Trio.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-xcode-${{ env.XCODE_VERSION }}-trio-derived-data-
 
       - name: Build faketandem
         uses: ./TandemKit/.github/actions/faketandem
@@ -313,6 +335,9 @@ jobs:
 
       - name: Build Trio and TrioIntegrationTests with the virtual pump
         run: TandemKit/scripts/trio-test.sh build -quiet
+
+      - name: Report the size of Trio's derived data
+        run: du -sh "${TRIO_DERIVED_DATA}"/* "${TRIO_DERIVED_DATA}"/Build/* || true
 
       - name: Wait for the simulator to finish booting
         run: xcrun simctl bootstatus "${SIMULATOR_UDID}" -b || true
@@ -341,15 +366,14 @@ jobs:
     name: Loop in the simulator (faketandem)
     needs: unit
     runs-on: [self-hosted, macOS]
-    # Loop, its LoopKit and the other kits build from source on every run.
+    # Loop, its LoopKit and the other kits build from source, incrementally from the derived data
+    # cache when its key hits; the time covers a build from nothing.
     timeout-minutes: 120
     env:
       FAKETANDEM_DIR: ${{ github.workspace }}/faketandem
       FAKETANDEM_BIN: ${{ github.workspace }}/loop-logs/faketandem
       FAKETANDEM_REF: ${{ github.event.inputs.faketandem_ref || '' }}
       LOG_DIR: ${{ github.workspace }}/loop-logs
-      LOOP_DIR: ${{ github.workspace }}/loop
-      LOOP_DERIVED_DATA: ${{ github.workspace }}/LoopDerivedData
     steps:
       - name: Checkout TandemKit
         uses: actions/checkout@v6
@@ -379,10 +403,28 @@ jobs:
           destination: ${{ env.SIMULATOR_DESTINATION }}
           xcode-version: ${{ env.XCODE_VERSION }}
 
+      # As in trio: LOOP_DIR and LOOP_DERIVED_DATA under $HOME, the same on every runner.
+      - name: Choose where LoopWorkspace checks out and builds
+        id: paths
+        run: TandemKit/scripts/ci/host-paths.sh loop LOOP LoopDerivedData
+
       - name: Check out LoopWorkspace with this TandemKit
+        id: loop
         uses: ./TandemKit/.github/actions/checkout-loop
         with:
           tandemkit-ref: ${{ github.sha }}
+
+      # As trio's: Build/ and SourcePackages/, keyed without the TandemKit commit, LoopWorkspace's
+      # files dated at its commit (checkout-loop) so a hit for the same one keeps their objects.
+      - name: Cache Loop's derived data
+        uses: actions/cache@v6
+        with:
+          path: |
+            ${{ steps.paths.outputs.derived-data }}/Build
+            ${{ steps.paths.outputs.derived-data }}/SourcePackages
+          key: ${{ runner.os }}-${{ runner.arch }}-xcode-${{ env.XCODE_VERSION }}-loop-derived-data-${{ steps.loop.outputs.commit }}-${{ hashFiles('loop/LoopWorkspace.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-xcode-${{ env.XCODE_VERSION }}-loop-derived-data-
 
       - name: Build faketandem
         uses: ./TandemKit/.github/actions/faketandem
@@ -392,6 +434,9 @@ jobs:
 
       - name: Build Loop and LoopIntegrationTests with the virtual pump
         run: TandemKit/scripts/loop-test.sh build -quiet
+
+      - name: Report the size of Loop's derived data
+        run: du -sh "${LOOP_DERIVED_DATA}"/* "${LOOP_DERIVED_DATA}"/Build/* || true
 
       - name: Wait for the simulator to finish booting
         run: xcrun simctl bootstatus "${SIMULATOR_UDID}" -b || true

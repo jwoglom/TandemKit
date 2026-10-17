@@ -19,10 +19,16 @@ inputs:
     description: TandemKit revision to test.
     required: true
 
+outputs:
+  commit:
+    description: The LoopWorkspace commit checked out.
+    value: ${{ steps.checkout.outputs.commit }}
+
 runs:
   using: composite
   steps:
     - name: Checkout LoopWorkspace (no submodules)
+      id: checkout
       uses: actions/checkout@v6
       with:
         repository: ${{ inputs.repository }}
@@ -59,3 +65,10 @@ runs:
         done < <(git config -f .gitmodules --get-regexp '^submodule\..*\.path$' | awk '{print $2}')
 
         git submodule update --init --recursive --depth 1 "${submodule_paths[@]}"
+
+    # For the derived data cache (scripts/ci/stamp-checkout.sh). TandemKit keeps the checkout's
+    # dates, so it is rebuilt from any restored build.
+    - name: Date LoopWorkspace's files at its commit
+      shell: bash
+      run: |
+        "${GITHUB_ACTION_PATH}/../../../scripts/ci/stamp-checkout.sh" loop TandemKit
