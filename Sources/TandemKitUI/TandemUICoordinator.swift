@@ -22,6 +22,7 @@ enum TandemScreen {
     case debug
     case historyLogViewer
     case pumpProfileViewer
+    case reconciliation
     case featureFlags
     case troubleshootConnection
 
@@ -309,6 +310,7 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
                 pumpManager: pumpManager,
                 openHistoryLogViewer: { self.navigateTo(.historyLogViewer) },
                 openPumpProfileViewer: { self.navigateTo(.pumpProfileViewer) },
+                openReconciliation: { self.navigateTo(.reconciliation) },
                 openFeatureFlags: { self.navigateTo(.featureFlags) },
                 rerunInitialSetup: {
                     self.pumpManager.deleteSavedPumpState()
@@ -332,6 +334,13 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
             return hostingController(
                 rootView: TandemKitPumpProfileViewerView(viewModel: viewModel),
                 title: String(localized: "Pump Profile Viewer", comment: "Title for pump profile viewer screen")
+            )
+
+        case .reconciliation:
+            let viewModel = TandemKitReconciliationViewModel(pumpManager: pumpManager)
+            return hostingController(
+                rootView: TandemKitReconciliationView(viewModel: viewModel),
+                title: String(localized: "Reconciliation", comment: "Title for the reconciliation debug screen")
             )
 
         case .featureFlags:

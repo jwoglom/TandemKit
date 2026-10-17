@@ -24,6 +24,13 @@ struct TandemKitDebugView: View {
                     Label("History Log Viewer", systemImage: "list.bullet.rectangle")
                 }
                 .disabled(viewModel.openHistoryLogViewer == nil)
+
+                Button {
+                    viewModel.openReconciliation?()
+                } label: {
+                    Label("Reconciliation", systemImage: "checklist")
+                }
+                .disabled(viewModel.openReconciliation == nil)
             }
 
             Section(header: Text("Profiles")) {

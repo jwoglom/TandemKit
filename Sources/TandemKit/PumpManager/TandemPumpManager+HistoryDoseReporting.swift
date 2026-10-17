@@ -14,14 +14,18 @@ extension TandemPumpManager {
         bluetooth.ensureConnected { error in
             if let error {
                 self.logger.warning("Deferring history dose reporting to the next tick: \(error.localizedDescription)")
+                self.reconciliationLog.recordSkippedPass(startedAt: outcome.startedAt, reason: error.localizedDescription, at: self.now)
                 return
             }
+            self.reconciliationLog.begin(outcome, at: self.now)
             var batch = self.reportHistoryDeliveryTransitions(after: outcome, pumpSerial: serial)
+            self.reconciliationLog.current?.transitionsReported = batch.events.count
             self.reconcileBasalHistory(after: outcome, pumpSerial: serial, into: &batch)
             self.emitHistoryReports(batch)
             if self.state.featureFlags.historyDoseReporting, let covered = outcome.sessionCovered {
                 self.reportHistoryBoluses(in: covered, pumpSerial: serial, floor: outcome.emitFloor, now: now)
             }
+            self.reconciliationLog.end(at: self.now)
             if !self.isAwaitingHistory {
                 self.releaseHistoryWaiters()
             }
@@ -92,6 +96,7 @@ extension TandemPumpManager {
         }
 
         logger.info("Reporting \(reports.count) bolus event(s) from pump history")
+        reconciliationLog.current?.bolusesReported = reports.count
         let sorted = reports.sorted { $0.date < $1.date }
         // Loop keeps a stored PumpEvent row over a non-replacing report with its raw, so finalizing
         // a dose the host holds as mutable takes a replacing batch (#452).

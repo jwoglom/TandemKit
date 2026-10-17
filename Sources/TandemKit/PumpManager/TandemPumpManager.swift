@@ -189,6 +189,26 @@ public class TandemPumpManager: PumpManager, Pluggable {
     var basalResidualDays = BasalReconciler.ResidualDays()
     /// How many history passes each store gap has held basal reconciliation back. Command queue only.
     var basalGapPasses: [ClosedRange<UInt32>: Int] = [:]
+    /// Written by history passes on the command queue and read by the Reconciliation debug screen.
+    private let reconciliationLogLock = NSLock()
+    private var _reconciliationLog = ReconciliationLog()
+    var reconciliationLog: ReconciliationLog {
+        get {
+            reconciliationLogLock.lock()
+            defer { reconciliationLogLock.unlock() }
+            return _reconciliationLog
+        }
+        _modify {
+            reconciliationLogLock.lock()
+            defer { reconciliationLogLock.unlock() }
+            yield &_reconciliationLog
+        }
+        set {
+            reconciliationLogLock.lock()
+            defer { reconciliationLogLock.unlock() }
+            _reconciliationLog = newValue
+        }
+    }
     /// Paces `updatePumpBasalProfile`: one write in flight, the next no sooner than
     /// `basalProfileUpdateRetryInterval`, however many basal readings arrive meanwhile.
     let basalProfileUpdateLock = NSLock()
