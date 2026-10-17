@@ -194,6 +194,7 @@ final class FaketandemHarness {
         VirtualPump.scanInterval = 0.5
         VirtualPump.responseTimeout = .milliseconds(Int(Self.responseTimeout * 1000))
         VirtualPump.connectTimeout = .seconds(15)
+        VirtualPump.historyPacing = HistoryLogFetcher.Pacing(requestDelay: 0.05, pollInterval: 0.05, chunkTimeout: 2)
         let bluetooth = TandemBluetoothManager()
         let central = bluetooth.manager!
         if poweredOnBeforeAttach {

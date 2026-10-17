@@ -24,6 +24,10 @@ public enum VirtualPump {
     /// slowest command. faketandem answers at once or, when a test tells it not to, never.
     static var responseTimeout: DispatchTimeInterval?
     static var connectTimeout: DispatchTimeInterval?
+
+    /// Replace the history fetcher's ControlX2 cadence, which paces each chunk for a pump's stream
+    /// over BLE. Over the socket a 255-entry chunk arrives in milliseconds.
+    static var historyPacing: HistoryLogFetcher.Pacing?
 }
 
 public enum CBPeripheralState: Int {
