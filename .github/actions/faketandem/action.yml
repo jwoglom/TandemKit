@@ -3,7 +3,8 @@ description: >-
   Checks out faketandem into `path` and builds it to `binary`, with the pumpX2 cliparser jar it
   runs for JPAKE in `path`/third_party. The ref is `ref` when given; otherwise a pull request's
   branch of the same name when faketandem has one, so a change that needs an emulator change is
-  tested against it; otherwise faketandem's default branch.
+  tested against it; otherwise faketandem's default branch. The binary is cached by faketandem
+  commit, so one build serves every job and run on it.
 
 inputs:
   ref:
@@ -34,7 +35,9 @@ runs:
         echo "ref=${ref}" >> "${GITHUB_OUTPUT}"
         echo "faketandem ref: ${ref:-<default branch>}"
 
+    # Kept on a cache hit too: the scripts read the jar from its third_party/.
     - name: Checkout faketandem
+      id: checkout
       uses: actions/checkout@v6
       with:
         repository: jwoglom/faketandem
@@ -42,9 +45,18 @@ runs:
         path: ${{ inputs.path }}
         fetch-depth: 1
 
+    # After the checkout, which empties the directory. The binary is a function of the commit and
+    # the platform alone; the Go version is not in the key, so a toolchain update rebuilds nothing.
+    - name: Cache the faketandem binary
+      uses: actions/cache@v6
+      with:
+        path: ${{ inputs.path }}/faketandem
+        key: faketandem-${{ runner.os }}-${{ runner.arch }}-${{ steps.checkout.outputs.commit }}
+
     # Before Go 1.24 the internal linker wrote no LC_UUID, and this macOS's dyld refuses such a
     # binary at launch (golang/go#68678). faketandem vendors its modules: nothing to cache.
     - name: Set up Go
+      if: hashFiles(format('{0}/faketandem', inputs.path)) == ''
       uses: actions/setup-go@v7
       with:
         go-version: stable
@@ -68,11 +80,19 @@ runs:
       working-directory: ${{ inputs.path }}
       env:
         BINARY: ${{ inputs.binary }}
+        COMMIT: ${{ steps.checkout.outputs.commit }}
       run: |
         set -euo pipefail
         if ! ls third_party/pumpx2-cliparser-*.jar >/dev/null 2>&1; then
           make jar
         fi
         ls -l third_party
+        if [[ -x faketandem ]]; then
+          echo "faketandem ${COMMIT}: using the cached build"
+        else
+          echo "faketandem ${COMMIT}: building"
+          go build -o faketandem .
+        fi
         mkdir -p "$(dirname "${BINARY}")"
-        go build -o "${BINARY}" .
+        cp faketandem "${BINARY}"
+        ls -l "${BINARY}"
