@@ -33,8 +33,7 @@ insulin, stops delivery or changes basal, and some steps deliberately cause erro
   the phone's time and give it a profile with no zero rates.
 - **Build.** Record the TandemKit commit and the host app's version.
 - **Feature flags** (Settings → View Debug Options → Feature Flags). Leave them at their defaults
-  unless a step changes one: History Backfill and History Dose Reporting on; Control-IQ Support,
-  Quick Bolus Button Support and History Basal Reporting off.
+  unless a step changes one: Control-IQ Support off; every other flag on.
 - **Logs.** Use "Share Tandem pump logs" on TandemKit's settings screen at the end of each run, and
   after any step that fails.
 - **Mobi.** The Mobi has no screen. Do steps marked *on the pump* on a t:slim X2. On a Mobi, do
@@ -45,7 +44,7 @@ insulin, stops delivery or changes basal, and some steps deliberately cause erro
 | ID | Do | Expect | Automated |
 |---|---|---|---|
 | P1 | Pair with a wrong 6-digit code. | The alert "The pump did not accept the pairing code." appears, pairing goes back to the step before the code, and scanning restarts once the alert is dismissed. The app doesn't retry the code on its own. Record whether a Mobi drops the link at that point. | `PairingIntegrationTests`, `PairingFailureTests` |
-| P2 | Pair with the right code and finish onboarding. | The pump holds the host's basal schedule, max bolus and max basal. Its clock reads the phone's time, its sounds are the ones chosen during onboarding, and its quick bolus is off. Check each on the pump. | `OnboardingIntegrationTests`, `TrioOnboardingTests` |
+| P2 | Pair with the right code and finish onboarding. | The pump holds the host's basal schedule, max bolus and max basal. Its clock reads the phone's time, its sounds are the ones chosen during onboarding, and its quick bolus is as it was before pairing. Check each on the pump. | `OnboardingIntegrationTests`, `TrioOnboardingTests` |
 | P3 | Set a 30-minute temp basal from the host, take the phone out of range for 10 minutes, then bring it back. | While out of range, the status says the pump can't be reached, and TandemKit's settings screen says how many minutes ago the app last connected, the temp rate the pump was running then, and when it returns to its profile rate. Back in range, the driver reconnects and syncs on its own, with nothing done in the app. "Pump Pairing Problem" never appears, even when the edge of range cuts a reconnect short. | `ReconnectIntegrationTests`, `DisconnectedDeliveryIntegrationTests`, conformance D6 and F5 |
 | P4 | With the phone out of range, pair the pump to a second phone or to Tandem's app, so it no longer accepts TandemKit's key. Bring TandemKit's phone back. | After three failed reconnects, "Pump Pairing Problem" appears and the driver stops reconnecting on its own. For each failed reconnect, record the error the log gives with "Device disconnected" and the JPAKE round it came after. | `ReconnectIntegrationTests`, `JpakeLinkLossTests` |
 | P5 | With TandemKit connected, open Tandem's app on the same phone and leave both running through a few of the host's loop cycles. | The host's syncs and doses carry on, and its reservoir and basal readings match the pump's screen. If Tandem's app talks to the pump, each burst of its traffic gives one log line "Unsolicited … another app on the phone is likely talking to the pump". Record whether those lines appear. | `AnotherClientIntegrationTests`, `UnsolicitedNotificationTests` |
@@ -65,13 +64,13 @@ insulin, stops delivery or changes basal, and some steps deliberately cause erro
 ## Conditional configurations
 
 These configurations change what the pump can do without the host. Control-IQ can be on at the
-pump when it is paired, and setup turns it off (C5); the rest depend on feature flags that are off
-by default.
+pump when it is paired, and setup turns it off (C5); the rest depend on feature flags that are
+turned off or on from their defaults.
 
 | ID | Do | Expect | Automated |
 |---|---|---|---|
-| Q1 | Quick Bolus Button Support off. Before pairing, turn the pump's quick bolus on in the pump's own settings, then pair (P2). Right after onboarding, press the quick bolus button. While still paired, turn quick bolus on again on the pump, then let the host sync. | Quick bolus is off on the pump as soon as onboarding ends, and pressing the button delivers nothing. After the sync, quick bolus is off again. | `QuickBolusEnforcementTests`, `SyncIntegrationTests`, `OnboardingIntegrationTests` |
-| Q2 | Turn on Quick Bolus Button Support. On TandemKit's Quick Bolus Settings screen, turn quick bolus on, then give a quick bolus with the pump's button. | Quick bolus stays on after syncs. Nothing is reported while the bolus runs. Once it finishes, the host holds one bolus at the pump's delivered amount, dated at its start, programmed on the pump and not automatic. | `SyncIntegrationTests`, conformance D12, `TrioBolusTests` |
+| Q1 | Turn off Quick Bolus Button Support. Before pairing, turn the pump's quick bolus on in the pump's own settings, then pair (P2). Right after onboarding, press the quick bolus button. While still paired, turn quick bolus on again on the pump, then let the host sync. | Quick bolus is off on the pump as soon as onboarding ends, and pressing the button delivers nothing. After the sync, quick bolus is off again. | `QuickBolusEnforcementTests`, `SyncIntegrationTests`, `OnboardingIntegrationTests` |
+| Q2 | Leave Quick Bolus Button Support on. On TandemKit's Quick Bolus Settings screen, turn quick bolus on, then give a quick bolus with the pump's button. | Quick bolus stays on after syncs. Nothing is reported while the bolus runs. Once it finishes, the host holds one bolus at the pump's delivered amount, dated at its start, programmed on the pump and not automatic. | `SyncIntegrationTests`, conformance D12, `TrioBolusTests` |
 | Q3 | As Q2, but with History Dose Reporting off. | The host never holds the bolus, and nothing in the app says so. While it runs, the driver's log says that the pump is delivering a bolus the app did not start, and that it will never be reported. With Control-IQ off, once TandemKit has been paired for longer than the pump's insulin duration, the log also warns 30 minutes after the bolus that the pump holds more bolus insulin than the host was told of. | conformance I3, `UnreportedInsulinOnBoardTests` |
 | C1 | Turn on Control-IQ Support. With a CGM paired to the pump, set Control-IQ's weight and total daily insulin to test values. Long-press the algorithm status on TandemKit's settings screen to switch to Control-IQ. Set a temp basal from the host, then turn the host's closed loop on for a few loop cycles, then give a manual bolus. | The "Control-IQ On" status appears. The temp basal is refused: "Control-IQ is active on the pump". So is every temp basal and automatic bolus the loop asks for. The manual bolus is delivered. Record what the host does with each refusal. | `DeliveryLimitIntegrationTests` (L5), `TandemPumpManagerControlIQTests` |
 | C2 | As C1, with History Dose Reporting on. Wait for Control-IQ to give an automatic bolus. It gives one only when it predicts high glucose, so this step may have to wait. | Nothing is reported while the bolus runs. Once it finishes, the host holds it once, as automatic and programmed on the pump. | conformance D16 |

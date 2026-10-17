@@ -1,7 +1,7 @@
 @testable import TandemKit
 import XCTest
 
-/// With `quickBolusButtonSupport` off — the default — every sync has to confirm the pump's quick
+/// With `quickBolusButtonSupport` off, every sync has to confirm the pump's quick
 /// bolus button is disabled and turn it off if the pump says otherwise, so a button pressed on the
 /// pump cannot deliver insulin the app knows nothing about.
 @available(macOS 13.0, iOS 14.0, *) final class QuickBolusEnforcementTests: XCTestCase {
@@ -46,9 +46,9 @@ import XCTest
         wait(for: [synced], timeout: 5)
     }
 
-    func testQuickBolusButtonSupportIsOffByDefault() {
-        XCTAssertFalse(TandemFeatureFlags.default.quickBolusButtonSupport)
-        XCTAssertFalse(TandemPumpManagerState(rawValue: [:]).featureFlags.quickBolusButtonSupport)
+    func testQuickBolusButtonSupportIsOnByDefault() {
+        XCTAssertTrue(TandemFeatureFlags.default.quickBolusButtonSupport)
+        XCTAssertTrue(TandemPumpManagerState(rawValue: [:]).featureFlags.quickBolusButtonSupport)
     }
 
     func testSyncDisablesTheQuickBolusButtonWhenTheFlagIsOff() throws {

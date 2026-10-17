@@ -35,9 +35,9 @@ import XCTest
         )
         let viewModel = TandemKitFeatureFlagsViewModel(pumpManager: manager)
 
-        viewModel.setFlag(.quickBolusButtonSupport, enabled: true)
+        viewModel.setFlag(.quickBolusButtonSupport, enabled: false)
 
-        XCTAssertTrue(viewModel.isEnabled(.quickBolusButtonSupport))
-        XCTAssertTrue(manager.state.featureFlags.quickBolusButtonSupport)
+        XCTAssertFalse(viewModel.isEnabled(.quickBolusButtonSupport))
+        XCTAssertFalse(manager.state.featureFlags.quickBolusButtonSupport)
     }
 }

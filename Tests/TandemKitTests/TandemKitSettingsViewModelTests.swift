@@ -27,7 +27,6 @@ import XCTest
             bluetooth: StubPumpBluetooth()
         )
         manager.setFeatureFlag(.controlIQSupport, enabled: true)
-        manager.setFeatureFlag(.quickBolusButtonSupport, enabled: true)
 
         let viewModel = makeSettingsViewModel(manager)
 
@@ -35,7 +34,7 @@ import XCTest
         XCTAssertTrue(viewModel.quickBolusButtonSupportEnabled)
     }
 
-    func testSettingsViewModelHidesTheGatedRowsByDefault() {
+    func testSettingsViewModelHidesTheControlIQRowByDefaultAndShowsTheQuickBolusRow() {
         let manager = TandemPumpManager(
             state: TandemPumpManagerState(rawValue: [:]),
             bluetooth: StubPumpBluetooth()
@@ -44,6 +43,18 @@ import XCTest
         let viewModel = makeSettingsViewModel(manager)
 
         XCTAssertFalse(viewModel.controlIQSupportEnabled)
+        XCTAssertTrue(viewModel.quickBolusButtonSupportEnabled)
+    }
+
+    func testSettingsViewModelHidesTheQuickBolusRowWhileTheFlagIsOff() {
+        let manager = TandemPumpManager(
+            state: TandemPumpManagerState(rawValue: [:]),
+            bluetooth: StubPumpBluetooth()
+        )
+        manager.setFeatureFlag(.quickBolusButtonSupport, enabled: false)
+
+        let viewModel = makeSettingsViewModel(manager)
+
         XCTAssertFalse(viewModel.quickBolusButtonSupportEnabled)
     }
 

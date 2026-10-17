@@ -346,8 +346,7 @@ there.
   or lost track of, and a pump profile that is not the app's schedule. A history pass sends its
   transitions and corrections as one batch.
 - The backfill and the dose reporting are behind the `historyBackfill`, `historyDoseReporting`
-  and `basalHistoryReporting` feature flags; the backfill and the dose reporting are on by default,
-  the basal reporting is off. AGENTS.md has the full rules.
+  and `basalHistoryReporting` feature flags, all on by default. AGENTS.md has the full rules.
 
 ### Reporting to the host
 
