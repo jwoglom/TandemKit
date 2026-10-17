@@ -228,6 +228,70 @@ final class PumpBasalTimelineTests: XCTestCase {
         XCTAssertEqual(trusted(timeline(log)), [true, true, false, false, false, true], "ran out at 700")
     }
 
+    func testAReplayThatStartsMidTempTrustsTheTempsRecords() {
+        var log = PumpLog()
+        log.delivery(0, source: 2, rate: 1500)
+        log.delivery(300, source: 2, rate: 1500)
+        log.tempEnded(400, id: 3, timeLeft: 600_000)
+        log.profile(600)
+        log.profile(900)
+
+        let timeline = timeline(log)
+        XCTAssertEqual(trusted(timeline), [true, true, true, true])
+        XCTAssertTrue(timeline.problems.isEmpty, "\(timeline.problems)")
+    }
+
+    func testAReplayThatStartsMidSuspendTrustsTheSuspendedRecords() {
+        var log = PumpLog()
+        log.delivery(0, source: 0, rate: 0)
+        log.resumed(200)
+        log.profile(201)
+        log.profile(501)
+
+        let timeline = timeline(log)
+        XCTAssertEqual(trusted(timeline), [true, true, true])
+        XCTAssertTrue(timeline.problems.isEmpty, "\(timeline.problems)")
+    }
+
+    func testATempWithNoStartAfterAProfileRecordStillFails() {
+        var log = PumpLog()
+        log.profile(0)
+        log.delivery(300, source: 2, rate: 1500)
+        log.profile(600)
+
+        XCTAssertEqual(trusted(timeline(log)), [false, false, false])
+    }
+
+    func testAResumeLostInAStoreGapLeavesWhatFollowsTrusted() {
+        var log = PumpLog()
+        log.profile(0)
+        log.suspended(100)
+        log.delivery(300, source: 0, rate: 0)
+        log.resumed(400)
+        log.profile(401)
+        log.profile(701)
+        log.lose(1004)
+
+        let timeline = timeline(log, gaps: [1004 ... 1004])
+        XCTAssertEqual(spans(timeline), ["0-100 profile 1000", "401-701 profile 1000", "701-1001 profile 1000"])
+        XCTAssertEqual(trusted(timeline), [true, true, true])
+        XCTAssertTrue(timeline.problems.isEmpty, "\(timeline.problems)")
+    }
+
+    func testATempStartLostInAStoreGapLeavesItsCyclesTrusted() {
+        var log = PumpLog()
+        log.profile(0)
+        log.tempStarted(100, percent: 150, minutes: 30, id: 4)
+        log.delivery(300, source: 2, rate: 1500)
+        log.delivery(600, source: 2, rate: 1500)
+        log.lose(1002)
+
+        let timeline = timeline(log, gaps: [1002 ... 1002])
+        XCTAssertEqual(spans(timeline), ["300-600 temp 1500", "600-900 temp 1500"])
+        XCTAssertEqual(trusted(timeline), [true, true])
+        XCTAssertTrue(timeline.problems.isEmpty, "\(timeline.problems)")
+    }
+
     func testAControlIQChunkFailsUnderOpenLoopOrNoControl() {
         for (pcm, passes) in [(ControlIQPcmChangeHistoryLog.PCM.closedLoop, true), (.cgmInactive, true), (.openLoop, false), (.noControl, false)] {
             var log = PumpLog()

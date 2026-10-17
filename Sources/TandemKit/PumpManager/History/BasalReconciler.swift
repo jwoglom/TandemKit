@@ -16,19 +16,55 @@ enum BasalReconciler {
         let host: ReportedBasalLedger.HostBasal
     }
 
+    /// The host's insulin less the pump's over chunks that matched, in units: the cycle timing no
+    /// correction covers. A change counts early at both ends of a temp, so `net` can cancel `gross`.
+    struct Residual: Equatable {
+        var net = 0.0
+        var gross = 0.0
+
+        mutating func add(_ residual: Double) {
+            net += residual
+            gross += abs(residual)
+        }
+    }
+
+    /// Per phone-calendar day, the residual of each chunk a session compares once, until the day is over.
+    struct ResidualDays {
+        private var open: [Date: (residual: Residual, chunks: Set<UInt32>)] = [:]
+        private var closed = Set<Date>()
+
+        mutating func add(_ residual: Double, of chunk: PumpBasalTimeline.Chunk, calendar: Calendar = .current) {
+            let day = calendar.startOfDay(for: chunk.start)
+            guard !closed.contains(day), open[day, default: (Residual(), [])].chunks.insert(chunk.sequenceNum).inserted else {
+                return
+            }
+            open[day]?.residual.add(residual)
+        }
+
+        /// The days before `now`'s, each once.
+        mutating func close(before now: Date, calendar: Calendar = .current) -> [(day: Date, residual: Residual, cycles: Int)] {
+            let today = calendar.startOfDay(for: now)
+            let over = open.filter { $0.key < today }.sorted { $0.key < $1.key }
+            for (day, _) in over {
+                open[day] = nil
+                closed.insert(day)
+            }
+            return over.map { ($0.key, $0.value.residual, $0.value.chunks.count) }
+        }
+    }
+
     struct Result: Equatable {
         var differences: [Difference] = []
         /// Chunks compared that matched.
         var matched = 0
         /// Suspended, before the floor, still running at `now`, or exempt.
         var skipped = 0
-        /// Per phone-calendar day, the host's insulin against the pump's over the chunks that
-        /// matched, in units: the cycle timing no correction covers.
-        var residualByDay: [Date: Double] = [:]
+        /// Per phone-calendar day.
+        var residualByDay: [Date: Residual] = [:]
     }
 
     enum Verdict: Equatable {
-        /// With the host's insulin against the pump's over the chunk, in units.
+        /// The host's insulin less the pump's over the chunk, in units.
         case matches(residual: Double)
         case differs(ReportedBasalLedger.HostBasal)
         case skipped
@@ -52,7 +88,7 @@ enum BasalReconciler {
             switch verdict(for: chunk, against: ledger, schedule: schedule, floor: floor, now: now, isExempt: isExempt) {
             case let .matches(residual):
                 result.matched += 1
-                result.residualByDay[calendar.startOfDay(for: chunk.start), default: 0] += residual
+                result.residualByDay[calendar.startOfDay(for: chunk.start), default: Residual()].add(residual)
             case let .differs(host):
                 result.differences.append(Difference(chunk: chunk, host: host))
             case .skipped:
@@ -81,7 +117,7 @@ enum BasalReconciler {
             return .differs(host)
         }
         let interval = DateInterval(start: chunk.start, end: chunk.end)
-        return .matches(residual: abs(ledger.hostUnits(in: interval, schedule: schedule) - chunk.units))
+        return .matches(residual: ledger.hostUnits(in: interval, schedule: schedule) - chunk.units)
     }
 
     /// The host's rate at the chunk's start, or either side of a change it was commanded to make

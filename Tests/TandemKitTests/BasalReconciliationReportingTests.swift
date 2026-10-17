@@ -310,6 +310,48 @@ import XCTest
         XCTAssertEqual(correction.endDate, at(610))
     }
 
+    func testAPumpTempWhoseStartIsLostInAStoreGapIsCorrectedOnceTheGapIsGivenUp() {
+        enableReporting()
+        var log = PumpBasalHistory()
+        log.profile(10)
+        log.tempStarted(100, percent: 150, minutes: 30, id: 7)
+        log.delivery(310, source: 2, rate: 1500)
+        log.delivery(610, source: 2, rate: 1500)
+        log.profile(910)
+        log.lose(1002)
+
+        pass(log)
+        pass(log)
+        XCTAssertTrue(events.isEmpty, "held back by the gap")
+        pass(log)
+
+        XCTAssertEqual(events.map(\.date), [at(310), at(610)])
+        XCTAssertEqual(events.map { $0.dose?.unitsPerHour }, [1.5, 1.5])
+    }
+
+    func testAFailingRecordIsLoggedOnceASession() {
+        var log = PumpBasalHistory()
+        log.pcm(0, .openLoop)
+        let failing = log.delivery(10, source: 3, rate: 2200)
+
+        pass(log)
+        pass(log)
+
+        XCTAssertEqual(manager.loggedBasalProblems, [failing])
+    }
+
+    func testAFailingRecordReconciliationIsDoneWithIsNotLogged() {
+        enableReporting()
+        var log = PumpBasalHistory()
+        log.pcm(0, .openLoop)
+        let failing = log.delivery(10, source: 3, rate: 2200)
+        manager.state.reportedBasal.track(pumpSerial: Self.pumpSerial, after: failing)
+
+        pass(log)
+
+        XCTAssertTrue(manager.loggedBasalProblems.isEmpty)
+    }
+
     func testAnUntrustedChunkIsNotCorrected() {
         enableReporting()
         var log = PumpBasalHistory()

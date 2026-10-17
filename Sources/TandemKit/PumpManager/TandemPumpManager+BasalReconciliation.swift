@@ -23,7 +23,8 @@ extension TandemPumpManager {
         DateChangeHistoryLog.typeId
     ]
 
-    /// Read before the floor, so the cross-check knows a temp or suspend already in force there.
+    /// Read before the floor so the cross-check knows a temp or suspend in force there, as far as the
+    /// session's store reaches: `deepFetchLookback` before its first pass. Short of it, it starts unknown.
     static let basalHistoryLookback: TimeInterval = .hours(12)
 
     /// History passes a store gap holds reconciliation back before it is skipped.
@@ -90,8 +91,12 @@ extension TandemPumpManager {
             gaps: gaps,
             readThrough: outcome.readsThroughPumpEnd ? outcome.startedAt : nil
         )
-        if !timeline.problems.isEmpty {
-            logger.warning("Pump basal history fails its checks; not correcting around: \(timeline.problems.joined(separator: "; "))")
+        let resumeAfter = reporting ? state.reportedBasal.reconciledThrough : nil
+        let problems = timeline.problems
+            .filter { $0.date >= floor && $0.sequenceNum > resumeAfter ?? 0 }
+            .filter { loggedBasalProblems.insert($0.sequenceNum).inserted }
+        if !problems.isEmpty {
+            logger.warning("Pump basal history fails its checks; not correcting around: \(problems.map(\.description).joined(separator: "; "))")
         }
 
         // What the host counts once this pass's other reports reach it.
@@ -115,9 +120,7 @@ extension TandemPumpManager {
 
         var firstUnresolved: Date?
         var resolvedThrough: UInt32?
-        var residualByDay: [Date: Double] = [:]
-        let from = reporting ? state.reportedBasal.reconciledThrough : nil
-        chunks: for chunk in timeline.chunks where from.map({ chunk.sequenceNum > $0 }) ?? true {
+        chunks: for chunk in timeline.chunks where resumeAfter.map({ chunk.sequenceNum > $0 }) ?? true {
             if stop.map({ chunk.sequenceNum > $0 }) ?? false || chunk.end > now {
                 firstUnresolved = chunk.start
                 break
@@ -134,7 +137,7 @@ extension TandemPumpManager {
                 )
                 guard case let .differs(host) = verdict else {
                     if case let .matches(residual) = verdict {
-                        residualByDay[Calendar.current.startOfDay(for: chunk.start), default: 0] += residual
+                        basalResidualDays.add(residual, of: chunk)
                     }
                     break
                 }
@@ -161,8 +164,8 @@ extension TandemPumpManager {
         if reporting, let resolvedThrough {
             state.reportedBasal.reconcile(through: resolvedThrough)
         }
-        for (day, residual) in residualByDay.sorted(by: { $0.key < $1.key }) {
-            logger.info("Basal cycle residual for \(day): \(residual) U")
+        for (day, residual, cycles) in basalResidualDays.close(before: now) {
+            logger.info("Basal cycle residual for \(day): \(residual.net) U net, \(residual.gross) U gross, host less pump over \(cycles) matching cycle(s)")
         }
         if pass.corrections > 0 {
             logger.info("Reporting \(pass.corrections) basal correction(s) from pump history")

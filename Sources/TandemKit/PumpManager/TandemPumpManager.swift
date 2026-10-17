@@ -183,6 +183,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
     /// The BasalDelivery records whose basal difference has been logged this session. Only touched
     /// from command queue jobs.
     var loggedBasalDifferences = Set<UInt32>()
+    /// The records whose basal history check failure has been logged this session. Command queue only.
+    var loggedBasalProblems = Set<UInt32>()
+    /// Command queue only.
+    var basalResidualDays = BasalReconciler.ResidualDays()
     /// How many history passes each store gap has held basal reconciliation back. Command queue only.
     var basalGapPasses: [ClosedRange<UInt32>: Int] = [:]
     /// Paces `updatePumpBasalProfile`: one write in flight, the next no sooner than
