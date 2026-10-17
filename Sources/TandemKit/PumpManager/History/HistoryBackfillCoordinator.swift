@@ -164,10 +164,29 @@ final class HistoryBackfillCoordinator {
                 now: now
             )
 
+            let pumpRange = status.firstSequenceNum ... max(status.firstSequenceNum, status.lastSequenceNum)
+            // An empty log's range names no entry (faketandem reports 0...0), and a read of it waits out
+            // the chunk timeout twice; bookkept as that read of nothing, so coverage and tracking start here.
+            if status.numEntries == 0 {
+                var read = bookkeeping
+                read.advanceWatermark(through: pumpRange.upperBound)
+                self.noteSessionCoverage(of: pumpRange)
+                self.persist(read)
+                finish(TickOutcome(
+                    bookkeeping: read,
+                    rangesRead: [pumpRange],
+                    sessionCovered: self.sessionCoverage,
+                    isDeepBackfillComplete: true,
+                    emitFloor: emitFloor,
+                    startedAt: now,
+                    pumpSequenceRange: pumpRange
+                ))
+                return
+            }
+
             let plan = HistoryBackfillPlanner.plan(
                 firstSequenceNum: status.firstSequenceNum,
                 lastSequenceNum: status.lastSequenceNum,
-                isPumpLogEmpty: status.numEntries == 0,
                 watermark: bookkeeping.watermark,
                 sessionCovered: self.sessionCoverage,
                 storeGaps: self.storeGaps(pumpSerial: serial),
@@ -183,7 +202,7 @@ final class HistoryBackfillCoordinator {
                     isDeepBackfillComplete: plan.isDeepBackfillComplete,
                     emitFloor: emitFloor,
                     startedAt: now,
-                    pumpSequenceRange: status.firstSequenceNum ... max(status.firstSequenceNum, status.lastSequenceNum)
+                    pumpSequenceRange: pumpRange
                 ))
                 return
             }
@@ -203,7 +222,7 @@ final class HistoryBackfillCoordinator {
                         || (self.sessionCoverage.map { $0.lowerBound <= status.firstSequenceNum } ?? false),
                     emitFloor: emitFloor,
                     startedAt: now,
-                    pumpSequenceRange: status.firstSequenceNum ... max(status.firstSequenceNum, status.lastSequenceNum)
+                    pumpSequenceRange: pumpRange
                 ))
             }
         }
