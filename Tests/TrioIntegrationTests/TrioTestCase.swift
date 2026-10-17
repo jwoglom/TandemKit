@@ -48,9 +48,14 @@ class TrioTestCase: FaketandemIntegrationTestCase {
         []
     }
 
+    /// Runs on the reset pump, before `seededFiles` is read and Trio launches: what a scenario
+    /// stages on the emulator, or has to know for its seed.
+    func beforeLaunch() throws {}
+
     override func setUpWithError() throws {
         try super.setUpWithError()
         try restorePumpDelivery()
+        try beforeLaunch()
         trio = try TrioApp.launchNew(name: name, files: seededFiles(), arguments: launchArguments)
         control = try trio.connectControl()
     }
@@ -107,12 +112,7 @@ class TrioTestCase: FaketandemIntegrationTestCase {
     func pairTrio(withCode: Bool = false, thenSync: Bool = true) throws {
         var request = VirtualPumpControl.Request(command: .pair, code: FaketandemHarness.pairingCode)
         if !withCode {
-            var key = Data(count: 32)
-            for index in key.indices {
-                key[index] = UInt8.random(in: .min ... .max)
-            }
-            _ = try harness.control.setLongTermKey(key)
-            request.longTermKey = key.hexadecimalString
+            request.longTermKey = try seedLongTermKey().hexadecimalString
         }
         let paired = try control.send(request)
         XCTAssertEqual(paired.status?.onboarded, true)
@@ -120,6 +120,16 @@ class TrioTestCase: FaketandemIntegrationTestCase {
         if thenSync {
             try control.send(.init(command: .sync))
         }
+    }
+
+    /// A random long-term key given to faketandem, the pump's half of a completed pairing.
+    func seedLongTermKey() throws -> Data {
+        var key = Data(count: 32)
+        for index in key.indices {
+            key[index] = UInt8.random(in: .min ... .max)
+        }
+        _ = try harness.control.setLongTermKey(key)
+        return key
     }
 
     /// What the pump does on its own reaches Trio through its history log, which the driver starts

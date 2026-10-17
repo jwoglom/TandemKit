@@ -12,9 +12,37 @@ final class TrioClosedLoopTests: TrioTestCase {
         ["-GlucoseSimulator_CenterValue", "250", "-GlucoseSimulator_Amplitude", "1", "-GlucoseSimulator_NoiseAmplitude", "1"]
     }
 
+    /// Trio loops only on a reading of the simulator, 5 minutes apart, and its first is at launch, so
+    /// it launches with the driver's state after a pairing: a pairing through the control channel
+    /// after launch lost the race to that loop, and the next one was a reading later.
+    private var pairedState: TandemPumpManagerState!
+
+    override func beforeLaunch() throws {
+        try super.beforeLaunch()
+        var state = try TandemPumpManagerState(
+            basalRateSchedule: XCTUnwrap(BasalRateSchedule(dailyItems: [RepeatingScheduleValue(startTime: 0, value: Self.scheduledBasalRate)])),
+            maxBasalRateUnitsPerHour: Self.maxBasal,
+            maxBolusUnits: Self.maxBolus
+        )
+        state.pumpState.derivedSecret = try seedLongTermKey()
+        state.pumpState.pincode = FaketandemHarness.pairingCode
+        // The id faketandem sends in every hello, which the driver's connect checks against.
+        state.pumpState.peripheralUuid = try harness.readHello().peripheralId.uuidString
+        state.hasSyncedBasalRateSchedule = true
+        pairedState = state
+        // The pump already runs the schedule, so the first sync queues no profile update.
+        let profile = FaketandemIDPProfile(id: 1, segments: [.init(startTime: 0, basalRate: Self.milliunits(Self.scheduledBasalRate))])
+        try harness.client.setState([
+            "idp_profiles": [profile.fields],
+            "basal_rate": Self.scheduledBasalRate,
+            "bolus_rate_units_per_second": 0.25,
+        ])
+    }
+
     override func seededFiles() throws -> [String: String] {
         var files = try super.seededFiles()
         files["Documents/freeaps/freeaps_settings.json"] = try Self.json(["cgm": "simulator", "dosingMode": "closed"])
+        files["Documents/PumpManagerState.plist"] = try Self.plist(["managerIdentifier": "TandemPumpManager", "state": pairedState.rawValue])
         return files
     }
 
@@ -24,12 +52,6 @@ final class TrioClosedLoopTests: TrioTestCase {
     }
 
     func testTrioLoopEnactsATempBasalAndAnSMBThatTrioStoresAsTheOracleExpects() throws {
-        try pairTrio()
-        try syncBasalSchedule()
-        try harness.client.setState(["bolus_rate_units_per_second": 0.25])
-
-        // The simulator gives a reading every 5 minutes and Trio loops on each; the loop at launch
-        // found the pump unpaired.
         try trioStored("a temp basal and an SMB from Trio's loop", timeout: 900) { events in
             events.contains { $0.dose?.type == .tempBasal && $0.dose?.automatic == true }
                 && events.contains { $0.dose?.type == .bolus && $0.dose?.automatic == true }

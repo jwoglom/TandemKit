@@ -344,13 +344,18 @@ Nothing in Trio changes for it:
 
 The commands call the driver as Trio's code would. `TrioClosedLoopTests` runs Trio's own loop
 instead: Trio's glucose simulator as the CGM (`cgm` `simulator`, held near 250 mg/dL through its
-`GlucoseSimulator_*` defaults passed as launch arguments), closed loop, a max IOB and SMBs allowed,
-so `APSManager` enacts a temp basal and an SMB through the driver on the simulator's next reading,
-up to 5 minutes after launch. Trio's manual bolus path (`APSManager.enactBolus`, from its bolus
-screen) is not driven, nor is its pump setup flow, which hands Trio the manager only once paired:
-every scenario pairs a manager Trio holds from launch, as when re-pairing. The cartridge and fill
-cannula wizards wait for state-stream notifications faketandem does not send, so their scenario
-sends what they report once done, around a suspend.
+`GlucoseSimulator_*` defaults passed as launch arguments), closed loop, a max IOB and SMBs allowed.
+Trio loops on each reading of the simulator, 5 minutes apart, and the first is at launch, so the
+scenario seeds `PumpManagerState.plist` with the driver's state after a pairing (`beforeLaunch`: the
+schedule as synced, a long-term key faketandem is given too, and the peripheral id faketandem sends
+in its `hello`, read with `FaketandemHarness.readHello`) and the pump's profile as the schedule: the
+loop at launch reaches a paired pump and `APSManager` enacts a temp basal and an SMB through the
+driver about 15 s in, where a pairing through the control channel after launch lost the race to
+that loop and waited for the next reading. Trio's manual bolus path (`APSManager.enactBolus`, from
+its bolus screen) is not driven, nor is its pump setup flow, which hands Trio the manager only once
+paired: every other scenario pairs a manager Trio holds from launch, as when re-pairing. The
+cartridge and fill cannula wizards wait for state-stream notifications faketandem does not send, so
+their scenario sends what they report once done, around a suspend.
 
 Journeys covered, each checked against the oracle: an app bolus, an automatic one (stored as an
 SMB), one cancelled part-way, one running across a relaunch of Trio, one through a dropped link, and
