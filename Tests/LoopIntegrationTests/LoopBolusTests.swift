@@ -32,6 +32,7 @@ final class LoopBolusTests: LoopTestCase {
 
     func testABolusCancelledPartWayIsStoredByLoopAtWhatThePumpDelivered() throws {
         try pairLoop()
+        try harness.client.setState(["bolus_rate_units_per_second": 0.1])
         try control.send(.init(command: .bolus, units: 2.0))
         try IntegrationWait.until("the pump to have delivered part of the bolus", timeout: 60) {
             try self.harness.client.snapshot().bolus.unitsDelivered >= 0.3
@@ -50,6 +51,7 @@ final class LoopBolusTests: LoopTestCase {
 
     func testABolusRunningAcrossARelaunchOfLoopIsStoredOnceFinished() throws {
         try pairLoop()
+        try harness.client.setState(["bolus_rate_units_per_second": 0.1])
         try control.send(.init(command: .bolus, units: 2.0))
         try loopStored("the running bolus") { events in
             events.contains { $0.dose?.type == .bolus && $0.dose?.isMutable == true }
