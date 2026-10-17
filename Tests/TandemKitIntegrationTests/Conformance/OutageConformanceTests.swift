@@ -297,7 +297,7 @@ final class OutageConformanceTests: ConformanceTestCase {
         try harness.client.armFault(FaketandemFaultSpec(.radioOn))
 
         // Real time: the driver reconnects on its own timer, not the modelled clock.
-        let retryBudget = TandemBluetoothManager.reconnectRetryDelays.reduce(0, +) + 30
+        let retryBudget = driver.bluetooth.reconnectRetryDelays.reduce(0, +) + 30
         let suspend = try waitForEvent("the suspend, with no sync from the host", since: batchesBefore, timeout: retryBudget) {
             $0.type == .suspend
         }

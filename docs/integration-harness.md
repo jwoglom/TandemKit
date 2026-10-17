@@ -588,7 +588,8 @@ shape of it explains what the harness is for:
 Not gaps, but worth knowing when reading timings: `FaketandemHarness.makeDriver` shortens the
 driver's response timeout to 5 s and its connect timeout to 15 s (`VirtualPump.responseTimeout`,
 `VirtualPump.connectTimeout`; production keeps 30 s for a real pump's slowest command), so a
-scenario that drops a response waits 5 s, not 30. An unauthenticated `DisconnectPumpRequest` is
-not answered (the handler requires auth, as on a real pump), so the driver sends it only on an
-authenticated session. And pairing-state `NotDiscoverable` still answers `hello` (followed by
-`disconnect`), which the virtual `CBCentralManager` treats as "not advertising".
+scenario that drops a response waits 5 s, not 30, and the reconnect retry's backoff to 1, 2, 3, 4,
+5 s (`reconnectRetryDelays`; production waits 5, 10, 20, 40, 60 s). An unauthenticated
+`DisconnectPumpRequest` is not answered (the handler requires auth, as on a real pump), so the
+driver sends it only on an authenticated session. And pairing-state `NotDiscoverable` still answers
+`hello` (followed by `disconnect`), which the virtual `CBCentralManager` treats as "not advertising".
