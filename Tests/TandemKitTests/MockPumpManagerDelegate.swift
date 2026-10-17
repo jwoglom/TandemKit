@@ -213,7 +213,13 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
 
     // MARK: - AlertIssuer
 
+    /// Loop and Trio register a pump manager as alert responder and sound vendor under its
+    /// `pluginIdentifier` and route an acknowledgement by the alert's `managerIdentifier`, so an
+    /// alert issued under any other can never be acknowledged on the pump.
     func issueAlert(_ alert: Alert) {
+        if alert.identifier.managerIdentifier != TandemPumpManager.pluginIdentifier {
+            XCTFail("\(alert.identifier) was issued under a managerIdentifier no host routes back to the pump manager")
+        }
         synchronized {
             _issuedAlerts.append(alert)
             record(.issueAlert(alert))
@@ -221,10 +227,39 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
     }
 
     func retractAlert(identifier: Alert.Identifier) {
+        if ![TandemPumpManager.pluginIdentifier, TandemPumpManager.legacyAlertManagerIdentifier].contains(identifier.managerIdentifier) {
+            XCTFail("\(identifier) was retracted under a managerIdentifier no alert was issued under")
+        }
         synchronized {
             _retractedAlerts.append(identifier)
             record(.retractAlert(identifier))
         }
+    }
+
+    // MARK: - Alert routing
+
+    private final class WeakResponder {
+        weak var responder: AlertResponder?
+        init(_ responder: AlertResponder) { self.responder = responder }
+    }
+
+    private var _alertResponders: [String: WeakResponder] = [:]
+
+    /// As Loop's `DeviceDataManager` and Trio's register a pump manager once it is set up.
+    func addAlertResponder(_ manager: AlertResponder & Pluggable) {
+        synchronized { _alertResponders[manager.pluginIdentifier] = WeakResponder(manager) }
+    }
+
+    /// Acknowledges as the hosts' alert managers do. Returns false, without calling `completion`,
+    /// when no responder is registered under the alert's `managerIdentifier`: the host then clears
+    /// the alert on the phone alone.
+    @discardableResult
+    func acknowledgeAlert(_ identifier: Alert.Identifier, completion: @escaping (Error?) -> Void) -> Bool {
+        guard let responder = synchronized({ _alertResponders[identifier.managerIdentifier]?.responder }) else {
+            return false
+        }
+        responder.acknowledgeAlert(alertIdentifier: identifier.alertIdentifier, completion: completion)
+        return true
     }
 
     // MARK: - PersistedAlertStore

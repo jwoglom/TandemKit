@@ -19,17 +19,14 @@ extension PumpNotificationSeverity {
 }
 
 extension NotificationItem {
-    func loopKitAlert(managerIdentifier: String) -> LoopKit.Alert {
+    var loopKitAlert: LoopKit.Alert {
         let content = LoopKit.Alert.Content(
             title: alertTitle,
             body: alertBody,
             acknowledgeActionButtonLabel: acknowledgeActionLabel
         )
         return LoopKit.Alert(
-            identifier: LoopKit.Alert.Identifier(
-                managerIdentifier: managerIdentifier,
-                alertIdentifier: stableIdentifier
-            ),
+            identifier: TandemPumpManager.alertIdentifier(stableIdentifier),
             foregroundContent: content,
             backgroundContent: content,
             trigger: .immediate,
@@ -125,6 +122,39 @@ extension TandemPumpManager {
 // MARK: - Alert reconciliation
 
 extension TandemPumpManager {
+    /// Loop and Trio register the manager as alert responder and sound vendor under its
+    /// `pluginIdentifier` and look either up by an alert's `managerIdentifier`, so an alert under any
+    /// other is never acknowledged on the pump.
+    static func alertIdentifier(_ alertIdentifier: LoopKit.Alert.AlertIdentifier) -> LoopKit.Alert.Identifier {
+        LoopKit.Alert.Identifier(managerIdentifier: pluginIdentifier, alertIdentifier: alertIdentifier)
+    }
+
+    /// What builds before `alertsIssuedUnderLegacyIdentifier` issued alerts under.
+    static let legacyAlertManagerIdentifier = "Tandem"
+
+    /// Retracts what the host holds under the legacy identifier, and forgets it was issued, so the
+    /// reconcilers issue whatever still stands again under `pluginIdentifier`. Loop plays an
+    /// unacknowledged, unretracted alert back at every launch. On the delegate queue.
+    func retractLegacyAlerts(_ delegate: PumpManagerDelegate) {
+        let issued = state
+        guard issued.alertsIssuedUnderLegacyIdentifier else { return }
+
+        var identifiers = issued.issuedAlertIdentifiers
+        if issued.pumpClockSkewAlertIssued {
+            identifiers.insert(Self.pumpClockSkewAlertIdentifier)
+        }
+        logger.info("Retracting alerts issued under \(Self.legacyAlertManagerIdentifier): \(identifiers.sorted())")
+        for identifier in identifiers.sorted() {
+            delegate.retractAlert(identifier: LoopKit.Alert.Identifier(
+                managerIdentifier: Self.legacyAlertManagerIdentifier,
+                alertIdentifier: identifier
+            ))
+        }
+        state.issuedAlertIdentifiers = []
+        state.pumpClockSkewAlertIssued = false
+        state.alertsIssuedUnderLegacyIdentifier = false
+    }
+
     /// Notification categories currently forwarded to LoopKit as alerts. Alarms and
     /// malfunctions mean stopped/compromised delivery; alerts are actionable. CGM alerts
     /// are opt-in and reminders stay in-app only.
@@ -174,13 +204,13 @@ extension TandemPumpManager {
         let activeItems = surfacedNotificationItems(from: bundle)
         let fetchedCategories = bundle.fetchedCategories
         let surfacedCategories = surfacedAlertCategories
-        let managerIdentifier = TandemPumpManager.managerIdentifier
 
         pumpDelegate.notify { delegate in
             guard let delegate else {
                 self.logger.warning("No pump delegate; deferring alert reconciliation")
                 return
             }
+            self.retractLegacyAlerts(delegate)
 
             let reconciliation = TandemAlertReconciler.reconcile(
                 activeItems: activeItems,
@@ -195,15 +225,12 @@ extension TandemPumpManager {
 
             for item in reconciliation.itemsToIssue {
                 self.logger.info("Issuing LoopKit alert \(item.stableIdentifier)")
-                delegate.issueAlert(item.loopKitAlert(managerIdentifier: managerIdentifier))
+                delegate.issueAlert(item.loopKitAlert)
             }
 
             for identifier in reconciliation.identifiersToRetract {
                 self.logger.info("Retracting LoopKit alert \(identifier)")
-                delegate.retractAlert(identifier: LoopKit.Alert.Identifier(
-                    managerIdentifier: managerIdentifier,
-                    alertIdentifier: identifier
-                ))
+                delegate.retractAlert(identifier: TandemPumpManager.alertIdentifier(identifier))
             }
 
             self.state.issuedAlertIdentifiers = reconciliation.updatedIssuedIdentifiers

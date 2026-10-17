@@ -565,6 +565,10 @@ shape of it explains what the harness is for:
 - **An occlusion raised an alert but no `AlarmStatusResponse` bit**, so a driver reading the alarm
   status, as one reads a pump's, never saw it (D2, B7). It stands as `OCCLUSION_ALARM` until the
   alarm is cleared.
+- **`DismissNotificationRequest` was answered OK without changing anything**, so an alarm the
+  driver acknowledged stood at its next read. A dismissed alarm leaves `AlarmStatusResponse`, with
+  an `AlarmCleared` record for each standing alarm it closes, and a dismissed alert leaves
+  `AlertStatusResponse` (`AlertIntegrationTests`). Reminders and CGM alerts are still only logged.
 - **A `HistoryLogRequest` for 128 or more records streamed one.** `numberOfLogs` is one
   unsigned byte that cliparser prints signed, so a full 255-record slice arrived as -1 and was
   served as a single record; a walk took a chunk timeout per record.

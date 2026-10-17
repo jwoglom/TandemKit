@@ -456,6 +456,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
         // Not pumpManagerDidUpdateState: Loop and Trio save rawValue on the main thread right after
         // attaching, and its save from their delegate queue races that one.
         notifyDelegate(includingState: false)
+        pumpDelegate.notify { delegate in
+            delegate.map(self.retractLegacyAlerts)
+        }
         flushPendingPumpEvents()
         flushPendingReservoirReading()
         flushPendingPumpClockAdjustments()
