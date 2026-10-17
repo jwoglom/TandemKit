@@ -65,6 +65,7 @@ final class TandemKitDebugViewModel: ObservableObject {
     private var lastRequestMessage: Message?
     let openHistoryLogViewer: (() -> Void)?
     let openPumpProfileViewer: (() -> Void)?
+    let openReconciliation: (() -> Void)?
     let openFeatureFlags: (() -> Void)?
     /// Re-runs the initial setup wizard (pairing included) against the existing pump manager,
     /// without removing it. Nil when the coordinator did not provide a navigation target.
@@ -74,12 +75,14 @@ final class TandemKitDebugViewModel: ObservableObject {
         pumpManager: TandemPumpManager?,
         openHistoryLogViewer: (() -> Void)? = nil,
         openPumpProfileViewer: (() -> Void)? = nil,
+        openReconciliation: (() -> Void)? = nil,
         openFeatureFlags: (() -> Void)? = nil,
         rerunInitialSetup: (() -> Void)? = nil
     ) {
         self.pumpManager = pumpManager
         self.openHistoryLogViewer = openHistoryLogViewer
         self.openPumpProfileViewer = openPumpProfileViewer
+        self.openReconciliation = openReconciliation
         self.openFeatureFlags = openFeatureFlags
         self.rerunInitialSetup = rerunInitialSetup
         useSilentMode = pumpManager?.state.useSilentTones ?? false

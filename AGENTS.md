@@ -594,6 +594,11 @@ edit instead of at the next sync.
     delivery change. A pass that started after it, read to the pump's end and left nothing open
     before it clears it. A pass that sees Control-IQ in the BasalDelivery records while
     `useControlIQ` is off, or PCM 1 while it is on, reads the Control-IQ status.
+  - Each pass records what it compared and did in `ReconciliationLog` (in memory, lock-guarded on the
+    manager): the pass's counts and what held it back, every difference with its outcome, the records
+    that fail their cross-check, the open residual days and the IOB monitor's finding. The
+    Reconciliation screen under Debug Options shows it with the ledgers' open items; nothing reads it
+    to dose. Unit tests in `ReconciliationLogTests` and `TandemKitReconciliationViewModelTests`.
   - Scenarios: unit tests in `BasalReconciliationReportingTests`; conformance group H.
 - Every date a history pass takes from a record goes through `HistoryRecordDates.phoneDate(of:)`:
   past the pump's own clock changes (`HistoryTimestampReconciler`), then the pump clock offset

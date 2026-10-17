@@ -156,6 +156,7 @@ extension TandemPumpManager {
         else {
             logger.debug("Pump IOB: \(Self.formatUnits(onBoard)) (\(String(describing: response.type)))")
             unreportedInsulinOnBoard.reset()
+            reconciliationLog.unreportedInsulinOnBoard = nil
             return nil
         }
 
@@ -172,8 +173,10 @@ extension TandemPumpManager {
                 "The pump has \(Self.formatUnits(onBoard)) of bolus insulin on board, \(Self.formatUnits(units)) more than "
                     + "all the boluses reported to the app in the last \(hours) hours"
             )
+            reconciliationLog.unreportedInsulinOnBoard = units
         case .resolved:
             logger.info("Pump bolus IOB is back within the boluses reported to the app")
+            reconciliationLog.unreportedInsulinOnBoard = nil
         }
         return finding
     }
