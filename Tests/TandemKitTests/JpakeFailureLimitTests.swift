@@ -13,6 +13,23 @@ import XCTest
         super.setUp()
         bluetooth = TandemBluetoothManager()
         manager = TandemPumpManager(state: TandemPumpManagerState(rawValue: [:]), bluetooth: bluetooth)
+        waitForTheCentralsFirstState()
+    }
+
+    /// The real central reports its first state on the manager's queue when it likes, and any but
+    /// poweredOn marks the link down, which `runConnectJob` reads as an attempt the test never made.
+    private func waitForTheCentralsFirstState() {
+        #if !os(Linux) && !TANDEMKIT_VIRTUAL_PUMP
+            let reported = XCTNSPredicateExpectation(
+                predicate: NSPredicate { _, _ in self.bluetooth.manager?.state != .unknown },
+                object: nil
+            )
+            guard XCTWaiter().wait(for: [reported], timeout: 2) == .completed, let state = bluetooth.manager?.state else {
+                return
+            }
+            // Runs on the manager's queue, after the central's own report of `state`.
+            bluetooth.handleBluetoothStateChange(state)
+        #endif
     }
 
     override func tearDown() {
