@@ -256,6 +256,20 @@ import XCTest
         }
     }
 
+    func testFetchOfAnEmptyLogSendsNoChunkRequest() {
+        bluetooth.stub(HistoryLogStatusRequest.self, with: HistoryLogStatusResponse(
+            numEntries: 0, firstSequenceNum: 0, lastSequenceNum: 0
+        ))
+
+        let result = runFetch(numberOfLogs: 3)
+
+        guard case let .success(progress) = result else {
+            return XCTFail("Expected success, got \(String(describing: result))")
+        }
+        XCTAssertEqual(progress.expectedCount, 0)
+        XCTAssertTrue(bluetooth.sent(HistoryLogRequest.self).isEmpty)
+    }
+
     // MARK: - Probing a single entry
 
     func testProbeLogReturnsRequestedEntry() {

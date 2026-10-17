@@ -466,6 +466,42 @@ import XCTest
         )
     }
 
+    /// faketandem answers an empty log with numEntries 0 and the range 0...0, which names no
+    /// entry: a read of it waited out the chunk timeout twice, 18 s a tick.
+    func testEmptyLogIsNotRead() throws {
+        setPumpSerial()
+        bluetooth.stub(HistoryLogStatusRequest.self, with: HistoryLogStatusResponse(
+            numEntries: 0, firstSequenceNum: 0, lastSequenceNum: 0
+        ))
+
+        let outcome = try XCTUnwrap(runTick())
+
+        XCTAssertTrue(bluetooth.sent(HistoryLogRequest.self).isEmpty)
+        XCTAssertTrue(outcome.rangesRead.isEmpty)
+        XCTAssertNil(outcome.sessionCovered)
+        XCTAssertNil(outcome.bookkeeping.watermark)
+        XCTAssertTrue(outcome.isDeepBackfillComplete, "The pump holds nothing older to walk to")
+        XCTAssertEqual(manager.state.historyBackfill, outcome.bookkeeping)
+    }
+
+    func testErasedLogLeftEmptyDropsTheWatermarkAndTheStoreWithoutARead() throws {
+        var state = Self.backfillEnabledState()
+        state.pumpState.pumpSerial = Self.pumpSerial
+        state.historyBackfill = HistoryBackfillState(pumpSerial: Self.pumpSerial, watermark: 900)
+        manager = TandemPumpManager(state: state, bluetooth: bluetooth)
+        coordinator = HistoryBackfillCoordinator(pumpManager: manager)
+        try manager.historyLogStore.insert((1 ... 10).map { log(sequenceNum: $0) }, pumpSerial: Self.pumpSerial)
+        bluetooth.stub(HistoryLogStatusRequest.self, with: HistoryLogStatusResponse(
+            numEntries: 0, firstSequenceNum: 0, lastSequenceNum: 0
+        ))
+
+        let outcome = try XCTUnwrap(runTick())
+
+        XCTAssertTrue(bluetooth.sent(HistoryLogRequest.self).isEmpty)
+        XCTAssertNil(outcome.bookkeeping.watermark)
+        XCTAssertEqual(try manager.historyLogStore.count(pumpSerial: Self.pumpSerial), 0)
+    }
+
     // MARK: - Feature flags
 
     func testAFreshInstallReadsHistory() throws {

@@ -242,6 +242,10 @@ public final class HistoryLogFetcher {
             logger.error("Failed to fetch history log status")
             return .failure(.noStatusResponse)
         }
+        guard status.numEntries > 0 else {
+            logger.info("Pump history log is empty; nothing to fetch")
+            return .success(currentProgress())
+        }
 
         let first = Int64(status.firstSequenceNum)
         let last = Int64(status.lastSequenceNum)

@@ -167,6 +167,7 @@ final class HistoryBackfillCoordinator {
             let plan = HistoryBackfillPlanner.plan(
                 firstSequenceNum: status.firstSequenceNum,
                 lastSequenceNum: status.lastSequenceNum,
+                isPumpLogEmpty: status.numEntries == 0,
                 watermark: bookkeeping.watermark,
                 sessionCovered: self.sessionCoverage,
                 storeGaps: self.storeGaps(pumpSerial: serial),
