@@ -468,7 +468,7 @@ import XCTest
 
     /// faketandem answers an empty log with numEntries 0 and the range 0...0, which names no
     /// entry: a read of it waited out the chunk timeout twice, 18 s a tick.
-    func testEmptyLogIsNotRead() throws {
+    func testEmptyLogIsBookkeptAsReadWithoutARequest() throws {
         setPumpSerial()
         bluetooth.stub(HistoryLogStatusRequest.self, with: HistoryLogStatusResponse(
             numEntries: 0, firstSequenceNum: 0, lastSequenceNum: 0
@@ -477,9 +477,10 @@ import XCTest
         let outcome = try XCTUnwrap(runTick())
 
         XCTAssertTrue(bluetooth.sent(HistoryLogRequest.self).isEmpty)
-        XCTAssertTrue(outcome.rangesRead.isEmpty)
-        XCTAssertNil(outcome.sessionCovered)
-        XCTAssertNil(outcome.bookkeeping.watermark)
+        XCTAssertEqual(outcome.rangesRead, [0 ... 0])
+        XCTAssertEqual(outcome.sessionCovered, 0 ... 0)
+        XCTAssertEqual(outcome.bookkeeping.watermark, 0)
+        XCTAssertEqual(outcome.pumpSequenceRange, 0 ... 0)
         XCTAssertTrue(outcome.isDeepBackfillComplete, "The pump holds nothing older to walk to")
         XCTAssertEqual(manager.state.historyBackfill, outcome.bookkeeping)
     }
@@ -498,7 +499,7 @@ import XCTest
         let outcome = try XCTUnwrap(runTick())
 
         XCTAssertTrue(bluetooth.sent(HistoryLogRequest.self).isEmpty)
-        XCTAssertNil(outcome.bookkeeping.watermark)
+        XCTAssertEqual(outcome.bookkeeping.watermark, 0)
         XCTAssertEqual(try manager.historyLogStore.count(pumpSerial: Self.pumpSerial), 0)
     }
 
