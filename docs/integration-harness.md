@@ -79,10 +79,17 @@ runs every class here too.
 
 `.github/workflows/linux.yml` runs it too, on GitHub-hosted Ubuntu, for every push to `main` and
 `dev`, pull request and manual run. Its `virtual-pump` job builds the suite and its `faketandem`
-job the emulator and jar, from the same faketandem ref the macOS job picks, side by side; the `integration` job then runs the suite in two halves at
-once, on that build restored from the Actions cache without rebuilding. `integration_fault` takes the
-classes `FAULT_SUITES` names, the conformance groups built on injected faults; `integration` takes
-the rest, so a new class runs there unless it is added to `FAULT_SUITES`.
+job the emulator and jar, from the same faketandem ref the macOS job picks, side by side; the
+`integration` job then runs the suite in four shards at once, each its own `swift test` against its
+own faketandem, on that build restored from the Actions cache without rebuilding. Each test is
+mostly idle waits, so a shard costs only its job's setup, and they are sized to finish together:
+`integration_fault` takes the classes `FAULT_SUITES` names (`PumpSideConformanceTests`,
+`OutageConformanceTests`), `integration_commands` those `COMMAND_SUITES` names
+(`InterruptConformanceTests`, `IdempotencyConformanceTests`, `CancelConformanceTests`),
+`integration_history` those `HISTORY_SUITES` names (`BasalHistoryConformanceTests`,
+`HistoryBackfillIntegrationTests`, `TimeChangeConformanceTests`), and `integration` the rest, by
+skipping the union of those three regexes, so a new class runs there unless it is added to one of
+them. Each shard fails if it skipped any test.
 
 ### How the tests find the emulator
 
