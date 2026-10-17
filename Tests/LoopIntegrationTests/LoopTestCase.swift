@@ -175,7 +175,7 @@ class LoopTestCase: FaketandemIntegrationTestCase {
     func loopStored(
         _ what: String,
         syncing: Bool = false,
-        timeout: TimeInterval = 300,
+        timeout: TimeInterval = 120,
         until condition: @escaping ([NewPumpEvent]) -> Bool
     ) throws -> [VirtualPumpControl.Batch] {
         let control = try XCTUnwrap(control)
