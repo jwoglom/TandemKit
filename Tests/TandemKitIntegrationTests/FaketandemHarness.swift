@@ -180,7 +180,7 @@ final class FaketandemHarness {
 
     /// A lost response and a failed connect are what several scenarios stage; at the production
     /// 30 s each they were most of the suite's run time. faketandem answers in well under a second.
-    static let responseTimeout: TimeInterval = 5
+    static let responseTimeout: TimeInterval = 2
 
     /// The reconnect retry's backoff: the production 5, 10, 20, 40, 60 s is wall-clock, which the manual clock
     /// cannot advance. The first delay leaves a test a second to re-arm a fault before the next attempt.

@@ -265,7 +265,7 @@ final class DeliveryLimitIntegrationTests: ConformanceTestCase {
         let driver = try startPairedDriver()
         // Held so the automatic bolus is enacted while the manual one's command job runs.
         var hold = FaketandemFaultSpec(.delayResponse, message: "BolusPermissionRequest")
-        hold.delayMilliseconds = 2000
+        hold.delayMilliseconds = Int(FaketandemHarness.responseTimeout * 1000 / 2)
         XCTAssertNotNil(try harness.client.armFault(hold))
         let mark = try logMark()
         let batchesBefore = allPumpEventBatches.count
