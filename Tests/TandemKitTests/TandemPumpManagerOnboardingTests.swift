@@ -76,6 +76,7 @@ import XCTest
             state.alarmAnnun = sounds.alarm
             state.pumpSoundsAwaitingWrite = true
         }
+        state.featureFlags[.quickBolusButtonSupport] = false
         return TandemPumpManager(state: state, bluetooth: bluetooth)
     }
 

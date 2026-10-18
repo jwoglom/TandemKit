@@ -47,7 +47,7 @@ struct TandemKitFeatureFlagsView: View {
     private var flagList: some View {
         List {
             Section(footer: Text(
-                "Feature flags turn on driver features that are still being validated. Leave them off unless you have been asked to test one.",
+                "Feature flags switch driver features that are still being validated. Leave them as they are unless you have been asked to change one.",
                 comment: "Footer explaining what feature flags are"
             )) {
                 ForEach(viewModel.flags) { flag in
