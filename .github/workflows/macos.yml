@@ -317,15 +317,17 @@ jobs:
       # target from any hit, while Trio's files are dated at Trio's commit (checkout-trio) and are
       # taken as unchanged on a hit for the same one. A fallback to another Trio commit dates them
       # differently and rebuilds them, which is why the date is the commit's and never a constant.
+      # Only once the checkout is at its stable path: a build under a per-runner path is good nowhere.
       - name: Cache Trio's derived data
+        if: steps.paths.outputs.location == 'home'
         uses: actions/cache@v6
         with:
           path: |
             ${{ steps.paths.outputs.derived-data }}/Build
             ${{ steps.paths.outputs.derived-data }}/SourcePackages
-          key: ${{ runner.os }}-${{ runner.arch }}-xcode-${{ env.XCODE_VERSION }}-trio-derived-data-${{ steps.trio.outputs.commit }}-${{ hashFiles('trio/Trio.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-xcode-${{ env.XCODE_VERSION }}-trio-derived-data-${{ steps.paths.outputs.location }}-${{ steps.trio.outputs.commit }}-${{ hashFiles('trio/Trio.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
           restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-xcode-${{ env.XCODE_VERSION }}-trio-derived-data-
+            ${{ runner.os }}-${{ runner.arch }}-xcode-${{ env.XCODE_VERSION }}-trio-derived-data-${{ steps.paths.outputs.location }}-
 
       - name: Build faketandem
         uses: ./TandemKit/.github/actions/faketandem
@@ -417,14 +419,15 @@ jobs:
       # As trio's: Build/ and SourcePackages/, keyed without the TandemKit commit, LoopWorkspace's
       # files dated at its commit (checkout-loop) so a hit for the same one keeps their objects.
       - name: Cache Loop's derived data
+        if: steps.paths.outputs.location == 'home'
         uses: actions/cache@v6
         with:
           path: |
             ${{ steps.paths.outputs.derived-data }}/Build
             ${{ steps.paths.outputs.derived-data }}/SourcePackages
-          key: ${{ runner.os }}-${{ runner.arch }}-xcode-${{ env.XCODE_VERSION }}-loop-derived-data-${{ steps.loop.outputs.commit }}-${{ hashFiles('loop/LoopWorkspace.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-xcode-${{ env.XCODE_VERSION }}-loop-derived-data-${{ steps.paths.outputs.location }}-${{ steps.loop.outputs.commit }}-${{ hashFiles('loop/LoopWorkspace.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
           restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-xcode-${{ env.XCODE_VERSION }}-loop-derived-data-
+            ${{ runner.os }}-${{ runner.arch }}-xcode-${{ env.XCODE_VERSION }}-loop-derived-data-${{ steps.paths.outputs.location }}-
 
       - name: Build faketandem
         uses: ./TandemKit/.github/actions/faketandem

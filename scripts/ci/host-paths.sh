@@ -13,7 +13,7 @@
 #     CHECKOUT  checkout directory, relative to the workspace (trio)
 #     PREFIX    PREFIX_DIR and PREFIX_DERIVED_DATA are written to GITHUB_ENV (TRIO)
 #     DERIVED   derived data directory name (TrioDerivedData)
-#   Writes derived-data, the derived data path, to GITHUB_OUTPUT.
+#   Writes derived-data, the derived data path, and location, home or workspace, to GITHUB_OUTPUT.
 set -euo pipefail
 
 usage="usage: host-paths.sh CHECKOUT PREFIX DERIVED"
@@ -23,20 +23,33 @@ derived="${3:?${usage}}"
 workspace="${GITHUB_WORKSPACE:?}"
 
 root="${HOME:-}/tandemkit-ci"
-if [[ -n "${HOME:-}" && -d "${workspace}/${checkout}" && ! -L "${workspace}/${checkout}" ]] \
-  && mkdir -p "${root}" 2>/dev/null && [[ -w "${root}" && ! -e "${root}/${checkout}" ]] \
-  && mv "${workspace}/${checkout}" "${root}/${checkout}"; then
+# The reason a move is refused, for the job log; the job goes on either way.
+refused() {
+  echo "::warning::${checkout}/ stays in the workspace, whose path differs between runners, so a restored derived data cache is rebuilt whole: $1"
+  root="${workspace}"
+}
+if [[ -z "${HOME:-}" ]]; then
+  refused "HOME is not set"
+elif [[ ! -d "${workspace}/${checkout}" || -L "${workspace}/${checkout}" ]]; then
+  refused "${workspace}/${checkout} is not a directory"
+elif ! mkdir -p "${root}" 2>&1 || [[ ! -w "${root}" ]]; then
+  refused "${root} cannot be created or written ($(ls -ld "${root}" 2>&1))"
+elif [[ -e "${root}/${checkout}" ]]; then
+  refused "${root}/${checkout} already exists ($(ls -ld "${root}/${checkout}" 2>&1))"
+elif ! mv "${workspace}/${checkout}" "${root}/${checkout}"; then
+  refused "the move failed"
+else
   ln -s "${root}/${checkout}" "${workspace}/${checkout}"
   echo "${checkout}/ moved under ${root}, with ${derived}/, the same path on every runner"
-else
-  root="${workspace}"
-  echo "::warning::${HOME:-\$HOME}/tandemkit-ci cannot take ${checkout}/: it and ${derived}/ stay in the workspace, whose path differs between runners, so a restored derived data cache is rebuilt whole"
 fi
 
 {
   echo "${prefix}_DIR=${root}/${checkout}"
   echo "${prefix}_DERIVED_DATA=${root}/${derived}"
 } >> "${GITHUB_ENV:?}"
-echo "derived-data=${root}/${derived}" >> "${GITHUB_OUTPUT:?}"
+{
+  echo "derived-data=${root}/${derived}"
+  echo "location=$([[ "${root}" == "${workspace}" ]] && echo workspace || echo home)"
+} >> "${GITHUB_OUTPUT:?}"
 echo "${prefix}_DIR=${root}/${checkout}"
 echo "${prefix}_DERIVED_DATA=${root}/${derived}"
