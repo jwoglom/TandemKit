@@ -19,17 +19,14 @@ extension PumpNotificationSeverity {
 }
 
 extension NotificationItem {
-    func loopKitAlert(managerIdentifier: String) -> LoopKit.Alert {
+    var loopKitAlert: LoopKit.Alert {
         let content = LoopKit.Alert.Content(
             title: alertTitle,
             body: alertBody,
             acknowledgeActionButtonLabel: acknowledgeActionLabel
         )
         return LoopKit.Alert(
-            identifier: LoopKit.Alert.Identifier(
-                managerIdentifier: managerIdentifier,
-                alertIdentifier: stableIdentifier
-            ),
+            identifier: TandemPumpManager.alertIdentifier(stableIdentifier),
             foregroundContent: content,
             backgroundContent: content,
             trigger: .immediate,
@@ -125,6 +122,24 @@ extension TandemPumpManager {
 // MARK: - Alert reconciliation
 
 extension TandemPumpManager {
+    /// Loop and Trio register the manager as alert responder and sound vendor under its
+    /// `pluginIdentifier` and look either up by an alert's `managerIdentifier`, so an alert under any
+    /// other is never acknowledged on the pump.
+    static func alertIdentifier(_ alertIdentifier: LoopKit.Alert.AlertIdentifier) -> LoopKit.Alert.Identifier {
+        LoopKit.Alert.Identifier(managerIdentifier: pluginIdentifier, alertIdentifier: alertIdentifier)
+    }
+
+    /// Loop and Trio record an acknowledgement whether or not it reached the pump, so an alert whose
+    /// dismissal failed is forgotten as issued: the reconciler issues it again while the pump raises it.
+    func issueAgainAfterFailedAcknowledgement(_ alertIdentifier: String) {
+        logger.warning("Acknowledgement of \(alertIdentifier) did not reach the pump; issuing it again while the pump raises it")
+        pumpDelegate.notify { _ in
+            guard self.state.issuedAlertIdentifiers.remove(alertIdentifier) != nil else { return }
+            self.notifyDelegateStateUpdated()
+        }
+        reconcileLoopKitAlerts()
+    }
+
     /// Notification categories currently forwarded to LoopKit as alerts. Alarms and
     /// malfunctions mean stopped/compromised delivery; alerts are actionable. CGM alerts
     /// are opt-in and reminders stay in-app only.
@@ -174,7 +189,6 @@ extension TandemPumpManager {
         let activeItems = surfacedNotificationItems(from: bundle)
         let fetchedCategories = bundle.fetchedCategories
         let surfacedCategories = surfacedAlertCategories
-        let managerIdentifier = TandemPumpManager.managerIdentifier
 
         pumpDelegate.notify { delegate in
             guard let delegate else {
@@ -195,15 +209,12 @@ extension TandemPumpManager {
 
             for item in reconciliation.itemsToIssue {
                 self.logger.info("Issuing LoopKit alert \(item.stableIdentifier)")
-                delegate.issueAlert(item.loopKitAlert(managerIdentifier: managerIdentifier))
+                delegate.issueAlert(item.loopKitAlert)
             }
 
             for identifier in reconciliation.identifiersToRetract {
                 self.logger.info("Retracting LoopKit alert \(identifier)")
-                delegate.retractAlert(identifier: LoopKit.Alert.Identifier(
-                    managerIdentifier: managerIdentifier,
-                    alertIdentifier: identifier
-                ))
+                delegate.retractAlert(identifier: TandemPumpManager.alertIdentifier(identifier))
             }
 
             self.state.issuedAlertIdentifiers = reconciliation.updatedIssuedIdentifiers

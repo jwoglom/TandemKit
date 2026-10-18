@@ -316,8 +316,9 @@ pump screen is found without waiting for the next sync.
 CGM-alert, malfunction and AAM status responses. `TandemAlertReconciler` then compares the active
 items with the LoopKit `Alert`s already issued and issues or retracts alerts to match. Alerts,
 alarms and malfunctions are forwarded; CGM alerts are forwarded only if the user opts in, and
-reminders stay in the app. When the host acknowledges an alert, `DismissNotificationRequest`
-clears it on the pump. Basal min/max alerts are acknowledged automatically, because oref sets
+reminders stay in the app. Alerts are issued under `TandemPumpManager.pluginIdentifier`, the
+identifier Loop and Trio register the manager's alert responder under, so the host's
+acknowledgement reaches `acknowledgeAlert`, and `DismissNotificationRequest` clears it on the pump. Basal min/max alerts are acknowledged automatically, because oref sets
 zero temp basals routinely and the pump would otherwise alert on each one.
 
 The same pass reports alarms and malfunctions to the host's pump event log (`reportPumpAlarms`):
