@@ -599,7 +599,11 @@ shape of it explains what the harness is for:
 Not gaps, but worth knowing when reading timings: `FaketandemHarness.makeDriver` shortens the
 driver's response timeout to 5 s and its connect timeout to 15 s (`VirtualPump.responseTimeout`,
 `VirtualPump.connectTimeout`; production keeps 30 s for a real pump's slowest command), so a
-scenario that drops a response waits 5 s, not 30. An unauthenticated `DisconnectPumpRequest` is
+scenario that drops a response waits 5 s, not 30. It also shortens the history fetcher's per-chunk
+pacing (`VirtualPump.historyPacing`) to a 50 ms request delay and poll and a 2 s chunk timeout,
+from ControlX2's 1 s, 0.5 s and 8 s (`HistoryLogFetcher.Pacing.production`), so a 255-entry
+`HistoryLogRequest` costs milliseconds rather than a second and a lost stream record waits 2 s,
+not 8, before the gap-healing pass. An unauthenticated `DisconnectPumpRequest` is
 not answered (the handler requires auth, as on a real pump), so the driver sends it only on an
 authenticated session. And pairing-state `NotDiscoverable` still answers `hello` (followed by
 `disconnect`), which the virtual `CBCentralManager` treats as "not advertising".
