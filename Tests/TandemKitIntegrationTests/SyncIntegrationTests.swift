@@ -72,9 +72,7 @@ final class SyncIntegrationTests: FaketandemIntegrationTestCase {
     }
 
     func testSyncTurnsOffAQuickBolusButtonTheFlagDoesNotAllow() throws {
-        var state = TandemPumpManagerState(rawValue: [:])
-        state.featureFlags[.quickBolusButtonSupport] = false
-        let driver = makeDriver(state: state)
+        let driver = makeDriver()
         try harness.pair(driver)
         XCTAssertEqual(try harness.client.quickBolusEnabled(), true, "faketandem's pump starts with the quick bolus button on")
 

@@ -203,6 +203,11 @@ final class FaketandemHarness {
         VirtualPump.responseTimeout = .milliseconds(Int(Self.responseTimeout * 1000))
         VirtualPump.connectTimeout = .seconds(15)
         VirtualPump.historyPacing = HistoryLogFetcher.Pacing(requestDelay: 0.05, pollInterval: 0.05, chunkTimeout: 2)
+        // A live quick bolus button makes every sync wait for its history pass (`awaitsHistoryBoluses`); tests that exercise it set the flag.
+        var state = state
+        if !state.featureFlags.isOverridden(.quickBolusButtonSupport) {
+            state.featureFlags[.quickBolusButtonSupport] = false
+        }
         let bluetooth = TandemBluetoothManager()
         bluetooth.reconnectRetryDelays = Self.reconnectRetryDelays
         let central = bluetooth.manager!

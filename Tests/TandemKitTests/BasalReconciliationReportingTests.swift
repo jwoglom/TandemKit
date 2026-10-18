@@ -30,6 +30,7 @@ import XCTest
     private static func state() -> TandemPumpManagerState {
         var state = TandemPumpManagerState(rawValue: [:])
         state.featureFlags[.historyBackfill] = true
+        state.featureFlags[.basalHistoryReporting] = false
         state.pumpState.pumpSerial = pumpSerial
         state.bolusReportLedger = BolusReportLedger(trackingSince: .distantPast)
         state.reportedBasal = ReportedBasalLedger(trackingSince: .distantPast)
