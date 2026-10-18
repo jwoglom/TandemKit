@@ -232,8 +232,8 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         fault.errorCode = 3
         XCTAssertNotNil(try harness.client.armFault(fault))
 
-        // The enact can wait seconds behind the first history walk, so the harness's 5 s timeout is too
-        // close to tell a prompt refusal from one that waited it out.
+        // The enact can wait seconds behind the first history walk, so the harness's short response
+        // timeout is too close to tell a prompt refusal from one that waited it out.
         let responseTimeout: TimeInterval = 60
         VirtualPump.responseTimeout = .seconds(Int(responseTimeout))
         addTeardownBlock { VirtualPump.responseTimeout = .milliseconds(Int(FaketandemHarness.responseTimeout * 1000)) }

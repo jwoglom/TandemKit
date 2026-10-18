@@ -180,7 +180,7 @@ final class FaketandemHarness {
 
     /// A lost response and a failed connect are what several scenarios stage; at the production
     /// 30 s each they were most of the suite's run time. faketandem answers in well under a second.
-    static let responseTimeout: TimeInterval = 5
+    static let responseTimeout: TimeInterval = 2
 
     /// `clock` defaults to a ManualClock starting now, so a test can jump the driver's idea of time
     /// (bolus estimated end, sync throttles) without waiting; the emulator stays on its own clock.
