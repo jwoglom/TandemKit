@@ -95,6 +95,10 @@ final class FaketandemHarness {
         // Naming the zone sets the pump's clock back to the phone's local time, which a test that
         // changed the pump's clock or the phone's zone left elsewhere.
         try client.setClock(mode: "real", pumpOffsetSeconds: 0, pumpTimezone: TimeZone.current.identifier)
+        // Before the erase, which takes the resume's records with it.
+        if try client.snapshot().basal.suspended {
+            try client.resume(clearAlarms: true)
+        }
         // An earlier test's records, dated on its clock, reach a fresh driver with dose reporting
         // on as pump boluses it never heard of.
         try client.eraseHistory()
@@ -198,6 +202,7 @@ final class FaketandemHarness {
         VirtualPump.scanInterval = 0.5
         VirtualPump.responseTimeout = .milliseconds(Int(Self.responseTimeout * 1000))
         VirtualPump.connectTimeout = .seconds(15)
+        VirtualPump.historyPacing = HistoryLogFetcher.Pacing(requestDelay: 0.05, pollInterval: 0.05, chunkTimeout: 2)
         let bluetooth = TandemBluetoothManager()
         bluetooth.reconnectRetryDelays = Self.reconnectRetryDelays
         let central = bluetooth.manager!

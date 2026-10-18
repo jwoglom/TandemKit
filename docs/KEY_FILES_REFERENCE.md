@@ -122,4 +122,4 @@ pieces fit together. Paths are relative to the repository root.
 | `scripts/check_doc_references.py` | Checks that the docs name only code, paths and headings the repository has. |
 | `scripts/claude-web-setup.sh` | Toolchain setup for Linux agent sessions. |
 | `HarmonizeRules/` | Lint rules that parse `Sources/` and `Tests/`; a separate SwiftPM package. |
-| `.github/workflows/linux.yml`, `macos.yml` | CI: Linux doc references, plain, Harmonize, virtual-pump, faketandem and two integration jobs; macOS unit, integration (the classes that need macOS), Trio and Loop jobs. |
+| `.github/workflows/linux.yml`, `macos.yml` | CI: Linux doc references, plain, Harmonize, virtual-pump, faketandem and four integration shards; macOS unit, integration (the classes that need macOS), Trio and Loop jobs. |

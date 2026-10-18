@@ -1036,10 +1036,7 @@ extension TandemPumpManager {
         guard skewed != state.pumpClockSkewAlertIssued else { return }
 
         let minutes = max(1, Int((abs(state.pumpClockOffset) / 60).rounded()))
-        let identifier = LoopKit.Alert.Identifier(
-            managerIdentifier: TandemPumpManager.managerIdentifier,
-            alertIdentifier: Self.pumpClockSkewAlertIdentifier
-        )
+        let identifier = Self.alertIdentifier(Self.pumpClockSkewAlertIdentifier)
         pumpDelegate.notify { delegate in
             guard let delegate, skewed != self.state.pumpClockSkewAlertIssued else { return }
 
