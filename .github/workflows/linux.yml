@@ -302,9 +302,13 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  # integration_fault takes the conformance groups built on injected link and response faults (A-D
-  # and F in docs/conformance-test-plan.md), integration everything else, so a new class lands in
-  # integration unless it is added to FAULT_SUITES.
+  # Four shards of one suite, each a swift test against its own faketandem, sized to finish
+  # together: integration_fault takes the conformance groups built on pump-side failures and
+  # outages (D and F in docs/conformance-test-plan.md), integration_commands the groups that
+  # interrupt, cancel and repeat the app's own commands (A-C), integration_history the history
+  # reads (H and G, and HistoryBackfillIntegrationTests), and integration everything else, skipping
+  # the other shards' classes, so a new class lands in integration unless it is added to one of the
+  # *_SUITES regexes below.
   integration:
     name: ${{ matrix.suite }} tests (faketandem)
     needs: [virtual-pump, faketandem]
@@ -316,12 +320,18 @@ jobs:
       matrix:
         include:
           - suite: integration
-            selection: --skip
+            selection: --skip "$FAULT_SUITES|$COMMAND_SUITES|$HISTORY_SUITES"
           - suite: integration_fault
-            selection: --filter
+            selection: --filter "$FAULT_SUITES"
+          - suite: integration_commands
+            selection: --filter "$COMMAND_SUITES"
+          - suite: integration_history
+            selection: --filter "$HISTORY_SUITES"
     env:
       TANDEMKIT_INTEGRATION_TESTS: '1'
-      FAULT_SUITES: 'TandemKitIntegrationTests\.(Interrupt|Cancel|Idempotency|PumpSide|Outage)ConformanceTests'
+      FAULT_SUITES: 'TandemKitIntegrationTests\.(PumpSide|Outage)ConformanceTests'
+      COMMAND_SUITES: 'TandemKitIntegrationTests\.(Interrupt|Idempotency|Cancel)ConformanceTests'
+      HISTORY_SUITES: 'TandemKitIntegrationTests\.(BasalHistoryConformance|HistoryBackfillIntegration|TimeChangeConformance)Tests'
     defaults:
       run:
         shell: bash
@@ -372,7 +382,7 @@ jobs:
           MODE: ${{ steps.build-cache.outputs.cache-hit == 'true' && 'test' || 'all' }}
         run: |
           chmod +x "$FAKETANDEM_BIN"
-          scripts/integration-test.sh "$MODE" ${{ matrix.selection }} "$FAULT_SUITES"
+          scripts/integration-test.sh "$MODE" ${{ matrix.selection }}
 
       # Every test throws XCTSkip when the emulator's addresses do not reach the test process, so
       # a run that never talked to faketandem would still pass.

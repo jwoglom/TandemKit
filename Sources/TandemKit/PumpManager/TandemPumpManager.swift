@@ -2878,6 +2878,13 @@ extension TandemPumpManager: AlertResponder, AlertSoundVendor {
             return
         }
 
+        let completion: ((any Error)?) -> Void = { error in
+            if error != nil {
+                self.issueAgainAfterFailedAcknowledgement(alertIdentifier)
+            }
+            completion(error)
+        }
+
         // Prefer the live bundle row for this identifier: a merged row (see
         // `MergedNotificationGroup`) carries the group's primary as its type/notificationId,
         // and `dismissNotification` knows how to acknowledge the merged members the pump
