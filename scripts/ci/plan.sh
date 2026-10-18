@@ -3,7 +3,7 @@
 # GITHUB_OUTPUT. Any failure to decide runs them.
 #
 # Skips when the change only touches documentation, or when this workflow already passed on the same
-# tree with the same external checkouts (the marker artifact `scripts/ci/mark-passed` uploads, named
+# tree with the same external checkouts (the marker artifact `.github/actions/ci-mark-passed` uploads, named
 # for them). workflow_dispatch and re-runs always run.
 #
 # Environment: GH_TOKEN, REPO, WORKFLOW, EVENT_NAME, RUN_ATTEMPT, DIFF_BASE, DIFF_HEAD (the two

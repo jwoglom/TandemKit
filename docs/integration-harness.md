@@ -314,9 +314,14 @@ Nothing in Trio changes for it:
   ThreadSanitizer, see below) and the test bundle.
 - `scripts/trio-test.sh test` starts faketandem and `scripts/app-launcher.py --host trio`, and hands
   the launcher's address to the bundle. The tests run in the simulator and cannot reach `simctl`, so
-  before each test `TrioTestCase` asks the launcher to install Trio anew (`/install`) and launch it
-  (`/launch`, with any launch arguments), and a test can stop and start it again on the same data
-  and arguments (`/relaunch`). The launcher seeds the data container with what a set-up install
+  before each test `TrioTestCase` asks the launcher for a fresh install of Trio (`/install`) and to
+  launch it (`/launch`, with any launch arguments), and a test can stop and start it again on the
+  same data and arguments (`/relaunch`). The first `/install` of a run uninstalls and installs the
+  app; the later ones keep the install the launcher made and put its data container back to what a
+  new one holds (every file gone, the container's metadata and empty directories kept) and restart
+  the simulator's `cfprefsd`, which would otherwise answer the last test's UserDefaults from memory.
+  `/install?fresh=1`, a rebuilt app at `--app` and a container that cannot be emptied each
+  uninstall and install again. The launcher then seeds the data container with what a set-up install
   holds: `onboardingCompleted`, an unpaired Tandem pump manager (`PumpManagerState.plist`:
   `managerIdentifier` `TandemPumpManager`, empty `state`) and both telemetry streams off (Trio's
   default is on). The test writes Trio's own settings over that (`seededFiles`): Trio's default
@@ -339,13 +344,18 @@ Nothing in Trio changes for it:
 
 The commands call the driver as Trio's code would. `TrioClosedLoopTests` runs Trio's own loop
 instead: Trio's glucose simulator as the CGM (`cgm` `simulator`, held near 250 mg/dL through its
-`GlucoseSimulator_*` defaults passed as launch arguments), closed loop, a max IOB and SMBs allowed,
-so `APSManager` enacts a temp basal and an SMB through the driver on the simulator's next reading,
-up to 5 minutes after launch. Trio's manual bolus path (`APSManager.enactBolus`, from its bolus
-screen) is not driven, nor is its pump setup flow, which hands Trio the manager only once paired:
-every scenario pairs a manager Trio holds from launch, as when re-pairing. The cartridge and fill
-cannula wizards wait for state-stream notifications faketandem does not send, so their scenario
-sends what they report once done, around a suspend.
+`GlucoseSimulator_*` defaults passed as launch arguments), closed loop, a max IOB and SMBs allowed.
+Trio loops on each reading of the simulator, 5 minutes apart, and the first is at launch, so the
+scenario seeds `PumpManagerState.plist` with the driver's state after a pairing (`beforeLaunch`: the
+schedule as synced, a long-term key faketandem is given too, and the peripheral id faketandem sends
+in its `hello`, read with `FaketandemHarness.readHello`) and the pump's profile as the schedule: the
+loop at launch reaches a paired pump and `APSManager` enacts a temp basal and an SMB through the
+driver about 15 s in, where a pairing through the control channel after launch lost the race to
+that loop and waited for the next reading. Trio's manual bolus path (`APSManager.enactBolus`, from
+its bolus screen) is not driven, nor is its pump setup flow, which hands Trio the manager only once
+paired: every other scenario pairs a manager Trio holds from launch, as when re-pairing. The
+cartridge and fill cannula wizards wait for state-stream notifications faketandem does not send, so
+their scenario sends what they report once done, around a suspend.
 
 Journeys covered, each checked against the oracle: an app bolus, an automatic one (stored as an
 SMB), one cancelled part-way, one running across a relaunch of Trio, one through a dropped link, and

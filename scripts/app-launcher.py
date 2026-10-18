@@ -6,7 +6,10 @@ scripts/trio-test.sh and scripts/loop-test.sh start this and hand its URL to the
 the simulator and cannot reach simctl themselves. It serves HTTP on 127.0.0.1, which the simulator
 shares:
 
-  POST /install?name=<test>  stop the app, install it anew and seed it; a JSON body
+  POST /install?name=<test>  stop the app and seed a fresh install of it: the first time, and with
+                             fresh=1 or once the app at --app has been rebuilt, by uninstalling and
+                             installing; otherwise by emptying the install this process made back to
+                             what a new one holds. A JSON body
                              {"files": {path: text}, "defaults": {"app" | "group": plist text}}
                              adds or replaces files in the data container ("group:<path>" in the
                              app group container) and sets the keys of the app's or the app group's
@@ -61,6 +64,27 @@ def write_plist(path, value):
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "wb") as f:
         plistlib.dump(value, f)
+
+
+def empty_directory(path, keep=()):
+    for child in path.iterdir():
+        if child.name in keep:
+            continue
+        if child.is_dir() and not child.is_symlink():
+            shutil.rmtree(child, ignore_errors=True)
+        else:
+            child.unlink(missing_ok=True)
+
+
+def directory_layout(root):
+    """The directories under root, relative; None if it holds a file this cannot put back."""
+    layout = []
+    for path in sorted(root.rglob("*")):
+        if path.is_dir() and not path.is_symlink():
+            layout.append(path.relative_to(root))
+        elif path != root / CONTAINER_METADATA:
+            return None
+    return layout
 
 
 class Trio:
@@ -125,6 +149,8 @@ class App:
         self.log_dir = Path(log_dir)
         self.container = None
         self.group = None
+        self.installed = None
+        self.fresh_layout = None
         self.name = None
         self.arguments = []
         self.running = False
@@ -175,43 +201,86 @@ class App:
         for line in out.splitlines():
             parts = line.split(None, 1)
             path = Path(parts[1].strip()) if len(parts) == 2 else None
-            if not path or not path.is_dir():
-                continue
-            for child in path.iterdir():
-                if child.name == CONTAINER_METADATA:
-                    continue
-                if child.is_dir() and not child.is_symlink():
-                    shutil.rmtree(child, ignore_errors=True)
-                else:
-                    child.unlink(missing_ok=True)
+            if path and path.is_dir():
+                empty_directory(path, keep=(CONTAINER_METADATA,))
+
+    def app_stamp(self):
+        return os.stat(self.app / self.info["CFBundleExecutable"]).st_mtime_ns
+
+    def reset_data_container(self):
+        """Puts the data container of the install this process made back to a new install's: its
+        metadata and its empty directories. The keychain is the device's, so a reinstall leaves it too."""
+        root = Path(self.container) if self.container else None
+        if self.fresh_layout is None or not root or not (root / CONTAINER_METADATA).is_file():
+            return False
+        empty_directory(root, keep=(CONTAINER_METADATA,))
+        if [child.name for child in root.iterdir()] != [CONTAINER_METADATA]:
+            return False
+        for relative in self.fresh_layout:
+            (root / relative).mkdir(parents=True, exist_ok=True)
+        return True
+
+    def reuse_install(self, fresh):
+        """Resets the install this process made instead of making another; the reason if it cannot."""
+        if fresh:
+            return "fresh=1"
+        if self.installed is None:
+            return "not installed by this launcher"
+        if self.installed != self.app_stamp():
+            return f"{self.app.name} was rebuilt"
+        if not self.cfprefsd_pids():
+            return "no cfprefsd found to drop the last test's UserDefaults from"
+        if not self.reset_data_container():
+            return "its data container could not be put back to new"
+        if self.host.fresh_group_container:
+            self.empty_group_containers()
+        return None
+
+    def install_app(self):
+        self.installed = None
+        self.fresh_layout = None
+        if self.host.fresh_group_container:
+            self.empty_group_containers()
+        self.simctl("uninstall", self.udid, self.bundle_id, check=False)
+        stamp = self.app_stamp()
+        self.simctl("install", self.udid, str(self.app))
+        self.container = self.simctl("get_app_container", self.udid, self.bundle_id, "data").stdout.strip()
+        self.group = self.group_container()
+        if self.host.fresh_group_container and self.group:
+            self.empty_group_containers()
+        self.fresh_layout = directory_layout(Path(self.container))
+        self.installed = stamp
+        if self.fresh_layout is None:
+            print(f"a new {self.bundle_id} data container holds files; every test reinstalls", flush=True)
+
+    def cfprefsd_pids(self):
+        sim = subprocess.run(["pgrep", "-f", f"launchd_sim.*{self.udid}"], capture_output=True, text=True).stdout.split()
+        return [pid for parent in sim
+                for pid in subprocess.run(["pgrep", "-P", parent, "cfprefsd"], capture_output=True, text=True).stdout.split()]
 
     def drop_preferences_cache(self):
         """cfprefsd answers UserDefaults from memory, not from a plist written behind its back. The device's
         launchd_sim restarts its instances on demand, and they read the files again."""
-        sim = subprocess.run(["pgrep", "-f", f"launchd_sim.*{self.udid}"], capture_output=True, text=True).stdout.split()
         killed = []
-        for parent in sim:
-            for pid in subprocess.run(["pgrep", "-P", parent, "cfprefsd"], capture_output=True, text=True).stdout.split():
-                try:
-                    os.kill(int(pid), signal.SIGKILL)
-                    killed.append(pid)
-                except (ProcessLookupError, ValueError):
-                    pass
+        for pid in self.cfprefsd_pids():
+            try:
+                os.kill(int(pid), signal.SIGKILL)
+                killed.append(pid)
+            except (ProcessLookupError, ValueError):
+                pass
         print(f"restarted the simulator's cfprefsd ({', '.join(killed)})" if killed else
               f"found no cfprefsd under launchd_sim for {self.udid}: the seeded UserDefaults may not be read", flush=True)
 
-    def install(self, name, files, defaults):
+    def install(self, name, files, defaults, fresh=False):
         self.stop()
-        if self.host.fresh_group_container:
-            self.empty_group_containers()
-        self.simctl("uninstall", self.udid, self.bundle_id, check=False)
-        self.simctl("install", self.udid, str(self.app))
-        self.container = self.simctl("get_app_container", self.udid, self.bundle_id, "data").stdout.strip()
-        self.group = self.group_container()
+        reinstall = self.reuse_install(fresh)
+        if reinstall:
+            print(f"installing {self.bundle_id} for {name}: {reinstall}", flush=True)
+            self.install_app()
+        else:
+            print(f"reset the installed {self.bundle_id} for {name}", flush=True)
         self.name = name
         self.arguments = []
-        if self.host.fresh_group_container and self.group:
-            self.empty_group_containers()
         group_defaults = self.host.seed(self.container, self.group, self.info)
         self.write_files(files)
         group_defaults.update(self.plist_dict(defaults.get("group")))
@@ -225,7 +294,8 @@ class App:
                 raise RuntimeError(f"{self.bundle_id} has no {kind} container for its UserDefaults")
             write_plist(Path(root) / "Library" / "Preferences" / f"{domain}.plist", values)
             wrote = True
-        if wrote:
+        # A new install's container is a path cfprefsd has never read; a reused one it may still hold.
+        if wrote or not reinstall:
             self.drop_preferences_cache()
         return {"dataContainer": self.container, "groupContainer": self.group or ""}
 
@@ -287,7 +357,8 @@ def serve(app, port_file):
                 length = int(self.headers.get("Content-Length") or 0)
                 request = json.loads(self.rfile.read(length) or b"{}")
                 if url.path == "/install":
-                    body = app.install(query.get("name", [app.host.name])[0], request.get("files", {}), request.get("defaults", {}))
+                    body = app.install(query.get("name", [app.host.name])[0], request.get("files", {}), request.get("defaults", {}),
+                                       fresh=query.get("fresh", ["0"])[0] not in ("", "0", "false"))
                 elif url.path == "/launch":
                     body = app.launch(request.get("arguments", []))
                 elif url.path == "/relaunch":

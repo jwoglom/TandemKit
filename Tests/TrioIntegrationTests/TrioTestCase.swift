@@ -48,9 +48,14 @@ class TrioTestCase: FaketandemIntegrationTestCase {
         []
     }
 
+    /// Runs on the reset pump, before `seededFiles` is read and Trio launches: what a scenario
+    /// stages on the emulator, or has to know for its seed.
+    func beforeLaunch() throws {}
+
     override func setUpWithError() throws {
         try super.setUpWithError()
         try restorePumpDelivery()
+        try beforeLaunch()
         trio = try TrioApp.launchNew(name: name, files: seededFiles(), arguments: launchArguments)
         control = try trio.connectControl()
     }
@@ -107,12 +112,7 @@ class TrioTestCase: FaketandemIntegrationTestCase {
     func pairTrio(withCode: Bool = false, thenSync: Bool = true) throws {
         var request = VirtualPumpControl.Request(command: .pair, code: FaketandemHarness.pairingCode)
         if !withCode {
-            var key = Data(count: 32)
-            for index in key.indices {
-                key[index] = UInt8.random(in: .min ... .max)
-            }
-            _ = try harness.control.setLongTermKey(key)
-            request.longTermKey = key.hexadecimalString
+            request.longTermKey = try seedLongTermKey().hexadecimalString
         }
         let paired = try control.send(request)
         XCTAssertEqual(paired.status?.onboarded, true)
@@ -122,11 +122,22 @@ class TrioTestCase: FaketandemIntegrationTestCase {
         }
     }
 
+    /// A random long-term key given to faketandem, the pump's half of a completed pairing.
+    func seedLongTermKey() throws -> Data {
+        var key = Data(count: 32)
+        for index in key.indices {
+            key[index] = UInt8.random(in: .min ... .max)
+        }
+        _ = try harness.control.setLongTermKey(key)
+        return key
+    }
+
     /// What the pump does on its own reaches Trio through its history log, which the driver starts
     /// reading on a sync after pairing.
     func waitForTheDriversFirstHistoryRead() throws {
+        let sync = IntegrationWait.Throttle(interval: 1)
         try IntegrationWait.until("the driver to have read the pump's history", timeout: 180) {
-            try self.control.send(.init(command: .sync))
+            try sync.run { _ = try self.control.send(.init(command: .sync)) }
             return try self.trio.savedPumpManagerState()?.historyBackfill != nil
         }
     }
@@ -145,19 +156,20 @@ class TrioTestCase: FaketandemIntegrationTestCase {
     }
 
     /// Every batch the driver gave Trio, once `condition` holds of their events and Trio has stored
-    /// them all (Trio calls a batch's completion once it has saved it). With `syncing`, syncs before
-    /// each look, as the host does before it doses.
+    /// them all (Trio calls a batch's completion once it has saved it). With `syncing`, syncs as the
+    /// host does before it doses, at most once a second between looks.
     @discardableResult
     func trioStored(
         _ what: String,
         syncing: Bool = false,
-        timeout: TimeInterval = 300,
+        timeout: TimeInterval = 120,
         until condition: @escaping ([NewPumpEvent]) -> Bool
     ) throws -> [VirtualPumpControl.Batch] {
         let control = try XCTUnwrap(control)
+        let sync = IntegrationWait.Throttle(interval: 1)
         let batches = try IntegrationWait.value("Trio to have stored \(what)", timeout: timeout) { () -> [VirtualPumpControl.Batch]? in
             if syncing {
-                try control.send(.init(command: .sync))
+                try sync.run { _ = try control.send(.init(command: .sync)) }
             }
             let batches = try self.allBatches()
             return condition(batches.flatMap(\.pumpEvents)) && batches.allSatisfy(\.completed) ? batches : nil

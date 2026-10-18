@@ -19,10 +19,16 @@ inputs:
     description: TandemKit revision to test.
     required: true
 
+outputs:
+  commit:
+    description: The Trio commit checked out.
+    value: ${{ steps.checkout.outputs.commit }}
+
 runs:
   using: composite
   steps:
     - name: Checkout Trio app repository (no submodules)
+      id: checkout
       uses: actions/checkout@v6
       with:
         repository: ${{ inputs.repository }}
@@ -67,3 +73,10 @@ runs:
         fi
 
         git submodule update --init --recursive --depth 1 "${submodule_paths[@]}"
+
+    # For the derived data cache (scripts/ci/stamp-checkout.sh). TandemKit keeps the checkout's
+    # dates, so it is rebuilt from any restored build.
+    - name: Date Trio's files at its commit
+      shell: bash
+      run: |
+        "${GITHUB_ACTION_PATH}/../../../scripts/ci/stamp-checkout.sh" trio TandemKit

@@ -32,6 +32,7 @@ final class TrioBolusTests: TrioTestCase {
 
     func testABolusCancelledPartWayIsStoredByTrioAtWhatThePumpDelivered() throws {
         try pairTrio()
+        try harness.client.setState(["bolus_rate_units_per_second": 0.1])
         try control.send(.init(command: .bolus, units: 2.0))
         try IntegrationWait.until("the pump to have delivered part of the bolus", timeout: 60) {
             try self.harness.client.snapshot().bolus.unitsDelivered >= 0.3
@@ -50,6 +51,7 @@ final class TrioBolusTests: TrioTestCase {
 
     func testABolusRunningAcrossARelaunchOfTrioIsStoredOnceFinished() throws {
         try pairTrio()
+        try harness.client.setState(["bolus_rate_units_per_second": 0.1])
         try control.send(.init(command: .bolus, units: 2.0))
         try trioStored("the running bolus") { events in
             events.contains { $0.dose?.type == .bolus && $0.dose?.isMutable == true }

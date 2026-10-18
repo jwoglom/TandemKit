@@ -47,6 +47,25 @@ enum IntegrationWait {
             Thread.sleep(forTimeInterval: pollInterval)
         }
     }
+
+    /// A step of a polling closure that costs more than a poll, such as a sync of the driver, runs at
+    /// most once per `interval` while the wait keeps polling at `pollInterval`.
+    final class Throttle {
+        private let interval: TimeInterval
+        private var lastRun: Date?
+
+        init(interval: TimeInterval) {
+            self.interval = interval
+        }
+
+        func run(_ body: () throws -> Void) rethrows {
+            if let lastRun, Date() < lastRun.addingTimeInterval(interval) {
+                return
+            }
+            lastRun = Date()
+            try body()
+        }
+    }
 }
 
 /// A completion result written from another queue and read by a polling wait.
