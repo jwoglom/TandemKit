@@ -79,10 +79,17 @@ runs every class here too.
 
 `.github/workflows/linux.yml` runs it too, on GitHub-hosted Ubuntu, for every push to `main` and
 `dev`, pull request and manual run. Its `virtual-pump` job builds the suite and its `faketandem`
-job the emulator and jar, from the same faketandem ref the macOS job picks, side by side; the `integration` job then runs the suite in two halves at
-once, on that build restored from the Actions cache without rebuilding. `integration_fault` takes the
-classes `FAULT_SUITES` names, the conformance groups built on injected faults; `integration` takes
-the rest, so a new class runs there unless it is added to `FAULT_SUITES`.
+job the emulator and jar, from the same faketandem ref the macOS job picks, side by side; the
+`integration` job then runs the suite in four shards at once, each its own `swift test` against its
+own faketandem, on that build restored from the Actions cache without rebuilding. Each test is
+mostly idle waits, so a shard costs only its job's setup, and they are sized to finish together:
+`integration_fault` takes the classes `FAULT_SUITES` names (`PumpSideConformanceTests`,
+`OutageConformanceTests`), `integration_commands` those `COMMAND_SUITES` names
+(`InterruptConformanceTests`, `IdempotencyConformanceTests`, `CancelConformanceTests`),
+`integration_history` those `HISTORY_SUITES` names (`BasalHistoryConformanceTests`,
+`HistoryBackfillIntegrationTests`, `TimeChangeConformanceTests`), and `integration` the rest, by
+skipping the union of those three regexes, so a new class runs there unless it is added to one of
+them. Each shard fails if it skipped any test.
 
 ### How the tests find the emulator
 
@@ -565,6 +572,10 @@ shape of it explains what the harness is for:
 - **An occlusion raised an alert but no `AlarmStatusResponse` bit**, so a driver reading the alarm
   status, as one reads a pump's, never saw it (D2, B7). It stands as `OCCLUSION_ALARM` until the
   alarm is cleared.
+- **`DismissNotificationRequest` was answered OK without changing anything**, so an alarm the
+  driver acknowledged stood at its next read. A dismissed alarm leaves `AlarmStatusResponse`, with
+  an `AlarmCleared` record for each standing alarm it closes, and a dismissed alert leaves
+  `AlertStatusResponse` (`AlertIntegrationTests`). Reminders and CGM alerts are still only logged.
 - **A `HistoryLogRequest` for 128 or more records streamed one.** `numberOfLogs` is one
   unsigned byte that cliparser prints signed, so a full 255-record slice arrived as -1 and was
   served as a single record; a walk took a chunk timeout per record.
@@ -588,7 +599,11 @@ shape of it explains what the harness is for:
 Not gaps, but worth knowing when reading timings: `FaketandemHarness.makeDriver` shortens the
 driver's response timeout to 2 s and its connect timeout to 15 s (`VirtualPump.responseTimeout`,
 `VirtualPump.connectTimeout`; production keeps 30 s for a real pump's slowest command), so a
-scenario that drops a response waits 2 s, not 30. An unauthenticated `DisconnectPumpRequest` is
+scenario that drops a response waits 2 s, not 30. It also shortens the history fetcher's per-chunk
+pacing (`VirtualPump.historyPacing`) to a 50 ms request delay and poll and a 2 s chunk timeout,
+from ControlX2's 1 s, 0.5 s and 8 s (`HistoryLogFetcher.Pacing.production`), so a 255-entry
+`HistoryLogRequest` costs milliseconds rather than a second and a lost stream record waits 2 s,
+not 8, before the gap-healing pass. An unauthenticated `DisconnectPumpRequest` is
 not answered (the handler requires auth, as on a real pump), so the driver sends it only on an
 authenticated session. And pairing-state `NotDiscoverable` still answers `hello` (followed by
 `disconnect`), which the virtual `CBCentralManager` treats as "not advertising".

@@ -329,6 +329,19 @@ edit instead of at the next sync.
   reservoir drops. `reconciliationBoundary`'s hold for a pump bolus (#353) is behind the reading on
   purpose, and the gate is the driver's own boundary. Trio doses on neither.
 
+### LoopKit alerts
+- Loop and Trio register the manager as alert responder and sound vendor under its
+  `pluginIdentifier` and route an acknowledgement, or a sound lookup, by the alert's
+  `managerIdentifier`. Every alert is issued and retracted under `TandemPumpManager.alertIdentifier`;
+  one under `managerIdentifier` (`"Tandem"`, which is the HUD provider's) was acknowledged on the
+  phone alone and stayed on the pump (#592). `MockPumpManagerDelegate` fails a test that issues one
+  under any other, and the Harmonize rule `AlertsCarryThePluginIdentifier` any code that builds one.
+- Both hosts record an acknowledgement whether or not it reached the pump, and Trio only logs a
+  failure. So a failed `acknowledgeAlert` forgets the alert as issued
+  (`issueAgainAfterFailedAcknowledgement`), and the reconciler issues it again from the last read
+  while the pump still raises it, out of range included. A malfunction, which the pump cannot
+  dismiss, stays acknowledged.
+
 ### Pump event batches
 - A `replacePendingEvents: true` batch makes both hosts delete every mutable dose it leaves out,
   and Loop never revives a deleted one. `emitPumpEvents` appends the boluses the host holds as

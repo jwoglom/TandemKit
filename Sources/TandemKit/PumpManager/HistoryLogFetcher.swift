@@ -47,14 +47,28 @@ public final class HistoryLogFetcher {
         }
     }
 
+    /// How `walkRange` waits on each chunk: a delay after the request, then polls until the chunk
+    /// has streamed in or the timeout gives up on it (stragglers are healed later).
+    struct Pacing {
+        var requestDelay: TimeInterval
+        var pollInterval: TimeInterval
+        var chunkTimeout: TimeInterval
+
+        /// ControlX2's cadence, sized for a 255-entry chunk streaming over BLE.
+        static let production = Pacing(requestDelay: 1.0, pollInterval: 0.5, chunkTimeout: 8.0)
+    }
+
     // 255 is the most logs a single HistoryLogRequest can ask for (numberOfLogs is one byte), so
-    // fetching in the largest chunks minimizes round-trips. chunkTimeout is correspondingly larger
-    // than the old 32-log value to give a full chunk time to stream in before gap-healing.
+    // fetching in the largest chunks minimizes round-trips.
     private static let chunkSize: Int64 = 255
-    private static let requestDelay: TimeInterval = 1.0
-    private static let pollInterval: TimeInterval = 0.5
-    private static let chunkTimeout: TimeInterval = 8.0
     private static let sendTimeout: DispatchTimeInterval = .seconds(45)
+
+    private static var pacing: Pacing {
+        #if TANDEMKIT_VIRTUAL_PUMP
+        if let override = VirtualPump.historyPacing { return override }
+        #endif
+        return .production
+    }
 
     // Weak: manager owns coordinator owns fetcher, so a strong reference back cycles and leaks
     // the manager, and the BLE stack behind it, past the user deleting the pump.
@@ -287,6 +301,7 @@ public final class HistoryLogFetcher {
 
     /// Walks [startId, endId] backward in chunks, requesting each chunk's top sequence number.
     private func walkRange(startId: Int64, endId: Int64) {
+        let pacing = Self.pacing
         var i = endId
         while i >= startId, !isCancelled {
             let count = Int(min(Self.chunkSize, i - startId + 1))
@@ -296,16 +311,14 @@ public final class HistoryLogFetcher {
                 logger.warning("No HistoryLogResponse for chunk \(chunkStart)-\(i)")
             }
 
-            // Same cadence as ControlX2: initial delay, then poll until the chunk has fully
-            // streamed in or the per-chunk timeout expires (stragglers are healed later).
-            sleepUnlessCancelled(Self.requestDelay)
+            sleepUnlessCancelled(pacing.requestDelay)
             var waited: TimeInterval = 0
-            while !isCancelled, waited < Self.chunkTimeout {
+            while !isCancelled, waited < pacing.chunkTimeout {
                 if receivedCount(from: chunkStart, to: i) >= count {
                     break
                 }
-                sleepUnlessCancelled(Self.pollInterval)
-                waited += Self.pollInterval
+                sleepUnlessCancelled(pacing.pollInterval)
+                waited += pacing.pollInterval
             }
 
             i = chunkStart - 1
