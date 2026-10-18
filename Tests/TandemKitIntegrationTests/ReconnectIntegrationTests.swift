@@ -53,7 +53,7 @@ final class ReconnectIntegrationTests: FaketandemIntegrationTestCase {
         let logStart = try harness.client.snapshot().requestLog.lastSeq
         try harness.client.armFault(FaketandemFaultSpec(.radioOn))
 
-        let retryBudget = TandemBluetoothManager.reconnectRetryDelays.prefix(3).reduce(0, +) + 30
+        let retryBudget = driver.bluetooth.reconnectRetryDelays.prefix(3).reduce(0, +) + 30
         try IntegrationWait.until("the driver to reconnect on its own", timeout: retryBudget) {
             try driver.manager.state.isConnected && harness.client.snapshot().auth.authenticated
         }
@@ -76,7 +76,7 @@ final class ReconnectIntegrationTests: FaketandemIntegrationTestCase {
         var logStart = try harness.client.snapshot().requestLog.lastSeq
         try harness.control.disconnectPump()
 
-        let retryBudget = TandemBluetoothManager.reconnectRetryDelays.prefix(4).reduce(0, +) + 30
+        let retryBudget = driver.bluetooth.reconnectRetryDelays.prefix(4).reduce(0, +) + 30
         for _ in 0 ..< TandemBluetoothManager.jpakeFailureLimit {
             try IntegrationWait.until("the driver's next handshake", timeout: retryBudget) {
                 try harness.requestsSeen(since: logStart).contains { $0.message == "Jpake3SessionKeyRequest" }
@@ -121,7 +121,7 @@ final class ReconnectIntegrationTests: FaketandemIntegrationTestCase {
         let outage = try pairSyncAndGoOutOfRange(driver)
         try harness.client.armFault(FaketandemFaultSpec(.radioOn))
 
-        let retryBudget = TandemBluetoothManager.reconnectRetryDelays.prefix(3).reduce(0, +) + 30
+        let retryBudget = driver.bluetooth.reconnectRetryDelays.prefix(3).reduce(0, +) + 30
         try assertSyncedOnItsOwn(driver, after: outage, timeout: retryBudget)
     }
 

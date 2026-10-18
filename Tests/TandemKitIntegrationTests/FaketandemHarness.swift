@@ -182,6 +182,10 @@ final class FaketandemHarness {
     /// 30 s each they were most of the suite's run time. faketandem answers in well under a second.
     static let responseTimeout: TimeInterval = 2
 
+    /// The reconnect retry's backoff: the production 5, 10, 20, 40, 60 s is wall-clock, which the manual clock
+    /// cannot advance. The first delay leaves a test a second to re-arm a fault before the next attempt.
+    static let reconnectRetryDelays: [TimeInterval] = [1, 2, 3, 4, 5]
+
     /// `clock` defaults to a ManualClock starting now, so a test can jump the driver's idea of time
     /// (bolus estimated end, sync throttles) without waiting; the emulator stays on its own clock.
     /// `poweredOnBeforeAttach` lands Bluetooth's poweredOn, and the connect attempts it queues, before the
@@ -200,6 +204,7 @@ final class FaketandemHarness {
         VirtualPump.connectTimeout = .seconds(15)
         VirtualPump.historyPacing = HistoryLogFetcher.Pacing(requestDelay: 0.05, pollInterval: 0.05, chunkTimeout: 2)
         let bluetooth = TandemBluetoothManager()
+        bluetooth.reconnectRetryDelays = Self.reconnectRetryDelays
         let central = bluetooth.manager!
         if poweredOnBeforeAttach {
             bluetooth.handleBluetoothStateChange(.poweredOn)

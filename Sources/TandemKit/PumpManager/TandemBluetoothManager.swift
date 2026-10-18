@@ -89,7 +89,7 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
     // CoreBluetooth says nothing when a pump that refused a connect comes back into range, and the
     // host's sync is throttled for minutes after the last one, so a failed connect on a paired pump
     // is retried on this schedule until a session lands (jwoglom/tandemkit-stress#4).
-    static let reconnectRetryDelays: [TimeInterval] = [5, 10, 20, 40, 60]
+    var reconnectRetryDelays: [TimeInterval] = [5, 10, 20, 40, 60]
     // Guarded by connectStateLock: scheduled from command jobs, cancelled from managerQueue
     // (Bluetooth off) and from deactivate().
     private var reconnectRetry: DispatchWorkItem?
@@ -338,7 +338,7 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
         if let pending = reconnectRetry, !pending.isCancelled {
             return
         }
-        let delays = Self.reconnectRetryDelays
+        let delays = reconnectRetryDelays
         let delay = delays[min(reconnectRetryCount, delays.count - 1)]
         reconnectRetryCount += 1
         let item = DispatchWorkItem { [weak self] in

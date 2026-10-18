@@ -599,7 +599,8 @@ shape of it explains what the harness is for:
 Not gaps, but worth knowing when reading timings: `FaketandemHarness.makeDriver` shortens the
 driver's response timeout to 2 s and its connect timeout to 15 s (`VirtualPump.responseTimeout`,
 `VirtualPump.connectTimeout`; production keeps 30 s for a real pump's slowest command), so a
-scenario that drops a response waits 2 s, not 30. It also shortens the history fetcher's per-chunk
+scenario that drops a response waits 2 s, not 30, and the reconnect retry's backoff to 1, 2, 3, 4,
+5 s (`reconnectRetryDelays`; production waits 5, 10, 20, 40, 60 s). It also shortens the history fetcher's per-chunk
 pacing (`VirtualPump.historyPacing`) to a 50 ms request delay and poll and a 2 s chunk timeout,
 from ControlX2's 1 s, 0.5 s and 8 s (`HistoryLogFetcher.Pacing.production`), so a 255-entry
 `HistoryLogRequest` costs milliseconds rather than a second and a lost stream record waits 2 s,
