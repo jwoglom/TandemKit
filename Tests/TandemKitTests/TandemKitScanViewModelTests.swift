@@ -1,3 +1,4 @@
+import CoreBluetooth
 import Foundation
 @testable import TandemKit
 import XCTest
@@ -55,6 +56,28 @@ import XCTest
 
         XCTAssertNil(error.recoverySuggestion)
         XCTAssertEqual(TandemKitScanViewModel.pairingFailureMessage(for: error), error.localizedDescription)
+    }
+
+    func testThePairingStepIsTheLastByteOfThePumpsManufacturerData() {
+        let manufacturerData = Data([0x9D, 0x05, 0x00, 0x01, 0x11])
+        XCTAssertEqual(
+            TandemKitScanViewModel.advertisedPairingStep([CBAdvertisementDataManufacturerDataKey: manufacturerData]),
+            0x11
+        )
+        XCTAssertNil(TandemKitScanViewModel.advertisedPairingStep([CBAdvertisementDataLocalNameKey: "Tandem Mobi 123"]))
+        XCTAssertNil(TandemKitScanViewModel.advertisedPairingStep(nil))
+    }
+
+    func testTheSimulatorMarkerStandsForAPumpReadyForItsCode() {
+        XCTAssertEqual(
+            TandemKitScanViewModel.advertisedPairingStep([
+                CBAdvertisementDataServiceUUIDsKey: [ServiceUUID.PUMP_SERVICE, ServiceUUID.PUMP_SIMULATOR_MARKER],
+            ]),
+            0x12
+        )
+        XCTAssertNil(
+            TandemKitScanViewModel.advertisedPairingStep([CBAdvertisementDataServiceUUIDsKey: [ServiceUUID.PUMP_SERVICE]])
+        )
     }
 
     /// The pairing step has no way out of its own: nothing but this ends it.

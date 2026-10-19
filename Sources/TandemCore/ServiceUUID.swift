@@ -16,6 +16,11 @@ public enum ServiceUUID {
     // Generic Attribute service
     static let GENERIC_ATTRIBUTE_SERVICE = CBUUID(string: "00001801-0000-1000-8000-00805f9b34fb")
 
+    // Advertised beside PUMP_SERVICE by the unified pump simulator, which fronts faketandem over
+    // CoreBluetooth; a CoreBluetooth peripheral cannot advertise the manufacturer data a pump's
+    // pairing step is read from. Never advertised by a pump, and not discovered.
+    static let PUMP_SIMULATOR_MARKER = CBUUID(string: "10710BFF-1949-498B-B49B-A26D4CA7973F")
+
     static let all: [CBUUID] = [
         PUMP_SERVICE,
         TDU_SERVICE,
