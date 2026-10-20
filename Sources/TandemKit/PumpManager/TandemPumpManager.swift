@@ -432,6 +432,13 @@ public class TandemPumpManager: PumpManager, Pluggable {
     /// deliver up to `baseline * 0.5%` more than was asked for. Trio drops any temp-basal record
     /// whose `unitsPerHour` exceeds its `maxBasal` and oref routinely requests exactly `maxBasal`,
     /// so the percent is stepped down until the rate no longer exceeds the request.
+    ///
+    /// The pump refuses a percent whose share of the profile is under its lowest rate (status 1):
+    /// 17% of 0.58 U/hr is 0.0986 U/hr, and oref asks for the 0.1 U/hr it is short of whenever a
+    /// zero temp is a little less than needed. The lowest percent the pump accepts goes out
+    /// instead, the nearer of the two it does accept either side of the request: it overshoots by
+    /// under a percent of the baseline, where 0% falls the whole request short. A request under the
+    /// lowest rate itself is 0%, as `roundToSupportedBasalRate` makes it before this is called.
     internal func tempBasalPercentAndRate(requestedRate: Double, baseline: Double) -> (percent: Int, rate: Double) {
         guard baseline > 0, requestedRate > 0 else { return (0, 0) }
 
@@ -447,7 +454,28 @@ public class TandemPumpManager: PumpManager, Pluggable {
             rate = roundToSupportedBasalRate(unitsPerHour: baseline * Double(percent) / 100.0)
         }
 
+        let lowestAccepted = min(Self.minimumTempBasalPercent(baseline: baseline), TandemPumpManager.maximumTempBasalPercent)
+        if percent > 0, percent < lowestAccepted {
+            let raised = requestedRate >= TandemPumpCapabilities.minimumBasalRate ? lowestAccepted : 0
+            logger.info(
+                "Sending a \(raised)% temp basal: \(percent)% of \(baseline) U/hr is under the pump's \(TandemPumpCapabilities.minimumBasalRate) U/hr minimum"
+            )
+            percent = raised
+            rate = roundToSupportedBasalRate(unitsPerHour: baseline * Double(percent) / 100.0)
+        }
+
         return (percent, rate)
+    }
+
+    /// The lowest non-zero percent the pump accepts of `baseline`: the first whose share of it, in
+    /// the milliunits the pump holds the profile in, reaches `TandemPumpCapabilities.minimumBasalRate`.
+    /// Whether the pump compares that share exactly or truncated to a milliunit, one of at least
+    /// 100 mU passes either test.
+    internal static func minimumTempBasalPercent(baseline: Double) -> Int {
+        let baselineMilliunits = Int((baseline * 1000).rounded())
+        guard baselineMilliunits > 0 else { return 1 }
+        let minimumMilliunits = Int((TandemPumpCapabilities.minimumBasalRate * 1000).rounded())
+        return (minimumMilliunits * 100 + baselineMilliunits - 1) / baselineMilliunits
     }
 
     internal static func tempBasalExceedsCeiling(requestedRate: Double, baseline: Double) -> Bool {

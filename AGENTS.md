@@ -682,6 +682,14 @@ edit instead of at the next sync.
 - `enactTempBasal` refuses a non-zero temp with `pumpProfileBasalRateIsZero` when the pump's
   `CurrentBasalStatus` reads a profile rate of 0 U/hr, before stopping a running temp basal; a
   Mobi ran a 0 U/hr profile for a day while the host was told its temp rates ran (#335, #343).
+- The pump refuses a percent whose share of its rate is under its 0.1 U/hr minimum
+  (`TandemPumpCapabilities.minimumBasalRate`) with status 1, after the running temp was stopped: a
+  Mobi refused 17% of 0.58 U/hr, the nearest percent to the 0.1 U/hr oref asks for when a zero temp
+  is a little less than needed, and Trio's loop failed while the pump ran its profile until the next
+  cycle. `tempBasalPercentAndRate` sends the lowest percent the pump accepts instead
+  (`minimumTempBasalPercent`, 18% there), nearer the request than 0% since it overshoots by under a
+  percent of the rate, and reports the grid rate below it (0.1 U/hr). `StubPumpBluetooth`'s basal
+  pump refuses such a percent as the pump does.
 - The percent is worked out against the pump's own rate in force, `profileBasalRate` from that
   same read, and the temp is reported at that percent of it. Within `segmentChangeWindow`
   (5 min) of the pump's next segment change it is worked out against the larger of the two

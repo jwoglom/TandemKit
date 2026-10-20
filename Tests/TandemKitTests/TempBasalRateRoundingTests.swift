@@ -4,6 +4,8 @@ import XCTest
 
 /// The rate the driver enacts and reports never exceeds the rate that was requested — a host that
 /// filters on it (Trio drops temp basals above its `maxBasal`) would otherwise discard the record.
+/// The one exception is a percent the pump refuses as under its lowest rate, where the lowest
+/// percent it accepts goes out instead.
 @available(macOS 13.0, iOS 14.0, *) final class TempBasalRateRoundingTests: XCTestCase {
     private var bluetooth: StubPumpBluetooth!
 
@@ -95,13 +97,15 @@ import XCTest
     }
 
     /// Sweeps every baseline/request pair the pump can express and asserts the invariant plus the
-    /// bounds that keep the fix from being "just always deliver less".
+    /// bounds that keep the fix from being "just always deliver less". Where the pump would refuse
+    /// the percent as under its lowest rate, the invariant gives way to the lowest percent it accepts.
     func testSweepNeverOvershootsAndStaysCloseToTheRequest() {
-        let baselines: [Double] = [0.1, 0.25, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.5, 7.5, 10.0, 15.0]
+        let baselines: [Double] = [0.1, 0.25, 0.42, 0.48, 0.5, 0.58, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.5, 7.5, 9.9, 10.0, 15.0]
 
         for baseline in baselines {
             let manager = makeManager(baseline: baseline)
             let ceiling = min(15.0, baseline * Double(TandemPumpManager.maximumTempBasalPercent) / 100.0)
+            let lowestAccepted = TandemPumpManager.minimumTempBasalPercent(baseline: baseline)
 
             for requested in supportedRates where requested > 0 && requested <= ceiling {
                 let (percent, rate) = manager.tempBasalPercentAndRate(requestedRate: requested, baseline: baseline)
@@ -112,12 +116,9 @@ import XCTest
                     TandemPumpManager.maximumTempBasalPercent,
                     "baseline \(baseline), requested \(requested)"
                 )
-
-                // The invariant this issue is about.
-                XCTAssertLessThanOrEqual(
-                    rate,
-                    requested + 1e-9,
-                    "overshoot: baseline \(baseline), requested \(requested) -> \(percent)% = \(rate)"
+                XCTAssertTrue(
+                    percent == 0 || percent >= lowestAccepted,
+                    "the pump refuses this: baseline \(baseline), requested \(requested) -> \(percent)%"
                 )
 
                 // The percent and the reported rate must describe the same delivery.
@@ -126,6 +127,30 @@ import XCTest
                     self.rate(percent: percent, baseline: baseline),
                     accuracy: 1e-9,
                     "percent/rate disagree: baseline \(baseline), requested \(requested)"
+                )
+
+                let exact = baseline * Double(percent) / 100.0
+                if percent == lowestAccepted, rate > requested + 1e-9 {
+                    // Raised over a refused percent: by under a percent of the baseline, and nearer
+                    // the request than 0% would have been.
+                    XCTAssertLessThan(
+                        exact - requested,
+                        baseline / 100.0 + 1e-9,
+                        "raised too far: baseline \(baseline), requested \(requested) -> \(percent)% = \(exact)"
+                    )
+                    XCTAssertLessThanOrEqual(
+                        exact - requested,
+                        requested,
+                        "0% was nearer: baseline \(baseline), requested \(requested) -> \(percent)% = \(exact)"
+                    )
+                    continue
+                }
+
+                // The invariant this issue is about.
+                XCTAssertLessThanOrEqual(
+                    rate,
+                    requested + 1e-9,
+                    "overshoot: baseline \(baseline), requested \(requested) -> \(percent)% = \(rate)"
                 )
 
                 // Never below the best the pump could have done, by more than the half percent
@@ -175,6 +200,79 @@ import XCTest
 
         XCTAssertEqual(percent, 100)
         XCTAssertEqual(rate, 1.35, accuracy: 1e-9)
+    }
+
+    // MARK: - Under the pump's lowest rate
+
+    /// The case from the field (Trio, a Mobi): oref asking a 0.58 U/hr profile for the 0.1 U/hr it
+    /// was short of. 17% is nearest but works out to 0.0986 U/hr, which the pump refused with
+    /// status 1 after the running temp had been stopped; 18% runs 0.1044 U/hr.
+    func testTheLowestRateUnderAPointFiveEightProfileGoesOutAsEighteenPercent() {
+        let manager = makeManager(baseline: 0.58)
+
+        let (percent, rate) = manager.tempBasalPercentAndRate(requestedRate: 0.1, baseline: 0.58)
+
+        XCTAssertEqual(percent, 18)
+        XCTAssertEqual(rate, 0.1, accuracy: 1e-9)
+    }
+
+    /// 21% of 0.48 U/hr is 0.1008 U/hr, which the same pump ran: a nearest percent it accepts is kept.
+    func testTheLowestRateUnderAPointFourEightProfileKeepsItsNearestPercent() {
+        let manager = makeManager(baseline: 0.48)
+
+        let (percent, rate) = manager.tempBasalPercentAndRate(requestedRate: 0.1, baseline: 0.48)
+
+        XCTAssertEqual(percent, 21)
+        XCTAssertEqual(rate, 0.1, accuracy: 1e-9)
+    }
+
+    /// 0.11 U/hr of 3 U/hr is nearest 4%, which overshoots to 0.12; the step down lands on 3%,
+    /// 0.09 U/hr, which the pump refuses; so 4% it is.
+    func testAStepDownOntoARefusedPercentComesBackUp() {
+        let manager = makeManager(baseline: 3.0)
+
+        let (percent, rate) = manager.tempBasalPercentAndRate(requestedRate: 0.11, baseline: 3.0)
+
+        XCTAssertEqual(percent, 4)
+        XCTAssertEqual(rate, 0.12, accuracy: 1e-9)
+    }
+
+    /// A request under the lowest rate itself is nearer 0% than any percent the pump accepts, and
+    /// `enactTempBasal` floors it there before asking.
+    func testARequestUnderTheLowestRateResolvesToZero() {
+        let manager = makeManager(baseline: 0.58)
+
+        for requested in [0.05, 0.06, 0.099] {
+            let (percent, rate) = manager.tempBasalPercentAndRate(requestedRate: requested, baseline: 0.58)
+            XCTAssertEqual(percent, 0, "requested \(requested)")
+            XCTAssertEqual(rate, 0, "requested \(requested)")
+        }
+    }
+
+    /// 20% of 0.499 U/hr is 99.8 mU/hr: under the minimum whether the pump truncates or not.
+    func testTheLowestPercentFollowsThePumpsMilliunitArithmetic() {
+        XCTAssertEqual(TandemPumpManager.minimumTempBasalPercent(baseline: 0.58), 18)
+        XCTAssertEqual(TandemPumpManager.minimumTempBasalPercent(baseline: 0.48), 21)
+        XCTAssertEqual(TandemPumpManager.minimumTempBasalPercent(baseline: 0.5), 20)
+        XCTAssertEqual(TandemPumpManager.minimumTempBasalPercent(baseline: 0.499), 21)
+        XCTAssertEqual(TandemPumpManager.minimumTempBasalPercent(baseline: 0.1), 100)
+        XCTAssertEqual(TandemPumpManager.minimumTempBasalPercent(baseline: 9.9), 2)
+        XCTAssertEqual(TandemPumpManager.minimumTempBasalPercent(baseline: 10.0), 1)
+        XCTAssertEqual(TandemPumpManager.minimumTempBasalPercent(baseline: 15.0), 1)
+    }
+
+    /// The field failure end to end: the stub pump refuses 17% of 0.58 U/hr as the Mobi did, so the
+    /// enact only succeeds by sending 18%, and the host is told the 0.1 U/hr grid rate below it.
+    func testEnactUnderAPointFiveEightProfileSendsEighteenPercentAndReportsTheLowestRate() throws {
+        let manager = makeManager(baseline: 0.58)
+        let (delegate, queue) = attach(manager)
+        stubHappyPump(baseline: 0.58)
+
+        XCTAssertNil(enact(manager, unitsPerHour: 0.1))
+        queue.sync {}
+
+        XCTAssertEqual(bluetooth.sent(SetTempRateRequest.self).map(\.percent), [18])
+        XCTAssertEqual(try XCTUnwrap(reportedTempBasalRate(delegate)), 0.1, accuracy: 1e-9)
     }
 
     // MARK: - Degenerate inputs

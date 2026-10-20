@@ -3,10 +3,15 @@ import Foundation
 /// Fixed hardware capabilities of the supported Tandem pumps, kept in TandemCore so both the pump
 /// manager and dose bookkeeping share one definition on every platform.
 public enum TandemPumpCapabilities {
+    /// The lowest non-zero rate the pump delivers, as a profile segment and as a temp basal: a
+    /// percent whose share of the profile works out under it is refused (status 1; a Mobi refused
+    /// 17% of 0.58 U/hr).
+    public static let minimumBasalRate = 0.1
+
     /// Tandem Mobi and t:slim X2: 0.0u, then 0.1 - 15.00u/hr in 0.01u chunks
     public static let supportedBasalRates: [Double] = {
         let multiplier = 1000.0
-        let start = Int(round(0.1 * multiplier))
+        let start = Int(round(minimumBasalRate * multiplier))
         let end = Int(round(15.0 * multiplier))
         let step = Int(round(0.01 * multiplier))
         return [0.0] + stride(from: start, through: end, by: step).map { Double($0) / multiplier }

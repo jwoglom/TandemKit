@@ -79,7 +79,9 @@ final class StubPumpBluetooth: PumpBluetoothConnection {
             capMilliunits: capMilliunits
         )
         stub(SetTempRateRequest.self) { request in
-            pump.setTempPercent((request as? SetTempRateRequest)?.percent)
+            let percent = (request as? SetTempRateRequest)?.percent
+            guard pump.accepts(percent) else { return SetTempRateResponse(status: 1, tempRateId: 0) }
+            pump.setTempPercent(percent)
             return SetTempRateResponse(status: 0, tempRateId: tempRateId)
         }
         stub(StopTempRateRequest.self) { _ in
@@ -252,6 +254,13 @@ private final class StubBasalPump {
         lock.lock()
         tempPercent = percent
         lock.unlock()
+    }
+
+    /// A Mobi answered 17% of 0.58 U/hr with status 1 and tempRateId 0, and runs 21% of 0.48 U/hr.
+    func accepts(_ percent: Int?) -> Bool {
+        guard let percent, percent > 0 else { return true }
+        let minimumMilliunits = UInt32((TandemPumpCapabilities.minimumBasalRate * 1000).rounded())
+        return profileMilliunits * UInt32(percent) >= minimumMilliunits * 100
     }
 
     func status() -> CurrentBasalStatusResponse {
