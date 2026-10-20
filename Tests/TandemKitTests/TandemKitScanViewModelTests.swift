@@ -61,23 +61,29 @@ import XCTest
     func testThePairingStepIsTheLastByteOfThePumpsManufacturerData() {
         let manufacturerData = Data([0x9D, 0x05, 0x00, 0x01, 0x11])
         XCTAssertEqual(
-            TandemKitScanViewModel.advertisedPairingStep([CBAdvertisementDataManufacturerDataKey: manufacturerData]),
+            TandemKitScanViewModel.advertisedPairingStep(
+                name: "Tandem Mobi 123",
+                advertisementData: [CBAdvertisementDataManufacturerDataKey: manufacturerData]
+            ),
             0x11
         )
-        XCTAssertNil(TandemKitScanViewModel.advertisedPairingStep([CBAdvertisementDataLocalNameKey: "Tandem Mobi 123"]))
-        XCTAssertNil(TandemKitScanViewModel.advertisedPairingStep(nil))
+        XCTAssertNil(TandemKitScanViewModel.advertisedPairingStep(name: "Tandem Mobi 123", advertisementData: [:]))
+        XCTAssertNil(TandemKitScanViewModel.advertisedPairingStep(name: "Tandem Mobi 123", advertisementData: nil))
     }
 
-    func testTheSimulatorMarkerStandsForAPumpReadyForItsCode() {
+    func testAPumpNamedAsASimulatorIsReadyForItsCode() {
+        XCTAssertEqual(TandemKitScanViewModel.advertisedPairingStep(name: "Tandem Mobi SIM", advertisementData: nil), 0x12)
+        // CoreBluetooth names a Mac it has connected to by the Mac's own name; the advertisement still says.
         XCTAssertEqual(
-            TandemKitScanViewModel.advertisedPairingStep([
-                CBAdvertisementDataServiceUUIDsKey: [ServiceUUID.PUMP_SERVICE, ServiceUUID.PUMP_SIMULATOR_MARKER],
-            ]),
+            TandemKitScanViewModel.advertisedPairingStep(
+                name: "Someone's MacBook",
+                advertisementData: [CBAdvertisementDataLocalNameKey: "Tandem Mobi SIM"]
+            ),
             0x12
         )
-        XCTAssertNil(
-            TandemKitScanViewModel.advertisedPairingStep([CBAdvertisementDataServiceUUIDsKey: [ServiceUUID.PUMP_SERVICE]])
-        )
+        XCTAssertFalse(TandemPumpScan.isSimulatorName("Tandem Mobi 123"))
+        XCTAssertFalse(TandemPumpScan.isSimulatorName("Tandem Mobi SIM1"))
+        XCTAssertTrue(TandemPumpScan.isSimulatorName("tslim X2 SIM"))
     }
 
     /// The pairing step has no way out of its own: nothing but this ends it.

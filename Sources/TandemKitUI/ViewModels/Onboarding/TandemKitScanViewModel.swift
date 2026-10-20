@@ -261,18 +261,14 @@ class TandemKitScanViewModel: ObservableObject {
 extension TandemKitScanViewModel {
     /// The pairing step a scan result advertises: the last byte of a pump's manufacturer data. The
     /// unified pump simulator, a CoreBluetooth peripheral fronting faketandem, cannot advertise any,
-    /// so it advertises `ServiceUUID.PUMP_SIMULATOR_MARKER` instead; its pairing state is set on the
-    /// simulator, so it is taken as ready for the code.
-    static func advertisedPairingStep(_ advertisementData: [String: Any]?) -> UInt8? {
-        guard let advertisementData else {
-            return nil
-        }
-        if let services = advertisementData[CBAdvertisementDataServiceUUIDsKey] as? [CBUUID],
-           services.contains(ServiceUUID.PUMP_SIMULATOR_MARKER)
-        {
+    /// so it is known by its name (`TandemPumpScan.isSimulatorName`); its pairing state is set on
+    /// the simulator, so it is taken as ready for the code. The advertised name comes first: for a
+    /// Mac it has connected to before, CoreBluetooth names the peripheral by the Mac's own.
+    static func advertisedPairingStep(name: String, advertisementData: [String: Any]?) -> UInt8? {
+        if TandemPumpScan.isSimulatorName(advertisementData?[CBAdvertisementDataLocalNameKey] as? String ?? name) {
             return 0x12
         }
-        return (advertisementData[CBAdvertisementDataManufacturerDataKey] as? Data)?.last
+        return (advertisementData?[CBAdvertisementDataManufacturerDataKey] as? Data)?.last
     }
 
     func deviceScanDidUpdate(_ device: TandemPumpScan) {
@@ -287,7 +283,8 @@ extension TandemKitScanViewModel {
             return
         }
 
-        guard let pairingState = Self.advertisedPairingStep(device.advertisementData) else {
+        guard let pairingState = Self.advertisedPairingStep(name: device.name, advertisementData: device.advertisementData)
+        else {
             return
         }
 
