@@ -491,9 +491,9 @@ runs against the emulator over the air, built as it ships, with faketandem's har
 the pump side. It is the way to run the manual test plan's flows without a pump.
 
 A CoreBluetooth peripheral cannot advertise manufacturer data, which is where the scan reads a
-pump's pairing step, so the simulator advertises the pump's name with `SIM` in place of the serial
-(`Tandem Mobi SIM`, `TandemPumpScan.isSimulatorName`) and `TandemKitScanViewModel` takes that as a
-pump at the code-entry step (`advertisedPairingStep`). Nor can it end a connection: when faketandem drops the link, the
+pump's pairing step, so the simulator advertises the pump's name after `SIM` (`SIM Tandem Mobi 123`,
+`TandemPumpScan.isSimulatorName`) and `TandemKitScanViewModel` takes that as a pump at the
+code-entry step (`advertisedPairingStep`). Nor can it end a connection: when faketandem drops the link, the
 simulator withdraws its services, so the driver sees its next request fail rather than the
 `peripheralDisconnected` a pump gives, and the handshake-failure count is not exercised that way.
 

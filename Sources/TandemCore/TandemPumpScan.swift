@@ -7,10 +7,10 @@ public struct TandemPumpScan {
     public let advertisementData: [String: Any]?
 
     /// The unified pump simulator, fronting faketandem over CoreBluetooth, advertises the pump's
-    /// name with `SIM` in place of the serial: `Tandem Mobi SIM`. A pump's name ends in its serial.
-    public static let simulatorNameSuffix = " SIM"
+    /// name after this: `SIM Tandem Mobi 123`. A pump's name starts with its model.
+    public static let simulatorNamePrefix = "SIM"
 
     public static func isSimulatorName(_ name: String) -> Bool {
-        name.hasSuffix(simulatorNameSuffix)
+        name.hasPrefix(simulatorNamePrefix)
     }
 }

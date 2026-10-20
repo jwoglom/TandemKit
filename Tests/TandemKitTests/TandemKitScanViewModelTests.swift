@@ -72,18 +72,19 @@ import XCTest
     }
 
     func testAPumpNamedAsASimulatorIsReadyForItsCode() {
-        XCTAssertEqual(TandemKitScanViewModel.advertisedPairingStep(name: "Tandem Mobi SIM", advertisementData: nil), 0x12)
+        XCTAssertEqual(TandemKitScanViewModel.advertisedPairingStep(name: "SIM Tandem Mobi 123", advertisementData: nil), 0x12)
         // CoreBluetooth names a Mac it has connected to by the Mac's own name; the advertisement still says.
         XCTAssertEqual(
             TandemKitScanViewModel.advertisedPairingStep(
                 name: "Someone's MacBook",
-                advertisementData: [CBAdvertisementDataLocalNameKey: "Tandem Mobi SIM"]
+                advertisementData: [CBAdvertisementDataLocalNameKey: "SIM Tandem Mobi 123"]
             ),
             0x12
         )
+        XCTAssertTrue(TandemPumpScan.isSimulatorName("SIM"))
+        XCTAssertTrue(TandemPumpScan.isSimulatorName("SIM tslim X2 ***123"))
         XCTAssertFalse(TandemPumpScan.isSimulatorName("Tandem Mobi 123"))
-        XCTAssertFalse(TandemPumpScan.isSimulatorName("Tandem Mobi SIM1"))
-        XCTAssertTrue(TandemPumpScan.isSimulatorName("tslim X2 SIM"))
+        XCTAssertFalse(TandemPumpScan.isSimulatorName("Tandem Mobi SIM"))
     }
 
     /// The pairing step has no way out of its own: nothing but this ends it.
