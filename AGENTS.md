@@ -739,9 +739,10 @@ edit instead of at the next sync.
   put the pump on its profile, which over-delivers whenever the temp was below it. No answer to
   the read reports it as commanded. Field logs show the temp in the first status read, within a
   second, every time.
-- The pump runs its profile between the stop of the temp that runs and the set of the next, so
-  everything it could refuse is settled before the stop, and the pump is left on its profile only
-  when nothing else can be done. A request above the pump's max basal rate limit
+- The pump refuses a `SetTempRate` while a temp rate runs, so a replacement is the stop of the one
+  that runs and then the set of the next, and the pump runs its profile between them. Everything it
+  could refuse is settled before the stop, and the pump is left on its profile only when nothing
+  else can be done. A request above the pump's max basal rate limit
   (`clampedToPumpMaximumBasalRate`: the limit read from the pump, else the one the host synced) is
   made the limit. A `SetTempRate` the pump refuses anyway, or that goes unanswered with the pump
   read back on its profile, has the stopped temp set again for the whole minutes left of it
