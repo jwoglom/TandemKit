@@ -31,7 +31,8 @@ struct LoopCachedDose: Equatable, CustomStringConvertible {
     var syncIdentifier: String
     var startDate: Date
     var endDate: Date
-    /// Units, `unitsInDeliverableIncrements` of the dose.
+    /// Units, `unitsInDeliverableIncrements` of the dose: the row's `deliveredUnits`, `value` before
+    /// LoopKit's model v6.
     var value: Double
     /// `HKInsulinDeliveryReason`: 1 basal, 2 bolus.
     var reason: Int
@@ -108,8 +109,9 @@ final class LoopStore {
     }
 
     func cachedDoses() throws -> [LoopCachedDose] {
+        let unitsColumn = try cachedDoseUnitsColumn()
         let sql = """
-            SELECT ZSYNCIDENTIFIER, ZSTARTDATE, ZENDDATE, ZVALUE, ZREASON, ZISSUSPEND, ZISMUTABLE, ZDELETEDAT,
+            SELECT ZSYNCIDENTIFIER, ZSTARTDATE, ZENDDATE, \(unitsColumn), ZREASON, ZISSUSPEND, ZISMUTABLE, ZDELETEDAT,
                    ZPROGRAMMEDTEMPBASALRATE, ZAUTOMATICALLYISSUED
             FROM ZCACHEDINSULINDELIVERYOBJECT
             ORDER BY ZSTARTDATE, Z_PK
@@ -128,6 +130,13 @@ final class LoopStore {
                 automatic: row.bool(9)
             )
         }
+    }
+
+    /// LoopKit's model v6 renamed the dose's units from `value` to `deliveredUnits`, so the column
+    /// follows the LoopKit Loop was built with.
+    private func cachedDoseUnitsColumn() throws -> String {
+        let columns = try query("PRAGMA table_info(ZCACHEDINSULINDELIVERYOBJECT)") { $0.text(1) ?? "" }
+        return columns.contains("ZDELIVEREDUNITS") ? "ZDELIVEREDUNITS" : "ZVALUE"
     }
 
     struct Row {
