@@ -1,3 +1,4 @@
+import CoreBluetooth
 import Foundation
 @testable import TandemKit
 import XCTest
@@ -55,6 +56,39 @@ import XCTest
 
         XCTAssertNil(error.recoverySuggestion)
         XCTAssertEqual(TandemKitScanViewModel.pairingFailureMessage(for: error), error.localizedDescription)
+    }
+
+    func testThePairingStepIsTheLastByteOfThePumpsManufacturerData() {
+        let manufacturerData = Data([0x9D, 0x05, 0x00, 0x01, 0x11])
+        XCTAssertEqual(
+            TandemKitScanViewModel.advertisedPairingStep(
+                name: "Tandem Mobi 123",
+                advertisementData: [CBAdvertisementDataManufacturerDataKey: manufacturerData]
+            ),
+            0x11
+        )
+        XCTAssertNil(TandemKitScanViewModel.advertisedPairingStep(name: "Tandem Mobi 123", advertisementData: [:]))
+        XCTAssertNil(TandemKitScanViewModel.advertisedPairingStep(name: "Tandem Mobi 123", advertisementData: nil))
+    }
+
+    func testAPumpNamedAsASimulatorIsReadyForItsCode() {
+        XCTAssertEqual(
+            TandemKitScanViewModel.advertisedPairingStep(name: "Tandem Mobi Simulator 123", advertisementData: nil),
+            0x12
+        )
+        // CoreBluetooth names a Mac it has connected to by the Mac's own name; the advertisement still says.
+        XCTAssertEqual(
+            TandemKitScanViewModel.advertisedPairingStep(
+                name: "Someone's MacBook",
+                advertisementData: [CBAdvertisementDataLocalNameKey: "Tandem Mobi Simulator 123"]
+            ),
+            0x12
+        )
+        XCTAssertTrue(TandemPumpScan.isSimulatorName("SIM Tandem Mobi 123"))
+        XCTAssertTrue(TandemPumpScan.isSimulatorName("Tandem Mobi SIM"))
+        XCTAssertTrue(TandemPumpScan.isSimulatorName("tslim X2 simulator"))
+        XCTAssertFalse(TandemPumpScan.isSimulatorName("Tandem Mobi 123"))
+        XCTAssertFalse(TandemPumpScan.isSimulatorName("tslim X2 ***123"))
     }
 
     /// The pairing step has no way out of its own: nothing but this ends it.

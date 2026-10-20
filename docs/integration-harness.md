@@ -482,6 +482,21 @@ And three things in Trio that the scenarios step around:
   resume that reaches Trio within that second is pulled back into it. The scenarios wait a second
   between such commands.
 
+## faketandem over real Bluetooth
+
+The [unified pump simulator](https://github.com/bastiaanv/unified-pump-simulator)'s Tandem tab is a
+CoreBluetooth peripheral that fronts faketandem's virtual GATT link: the Mac advertises as the pump
+and forwards every subscription, write and read a phone makes, so TandemKit on a phone pairs and
+runs against the emulator over the air, built as it ships, with faketandem's harness API driving
+the pump side. It is the way to run the manual test plan's flows without a pump.
+
+A CoreBluetooth peripheral cannot advertise manufacturer data, which is where the scan reads a
+pump's pairing step, so the simulator says so in its name (`Tandem Mobi Simulator 123`; any name
+with `SIM` or `Simulator` in it, `TandemPumpScan.isSimulatorName`) and `TandemKitScanViewModel` takes
+that as a pump at the code-entry step (`advertisedPairingStep`). Nor can it end a connection: when faketandem drops the link, the
+simulator withdraws its services, so the driver sees its next request fail rather than the
+`peripheralDisconnected` a pump gives, and the handshake-failure count is not exercised that way.
+
 ## When CI does not run
 
 Runner minutes, the macOS ones above all, are spent only on work that can still tell something new:

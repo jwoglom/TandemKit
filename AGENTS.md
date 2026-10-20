@@ -251,6 +251,10 @@ edit instead of at the next sync.
   unanswered (a Mobi drops the link) or answered with a digest that does not match fails the connect with
   `PumpCommError.pairingCodeRejected`; any other failed round is `noResponse`. The link drop is the
   signature in field logs, and a glitch at that exact round reads the same.
+- The scan reads the pairing step from the last byte of the pump's manufacturer data
+  (`advertisedPairingStep`). A result whose name says `SIM` or `Simulator` (`TandemPumpScan.isSimulatorName`)
+  is the unified pump simulator fronting faketandem over CoreBluetooth, which cannot advertise manufacturer
+  data; it is taken as ready for the code, since its pairing state is set on the simulator.
 - Every error `pairPump` completes with has to reach `TandemKitScanViewModel.onPairFailure`, which ends
   the pairing step (alert, back to the double-tap step, scan restarts when the alert is dismissed). The
   step has no exit of its own.
