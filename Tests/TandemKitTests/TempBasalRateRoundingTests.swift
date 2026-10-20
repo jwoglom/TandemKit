@@ -65,9 +65,10 @@ import XCTest
 
     private var supportedRates: [Double] { TandemPumpCapabilities.supportedBasalRates }
 
-    /// The rate a given percent actually delivers, computed the way the driver does.
+    /// The grid rate a given percent delivers, by integer arithmetic on the pump's milliunits.
     private func rate(percent: Int, baseline: Double) -> Double {
-        supportedRates.last(where: { $0 <= baseline * Double(percent) / 100.0 }) ?? 0
+        let gridMilliunits = TandemPumpCapabilities.milliunits(baseline) * percent / 1000 * 10
+        return gridMilliunits < 100 ? 0 : Double(min(gridMilliunits, 15000)) / 1000
     }
 
     /// The highest rate any whole percent can deliver without exceeding `limit`. The rate is
@@ -273,6 +274,35 @@ import XCTest
 
         XCTAssertEqual(bluetooth.sent(SetTempRateRequest.self).map(\.percent), [18])
         XCTAssertEqual(try XCTUnwrap(reportedTempBasalRate(delegate)), 0.1, accuracy: 1e-9)
+    }
+
+    // MARK: - Float noise
+
+    /// Hosts compute their rates: 0.57 + 0.01 is 0.5800000000000001 and 1.1 * 0.4 is
+    /// 0.44000000000000006. Flooring onto the grid by raw comparison would drop each a step.
+    func testARequestCarryingFloatNoiseResolvesToTheRateItMeans() {
+        let manager = makeManager(baseline: 1.0)
+
+        XCTAssertEqual(manager.roundToSupportedBasalRate(unitsPerHour: 0.57 + 0.01), 0.58)
+        XCTAssertEqual(manager.roundToSupportedBasalRate(unitsPerHour: 1.1 * 0.4), 0.44)
+        XCTAssertEqual(manager.roundToSupportedBasalRate(unitsPerHour: 0.58 * 50 / 100), 0.29)
+        XCTAssertEqual(manager.roundToSupportedBasalRate(unitsPerHour: Double(Float(0.9))), 0.9)
+        XCTAssertEqual(manager.roundToSupportedBolusVolume(units: 0.1 + 0.2), 0.3)
+        XCTAssertEqual(manager.roundToSupportedBolusVolume(units: Double(Float(1.15))), 1.15)
+    }
+
+    /// A request a hair over the scheduled rate is the scheduled rate: no 99% temp goes out for it.
+    func testARequestANoiseAboveTheScheduledRateChangesNothing() throws {
+        let manager = makeManager(baseline: 0.58)
+        let (delegate, queue) = attach(manager)
+        stubHappyPump(baseline: 0.58)
+
+        XCTAssertNil(enact(manager, unitsPerHour: 0.57 + 0.01))
+        queue.sync {}
+
+        XCTAssertFalse(bluetooth.didSend(SetTempRateRequest.self))
+        let reported = try XCTUnwrap(delegate.pumpEvents.compactMap(\.dose).last(where: { $0.type == .basal })?.unitsPerHour)
+        XCTAssertEqual(reported, 0.58)
     }
 
     // MARK: - Degenerate inputs

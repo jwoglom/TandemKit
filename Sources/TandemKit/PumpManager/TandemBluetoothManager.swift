@@ -355,7 +355,7 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
         }
         reconnectRetry = item
         logger.info("Retrying the reconnect in \(delay) s")
-        managerQueue.asyncAfter(wallInterval: .milliseconds(Int(delay * 1000)), execute: item)
+        managerQueue.asyncAfter(wallInterval: .milliseconds(Int((delay * 1000).rounded())), execute: item)
     }
 
     private func cancelReconnectRetry() {

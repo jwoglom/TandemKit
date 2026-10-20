@@ -119,7 +119,8 @@ HarmonizeRules` (`--filter <RuleName>` for one rule); the Linux workflow's `harm
 A failing rule prints what it enforces, why, how to fix it and an example, at the offending line:
 fix the code, not the rule. Each rule's baseline lists the violations that predate it, and
 Harmonize fails on an entry that no longer violates, so remove it in the change that fixes it.
-Don't add to a baseline to get a new violation through.
+Don't add to a baseline to get a new violation through. `MilliunitConversionsRound` fails an
+integer conversion of a Double scaled by 1000 that is not rounded first (see Floating point below).
 
 ### LoopKit and Linux
 - Apple-platform builds resolve `LoopKit`/`LoopKitUI` from the surrounding Xcode workspace, which must build them — Trio's workspace does, via its `loopandlearn/LoopKit` submodule. SwiftPM cannot build these targets at all; see the comment atop `Package.swift`.
@@ -130,6 +131,27 @@ Don't add to a baseline to get a new violation through.
 ## Driver behaviour
 Rules that are easy to break without noticing. The overall design is in
 [docs/ARCHITECTURE_ANALYSIS.md](docs/ARCHITECTURE_ANALYSIS.md).
+
+### Floating point
+Insulin amounts and rates are `Double` in U and U/hr, and the pump holds them in whole
+milliunits, which is where they are compared and converted.
+- `TandemPumpCapabilities.milliunits(_:)` rounds to the milliunit; `Int(x * 1000)` truncates
+  `1.001 * 1000`, which is 1000.9999999999999, to 1000, as it does 95 of the grid's rates. The
+  Harmonize rule `MilliunitConversionsRound` fails that pattern.
+- Two rates are equal when their milliunits are, never by `==` on the Doubles (`0.57 + 0.01`
+  is not `0.58`), and a tolerance is in milliunits too: `tempBasalReadbackMatches` takes 10,
+  `BasalReconciler` 10 plus a percent of the profile, `deliveredBasalRateMismatch` compares whole
+  milliunits at the schedule's rates either side of the reading.
+- Onto the pump's grids through `TandemPumpCapabilities.floor(_:ontoGrid:)` only: it allows a
+  thousandth of a milliunit (`arithmeticNoise`), so a rate computed just under a grid step is that
+  step while 99% of 0.101 U/hr, a hundredth of one under, is not. `roundToSupportedBasalRate`
+  and `roundToSupportedBolusVolume` floor, as other LoopKit drivers do, so a host that filters on
+  the reported rate (Trio's `maxBasal`) keeps the record. The `Float32` the pump's records carry go
+  through `roundToReportingResolution` (`Float(0.9)` is 0.89999997).
+- A discrepancy that rounding explains never fails a command, and a command that fails never
+  leaves the pump on its profile when the temp it stopped can be put back: see Therapy command
+  validation. `TandemPumpCapabilitiesTests` checks every percent of every profile rate against
+  integer arithmetic, and `TempBasalRateRoundingTests` the requests hosts compute.
 
 ### Delegate queue
 `PumpManagerDelegate` methods are only called through `pumpDelegate.notify` or
@@ -712,10 +734,21 @@ edit instead of at the next sync.
   uncut record; while disconnected it stays uncut until the next reading.
 - After `SetTempRate`, `enactTempBasal` reads `CurrentBasalStatus` back and needs a temp within
   one 0.01 U/hr step of the percent of the pump's own rate (its rounding is unknown; 10% of
-  0.15 U/hr is reported as 0). Otherwise it stops the temp, reports none and fails with
-  `tempBasalRateMismatch`, as when the pump's max basal limit caps it; one it can't stop is
-  reported at the pump's rate. No answer to the read reports it as commanded. Field logs show
-  the temp in the first status read, within a second, every time.
+  0.15 U/hr is reported as 0). Otherwise it fails with `tempBasalRateMismatch` but keeps the temp
+  the pump runs, reported at the pump's rate, so the host counts what goes in: stopping it would
+  put the pump on its profile, which over-delivers whenever the temp was below it. No answer to
+  the read reports it as commanded. Field logs show the temp in the first status read, within a
+  second, every time.
+- The pump runs its profile between the stop of the temp that runs and the set of the next, so
+  everything it could refuse is settled before the stop, and the pump is left on its profile only
+  when nothing else can be done. A request above the pump's max basal rate limit
+  (`clampedToPumpMaximumBasalRate`: the limit read from the pump, else the one the host synced) is
+  made the limit. A `SetTempRate` the pump refuses anyway, or that goes unanswered with the pump
+  read back on its profile, has the stopped temp set again for the whole minutes left of it
+  (`restoreStoppedTempBasal`), from the driver's own record of it, and reported as a new dose from
+  then; the command still fails with the refusal. Under 15 minutes left, the pump's shortest temp,
+  the profile runs them. A zero temp is restored like any other: its loss over-delivers most.
+  Tests in `TempBasalFallbackTests`.
 - A `SetTempRate` whose answer is lost may still have reached the pump, after the stop of the temp
   it replaces did (#340). `enactTempBasal` then reads `CurrentBasalStatus` and `TempRateRequest`
   and, if the pump runs a temp at that percent, reports it (`adoptUnansweredTempBasal`), ending

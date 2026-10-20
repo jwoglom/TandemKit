@@ -359,12 +359,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     public func roundToSupportedBolusVolume(units: Double) -> Double {
-        // We do support rounding a 0 U volume to 0
-        supportedBolusVolumes.last(where: { $0 <= units }) ?? 0
+        TandemPumpCapabilities.floor(units, ontoGrid: supportedBolusVolumes)
     }
 
     public func roundToSupportedBasalRate(unitsPerHour: Double) -> Double {
-        supportedBasalRates.last(where: { $0 <= unitsPerHour }) ?? 0
+        TandemPumpCapabilities.floor(unitsPerHour, ontoGrid: supportedBasalRates)
     }
 
     public var lastSync: Date? {
@@ -736,7 +735,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
             return .invalidBolusAmount(requested: units)
         }
 
-        if let maxBolus = state.settings.maxBolus, units > maxBolus {
+        if let maxBolus = state.settings.maxBolus,
+           TandemPumpCapabilities.milliunits(units) > TandemPumpCapabilities.milliunits(maxBolus)
+        {
             return .maximumBolusExceeded(requested: units, maximum: maxBolus)
         }
 
@@ -1123,7 +1124,23 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
+            // Everything the pump could refuse is settled before the running temp is stopped: a
+            // refusal after the stop leaves the pump on its profile until the next cycle.
+            let baseline = self.tempBasalBaseline(pumpRate: currentBasal.profileBasalRate)
+            let requestedRate = isCancel ? 0 : self.clampedToPumpMaximumBasalRate(unitsPerHour)
+            let (percent, absoluteRate) = isCancel ? (100, 0) : self.tempBasalPercentAndRate(
+                requestedRate: requestedRate,
+                baseline: baseline
+            )
+
+            if !isCancel, Self.tempBasalExceedsCeiling(requestedRate: requestedRate, baseline: baseline) {
+                self.logger.warning(
+                    "Clamped temp basal \(requestedRate) → \(absoluteRate) U/hr (\(percent)% of \(baseline) U/hr profile)"
+                )
+            }
+
             let tempWasRunning = currentBasal.basalType == .tempBasal
+            let stoppedTemp = tempWasRunning && self.state.basalDose.type == .tempBasal ? self.state.basalDose : nil
             if tempWasRunning {
                 let stopRequest = StopTempRateRequest()
                 guard let stopCurrentRate = self.bluetooth.write(stopRequest) else {
@@ -1142,21 +1159,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 self.skewCompensationTemp = nil
             }
 
-            let baseline = self.tempBasalBaseline(pumpRate: currentBasal.profileBasalRate)
-            let (percent, absoluteRate) = isCancel ? (100, 0) : self.tempBasalPercentAndRate(
-                requestedRate: unitsPerHour,
-                baseline: baseline
-            )
-
-            if !isCancel, Self.tempBasalExceedsCeiling(requestedRate: unitsPerHour, baseline: baseline) {
-                self.logger.warning(
-                    "Clamped temp basal \(unitsPerHour) → \(absoluteRate) U/hr (\(percent)% of \(baseline) U/hr profile)"
-                )
-            }
-
             // Skewed, the host counts its own schedule rather than the pump's rate when no temp runs.
             let hostCountsThePumpsRate = !self.state.isPumpClockSkewed
-                || Int((absoluteRate * 1000).rounded()) == Int((self.getScheduledBasalRate() * 1000).rounded())
+                || TandemPumpCapabilities.milliunits(absoluteRate) == TandemPumpCapabilities.milliunits(self.getScheduledBasalRate())
             if percent == 100, isCancel || hostCountsThePumpsRate {
                 self.logger.info("Enact completed! (no basal rate change)")
                 self.startScheduledBasalDose(reading: currentBasal)
@@ -1170,7 +1175,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
             let request = SetTempRateRequest(minutes: minutes, percent: percent)
             guard let response = self.bluetooth.write(request) else {
                 self.logger.error("Failed to set temp rate")
-                self.adoptUnansweredTempBasal(rate: absoluteRate, percent: percent, duration: programmedDuration)
+                let outcome = self.adoptUnansweredTempBasal(rate: absoluteRate, percent: percent, duration: programmedDuration)
+                if !outcome.adopted, outcome.status?.basalType == .basal {
+                    self.restoreStoppedTempBasal(stoppedTemp)
+                }
                 completion(.communication(PumpCommError.noResponse))
                 return
             }
@@ -1180,6 +1188,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     .error(
                         "Failed to set temp rate - Status: \(response.status), percent: \(percent), duration: \(minutes)min"
                     )
+                self.restoreStoppedTempBasal(stoppedTemp)
                 completion(.deviceState(PumpRefusal.tempBasal(
                     response,
                     to: request,
@@ -1214,19 +1223,59 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
     /// A `SetTempRate` whose answer was lost may still have reached the pump, after the stop of the
     /// temp it replaces did.
-    private func adoptUnansweredTempBasal(rate: Double, percent: Int, duration: TimeInterval) {
+    private func adoptUnansweredTempBasal(
+        rate: Double,
+        percent: Int,
+        duration: TimeInterval
+    ) -> (status: CurrentBasalStatusResponse?, adopted: Bool) {
         guard let status = bluetooth.write(CurrentBasalStatusRequest()) else {
             logger.warning("No basal status after an unanswered SetTempRate; the next reading settles it")
-            return
+            return (nil, false)
         }
         guard Self.tempBasalReadbackMatches(status, percent: percent),
               let temp = bluetooth.write(TempRateRequest()), temp.active, temp.percentage == percent
         else {
             observeDeliveryState(status.basalType)
-            return
+            return (status, false)
         }
         logger.warning("The pump runs the \(percent)% temp basal whose SetTempRate answer was lost; reporting it")
         recordTempBasal(rate: rate, percent: percent, duration: duration, tempRateId: nil)
+        return (status, true)
+    }
+
+    /// The temp a refused replacement was stopped for is set again for what remained of it, so the
+    /// pump runs its profile only when that fails too. The host counts the temp it was told of, and
+    /// a profile above it over-delivers until the next cycle; a zero temp most of all.
+    private func restoreStoppedTempBasal(_ stopped: UnfinalizedDose?) {
+        guard let stopped, let percent = stopped.tempPercent else { return }
+        let minutes = Int(stopped.estimatedEndDate.timeIntervalSince(now).minutes.rounded(.down))
+        guard Self.supportedTempBasalMinutes.contains(minutes) else {
+            logger.warning("Not restoring the stopped \(percent)% temp basal with \(minutes) min left; the pump runs its profile")
+            return
+        }
+        guard let response = bluetooth.write(SetTempRateRequest(minutes: minutes, percent: percent)), response.isStatusOK else {
+            logger.error("Could not restore the stopped \(percent)% temp basal; the pump runs its profile")
+            return
+        }
+        logger.warning("Restored the stopped \(percent)% temp basal for the \(minutes) min left of it")
+        recordTempBasal(rate: stopped.value, percent: percent, duration: .minutes(Double(minutes)), tempRateId: response.tempRateId)
+    }
+
+    /// The pump refuses a temp above its max basal rate limit, so a request above it is made the
+    /// limit, the most the pump will run, rather than refused after the running temp was stopped.
+    /// The limit read from the pump is what it enforces; the one the host synced stands in until
+    /// the daily settings read.
+    func clampedToPumpMaximumBasalRate(_ unitsPerHour: Double) -> Double {
+        let limit: Double? = if let milliunits = state.maxBasalLimitMilliunits, milliunits > 0 {
+            Double(milliunits) / 1000
+        } else {
+            state.settings.maxTempBasalRate
+        }
+        guard let limit, TandemPumpCapabilities.milliunits(unitsPerHour) > TandemPumpCapabilities.milliunits(limit) else {
+            return unitsPerHour
+        }
+        logger.warning("Clamped temp basal \(unitsPerHour) → \(limit) U/hr, the pump's maximum basal rate limit")
+        return limit
     }
 
     private func recordTempBasal(rate: Double, percent: Int, duration: TimeInterval, tempRateId: Int?) {
@@ -1291,13 +1340,15 @@ public class TandemPumpManager: PumpManager, Pluggable {
     static func tempBasalReadbackMatches(_ readback: CurrentBasalStatusResponse, percent: Int) -> Bool {
         guard readback.basalType == .tempBasal else { return false }
         let exact = readback.profileBasalRate * Double(percent) / 100
-        let floored = TandemPumpCapabilities.supportedBasalRates.last { $0 <= exact } ?? 0
-        let actual = Int((readback.currentBasalRate * 1000).rounded())
-        return [exact, floored].contains { abs(actual - Int(($0 * 1000).rounded())) <= 10 }
+        let floored = TandemPumpCapabilities.roundToSupportedBasalRate(exact)
+        let actual = TandemPumpCapabilities.milliunits(readback.currentBasalRate)
+        return [exact, floored].contains { abs(actual - TandemPumpCapabilities.milliunits($0)) <= 10 }
     }
 
-    /// Stops the temp basal so the host is not told a rate the pump isn't running. If it can't be
-    /// stopped, it is reported at the rate the pump read back, so the host counts what goes in.
+    /// The pump runs something other than the percent it was sent. What runs is kept and reported
+    /// at the pump's rate, so the host counts what goes in: stopping it would put the pump on its
+    /// profile, which over-delivers whenever the temp was below it. The command still fails, since
+    /// the host did not get the rate it asked for.
     private func rejectMismatchedTempBasal(
         _ readback: CurrentBasalStatusResponse,
         expectedRate: Double,
@@ -1316,13 +1367,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
         switch readback.basalType {
         case .tempBasal:
-            guard let stop = bluetooth.write(StopTempRateRequest()), stop.isStatusOK else {
-                logger.error("Could not stop the mismatched temp basal; reporting it at the pump's rate")
-                recordTempBasal(rate: readback.currentBasalRate, percent: percent, duration: duration, tempRateId: tempRateId)
-                completion(.deviceState(error))
-                return
-            }
-            startScheduledBasalDose(reading: readback)
+            recordTempBasal(rate: readback.currentBasalRate, percent: percent, duration: duration, tempRateId: tempRateId)
         case .suspend:
             observeDeliveryState(.suspend)
         default:
@@ -1681,7 +1726,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            let response = self.bluetooth.write(FillCannulaRequest(primeSizeMilliUnits: Int(amount * 1000)))
+            let response = self.bluetooth.write(FillCannulaRequest(primeSizeMilliUnits: TandemPumpCapabilities.milliunits(amount)))
 
             completion(response)
         }
