@@ -1039,6 +1039,7 @@
 		FF4DC0A9345CF95CFB636F6E /* BolusCompletedHistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC273C88388D73F8F5562AC1 /* BolusCompletedHistoryLogTests.swift */; };
 		FF5E076DE8C41C71D56F25B0 /* ChangeTimeDateResponseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDE39294DCCDE2299E1C357B /* ChangeTimeDateResponseTests.swift */; };
 		FF8854414730F26C3F581AE3 /* TempRateCompletedHistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B27AEA9EADF4DEEE18B1EF27 /* TempRateCompletedHistoryLogTests.swift */; };
+		FFEDD7D5D97B66A4FC2552D5 /* TempBasalFallbackTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FB88D24D3EBF3901C827CBE /* TempBasalFallbackTests.swift */; };
 		WG643K54SZICC7GBOF5YAHMA /* TandemKitNotificationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DKD1XH8Y99W8KKUIS3Z6R90D /* TandemKitNotificationsView.swift */; };
 /* End PBXBuildFile section */
 
@@ -1253,6 +1254,7 @@
 		2E778C7F4639DDE6BDAA48C2 /* TandemKitSoundSettingsViewModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TandemKitSoundSettingsViewModelTests.swift; sourceTree = "<group>"; };
 		2EB8BF9AC872E53FC8FD7D4E /* TransportIntegrationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TransportIntegrationTests.swift; sourceTree = "<group>"; };
 		2F26A8013890E2BE10D0B09D /* UnansweredBolusTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = UnansweredBolusTests.swift; sourceTree = "<group>"; };
+		2FB88D24D3EBF3901C827CBE /* TempBasalFallbackTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TempBasalFallbackTests.swift; sourceTree = "<group>"; };
 		2FB96EDC17F9C83E83CBFF0F /* StopTempRateResponseTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = StopTempRateResponseTests.swift; sourceTree = "<group>"; };
 		305958E7A519D3D77B662AEC /* VirtualCoreBluetoothNames.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VirtualCoreBluetoothNames.swift; sourceTree = "<group>"; };
 		30718013FC94791A3BB624E5 /* NewDayHistoryLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NewDayHistoryLogTests.swift; sourceTree = "<group>"; };
@@ -3379,6 +3381,7 @@
 				C6B70B2BA30A6497DFB94D70 /* ReconciliationLogTests.swift */,
 				725B7896F1727BC56D589B6B /* TandemKitReconciliationViewModelTests.swift */,
 				2368E641481AE11D7C2FA5EB /* AlertRoutingTests.swift */,
+				2FB88D24D3EBF3901C827CBE /* TempBasalFallbackTests.swift */,
 			);
 			name = TandemKitTests;
 			path = Tests/TandemKitTests;
@@ -4861,6 +4864,7 @@
 				9CE1CD62CCC7D571A4D1F989 /* ReconciliationLogTests.swift in Sources */,
 				075B5FA7582CD75D4902F9F2 /* TandemKitReconciliationViewModelTests.swift in Sources */,
 				4BF5DAC285D1F7EC60ED6CB5 /* AlertRoutingTests.swift in Sources */,
+				FFEDD7D5D97B66A4FC2552D5 /* TempBasalFallbackTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

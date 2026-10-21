@@ -424,8 +424,9 @@ import XCTest
         XCTAssertFalse(bluetooth.didSend(StopTempRateRequest.self))
     }
 
-    /// A pump max basal limit of 1.2 U/hr caps the 150% temp.
-    func testMismatchedReadbackStopsTheTempBasalAndFails() {
+    /// A pump the driver does not know the max basal limit of caps the 150% temp at 1.2 U/hr. What
+    /// runs is kept and told to the host; stopping it would put the pump on its 1.0 U/hr profile.
+    func testMismatchedReadbackKeepsTheTempBasalAtThePumpsRateAndFails() {
         let bluetooth = StubPumpBluetooth()
         bluetooth.stubBasalPump(profileMilliunits: 1000, capMilliunits: 1200)
         let (manager, delegate, queue) = makeReadbackManager(bluetooth: bluetooth)
@@ -437,24 +438,11 @@ import XCTest
         let sent = bluetooth.sentMessages.map { String(describing: type(of: $0)) }
         XCTAssertEqual(
             sent.filter { $0.contains("TempRate") || $0 == "CurrentBasalStatusRequest" },
-            ["CurrentBasalStatusRequest", "SetTempRateRequest", "CurrentBasalStatusRequest", "StopTempRateRequest"]
+            ["CurrentBasalStatusRequest", "SetTempRateRequest", "CurrentBasalStatusRequest"]
         )
-        XCTAssertEqual(manager.state.basalDose.type, .basal)
-        XCTAssertEqual(reportedTempBasalRates(delegate), [], "the host is never told the temp basal ran")
-    }
-
-    func testMismatchedTempBasalThatCannotBeStoppedIsReportedAtThePumpsRate() {
-        let bluetooth = StubPumpBluetooth()
-        bluetooth.stubBasalPump(profileMilliunits: 1000, capMilliunits: 1200)
-        bluetooth.stub(StopTempRateRequest.self, with: StopTempRateResponse(status: 1, tempRateId: 42))
-        let (manager, delegate, queue) = makeReadbackManager(bluetooth: bluetooth)
-
-        let error = enactTempBasal(manager, unitsPerHour: 1.5, for: .minutes(30))
-        queue.sync {}
-
-        XCTAssertEqual(validationError(from: error), .tempBasalRateMismatch(expected: 1.5, actual: 1.2))
         XCTAssertEqual(manager.state.basalDose.type, .tempBasal)
         XCTAssertEqual(manager.state.basalDose.value, 1.2, accuracy: 0.0001)
+        XCTAssertEqual(manager.state.basalDose.tempPercent, 150)
         XCTAssertEqual(reportedTempBasalRates(delegate), [1.2])
     }
 

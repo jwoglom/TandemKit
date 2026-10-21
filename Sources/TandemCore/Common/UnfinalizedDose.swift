@@ -291,7 +291,7 @@ public class UnfinalizedDose: Equatable {
     }
 
     private func roundBasalRate(_ rate: Double) -> Double {
-        TandemPumpCapabilities.supportedBasalRates.last(where: { $0 <= rate }) ?? 0
+        TandemPumpCapabilities.roundToSupportedBasalRate(rate)
     }
 
     public static func defaultBasalDose(

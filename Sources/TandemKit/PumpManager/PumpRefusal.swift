@@ -3,7 +3,7 @@ import Foundation
 /// The pump answers a refused command with a status code and no reason, so the reason worded here
 /// is only what the driver can read off the command and the pump state it was sent against.
 enum PumpRefusal {
-    private static let minimumBasalRate = TandemPumpCapabilities.supportedBasalRates.first { $0 > 0 } ?? 0.1
+    private static let minimumBasalRate = TandemPumpCapabilities.minimumBasalRate
 
     static func tempBasal(
         _ response: SetTempRateResponse,

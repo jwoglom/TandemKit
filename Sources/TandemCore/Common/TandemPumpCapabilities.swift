@@ -3,14 +3,51 @@ import Foundation
 /// Fixed hardware capabilities of the supported Tandem pumps, kept in TandemCore so both the pump
 /// manager and dose bookkeeping share one definition on every platform.
 public enum TandemPumpCapabilities {
+    /// The lowest non-zero rate the pump delivers, as a profile segment and as a temp basal: a
+    /// percent whose share of the profile works out under it is refused (status 1; a Mobi refused
+    /// 17% of 0.58 U/hr).
+    public static let minimumBasalRate = 0.1
+
     /// Tandem Mobi and t:slim X2: 0.0u, then 0.1 - 15.00u/hr in 0.01u chunks
     public static let supportedBasalRates: [Double] = {
         let multiplier = 1000.0
-        let start = Int(round(0.1 * multiplier))
+        let start = Int(round(minimumBasalRate * multiplier))
         let end = Int(round(15.0 * multiplier))
         let step = Int(round(0.01 * multiplier))
         return [0.0] + stride(from: start, through: end, by: step).map { Double($0) / multiplier }
     }()
+
+    /// `units` in whole milliunits, the resolution the pump holds every amount in. Double
+    /// arithmetic lands a hair off: `1.001 * 1000` is 1000.9999999999999, which `Int(_:)` makes 1000.
+    public static func milliunits(_ units: Double) -> Int {
+        Int((units * 1000).rounded())
+    }
+
+    /// A thousandth of a milliunit. Double arithmetic misses by a ten-billionth of one (`1.001 * 1000`
+    /// is 1000.9999999999999) and a `Float32` from a pump record by a hundred-thousandth (`Float(0.9)`
+    /// is 0.89999997), while a whole percent of a profile rate lands no nearer a step than a hundredth.
+    static let arithmeticNoise = 1e-6
+
+    /// The highest value of `grid`, ascending, not above `units`; a value computed a hair under a
+    /// grid step is that step, not the one below it. 0 below the grid.
+    public static func floor(_ units: Double, ontoGrid grid: [Double]) -> Double {
+        let target = units + arithmeticNoise
+        var low = 0
+        var high = grid.count
+        while low < high {
+            let middle = (low + high) / 2
+            if grid[middle] <= target {
+                low = middle + 1
+            } else {
+                high = middle
+            }
+        }
+        return low == 0 ? 0 : grid[low - 1]
+    }
+
+    public static func roundToSupportedBasalRate(_ unitsPerHour: Double) -> Double {
+        floor(unitsPerHour, ontoGrid: supportedBasalRates)
+    }
 
     /// Round an insulin amount to the pump's native milliunit reporting resolution, stripping
     /// Float32 representation noise (e.g. `Float(0.9)` = 0.89999997) without distorting genuine

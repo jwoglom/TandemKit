@@ -65,29 +65,64 @@ import XCTest
 
     // MARK: - Temp basal
 
+    /// The refusal a Mobi gave a build that still sent 17% of 0.58 U/hr. The driver sends 18% now,
+    /// so the wording is checked on the message alone.
     func testATempBasalBelowThePumpsLowestRateIsRefusedWithTheRateItWorksOutTo() {
+        let request = SetTempRateRequest(minutes: 30, percent: 17)
+
+        let error = PumpRefusal.tempBasal(
+            SetTempRateResponse(status: 1, tempRateId: 0),
+            to: request,
+            pumpBasalRate: 0.58,
+            maximumTempBasalRate: nil,
+            afterStoppingATemp: true
+        )
+
+        XCTAssertEqual(
+            context(of: error),
+            "The pump refused the 17% temporary basal rate (status 1). 17% of its 0.580 U/hr basal rate is 0.099 U/hr, below the 0.100 U/hr the pump can deliver. The temporary basal rate that was running had already been stopped, so the pump is back on its scheduled basal rate."
+        )
+    }
+
+    /// 33% of 0.3 U/hr is 0.099 U/hr, so 34% goes out, and a refusal of it has no minimum to blame.
+    func testTheLowestRateNeverGoesOutAsAPercentUnderIt() {
         bluetooth.stubBasalPump(profileMilliunits: 300)
         refuseSetTempRate()
 
         let error = enactTempBasal(makeManager(), unitsPerHour: 0.1)
 
-        XCTAssertEqual(bluetooth.sent(SetTempRateRequest.self).map(\.percent), [33])
+        XCTAssertEqual(bluetooth.sent(SetTempRateRequest.self).map(\.percent), [34])
+        XCTAssertEqual(refusal(error), "The pump refused the 34% temporary basal rate (status 1).")
+    }
+
+    /// A request above a known limit is clamped to it before the pump sees it (see
+    /// `TempBasalFallbackTests`), so the wording is checked on the message alone.
+    func testATempBasalAboveTheMaximumBasalLimitIsRefusedWithThatLimit() {
+        let request = SetTempRateRequest(minutes: 30, percent: 150)
+
+        let error = PumpRefusal.tempBasal(
+            SetTempRateResponse(status: 1, tempRateId: 0),
+            to: request,
+            pumpBasalRate: 1.0,
+            maximumTempBasalRate: 1.2,
+            afterStoppingATemp: false
+        )
+
         XCTAssertEqual(
-            refusal(error),
-            "The pump refused the 33% temporary basal rate (status 1). 33% of its 0.300 U/hr basal rate is 0.099 U/hr, below the 0.100 U/hr the pump can deliver."
+            context(of: error),
+            "The pump refused the 150% temporary basal rate (status 1). 150% of its 1.000 U/hr basal rate is 1.500 U/hr, above the pump's maximum basal rate limit of 1.200 U/hr."
         )
     }
 
-    func testATempBasalAboveTheMaximumBasalLimitIsRefusedWithThatLimit() {
+    /// With the limit known, the request is made the limit and a refusal of that is unexplained.
+    func testARequestAboveAKnownLimitGoesOutAtTheLimit() {
         bluetooth.stubBasalPump(profileMilliunits: 1000)
         refuseSetTempRate()
 
         let error = enactTempBasal(makeManager(maxTempBasalRate: 1.2), unitsPerHour: 1.5)
 
-        XCTAssertEqual(
-            refusal(error),
-            "The pump refused the 150% temporary basal rate (status 1). 150% of its 1.000 U/hr basal rate is 1.500 U/hr, above the pump's maximum basal rate limit of 1.200 U/hr."
-        )
+        XCTAssertEqual(bluetooth.sent(SetTempRateRequest.self).map(\.percent), [120])
+        XCTAssertEqual(refusal(error), "The pump refused the 120% temporary basal rate (status 1).")
     }
 
     func testARefusedTempBasalWithNoKnownReasonQuotesTheStatus() {

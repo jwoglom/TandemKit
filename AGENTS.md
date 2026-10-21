@@ -131,6 +131,11 @@ Don't add to a baseline to get a new violation through.
 Rules that are easy to break without noticing. The overall design is in
 [docs/ARCHITECTURE_ANALYSIS.md](docs/ARCHITECTURE_ANALYSIS.md).
 
+### Floating point
+Insulin amounts are compared and converted in whole milliunits, through
+`TandemPumpCapabilities.milliunits(_:)` and `floor(_:ontoGrid:)`, never by `==` or `Int(x * 1000)`
+on the Doubles. A discrepancy that rounding explains never fails a command.
+
 ### Delegate queue
 `PumpManagerDelegate` methods are only called through `pumpDelegate.notify` or
 `delegateQueue.async`. Loop opens them with `dispatchPrecondition(condition: .onQueue(queue))`, so
@@ -686,6 +691,9 @@ edit instead of at the next sync.
 - `enactTempBasal` refuses a non-zero temp with `pumpProfileBasalRateIsZero` when the pump's
   `CurrentBasalStatus` reads a profile rate of 0 U/hr, before stopping a running temp basal; a
   Mobi ran a 0 U/hr profile for a day while the host was told its temp rates ran (#335, #343).
+- The pump refuses a percent whose share of its rate is under its 0.1 U/hr minimum (a Mobi
+  refused 17% of 0.58 U/hr), so `tempBasalPercentAndRate` sends the lowest percent it accepts
+  instead, nearer the request than 0%.
 - The percent is worked out against the pump's own rate in force, `profileBasalRate` from that
   same read, and the temp is reported at that percent of it. Within `segmentChangeWindow`
   (5 min) of the pump's next segment change it is worked out against the larger of the two
@@ -708,10 +716,15 @@ edit instead of at the next sync.
   uncut record; while disconnected it stays uncut until the next reading.
 - After `SetTempRate`, `enactTempBasal` reads `CurrentBasalStatus` back and needs a temp within
   one 0.01 U/hr step of the percent of the pump's own rate (its rounding is unknown; 10% of
-  0.15 U/hr is reported as 0). Otherwise it stops the temp, reports none and fails with
-  `tempBasalRateMismatch`, as when the pump's max basal limit caps it; one it can't stop is
-  reported at the pump's rate. No answer to the read reports it as commanded. Field logs show
-  the temp in the first status read, within a second, every time.
+  0.15 U/hr is reported as 0). Otherwise it fails with `tempBasalRateMismatch` but keeps the temp
+  the pump runs, reported at the pump's rate, so the host counts what goes in: stopping it would
+  put the pump on its profile, which over-delivers whenever the temp was below it. No answer to
+  the read reports it as commanded. Field logs show the temp in the first status read, within a
+  second, every time.
+- The pump refuses a `SetTempRate` while a temp rate runs, so a replacement stops the running temp
+  first and the pump is on its profile until the set lands. Everything the pump could refuse is
+  settled before the stop (a request above its max basal limit becomes the limit), and a set it
+  refuses anyway puts the stopped temp back for what remained of it (`restoreStoppedTempBasal`).
 - A `SetTempRate` whose answer is lost may still have reached the pump, after the stop of the temp
   it replaces did (#340). `enactTempBasal` then reads `CurrentBasalStatus` and `TempRateRequest`
   and, if the pump runs a temp at that percent, reports it (`adoptUnansweredTempBasal`), ending
