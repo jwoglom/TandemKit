@@ -500,6 +500,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     private func deliverStateMissedByTheDelegate() {
         guard pumpDelegate.delegate != nil, hasDelegateQueue else { return }
 
+        bluetooth.pumpManagerWasAdopted()
         // Not pumpManagerDidUpdateState: Loop and Trio save rawValue on the main thread right after
         // attaching, and its save from their delegate queue races that one.
         notifyDelegate(includingState: false)

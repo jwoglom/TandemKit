@@ -312,6 +312,13 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
         runConnectJob(automatic: false, completion: completion)
     }
 
+    func pumpManagerWasAdopted() {
+        managerQueue.async { [weak self] in
+            guard let self, self.manager?.state == .poweredOn else { return }
+            self.autoReconnect()
+        }
+    }
+
     /// A connect the driver starts on its own, which `isJpakeFailureLimitReached` stops, as does no
     /// host having adopted the manager (`canNotifyDelegate`). A host command still tries: only an
     /// attempt can tell the pump has stopped refusing, and a host cycle is minutes apart, not the

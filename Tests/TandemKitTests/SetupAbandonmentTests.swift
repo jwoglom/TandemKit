@@ -15,16 +15,19 @@ import XCTest
     }
 
     func testAManagerIsAdoptedOnceAHostHasSetItsDelegateAndQueue() {
-        let manager = TandemPumpManager(state: TandemPumpManagerState(rawValue: [:]), bluetooth: StubPumpBluetooth())
+        let bluetooth = StubPumpBluetooth()
+        let manager = TandemPumpManager(state: TandemPumpManagerState(rawValue: [:]), bluetooth: bluetooth)
 
         XCTAssertFalse(manager.canNotifyDelegate)
 
         let delegate = MockPumpManagerDelegate()
         manager.pumpManagerDelegate = delegate
         XCTAssertFalse(manager.canNotifyDelegate, "a delegate without a queue is not somewhere events can go")
+        XCTAssertEqual(bluetooth.adoptedCount, 0)
 
         manager.delegateQueue = DispatchQueue(label: "setup-abandonment-test")
         XCTAssertTrue(manager.canNotifyDelegate)
+        XCTAssertEqual(bluetooth.adoptedCount, 1, "the transport is told, since Bluetooth may have come on first")
         withExtendedLifetime(delegate) {}
     }
 }

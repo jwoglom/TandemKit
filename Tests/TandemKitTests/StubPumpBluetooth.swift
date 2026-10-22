@@ -29,6 +29,7 @@ final class StubPumpBluetooth: PumpBluetoothConnection {
     private(set) var ensureConnectedCount = 0
     private(set) var disconnectCount = 0
     private(set) var deactivateCount = 0
+    private(set) var adoptedCount = 0
     private(set) var unhandledRequests: [Message] = []
 
     private var jobThread: Thread?
@@ -135,6 +136,12 @@ final class StubPumpBluetooth: PumpBluetoothConnection {
     }
 
     // MARK: - PumpBluetoothConnection
+
+    func pumpManagerWasAdopted() {
+        lock.lock()
+        adoptedCount += 1
+        lock.unlock()
+    }
 
     func startScan(_: @escaping (_ result: TandemPumpScan) -> Void) -> Bool { false }
 

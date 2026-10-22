@@ -220,7 +220,8 @@ unconfirmed (hardware test plan P4).
 - The connects the driver starts on its own (`reconnectAutomatically`: after a disconnect, on
   Bluetooth powering on, the retry) run only for a manager a host has adopted (`canNotifyDelegate`);
   a host command still connects. Until then the manager is a setup flow's, which connects as a
-  command when it needs to (#603).
+  command when it needs to (#603). Adoption itself starts one (`pumpManagerWasAdopted`): on a
+  relaunch Bluetooth can report on before the host has set its delegate and queue.
 - A poll (`onlyIfIdle`) that finds a sync in flight queues nothing and is handed that sync's result
   (`SyncResult`) when it completes, not the `lastSync` from before it: Trio loops as soon as its
   poll completes, and the sync in flight may be the first to read the pump since an outage.
