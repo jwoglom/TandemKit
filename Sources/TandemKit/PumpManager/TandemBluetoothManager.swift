@@ -106,7 +106,7 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
         return consecutiveJpakeFailures >= Self.jpakeFailureLimit
     }
 
-    private var isActive: Bool {
+    var isActive: Bool {
         connectStateLock.lock()
         defer { connectStateLock.unlock() }
         return !isDeactivated
@@ -118,10 +118,16 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
         connectStateLock.unlock()
     }
 
-    private func setConnectCompletion(_ completion: ((Error?) -> Void)?) {
+    /// False once deactivated: `deactivate` ends the completion it finds, so one armed after it
+    /// looked would wait out its timeout. Both go through the lock, so a connect is one or the other.
+    private func armConnectCompletion(_ completion: @escaping (Error?) -> Void) -> Bool {
         connectStateLock.lock()
+        defer { connectStateLock.unlock() }
+        guard !isDeactivated else {
+            return false
+        }
         _connectCompletion = completion
-        connectStateLock.unlock()
+        return true
     }
 
     private func takeConnectCompletion() -> ((Error?) -> Void)? {
@@ -218,6 +224,11 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
     /// connecting again, which took over this connect's completion and left pairing waiting forever.
     func connect(_ peripheral: CBPeripheral, completion: @escaping (Error?) -> Void) {
         commandQueue.async {
+            guard self.isActive else {
+                self.logger.info("Pump deactivated; refusing to connect")
+                completion(PumpCommError.pumpNotConnected)
+                return
+            }
             guard let manager = self.manager else {
                 self.logger.error("No CBCentralManager")
                 completion(PumpCommError.pumpNotConnected)
@@ -247,7 +258,11 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
         logger.info("Connecting to \(peripheral)")
 
         self.peripheral = peripheral
-        setConnectCompletion(completion)
+        guard armConnectCompletion(completion) else {
+            logger.info("Pump deactivated; refusing to connect")
+            completion(PumpCommError.pumpNotConnected)
+            return
+        }
 
         manager.connect(peripheral)
     }
@@ -297,15 +312,23 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
         runConnectJob(automatic: false, completion: completion)
     }
 
-    /// A connect the driver starts on its own, which `isJpakeFailureLimitReached` stops. A host
-    /// command still tries: only an attempt can tell the pump has stopped refusing, and a host cycle
-    /// is minutes apart, not the seconds a disconnect-triggered retry is.
+    /// A connect the driver starts on its own, which `isJpakeFailureLimitReached` stops, as does no
+    /// host having adopted the manager (`canNotifyDelegate`). A host command still tries: only an
+    /// attempt can tell the pump has stopped refusing, and a host cycle is minutes apart, not the
+    /// seconds a disconnect-triggered retry is.
     func reconnectAutomatically(completion: @escaping (Error?) -> Void) {
         runConnectJob(automatic: true, completion: completion)
     }
 
     private func runConnectJob(automatic: Bool, completion: @escaping (Error?) -> Void) {
         commandQueue.async {
+            // A setup flow's manager connects as a command when it needs to; one left behind kept
+            // the pump's one link against every attempt after it (#603).
+            if automatic, self.pumpManager?.canNotifyDelegate != true {
+                self.logger.info("No host has adopted this pump manager; not reconnecting automatically")
+                completion(PumpCommError.pumpNotConnected)
+                return
+            }
             if automatic, self.isJpakeFailureLimitReached {
                 self.logger.info("The pump keeps ending the handshake; not reconnecting automatically")
                 completion(PumpCommError.pumpNotConnected)
@@ -327,9 +350,12 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
     }
 
     /// Arms the next background connect attempt, unless one is already pending. Only for a pump
-    /// that has been paired: an unpaired one has nothing to reconnect to.
+    /// that has been paired, and a manager a host has adopted: an unpaired one has nothing to
+    /// reconnect to, and an unadopted one's retry would be refused.
     private func scheduleReconnectRetry() {
-        guard isActive, !isJpakeFailureLimitReached, manager?.state == .poweredOn, pumpManager?.isOnboarded == true else {
+        guard isActive, !isJpakeFailureLimitReached, manager?.state == .poweredOn, pumpManager?.isOnboarded == true,
+              pumpManager?.canNotifyDelegate == true
+        else {
             return
         }
 
@@ -589,6 +615,8 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
         connectStateLock.unlock()
 
         cancelReconnectRetry()
+        // Pairing's wait outlives a lost link on purpose, so a connect still pending is ended here.
+        takeConnectCompletion()?(PumpCommError.pumpNotConnected)
         disconnect()
         pumpManager = nil
     }

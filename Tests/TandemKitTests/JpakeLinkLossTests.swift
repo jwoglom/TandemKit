@@ -12,6 +12,8 @@ final class JpakeLinkLossTests: XCTestCase {
     private var manager: TandemPumpManager?
     private let handshakes = Counter()
     private let connections = Counter()
+    private let delegate = MockPumpManagerDelegate()
+    private let delegateQueue = DispatchQueue(label: "jpake-link-loss-test")
     private var restoreVirtualPump: () -> Void = {}
 
     private final class Counter {
@@ -84,7 +86,11 @@ final class JpakeLinkLossTests: XCTestCase {
         state.pumpState.peripheralUuid = server.peripheralId.uuidString
         let bluetooth = TandemBluetoothManager()
         self.bluetooth = bluetooth
-        manager = TandemPumpManager(state: state, bluetooth: bluetooth)
+        let manager = TandemPumpManager(state: state, bluetooth: bluetooth)
+        // Only a manager a host has adopted reconnects on its own, and hosts adopt one at once.
+        manager.pumpManagerDelegate = delegate
+        manager.delegateQueue = delegateQueue
+        self.manager = manager
     }
 
     func testThePumpEndingEveryHandshakeStopsTheAutomaticReconnects() {

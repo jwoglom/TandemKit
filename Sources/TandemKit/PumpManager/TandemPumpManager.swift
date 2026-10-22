@@ -1844,6 +1844,15 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
+    /// A setup flow left before the host was handed the manager (#603). Nothing owns it from here, so
+    /// its link goes down for good: left up, it kept reconnecting to the pump it paired and held the
+    /// pump's one link against every attempt after it.
+    func abandonSetup() {
+        logger.info("Setup left before a host adopted the pump manager; tearing down transport")
+        bluetooth.deactivate()
+        telemetryScheduler.cancelAll()
+    }
+
     /// The pump runs a temp basal to its end and finishes a bolus after the app forgets it. Loop stores a
     /// finalized dose only once it has ended, so the temp is cut now and its remainder reported on its own.
     func finalizeHeldDosesForDeactivation() {
@@ -2741,8 +2750,8 @@ extension TandemPumpManager {
     }
 
     /// The host asserts its delegate methods run on the queue it set, so a delegate without a
-    /// queue is not somewhere events can be sent.
-    private var canNotifyDelegate: Bool {
+    /// queue is not somewhere events can be sent. Also whether a host has adopted the manager at all.
+    var canNotifyDelegate: Bool {
         pumpDelegate.delegate != nil && hasDelegateQueue
     }
 

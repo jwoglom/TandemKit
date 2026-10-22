@@ -49,9 +49,9 @@ protocol TandemUINavigator: AnyObject {
 }
 
 class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, CompletionNotifying, UINavigationControllerDelegate {
-    var pumpManagerOnboardingDelegate: PumpManagerOnboardingDelegate?
+    weak var pumpManagerOnboardingDelegate: PumpManagerOnboardingDelegate?
 
-    var completionDelegate: CompletionDelegate?
+    weak var completionDelegate: CompletionDelegate?
 
     var screenStack = [TandemScreen]()
     var currentScreen: TandemScreen {
@@ -60,7 +60,11 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
 
     private let colorPalette: LoopUIColorPalette
 
-    private var pumpManager: TandemPumpManager
+    let pumpManager: TandemPumpManager
+
+    /// True while a manager this flow created is nobody else's: until pairing hands it to the host,
+    /// a flow that goes away takes it down with it (#603).
+    private(set) var ownsPumpManager: Bool
 
     private var allowedInsulinTypes: [InsulinType]
 
@@ -85,6 +89,7 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
             )
             self.pumpManager = TandemPumpManager(state: state)
         }
+        ownsPumpManager = pumpManager == nil
 
         self.colorPalette = colorPalette
         self.allowDebugFeatures = allowDebugFeatures
@@ -135,14 +140,14 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
     private func viewControllerForScreen(_ screen: TandemScreen) -> UIViewController {
         switch screen {
         case .setup:
-            let view = TandemKitSetupView(nextAction: stepFinished)
+            let view = TandemKitSetupView(nextAction: { [weak self] in self?.stepFinished() })
             return hostingController(
                 rootView: view,
                 title: String(localized: "Tandem Mobi Setup", comment: "Title for TandemKitSetupView")
             )
         case .deviceScanning:
-            let nextStep = {
-                self.resetNavigationTo([.setupComplete])
+            let nextStep: () -> Void = { [weak self] in
+                self?.pairingCompleted()
             }
 
             let viewModel = TandemKitScanViewModel(pumpManager, nextStep: nextStep)
@@ -152,16 +157,10 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
                 largeTitleDisplayMode: .never
             )
         case .setupComplete:
-            pumpManagerOnboardingDelegate?.pumpManagerOnboarding(didOnboardPumpManager: pumpManager)
-            let returnToMainScreen: () -> Void = {
-                self.pumpManager.state.onboarded = true
-                self.pumpManager.notifyDelegateStateUpdated()
-
-                self.pumpManagerOnboardingDelegate?.pumpManagerOnboarding(didCreatePumpManager: self.pumpManager)
+            let view = TandemKitSetupCompleteView(finish: { [weak self] in
+                guard let self else { return }
                 self.completionDelegate?.completionNotifyingDidComplete(self)
-            }
-
-            let view = TandemKitSetupCompleteView(finish: returnToMainScreen)
+            })
             return hostingController(
                 rootView: view,
                 title: String(localized: "Setup Complete", comment: "Title for setup complete")
@@ -173,7 +172,8 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
                 supportedInsulinTypes: allowedInsulinTypes,
                 label: !isOnboarded ? String(localized: "Continue", comment: "continue") :
                     String(localized: "Save", comment: "save"),
-                didConfirm: { type in
+                didConfirm: { [weak self] type in
+                    guard let self else { return }
                     self.pumpManager.state.insulinType = type
                     self.pumpManager.notifyDelegateStateUpdated()
 
@@ -190,7 +190,7 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
         case .pumpInformation:
             let viewModel = TandemKitPumpInformationViewModel(
                 pumpManager: pumpManager,
-                openDebug: { self.navigateTo(.debug) },
+                openDebug: { [weak self] in self?.navigateTo(.debug) },
                 allowDebugFeatures: allowDebugFeatures
             )
             return hostingController(
@@ -202,28 +202,28 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
             // next step = deactivate the pump
             let viewModel = TandemKitSettingsViewModel(
                 pumpManager,
-                nextStep: stepFinished,
-                openPumpInformation: { self.navigateTo(.pumpInformation) },
-                openNotifications: { self.navigateTo(.notifications) },
-                openInsulinType: { self.navigateTo(.insulinType) },
-                openSoundSettings: { self.navigateTo(.soundSettings) },
-                openCartridgeChange: { self.navigateTo(.changeCartridge) },
-                openFillTubing: { self.navigateTo(.fillTubing) },
-                openFillCannula: { self.navigateTo(.fillCannula) },
-                openCgmSettings: { self.navigateTo(.cgmSettings) },
-                openControlIQSettings: { self.navigateTo(.controlIQSettings) },
-                openQuickBolus: { self.navigateTo(.quickBolus) },
-                openAlertSettings: { self.navigateTo(.alertSettings) },
-                openDebug: { self.navigateTo(.debug) },
-                openTroubleshootConnection: { self.navigateTo(.troubleshootConnection) },
+                nextStep: { [weak self] in self?.stepFinished() },
+                openPumpInformation: { [weak self] in self?.navigateTo(.pumpInformation) },
+                openNotifications: { [weak self] in self?.navigateTo(.notifications) },
+                openInsulinType: { [weak self] in self?.navigateTo(.insulinType) },
+                openSoundSettings: { [weak self] in self?.navigateTo(.soundSettings) },
+                openCartridgeChange: { [weak self] in self?.navigateTo(.changeCartridge) },
+                openFillTubing: { [weak self] in self?.navigateTo(.fillTubing) },
+                openFillCannula: { [weak self] in self?.navigateTo(.fillCannula) },
+                openCgmSettings: { [weak self] in self?.navigateTo(.cgmSettings) },
+                openControlIQSettings: { [weak self] in self?.navigateTo(.controlIQSettings) },
+                openQuickBolus: { [weak self] in self?.navigateTo(.quickBolus) },
+                openAlertSettings: { [weak self] in self?.navigateTo(.alertSettings) },
+                openDebug: { [weak self] in self?.navigateTo(.debug) },
+                openTroubleshootConnection: { [weak self] in self?.navigateTo(.troubleshootConnection) },
                 allowDebugFeatures: allowDebugFeatures
             )
             let view = TandemKitSettingsView(viewModel: viewModel)
             return hostingController(rootView: view, title: pumpSettingsTitle)
         case .soundSettings:
             let isOnboarded = pumpManager.isOnboarded
-            let onSubmit = !isOnboarded ? {
-                self.navigateTo(.deviceScanning)
+            let onSubmit: (() -> Void)? = !isOnboarded ? { [weak self] in
+                self?.navigateTo(.deviceScanning)
             } : nil
 
             let viewModel = TandemKitSoundSettingsViewModel(pumpManager: pumpManager, onSubmit: onSubmit)
@@ -235,8 +235,8 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
         case .changeCartridge:
             let viewModel = TandemKitChangeCartridgeViewModel(
                 pumpManager: pumpManager,
-                done: { self.resetNavigationTo([.pumpSettings]) },
-                toFillTubing: { self.navigateTo(.fillTubingAfterCartridgeChange) }
+                done: { [weak self] in self?.resetNavigationTo([.pumpSettings]) },
+                toFillTubing: { [weak self] in self?.navigateTo(.fillTubingAfterCartridgeChange) }
             )
 
             return hostingController(
@@ -248,8 +248,8 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
         case .fillTubing, .fillTubingAfterCartridgeChange:
             let viewModel = TandemKitFillTubingViewModel(
                 pumpManager: pumpManager,
-                done: { self.resetNavigationTo([.pumpSettings]) },
-                toFillingCannula: { self.navigateTo(.fillCannula) },
+                done: { [weak self] in self?.resetNavigationTo([.pumpSettings]) },
+                toFillingCannula: { [weak self] in self?.navigateTo(.fillCannula) },
                 followsCartridgeChange: screen == .fillTubingAfterCartridgeChange
             )
 
@@ -262,7 +262,7 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
         case .fillCannula:
             let viewModel = TandemKitFillCannulaViewModel(
                 pumpManager: pumpManager,
-                done: { self.resetNavigationTo([.pumpSettings]) }
+                done: { [weak self] in self?.resetNavigationTo([.pumpSettings]) }
             )
             return hostingController(
                 rootView: TandemKitFillCannulaView(viewModel: viewModel),
@@ -308,13 +308,13 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
         case .debug:
             let viewModel = TandemKitDebugViewModel(
                 pumpManager: pumpManager,
-                openHistoryLogViewer: { self.navigateTo(.historyLogViewer) },
-                openPumpProfileViewer: { self.navigateTo(.pumpProfileViewer) },
-                openReconciliation: { self.navigateTo(.reconciliation) },
-                openFeatureFlags: { self.navigateTo(.featureFlags) },
-                rerunInitialSetup: {
-                    self.pumpManager.deleteSavedPumpState()
-                    self.resetNavigationTo([.setup])
+                openHistoryLogViewer: { [weak self] in self?.navigateTo(.historyLogViewer) },
+                openPumpProfileViewer: { [weak self] in self?.navigateTo(.pumpProfileViewer) },
+                openReconciliation: { [weak self] in self?.navigateTo(.reconciliation) },
+                openFeatureFlags: { [weak self] in self?.navigateTo(.featureFlags) },
+                rerunInitialSetup: { [weak self] in
+                    self?.pumpManager.deleteSavedPumpState()
+                    self?.resetNavigationTo([.setup])
                 }
             )
             return hostingController(
@@ -363,12 +363,48 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
         if let nextStep = currentScreen.next() {
             navigateTo(nextStep)
         } else {
-            pumpManager.prepareForDeactivation { _ in
+            pumpManager.prepareForDeactivation { [weak self] _ in
                 DispatchQueue.main.async {
+                    guard let self else { return }
                     self.completionDelegate?.completionNotifyingDidComplete(self)
                 }
             }
         }
+    }
+
+    /// Pairing and the onboarding writes are done: the pump holds a key for this phone, so the host
+    /// owns the manager from here, and a setup left before Finish is in its settings, where it can be
+    /// deleted (#603). Created, then onboarded: the order the hosts adopt a manager in.
+    func pairingCompleted() {
+        handPumpManagerToHost()
+        resetNavigationTo([.setupComplete])
+    }
+
+    func handPumpManagerToHost() {
+        pumpManager.state.onboarded = true
+        pumpManager.notifyDelegateStateUpdated()
+        ownsPumpManager = false
+        pumpManagerOnboardingDelegate?.pumpManagerOnboarding(didCreatePumpManager: pumpManager)
+        pumpManagerOnboardingDelegate?.pumpManagerOnboarding(didOnboardPumpManager: pumpManager)
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        if isBeingDismissed || isMovingFromParent {
+            abandonSetupIfOwned()
+        }
+    }
+
+    deinit {
+        abandonSetupIfOwned()
+    }
+
+    /// A flow that goes away with its manager still its own takes the manager's link down: one left
+    /// pairing on in the background held the pump's one link against every attempt after it (#603).
+    private func abandonSetupIfOwned() {
+        guard ownsPumpManager else { return }
+        ownsPumpManager = false
+        pumpManager.abandonSetup()
     }
 
     func getInitialScreen() -> TandemScreen {
