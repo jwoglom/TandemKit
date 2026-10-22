@@ -46,6 +46,21 @@ class LoopTestCase: FaketandemIntegrationTestCase {
         []
     }
 
+    /// The manager Loop's pump setup screen builds from Loop's limits and basal schedule. A scenario
+    /// that pairs on the pump's code holds it from launch, since the test cannot drive the screen.
+    static func setupState() -> TandemPumpManagerState {
+        TandemPumpManagerState(
+            basalRateSchedule: BasalRateSchedule(dailyItems: [RepeatingScheduleValue(startTime: 0, value: scheduledBasalRate)])!,
+            maxBasalRateUnitsPerHour: maxBasal,
+            maxBolusUnits: maxBolus
+        )
+    }
+
+    /// `Documents/PumpManagerState.plist` holding `state`, as Loop saves a Tandem pump manager.
+    static func pumpManagerPlist(_ state: TandemPumpManagerState) throws -> String {
+        try plist(["managerIdentifier": "TandemPumpManager", "state": state.rawValue])
+    }
+
     /// Loop's therapy settings as the legacy keys SettingsManager migrates at launch (LoopCore
     /// NSUserDefaults.swift), in their raw-value form; the launcher adds the onboarding flag.
     func groupDefaults() -> [String: Any] {
@@ -168,6 +183,27 @@ class LoopTestCase: FaketandemIntegrationTestCase {
         control.close()
         loop = try loop.relaunched()
         control = try loop.connectControl()
+    }
+
+    /// Deletes the pump manager as Loop's pump settings screen does, and waits for Loop to have let
+    /// it go, which removes its saved state.
+    func deletePumpManager() throws {
+        try control.send(.init(command: .deletePumpManager))
+        try IntegrationWait.until("Loop to have let the pump manager go", timeout: 30) {
+            !self.loop.hasSavedPumpManager()
+        }
+    }
+
+    /// A new, unpaired pump manager in place of the deleted one, as Loop's pump setup screen makes
+    /// one. The screen cannot be driven, so Loop restores it from a seeded `PumpManagerState.plist`
+    /// at a relaunch; Loop's own data is kept, as the app was not reinstalled.
+    func recreatePumpManager() throws {
+        control.close()
+        loop = try loop.relaunched(files: ["Documents/PumpManagerState.plist": Self.pumpManagerPlist(Self.setupState())])
+        control = try loop.connectControl()
+        let status = try XCTUnwrap(control.send(.init(command: .status)).status)
+        XCTAssertFalse(status.onboarded, "the new manager has not paired yet")
+        XCTAssertTrue(status.delegateAttached, "Loop holds the new manager")
     }
 
     /// Every batch the driver gave Loop, once `condition` holds of their events and Loop has saved them

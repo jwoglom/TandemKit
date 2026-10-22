@@ -36,9 +36,9 @@ struct TrioApp {
     }
 
     /// Trio stopped and started again on the same data, with the same launch arguments, as after
-    /// the system ended it.
-    func relaunched() throws -> TrioApp {
-        try Self.launch(launcher, "relaunch", [:])
+    /// the system ended it. `files` are written over that data first, as `launchNew`'s are.
+    func relaunched(files: [String: String] = [:]) throws -> TrioApp {
+        try Self.launch(launcher, "relaunch", ["files": files])
     }
 
     /// With `sample`, the launcher first records a few seconds of Trio's stacks into the test's logs.
@@ -55,11 +55,22 @@ struct TrioApp {
         try XCTUnwrap(documentsJSON("settings/settings.json")["maxBasal"] as? Double, "settings/settings.json has no maxBasal")
     }
 
+    /// `preferences.json`'s `bolus_increment`: Trio writes the pump's when it takes a pump manager
+    /// and puts its 0.1 U default back when it lets one go.
+    func bolusIncrement() throws -> Double {
+        try XCTUnwrap(documentsJSON("preferences.json")["bolus_increment"] as? Double, "preferences.json has no bolus_increment")
+    }
+
     /// The driver state Trio last saved, which a relaunch restores.
     func savedPumpManagerState() throws -> TandemPumpManagerState? {
         let url = documents.appendingPathComponent("PumpManagerState.plist")
         let plist = try PropertyListSerialization.propertyList(from: Data(contentsOf: url), format: nil)
         return ((plist as? [String: Any])?["state"] as? [String: Any]).map(TandemPumpManagerState.init(rawValue:))
+    }
+
+    /// Whether Trio has a pump manager saved to restore at its next launch.
+    func hasSavedPumpManager() -> Bool {
+        FileManager.default.fileExists(atPath: documents.appendingPathComponent("PumpManagerState.plist").path)
     }
 
     func store() throws -> TrioStore {

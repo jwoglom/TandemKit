@@ -92,16 +92,33 @@ final class VirtualPumpControlIntegrationTests: FaketandemIntegrationTestCase {
         XCTAssertEqual(finalized.dose?.deliveredUnits ?? -1, delivered, accuracy: 0.001)
     }
 
+    func testDeletingThePumpManagerThroughTheChannelTellsTheDelegateAndEndsTheChannelsReach() throws {
+        let driver = try pairThroughTheChannel(servingTheCurrentManager: true)
+
+        _ = try send(.init(command: .deletePumpManager))
+
+        driver.drainDelegate()
+        XCTAssertEqual(driver.delegate.willDeactivateCount, 1)
+        try IntegrationWait.until("the emulator to see the deleted manager's link go", timeout: 10) {
+            try !self.harness.client.snapshot().connection.connected
+        }
+        XCTAssertThrowsError(try send(.init(command: .status)), "a deleted manager is out of the channel's reach")
+    }
+
     // MARK: - Helpers
 
-    /// Trio's clock: doses are finalized on real time, as they would be in the app.
+    /// Trio's clock: doses are finalized on real time, as they would be in the app. The app's server
+    /// serves whichever manager the host holds (`servingTheCurrentManager`); the others here serve this
+    /// test's driver whatever else is made.
     private func pairThroughTheChannel(
         state: TandemPumpManagerState = TandemPumpManagerState(rawValue: [:]),
-        stageBasalScheduleSync: Bool = true
+        stageBasalScheduleSync: Bool = true,
+        servingTheCurrentManager: Bool = false
     ) throws -> FaketandemHarness.Driver {
         let driver = makeDriver(state: state, clock: SystemClock(), stageBasalScheduleSync: stageBasalScheduleSync)
         let manager = driver.manager
-        let server = try VirtualPumpControl.Server { manager }
+        let served: () -> TandemPumpManager? = servingTheCurrentManager ? { VirtualPumpControl.current } : { manager }
+        let server = try VirtualPumpControl.Server(manager: served)
         self.server = server
         control = try VirtualPumpControl.Client(port: server.port)
 

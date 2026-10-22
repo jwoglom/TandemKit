@@ -1836,6 +1836,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
     public func prepareForDeactivation(_ completion: @escaping (Error?) -> Void) {
         logger.debug("Preparing for pump deactivation – tearing down transport")
+        #if TANDEMKIT_VIRTUAL_PUMP
+        VirtualPumpControl.detach(self)
+        #endif
         bluetooth.deactivate()
         telemetryScheduler.cancelAll()
         finalizeHeldDosesForDeactivation()

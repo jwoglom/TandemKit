@@ -44,6 +44,21 @@ class TrioTestCase: FaketandemIntegrationTestCase {
         ["bolus_increment": Self.bolusIncrement]
     }
 
+    /// The manager Trio's pump setup screen builds from Trio's limits and basal profile. A scenario
+    /// that pairs on the pump's code holds it from launch, since the test cannot drive the screen.
+    static func setupState() -> TandemPumpManagerState {
+        TandemPumpManagerState(
+            basalRateSchedule: BasalRateSchedule(dailyItems: [RepeatingScheduleValue(startTime: 0, value: scheduledBasalRate)])!,
+            maxBasalRateUnitsPerHour: maxBasal,
+            maxBolusUnits: maxBolus
+        )
+    }
+
+    /// `Documents/PumpManagerState.plist` holding `state`, as Trio saves a Tandem pump manager.
+    static func pumpManagerPlist(_ state: TandemPumpManagerState) throws -> String {
+        try plist(["managerIdentifier": "TandemPumpManager", "state": state.rawValue])
+    }
+
     var launchArguments: [String] {
         []
     }
@@ -153,6 +168,27 @@ class TrioTestCase: FaketandemIntegrationTestCase {
         control.close()
         trio = try trio.relaunched()
         control = try trio.connectControl()
+    }
+
+    /// Deletes the pump manager as Trio's pump settings screen does, and waits for Trio to have let
+    /// it go: the first thing it does is put its bolus increment back to the default.
+    func deletePumpManager() throws {
+        try control.send(.init(command: .deletePumpManager))
+        try IntegrationWait.until("Trio to have let the pump manager go", timeout: 30) {
+            try abs(self.trio.bolusIncrement() - 0.1) < 1e-9
+        }
+    }
+
+    /// A new, unpaired pump manager in place of the deleted one, as Trio's pump setup screen makes
+    /// one. The screen cannot be driven, so Trio restores it from a seeded `PumpManagerState.plist`
+    /// at a relaunch; Trio's own data is kept, as the app was not reinstalled.
+    func recreatePumpManager() throws {
+        control.close()
+        trio = try trio.relaunched(files: ["Documents/PumpManagerState.plist": Self.pumpManagerPlist(Self.setupState())])
+        control = try trio.connectControl()
+        let status = try XCTUnwrap(control.send(.init(command: .status)).status)
+        XCTAssertFalse(status.onboarded, "the new manager has not paired yet")
+        XCTAssertTrue(status.delegateAttached, "Trio holds the new manager")
     }
 
     /// Every batch the driver gave Trio, once `condition` holds of their events and Trio has stored
