@@ -279,6 +279,21 @@ reported while it runs (D12, #452).
   LoopWorkspace pins it. TandemKit implements their signatures, and `LinuxShims/LoopKit` mirrors
   them. A port to next-dev is wider than the one parameter, since there `DoseEntry`'s init takes it
   with no default at every call site, so it waits on supporting that LoopKit at all.
+- **The boundary is the live reads', not the last history pass's** (§6; #353 P02-7).
+  `lastReconciliation` moves at a dose change the driver reports and at the end of a sync whose
+  delivery reads the pump answered, and is held at a pump bolus history has yet to report. Loop's
+  `DoseStore` saves a batch's doses only under a boundary past the newest finalized basal it holds,
+  and counts a finalized dose dated before the boundary only once saved, so a boundary held at the
+  last history pass would drop the app's own finalized temp basals from IOB. What a history pass
+  finds that the live reads missed (a pump bolus, an outage's suspend and resume, Control-IQ's
+  basal) each reach the host on a path of their own. A finalized bolus reported under a boundary at
+  that end is carried again by the first boundary-only batch past it, which Loop would otherwise
+  take as a save that never happened (`SyncPendingDoseReportTests`).
+- **A temp rate the app did not set is not reported live** (§7; #353 P08-3). While the driver
+  holds scheduled basal the live path ignores it; it reaches the host from basal reconciliation as a
+  correction per 5-minute `BasalDelivery` record once the cycle closes, under Control-IQ the same
+  way (group H). Reporting it live would have to be reconciled against those corrections, for
+  insulin the host would count at most one cycle sooner.
 
 ## Execution order
 

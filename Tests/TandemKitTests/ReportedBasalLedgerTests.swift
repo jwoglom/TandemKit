@@ -150,6 +150,12 @@ final class ReportedBasalLedgerTests: XCTestCase {
         XCTAssertEqual(ReportedBasalLedger(rawValue: ledger.rawValue), ledger)
     }
 
+    func testTheNewestFinalizedEndLeavesOutTheHeldTempBasal() {
+        XCTAssertNil(ledger([temp(1.5, at: 0)]).newestFinalizedEnd)
+        XCTAssertEqual(ledger([temp(1.5, at: 0, endingAt: 300), marker(at: 300), temp(0.5, at: 600)]).newestFinalizedEnd, at(300))
+        XCTAssertEqual(ledger([temp(1.5, at: 0, endingAt: 300), suspend(at: 400)]).newestFinalizedEnd, at(400))
+    }
+
     func testRawValueRoundTrip() {
         var ledger = ledger([temp(1.5, at: 0, endingAt: 300), marker(at: 300), suspend(at: 400), resume(at: 500), temp(0.5, at: 600)])
         ledger.record([temp(0.5, at: 600)], replacePendingEvents: false) { _ in 41 }

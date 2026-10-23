@@ -189,6 +189,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
     var basalResidualDays = BasalReconciler.ResidualDays()
     /// How many history passes each store gap has held basal reconciliation back. Command queue only.
     var basalGapPasses: [ClosedRange<UInt32>: Int] = [:]
+    /// Finalized boluses reported under a boundary Loop saves nothing behind, re-sent by the first
+    /// boundary-only batch past it. Command queue only.
+    var bolusReportsAwaitingStorage: [NewPumpEvent] = []
     /// Written by history passes on the command queue and read by the Reconciliation debug screen.
     private let reconciliationLogLock = NSLock()
     private var _reconciliationLog = ReconciliationLog()
@@ -2658,6 +2661,14 @@ extension TandemPumpManager {
             let reported = Set(events.map(\.raw))
             events += inProgressBolusEvents().filter { !reported.contains($0.raw) }
         }
+        // Loop saves a batch's doses only under a boundary past the newest finalized basal it holds,
+        // and counts a finalized bolus dated before the boundary only once saved (a basal dose
+        // dated before that end it never saves). A boundary alone would move it with no save, so it
+        // carries the boluses still waiting on one instead.
+        let loopSavesAfter = state.reportedBasal.newestFinalizedEnd ?? .distantPast
+        if events.isEmpty, let boundary = reconciliationBoundary, boundary > loopSavesAfter {
+            events = bolusReportsAwaitingStorage
+        }
 
         for event in events {
             guard let dose = event.dose, dose.type == .bolus, !dose.isMutable else {
@@ -2670,11 +2681,24 @@ extension TandemPumpManager {
             heldTemp.type == .tempBasal && dose.startDate >= heldTemp.startDate ? heldTemp.tempRateId : nil
         }
 
+        let boundary = reconciliationBoundary
         emitPumpEvents(PendingPumpEventBatch(
             events: events,
-            lastReconciliation: reconciliationBoundary,
+            lastReconciliation: boundary,
             replacePendingEvents: replacePendingEvents
         ))
+
+        if !events.isEmpty, let boundary, boundary > loopSavesAfter {
+            bolusReportsAwaitingStorage = []
+        } else {
+            let horizon = now.addingTimeInterval(-BolusReportLedger.reportingHorizon)
+            bolusReportsAwaitingStorage.removeAll { $0.date < horizon }
+            for event in events where event.dose?.type == .bolus && event.dose?.isMutable == false
+                && !bolusReportsAwaitingStorage.contains(where: { $0.raw == event.raw })
+            {
+                bolusReportsAwaitingStorage.append(event)
+            }
+        }
     }
 
     /// `lastReconciliation` as the host is given it. Loop takes delivery up to it as accounted for, so

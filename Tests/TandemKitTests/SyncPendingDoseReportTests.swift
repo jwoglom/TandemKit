@@ -285,6 +285,97 @@ import XCTest
 
     // MARK: - Boundary only
 
+    private func cancelTempBasal() {
+        let done = expectation(description: "cancel")
+        manager.enactTempBasal(unitsPerHour: 0, for: 0) { error in
+            XCTAssertNil(error)
+            done.fulfill()
+        }
+        wait(for: [done], timeout: 5)
+        delegateQueue.sync {}
+    }
+
+    /// The records the pump writes for a quick bolus of `units`, activated at `activation` and
+    /// finished at `completion`.
+    private func quickBolusRecords(bolusId: Int, units: Float, activation: Date, completion: Date, firstSequenceNum: UInt32) -> [HistoryLog] {
+        let activated = UInt32(Dates.fromInstantToJan12008EpochSeconds(activation))
+        return [
+            BolusActivatedHistoryLog(pumpTimeSec: activated, sequenceNum: firstSequenceNum, bolusId: bolusId, selectedIob: 0, iob: 0, bolusSize: units),
+            BolusDeliveryHistoryLog(
+                pumpTimeSec: activated,
+                sequenceNum: firstSequenceNum + 1,
+                bolusID: bolusId,
+                bolusDeliveryStatus: 1,
+                bolusTypeBitmask: 1,
+                bolusSource: BolusDeliveryHistoryLog.BolusSource.quickBolus.rawValue,
+                remoteId: 0,
+                requestedNow: Int(units * 1000),
+                requestedLater: 0,
+                correction: 0,
+                extendedDurationRequested: 0,
+                deliveredTotal: 0
+            ),
+            BolusCompletedHistoryLog(
+                pumpTimeSec: UInt32(Dates.fromInstantToJan12008EpochSeconds(completion)),
+                sequenceNum: firstSequenceNum + 2,
+                completionStatusId: 3,
+                bolusId: bolusId,
+                iob: units,
+                insulinDelivered: units,
+                insulinRequested: units
+            )
+        ]
+    }
+
+    /// Loop saves a batch's doses only under a boundary past its newest finalized basal, and counts a
+    /// finalized dose dated before the boundary only once saved (#353). A cancel leaves the boundary
+    /// at that end, so a pump bolus history reports before the next sync waits for the sync's batch.
+    func testASyncWithNothingRunningCarriesAHistoryBolusLoopHasNotStored() throws {
+        manager.state.featureFlags[.historyBackfill] = true
+        manager.state.featureFlags[.historyDoseReporting] = true
+        manager.state.bolusReportLedger = BolusReportLedger(trackingSince: .distantPast)
+        manager.state.quickBolusEnabled = false
+        stubNoBolusRunning()
+        _ = try startTempBasal()
+        clock.advance(by: .minutes(10))
+        cancelTempBasal()
+        let cancelledAt = clock.now
+        XCTAssertEqual(manager.state.lastReconciliation, cancelledAt)
+
+        let records = quickBolusRecords(
+            bolusId: 77,
+            units: 1.0,
+            activation: cancelledAt.addingTimeInterval(-.minutes(4)),
+            completion: cancelledAt.addingTimeInterval(-.minutes(3)),
+            firstSequenceNum: 500
+        )
+        manager.storeHistoryLogs(records, now: clock.now)
+        manager.reportHistoryBoluses(in: 500 ... 502, pumpSerial: try XCTUnwrap(HistoryLogSyncIdentifier.PumpSerial(Self.pumpSerial)), floor: .distantPast, now: clock.now)
+        let reported = try XCTUnwrap(batches.last)
+        let bolusRaw = try XCTUnwrap(reported.events.first { $0.dose?.type == .bolus }?.raw)
+        XCTAssertEqual(reported.lastReconciliation, cancelledAt)
+        XCTAssertNil(feedLoop().dose(raw: bolusRaw), "Loop saves nothing under a boundary at its newest finalized basal's end")
+
+        clock.advance(by: .minutes(5))
+        let before = batches.count
+        sync()
+
+        let batch = try XCTUnwrap(batches(since: before).last)
+        XCTAssertFalse(batch.replacePendingEvents)
+        XCTAssertEqual(batch.events.map(\.raw), [bolusRaw])
+        XCTAssertEqual(batch.lastReconciliation, clock.now)
+        let loop = feedLoop()
+        XCTAssertEqual(try XCTUnwrap(loop.assertPermanent(raw: bolusRaw)).dose.deliveredUnits, 1.0)
+        XCTAssertGreaterThan(loop.iob(at: clock.now), 0)
+        _ = feedTrio().assertSingleBolus(at: cancelledAt.addingTimeInterval(-.minutes(4)), amount: 1.0)
+
+        clock.advance(by: .minutes(5))
+        let again = batches.count
+        sync()
+
+        XCTAssertEqual(batches(since: again).last?.events.isEmpty, true, "carried once")
+    }
+
     func testASyncWithNothingRunningSendsOnlyTheBoundary() throws {
         stubNoBolusRunning()
         sync()

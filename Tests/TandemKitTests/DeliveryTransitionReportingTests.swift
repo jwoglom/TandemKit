@@ -1285,6 +1285,47 @@ import XCTest
         XCTAssertEqual(manager.state.basalDose.type, .basal)
     }
 
+    private func controlIQInfo(on: Bool) -> ControlIQInfoV2Response {
+        ControlIQInfoV2Response(
+            closedLoopEnabled: on,
+            weight: 150,
+            weightUnit: ControlIQInfoAbstractResponse.WeightUnit.pounds.rawValue,
+            totalDailyInsulin: 40,
+            currentUserModeType: 0,
+            byte6: 0,
+            byte7: 0,
+            byte8: 0,
+            controlStateType: 0,
+            exerciseChoice: 0,
+            exerciseDuration: 0,
+            exerciseTimeRemaining: 0
+        )
+    }
+
+    /// #353 G07: Control-IQ turned on at the pump ends the app's temp, which the driver still holds,
+    /// and only history dates the end; without basal reporting the transitions pass does it.
+    func testAnAppTempHeldWhenControlIQStartsOnThePumpEndsAtItsCompletionWithoutBasalReporting() throws {
+        manager.state.featureFlags[.basalHistoryReporting] = false
+        appTempBasal(1.5)
+        let tempRaw = try XCTUnwrap(events(.tempBasal).last?.raw)
+        advance(to: minutes(8))
+        manager.state.pumpState.apiVersion = KnownApiVersion.apiV3_4.value
+        bluetooth.stub(ControlIQInfoV2Request.self, with: controlIQInfo(on: true))
+        manager.fetchControlIQStatus()
+        XCTAssertTrue(manager.state.useControlIQ)
+        XCTAssertEqual(manager.state.basalDose.type, .tempBasal, "the flip alone does not end the temp the driver holds")
+
+        observe(0)
+        XCTAssertNotNil(manager.state.deliveryTransitions.pending)
+        XCTAssertEqual(events(.tempBasal).count, 1, "nothing is reported at detection")
+
+        pass([tempRateCompleted(50, at: minutes(5), timeLeft: 25 * 60)])
+
+        XCTAssertEqual(try XCTUnwrap(feedLoop().assertPermanent(raw: tempRaw)).dose.endDate, minutes(5))
+        XCTAssertNil(manager.state.deliveryTransitions.pending)
+        XCTAssertEqual(manager.state.basalDose.type, .basal)
+    }
+
     // MARK: - A temp basal the pump resumes after a stop
 
     /// The pump's temp 7 at 200% of its 1 U/hr from `start` for 30 minutes, stopped at `stoppedAt`

@@ -402,7 +402,17 @@ edit instead of at the next sync.
   re-sent as one replacing batch, so a running dose is refreshed until it finalizes (#330, #450).
   Loop keeps its row over a non-replacing re-send, so it has to replace. The batch is the boundary
   alone, empty and non-replacing, with nothing mutable (an empty replacing batch purges every
-  mutable row in Trio).
+  mutable row in Trio), unless finalized history reports wait on a save (below).
+- The boundary is the live reads' (`lastReconciliation`, with `reconciliationBoundary`'s hold for a
+  pump bolus), never the last history pass's (#353): Loop's `DoseStore` saves a batch's doses only
+  under a boundary past the newest finalized basal it holds, and counts a finalized dose dated before
+  the boundary only once saved, so a boundary held at the last history pass would drop the app's own
+  finalized temp basals from IOB. For the same reason a finalized bolus reported under a boundary
+  at that end (from history after a cancel, before the next sync) is not saved, and an empty batch
+  moving the boundary past it would not save it either: `emitPumpEvents` keeps such reports
+  (`bolusReportsAwaitingStorage`, not persisted), and the first boundary-only batch past that end
+  carries them instead of nothing. Neither host minds a finalized dose sent again under its `raw`.
+  A basal dose dated before that end Loop never saves, whatever the boundary, so none is carried.
 - While a delivery change waits for history, `basalDose` is a placeholder and the host still holds
   the dose the change ended, so `getActivePumpEvents()` gives `pending.prior`, as last reported and
   uncut, mutable (#556). A bolus that finishes or is cancelled meanwhile, and the sync's re-send,
@@ -647,12 +657,10 @@ edit instead of at the next sync.
   clock. Build one per pass from the records it reads. Pump dates decode with the phone's current
   UTC offset, so `pumpClockOffset` moves by any change in it since the clock was read
   (`pumpTimeCheckUTCOffset`): a phone zone change between syncs does not misdate history (#482).
-- Still open: a boundary that trails the live reads to the last history pass (#353). Loop's
-  `DoseStore` stores nothing while the boundary is at or behind the end of the newest finalized
-  basal it holds, and leaves out of IOB a dose that ended before the boundary and was not stored, so
-  a boundary held behind the app's own finalized temp basals and then advanced by an empty batch
-  drops doses from IOB. A temp rate the app did not set reaches the host only through basal
-  reconciliation, after the fact; the live path still ignores it.
+- A temp rate the app did not set reaches the host only through basal reconciliation, a
+  correction per BasalDelivery record once the cycle closes; the live path ignores it while the
+  driver holds scheduled basal (#353 P08-3). Reporting it live would have to be reconciled against
+  those corrections, for insulin the host would count at most one cycle sooner.
 
 ### Therapy command validation
 - The pump delivers basal in 5-minute cycles: at each it writes a `BasalDelivery` (279) record and

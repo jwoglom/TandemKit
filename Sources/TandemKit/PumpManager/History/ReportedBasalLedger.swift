@@ -77,6 +77,12 @@ public struct ReportedBasalLedger: Equatable {
         }
     }
 
+    /// Loop's `InsulinDeliveryStore` saves a batch's doses only under a boundary past the newest
+    /// finalized basal it holds, which is this row's end.
+    public var newestFinalizedEnd: Date? {
+        rows.filter { !$0.isMutable }.map(\.end).max()
+    }
+
     /// On first sight, a replacement pump, or a log the pump erased, which numbers from scratch.
     public mutating func track(pumpSerial: UInt32, after lastSequenceNum: UInt32?) {
         self.pumpSerial = pumpSerial
