@@ -186,9 +186,14 @@ class TrioTestCase: FaketandemIntegrationTestCase {
         control.close()
         trio = try trio.relaunched(files: ["Documents/PumpManagerState.plist": Self.pumpManagerPlist(Self.setupState())])
         control = try trio.connectControl()
-        let status = try XCTUnwrap(control.send(.init(command: .status)).status)
+        // The channel listens from the manager's init; the host attaches itself later in its launch.
+        let status = try IntegrationWait.value("Trio to adopt the new manager", timeout: 60) { () -> VirtualPumpControl.Status? in
+            guard let status = try self.control.send(.init(command: .status)).status, status.delegateAttached else {
+                return nil
+            }
+            return status
+        }
         XCTAssertFalse(status.onboarded, "the new manager has not paired yet")
-        XCTAssertTrue(status.delegateAttached, "Trio holds the new manager")
     }
 
     /// Every batch the driver gave Trio, once `condition` holds of their events and Trio has stored

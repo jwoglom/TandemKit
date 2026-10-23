@@ -72,13 +72,9 @@ final class TrioPumpDeletionTests: TrioTestCase {
         let key = try harness.control.pairingStatus().longTermKey
         XCTAssertNotNil(key, "a completed pairing leaves the pump its key")
         XCTAssertNotEqual(key, earlierKey, "a fresh pairing derives a new key")
-        let saved = try IntegrationWait.value("Trio to have saved the paired manager", timeout: 30) { () -> TandemPumpManagerState? in
-            guard let state = try self.trio.savedPumpManagerState(), state.onboarded else {
-                return nil
-            }
-            return state
+        try IntegrationWait.until("Trio to have saved the manager with the key the pump derived", timeout: 30) {
+            try self.trio.savedPumpManagerState()?.pumpState.derivedSecret == key
         }
-        XCTAssertEqual(saved.pumpState.derivedSecret, key, "Trio holds the key the pump derived")
     }
 
     /// How many exchanges the pump saw start from `Jpake1aRequest` since the reset; a quick reconnect starts at round 3.

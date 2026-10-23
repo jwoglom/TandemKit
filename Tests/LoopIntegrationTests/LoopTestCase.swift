@@ -201,9 +201,14 @@ class LoopTestCase: FaketandemIntegrationTestCase {
         control.close()
         loop = try loop.relaunched(files: ["Documents/PumpManagerState.plist": Self.pumpManagerPlist(Self.setupState())])
         control = try loop.connectControl()
-        let status = try XCTUnwrap(control.send(.init(command: .status)).status)
+        // The channel listens from the manager's init; the host attaches itself later in its launch.
+        let status = try IntegrationWait.value("Loop to adopt the new manager", timeout: 60) { () -> VirtualPumpControl.Status? in
+            guard let status = try self.control.send(.init(command: .status)).status, status.delegateAttached else {
+                return nil
+            }
+            return status
+        }
         XCTAssertFalse(status.onboarded, "the new manager has not paired yet")
-        XCTAssertTrue(status.delegateAttached, "Loop holds the new manager")
     }
 
     /// Every batch the driver gave Loop, once `condition` holds of their events and Loop has saved them
