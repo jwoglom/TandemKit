@@ -266,6 +266,20 @@ on and ends with both oracles and the complete-batch check. `ExtendedBolusConfor
 | J6 | A `BolexCompleted` never read | Held through the programmed end and `extendedPartFinalizationWindow` after it, then finalized at its programmed amount, ending at its programmed end, in a replacing batch |
 | J7 | An app bolus, a quick bolus on the pump, an extended bolus, then an app bolus that still runs when history reads the extended part's end | The app boluses reported live and never again from history, the quick bolus once from history; the batch that finalizes the extended part carries the running app bolus; each finalized once; four rows in Trio |
 
+## Known deviations
+
+Departures from the guide that stand by design. Two are noted at the scenarios that pin them: a
+zero-delivery cancel is finalized at 0 U rather than withdrawn (B2, #455), and a pump bolus is not
+reported while it runs (D12, #452).
+
+- **`decisionId` is not threaded to the `DoseEntry`** (§9 item 9, #453). The parameter exists only
+  on upstream LoopKit next-dev, where `enactBolus` and `enactTempBasal` take a `decisionId` and
+  `DoseEntry` carries it. None of the LoopKit revisions the hosts build against has it: not
+  loopandlearn/LoopKit as Trio and this repository's CI pin it, and not LoopKit/LoopKit as
+  LoopWorkspace pins it. TandemKit implements their signatures, and `LinuxShims/LoopKit` mirrors
+  them. A port to next-dev is wider than the one parameter, since there `DoseEntry`'s init takes it
+  with no default at every call site, so it waits on supporting that LoopKit at all.
+
 ## Execution order
 
 1. Oracles + the delegate journal + `PumpTimeline` + `advanceBoth` (shared infrastructure; the oracles

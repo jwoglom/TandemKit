@@ -27,6 +27,7 @@ from dataclasses import dataclass
 # Defined outside this repository, by the codebase named.
 EXTERNAL = {
     "CGMManager": "LoopKit",
+    "decisionId": "LoopKit",
     "PumpConfig": "Trio",
     "PumpType": "Trio",
     "addPump": "Trio",
