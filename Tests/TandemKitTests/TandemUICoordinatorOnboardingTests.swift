@@ -98,8 +98,8 @@ import XCTest
         autoreleasepool {
             let coordinator = makeSetupCoordinator()
             freed = coordinator
-            coordinator.loadViewIfNeeded()
-            coordinator.viewWillAppear(false)
+            coordinator.beginAppearanceTransition(true, animated: false)
+            coordinator.endAppearanceTransition()
         }
 
         XCTAssertNil(freed)
