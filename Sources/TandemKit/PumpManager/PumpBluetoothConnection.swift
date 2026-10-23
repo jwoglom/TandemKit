@@ -39,6 +39,10 @@ protocol PumpBluetoothConnection: AnyObject {
     /// then stopped reconnecting on its own; a successful handshake clears it.
     var isJpakeFailureLimitReached: Bool { get }
 
+    /// The host has set its delegate and its queue. Only an adopted manager connects on its own, and
+    /// Bluetooth may have come on before the host got this far, as on a relaunch.
+    func pumpManagerWasAdopted()
+
     /// Responses the pump has actually returned. Compared before and after a sequence of reads to
     /// tell a pump that answered something from one that answered nothing.
     var responseCount: Int { get }

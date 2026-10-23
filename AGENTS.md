@@ -217,6 +217,11 @@ unconfirmed (hardware test plan P4).
   limiting this to the automatic connects missed it. A sync that reconnected is already in flight,
   and the reconnect's joins it. Not before the host has adopted the manager (`canNotifyDelegate`),
   whose first poll syncs, so not during onboarding; not for pairing's connect.
+- The connects the driver starts on its own (`reconnectAutomatically`: after a disconnect, on
+  Bluetooth powering on, the retry) run only for a manager a host has adopted (`canNotifyDelegate`);
+  a host command still connects. Until then the manager is a setup flow's, which connects as a
+  command when it needs to (#603). Adoption itself starts one (`pumpManagerWasAdopted`): on a
+  relaunch Bluetooth can report on before the host has set its delegate and queue.
 - A poll (`onlyIfIdle`) that finds a sync in flight queues nothing and is handed that sync's result
   (`SyncResult`) when it completes, not the `lastSync` from before it: Trio loops as soon as its
   poll completes, and the sync in flight may be the first to read the pump since an outage.
@@ -269,6 +274,15 @@ edit instead of at the next sync.
   One queued before it can connect a pump that already holds a key (a re-pair), and pairing then completes
   on that session: a second connect to a connected peripheral is never answered. A lost link ends a reconnect's wait at once, but not pairing's, so the setup reports the round it lost:
   only then does a link dropped at key confirmation reach `pairPump` as `pairingCodeRejected`.
+  `deactivate` ends a pairing connect still pending, since nothing else would.
+- Once pairing and the onboarding writes are done, `TandemUICoordinator` hands the manager to the
+  host (`pairingCompleted`: created, then onboarded, the order the hosts adopt a manager in) before
+  the setup-complete screen, so a setup left before Finish is in the host's settings, where it can be
+  deleted. Until then the flow owns the manager (`ownsPumpManager`), and a flow that goes away still
+  owning it, dismissed or freed, runs `abandonSetup`, which deactivates the transport. One left
+  mid-connect paired on in the background, and its reconnects then held the pump's one link against
+  every attempt after it (#603). The coordinator's screens capture it weakly, or a dismissed flow
+  lived on with its manager.
 
 ### Onboarding and the basal schedule
 - `applyOnboardingSettings` writes the host's `PumpManagerSetupSettings` to a freshly paired
