@@ -36,15 +36,28 @@ enum VirtualPumpControl {
             return
         }
         do {
-            server = try Server(port: port) {
-                lock.lock()
-                defer { lock.unlock() }
-                return latestManager
-            }
+            server = try Server(port: port) { current }
             logger.warning("Virtual pump control listening on 127.0.0.1:\(port)")
         } catch {
             logger.error("Virtual pump control could not listen on 127.0.0.1:\(port): \(error)")
         }
+    }
+
+    /// From `prepareForDeactivation`: the host is letting `manager` go, so no command reaches it
+    /// again, whether or not something still holds it.
+    static func detach(_ manager: TandemPumpManager) {
+        lock.lock()
+        defer { lock.unlock() }
+        if latestManager === manager {
+            latestManager = nil
+        }
+    }
+
+    /// The manager commands reach: the host's latest, until it is deleted.
+    static var current: TandemPumpManager? {
+        lock.lock()
+        defer { lock.unlock() }
+        return latestManager
     }
 
     /// Called as a batch goes to the delegate; returns the index `delegateDidFinish` takes.
@@ -129,6 +142,9 @@ enum VirtualPumpControl {
             case recordSiteChange
             /// `setFeatureFlag(_:enabled:)` with `featureFlag` and `enabled`, as the flags screen does.
             case setFeatureFlag
+            /// `prepareForDeactivation`, as the settings screen's remove does: the driver drops its link
+            /// and the host is told to let the manager go. Nothing sent afterwards reaches it.
+            case deletePumpManager
             /// Every batch sent to the delegate after index `after`.
             case pumpEventBatches
         }
@@ -301,7 +317,7 @@ enum VirtualPumpControl {
         static func handle(_ request: Request, manager: TandemPumpManager?) -> Response {
             var response = Response(id: request.id)
             guard let manager else {
-                response.error = "no TandemPumpManager has been created"
+                response.error = "no TandemPumpManager to reach: none created, or the host deleted the last one"
                 return response
             }
             do {
@@ -334,6 +350,8 @@ enum VirtualPumpControl {
                     manager.recordSiteChange(primeAmount: request.units)
                 case .setFeatureFlag:
                     try setFeatureFlag(manager, name: request.featureFlag, enabled: request.enabled)
+                case .deletePumpManager:
+                    try deletePumpManager(manager)
                 case .pumpEventBatches:
                     response.batches = VirtualPumpControl.batches(of: manager, after: request.after)
                 }
@@ -419,6 +437,14 @@ enum VirtualPumpControl {
                 throw ControlError("no feature flag \(name)")
             }
             manager.setFeatureFlag(flag, enabled: enabled)
+        }
+
+        private static func deletePumpManager(_ manager: TandemPumpManager) throws {
+            let deleted = Completion<Error?>()
+            manager.prepareForDeactivation { deleted.finish($0) }
+            if let error = try deleted.wait("prepareForDeactivation", timeout: 120) {
+                throw error
+            }
         }
 
         private static func sync(_ manager: TandemPumpManager) throws -> Date? {

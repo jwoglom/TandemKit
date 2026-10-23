@@ -4,16 +4,10 @@ import LoopKit
 import XCTest
 
 final class TrioOnboardingTests: TrioTestCase {
-    /// The manager Trio's pump setup screen builds from Trio's limits and basal profile. Trio holds it
-    /// from launch here, as when re-pairing, since the test cannot drive the screen.
+    /// Trio holds the setup screen's manager from launch here, as when re-pairing.
     override func seededFiles() throws -> [String: String] {
-        let setup = TandemPumpManagerState(
-            basalRateSchedule: BasalRateSchedule(dailyItems: [RepeatingScheduleValue(startTime: 0, value: Self.scheduledBasalRate)])!,
-            maxBasalRateUnitsPerHour: Self.maxBasal,
-            maxBolusUnits: Self.maxBolus
-        )
         var files = try super.seededFiles()
-        files["Documents/PumpManagerState.plist"] = try Self.plist(["managerIdentifier": "TandemPumpManager", "state": setup.rawValue])
+        files["Documents/PumpManagerState.plist"] = try Self.pumpManagerPlist(Self.setupState())
         return files
     }
 

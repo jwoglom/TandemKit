@@ -317,7 +317,8 @@ Nothing in Trio changes for it:
   the launcher's address to the bundle. The tests run in the simulator and cannot reach `simctl`, so
   before each test `TrioTestCase` asks the launcher for a fresh install of Trio (`/install`) and to
   launch it (`/launch`, with any launch arguments), and a test can stop and start it again on the
-  same data and arguments (`/relaunch`). The first `/install` of a run uninstalls and installs the
+  same data and arguments (`/relaunch`, with files to write over that data first, which is how a
+  deleted pump manager is made again). The first `/install` of a run uninstalls and installs the
   app; the later ones keep the install the launcher made and put its data container back to what a
   new one holds (every file gone, the container's metadata and empty directories kept) and restart
   the simulator's `cfprefsd`, which would otherwise answer the last test's UserDefaults from memory.
@@ -334,10 +335,12 @@ Nothing in Trio changes for it:
   long-term key the test also gives faketandem, so only the quick-reconnect rounds run, or without
   one through the whole JPAKE exchange), `applyOnboardingSettings`, `bolus`, `cancelBolus`,
   `syncBasalSchedule`, `tempBasal` (a duration of 0 cancels), `suspend`, `resume`,
-  `recordCartridgeChange`, `recordSiteChange`, `setFeatureFlag`, `sync`, `status`, and
-  `pumpEventBatches`, every batch handed to Trio with Trio's completion. Trio completes a batch
-  once it has saved it, so a completed log is all in the store. What the pump does on its own
-  (a suspend, a bolus from its screen, a dropped link) goes through faketandem's API.
+  `recordCartridgeChange`, `recordSiteChange`, `setFeatureFlag`, `deletePumpManager`
+  (`prepareForDeactivation`, as the pump settings screen's remove does; nothing reaches the manager
+  afterwards), `sync`, `status`, and `pumpEventBatches`, every batch handed to Trio with Trio's
+  completion. Trio completes a batch once it has saved it, so a completed log is all in the store.
+  What the pump does on its own (a suspend, a bolus from its screen, a dropped link) goes through
+  faketandem's API.
 - They read Trio's Core Data store (`TrioCoreDataPersistentContainer.sqlite`, WAL) read-only in
   place (`TrioStore`), between two reads of the batch log that agree, and compare its rows with
   `TrioDoseStoreOracle` fed the same batches, using Trio's `maxBasal` and the bolus increment it
@@ -365,6 +368,16 @@ by another, one above Trio's `maxBasal` (dropped), and one across a relaunch, af
 limits reach the pump; an app suspend that stops a temp and its resume, and a suspend and resume
 on the pump; a basal profile edit while a temp runs; a cartridge and site change; pairing on the
 pump's code with Trio's settings applied; and Trio's closed loop.
+
+`TrioPumpDeletionTests` delete the pump manager, once while it is connected and once after the pump
+refused the code, and pair a new one on the pump's code: the pump's link goes down and stays down,
+no command reaches the deleted manager, and the new one pairs from the first JPAKE round, so Trio and
+the pump end up holding a key the deleted manager never had. The setup screen that makes the new
+manager is not driven: `recreatePumpManager` relaunches Trio with an unpaired manager seeded in
+`PumpManagerState.plist`, and Trio restores it as it restores every scenario's manager. Trio's
+`DeviceDataManager` writes that file only when it takes a manager, so the deleted one's stays and a
+relaunch without the seed would bring the deleted pump back; the test holds that as a strict
+expected failure, which becomes an unexpected pass once Trio removes the file.
 
 `trio.log` (the simulator's log stream, every launch) and `app-launcher.log` land in `LOG_DIR`, and
 each test's Trio `Documents/logs`, TandemKit log and store in `LOG_DIR/<test>`. A failed test also leaves
@@ -422,6 +435,10 @@ after its suspend, ahead of Loop's clock inside that second, and `DoseStore` cac
 that ends ahead of its clock, so a suspend resumed sooner stays open in `CachedInsulinDeliveryObject`
 until the next batch that is not empty. The other waits in Trio's scenarios are for its own
 same-second ordering, which Loop does not have.
+
+`LoopPumpDeletionTests` are `TrioPumpDeletionTests`' twins: deleting the pump manager, connected and
+after a refused code, then pairing a new one Loop restores from a seeded `PumpManagerState.plist` at
+a relaunch. Loop removes that file when it lets a pump manager go, which the test waits for.
 
 `loop.log`, `app-launcher.log` and each test's TandemKit log and Loop store land in `LOG_DIR` as for
 Trio, with `loop-sample.txt` for a failed test. The `loop` job in `.github/workflows/macos.yml` runs it

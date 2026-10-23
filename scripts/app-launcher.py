@@ -15,7 +15,8 @@ shares:
                              app group container) and sets the keys of the app's or the app group's
                              UserDefaults
   POST /launch               launch it; a JSON body {"arguments": [...]} passes launch arguments
-  POST /relaunch             stop it and launch it again on the same data, with the same arguments
+  POST /relaunch             stop it and launch it again on the same data, with the same arguments;
+                             a JSON body {"files": {path: text}} first writes those over that data
   POST /stop                 stop it; {"sample": true} first samples its stacks for a few seconds
 
 /install answers {"dataContainer": path, "groupContainer": path}; /launch and /relaunch add
@@ -321,6 +322,12 @@ class App:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(text)
 
+    def relaunch(self, files):
+        """The same data and arguments again, with `files` written over the data once the app has stopped."""
+        self.stop()
+        self.write_files(files)
+        return self.launch(self.arguments)
+
     def launch(self, arguments):
         if not self.container:
             raise RuntimeError(f"no {self.host.name} installed; POST /install first")
@@ -362,7 +369,7 @@ def serve(app, port_file):
                 elif url.path == "/launch":
                     body = app.launch(request.get("arguments", []))
                 elif url.path == "/relaunch":
-                    body = app.launch(app.arguments)
+                    body = app.relaunch(request.get("files", {}))
                 elif url.path == "/stop":
                     app.stop(sample=bool(request.get("sample")))
                     body = {}
