@@ -59,12 +59,22 @@ public struct ReportedBasalLedger: Equatable {
     public private(set) var pumpSerial: UInt32?
     /// The last BasalDelivery record a reporting pass is done with; later passes start after it.
     public private(set) var reconciledThrough: UInt32?
+    /// When a pass first ran with reporting on. Nothing before it is corrected: the first pass would
+    /// otherwise correct hours of differences at once, moving the host's IOB in one step.
+    public private(set) var reportingSince: Date?
 
-    public init(trackingSince: Date, rows: [Row] = [], pumpSerial: UInt32? = nil, reconciledThrough: UInt32? = nil) {
+    public init(trackingSince: Date, rows: [Row] = [], pumpSerial: UInt32? = nil, reconciledThrough: UInt32? = nil, reportingSince: Date? = nil) {
         self.trackingSince = trackingSince
         self.rows = rows
         self.pumpSerial = pumpSerial
         self.reconciledThrough = reconciledThrough
+        self.reportingSince = reportingSince
+    }
+
+    public mutating func startReporting(at date: Date) {
+        if reportingSince == nil {
+            reportingSince = date
+        }
     }
 
     /// On first sight, a replacement pump, or a log the pump erased, which numbers from scratch.
@@ -231,7 +241,8 @@ extension ReportedBasalLedger: RawRepresentable {
             trackingSince: Date(timeIntervalSinceReferenceDate: trackingSince),
             rows: (rawValue["rows"] as? [[String: Any]] ?? []).compactMap(Row.init(rawValue:)),
             pumpSerial: rawValue["pumpSerial"] as? UInt32,
-            reconciledThrough: rawValue["reconciledThrough"] as? UInt32
+            reconciledThrough: rawValue["reconciledThrough"] as? UInt32,
+            reportingSince: (rawValue["reportingSince"] as? TimeInterval).map(Date.init(timeIntervalSinceReferenceDate:))
         )
     }
 
@@ -242,6 +253,7 @@ extension ReportedBasalLedger: RawRepresentable {
         ]
         raw["pumpSerial"] = pumpSerial
         raw["reconciledThrough"] = reconciledThrough
+        raw["reportingSince"] = reportingSince?.timeIntervalSinceReferenceDate
         return raw
     }
 }

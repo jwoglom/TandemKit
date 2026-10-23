@@ -33,7 +33,8 @@ import XCTest
         state.featureFlags[.basalHistoryReporting] = false
         state.pumpState.pumpSerial = pumpSerial
         state.bolusReportLedger = BolusReportLedger(trackingSince: .distantPast)
-        state.reportedBasal = ReportedBasalLedger(trackingSince: .distantPast)
+        // Watching the pump, and reporting, since before the records these tests write.
+        state.reportedBasal = ReportedBasalLedger(trackingSince: .distantPast, pumpSerial: pumpSerial, reportingSince: .distantPast)
         state.basalRateSchedule = BasalRateSchedule(dailyItems: [RepeatingScheduleValue(startTime: 0, value: 1.0)])!
         state.insulinType = .novolog
         return state
@@ -604,5 +605,63 @@ import XCTest
         pass(log)
 
         XCTAssertTrue(events.isEmpty)
+    }
+
+    // MARK: - Where reporting starts (#584)
+
+    private func lastSequenceNum(_ log: PumpBasalHistory) -> UInt32? {
+        log.logs.map(\.sequenceNum).max()
+    }
+
+    func testNothingBeforeReportingFirstRanIsCorrected() {
+        manager.state.reportedBasal = ReportedBasalLedger(trackingSince: .distantPast, pumpSerial: Self.pumpSerial)
+        var log = controlIQHour()
+        pass(log)
+        XCTAssertEqual(manager.loggedBasalDifferences.count, 6)
+        XCTAssertNil(manager.state.reportedBasal.reportingSince)
+
+        enableReporting()
+        pass(log)
+
+        XCTAssertTrue(events.isEmpty, "the hour before reporting ran is not corrected: \(events)")
+        XCTAssertEqual(manager.state.reportedBasal.reportingSince, clock.now)
+        XCTAssertEqual(manager.state.reportedBasal.reconciledThrough, lastSequenceNum(log))
+
+        clock.set(PumpBasalHistory.date(10800))
+        log.delivery(7210, source: 3, rate: 2200)
+        log.delivery(7510, source: 3, rate: 2200)
+        pass(log)
+
+        XCTAssertEqual(events.map(\.date), [at(7210), at(7510)])
+        XCTAssertEqual(manager.state.reportedBasal.reportingSince, at(7200), "stamped once")
+    }
+
+    func testAReplacementPumpsBasalFromBeforeFirstSightIsNotCompared() {
+        enableReporting()
+        manager.state.reportedBasal = ReportedBasalLedger(trackingSince: .distantPast, pumpSerial: 111_111, reportingSince: .distantPast)
+        var log = controlIQHour()
+        pass(log)
+
+        XCTAssertTrue(events.isEmpty, "\(events)")
+        XCTAssertTrue(manager.loggedBasalDifferences.isEmpty)
+        XCTAssertEqual(manager.state.reportedBasal.pumpSerial, Self.pumpSerial)
+        XCTAssertEqual(manager.state.reportedBasal.reconciledThrough, lastSequenceNum(log))
+
+        clock.set(PumpBasalHistory.date(10800))
+        log.delivery(7210, source: 3, rate: 2200)
+        pass(log)
+
+        XCTAssertEqual(events.map(\.date), [at(7210)])
+    }
+
+    func testAnErasedLogOnTheSamePumpIsComparedFromItsStart() {
+        enableReporting()
+        manager.state.reportedBasal = ReportedBasalLedger(trackingSince: .distantPast, pumpSerial: Self.pumpSerial, reconciledThrough: 5000, reportingSince: .distantPast)
+        let log = controlIQHour()
+
+        pass(log)
+
+        XCTAssertEqual(events.count, 6)
+        XCTAssertEqual(manager.state.reportedBasal.reconciledThrough, lastSequenceNum(log))
     }
 }

@@ -21,7 +21,7 @@ import XCTest
         state.featureFlags[.basalHistoryReporting] = false
         state.pumpState.pumpSerial = Self.pumpSerial
         state.bolusReportLedger = BolusReportLedger(trackingSince: .distantPast)
-        state.reportedBasal = ReportedBasalLedger(trackingSince: .distantPast)
+        state.reportedBasal = ReportedBasalLedger(trackingSince: .distantPast, pumpSerial: Self.pumpSerial, reportingSince: .distantPast)
         state.basalRateSchedule = BasalRateSchedule(dailyItems: [RepeatingScheduleValue(startTime: 0, value: 1.0)])!
         state.insulinType = .novolog
         state.hasSyncedBasalRateSchedule = true

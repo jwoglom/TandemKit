@@ -141,6 +141,15 @@ final class ReportedBasalLedgerTests: XCTestCase {
         XCTAssertEqual(ledger.rows.map(\.kind), [.tempBasal])
     }
 
+    func testReportingSinceIsStampedOnceAndRoundTrips() {
+        var ledger = ReportedBasalLedger(trackingSince: at(0))
+        ledger.startReporting(at: at(100))
+        ledger.startReporting(at: at(200))
+
+        XCTAssertEqual(ledger.reportingSince, at(100))
+        XCTAssertEqual(ReportedBasalLedger(rawValue: ledger.rawValue), ledger)
+    }
+
     func testRawValueRoundTrip() {
         var ledger = ledger([temp(1.5, at: 0, endingAt: 300), marker(at: 300), suspend(at: 400), resume(at: 500), temp(0.5, at: 600)])
         ledger.record([temp(0.5, at: 600)], replacePendingEvents: false) { _ in 41 }

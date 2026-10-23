@@ -58,11 +58,11 @@ public struct HistoryBackfillState: Equatable {
     /// actually connected.
     ///
     /// A serial mismatch means a *replacement* pump: its sequence numbers count from its own
-    /// history and say nothing about what this driver has read, and its pre-existing log may
-    /// hold deliveries from a bench test or a previous owner. Both problems are handled by
-    /// starting over with a floor at first sight, so nothing recorded before this pump
-    /// entered service can reach the host app. Re-pairing the *same* pump keeps its bookkeeping,
-    /// including the original floor, so the gap while the app was away is still reportable.
+    /// history and say nothing about what this driver has read. So its bookkeeping starts over,
+    /// floored `deepFetchLookback` before first sight as any pump's is: its boluses from the hours
+    /// before pairing are imported, and basal reconciliation starts at first sight on its own.
+    /// Re-pairing the *same* pump keeps its bookkeeping, including the original floor, so the gap
+    /// while the app was away is still reportable.
     public func matching(pumpSerial: UInt32, now: Date = Date()) -> HistoryBackfillState {
         guard self.pumpSerial == pumpSerial else {
             return HistoryBackfillState(firstSeenPumpSerial: pumpSerial, now: now)

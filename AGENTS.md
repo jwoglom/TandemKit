@@ -451,7 +451,10 @@ edit instead of at the next sync.
   history, and `basalHistoryReporting` whether basal corrections do; both are `&&`-ed with
   `historyBackfill`, since there is nothing to report from a log never read. None is a dry run — a
   watermark written for entries that were never read would mark them read and suppress them once
-  the flag goes on, so `reconciledThrough` only moves while basal reporting is on.
+  the flag goes on, so `reconciledThrough` only moves while basal reporting is on. Corrections
+  start from when reporting first ran (`ReportedBasalLedger.reportingSince`, persisted), not from
+  the floor: the first pass would otherwise correct hours at once and move Trio's IOB in one step
+  (#584).
 - The walk is sliced at one `HistoryLogRequest` (255 entries) so dosing interleaves with it,
   but is not paced one slice per sync: a tick keeps stepping until it reaches
   `deepFetchTarget`, bounded by `maxDeepSlicesPerTick`.
@@ -595,7 +598,7 @@ edit instead of at the next sync.
     after left the pump on its profile for the cycle, while the row the stop ended held a second of
     it: built against that row, the correction was empty and the chunk was passed for good (#564).
   - Skipped: suspended time (the pump's or the host's), chunks before the latest of
-    `firstSeenFloor`, 24 hours ago and `trackingSince`, chunks still running, and temp chunks within
+    `firstSeenFloor`, 24 hours ago, `trackingSince` and `reportingSince`, chunks still running, and temp chunks within
     `segmentChangeWindow` before a segment change, which the driver reports at the request on
     purpose.
   - Each difference is logged once a session, with the action it calls for, and each record that
@@ -620,8 +623,11 @@ edit instead of at the next sync.
     - H from a suspend: nothing.
   - A chunk waits, with everything after it, behind an open chunk, a store gap for
     `basalGapPatience` (2) passes (then the gap is skipped, with a warning), a pending delivery
-    change, or a temp basal the host still holds open before it. `reconciledThrough` (persisted,
-    reset on a new serial or an erased log) is the last BasalDelivery record a pass is done with.
+    change, or a temp basal the host still holds open before it. `reconciledThrough` (persisted) is
+    the last BasalDelivery record a pass is done with. A new serial starts it at the pump's last
+    record at first sight, as `DeliveryTransitionLedger` does, so a replacement pump's basal from
+    before pairing, on a bench or on someone else, is never corrected (#584); an erased log on the
+    same pump starts it over.
   - Control-IQ hand-back: when `useControlIQ` goes off (`configureControlIQMode`,
     `fetchControlIQStatus`) `controlIQEndedAt` is persisted. While it is set, with reporting on,
     `isAwaitingHistory` holds: `ensureCurrentPumpData` does not throttle and `syncPumpData` waits

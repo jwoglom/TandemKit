@@ -59,12 +59,23 @@ extension TandemPumpManager {
         if let pumpRange = outcome.pumpSequenceRange,
            !state.reportedBasal.isTracking(pumpSerial: serial.rawValue, lastSequenceNum: pumpRange.upperBound)
         {
-            logger.info("Reconciling basal on pump \(serial.rawValue) from its history's start")
-            state.reportedBasal.track(pumpSerial: serial.rawValue, after: nil)
+            // A pump the driver has not watched may have delivered for hours before pairing, on a
+            // bench or on someone else, so its basal is compared from first sight.
+            if state.reportedBasal.pumpSerial == serial.rawValue {
+                logger.info("Reconciling basal on pump \(serial.rawValue) from its erased log's start")
+                state.reportedBasal.track(pumpSerial: serial.rawValue, after: nil)
+            } else {
+                logger.info("Reconciling basal on pump \(serial.rawValue) after record \(pumpRange.upperBound), its last at first sight")
+                state.reportedBasal.track(pumpSerial: serial.rawValue, after: pumpRange.upperBound)
+            }
+        }
+        if reporting {
+            state.reportedBasal.startReporting(at: now)
         }
         let floor = max(
             state.historyBackfill?.firstSeenFloor ?? .distantPast,
-            now.addingTimeInterval(-BolusReportLedger.reportingHorizon)
+            now.addingTimeInterval(-BolusReportLedger.reportingHorizon),
+            reporting ? state.reportedBasal.reportingSince ?? now : .distantPast
         )
 
         let logs: [HistoryLog]

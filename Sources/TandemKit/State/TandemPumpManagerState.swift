@@ -688,7 +688,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
             "* lastBasalStatusDate: \(String(describing: lastBasalStatusDate))",
             "* historyBackfill: \(String(describing: historyBackfill))",
             "* bolusReportLedger: \(bolusReportLedger)",
-            "* reportedBasal: \(reportedBasal.rows.count) row(s) since \(reportedBasal.trackingSince)",
+            "* reportedBasal: \(reportedBasal.rows.count) row(s) since \(reportedBasal.trackingSince), reporting since \(String(describing: reportedBasal.reportingSince))",
             "* lastTempRateEventRaw: \(lastTempRateEventRaw?.hexadecimalString ?? "nil")",
             "* deliveryTransitions: \(deliveryTransitions)",
             "* bolusState: \(bolusState)",

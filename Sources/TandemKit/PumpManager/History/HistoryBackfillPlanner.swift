@@ -78,8 +78,8 @@ enum HistoryBackfillPlanner {
         guard let firstSeenFloor else {
             return lookbackTarget
         }
-        // Only bites in the first lookback after a pump enters service, where it stops a
-        // replacement pump's pre-service history being read.
+        // The floor is the lookback before first sight, so this is the lookback target unless the
+        // phone's clock has gone back since.
         return max(lookbackTarget, firstSeenFloor)
     }
 
