@@ -1,7 +1,6 @@
 ## Reference material
 - See [docs/ARCHITECTURE_ANALYSIS.md](docs/ARCHITECTURE_ANALYSIS.md) and [docs/KEY_FILES_REFERENCE.md](docs/KEY_FILES_REFERENCE.md) for deeper implementation notes and file-level pointers.
 - [docs/integration-harness.md](docs/integration-harness.md): the `TandemKitIntegrationTests` target, which runs the real driver against the faketandem emulator (`scripts/integration-test.sh`), and the emulator gaps it currently works around.
-- [docs/hardware-test-plan.md](docs/hardware-test-plan.md): the manual procedure on a real pump, including the quick bolus and Control-IQ configurations, and the firmware behaviour only a pump can confirm.
 
 ## Comments
 **Default to no comment.** Most code needs none. Before writing one, ask what a reader who has the
@@ -206,7 +205,7 @@ disconnect the driver made itself (a connect out of time), an unanswered round o
 refusal and an answered but invalid handshake all count. Once its link is gone a setup task stops at
 its next step: every operation after `linkWentDown` is refused, so it never writes to the peripheral
 the next connect reuses. Whether a Mobi refusing a stored key ever drops as `connectionTimeout` is
-unconfirmed (hardware test plan P4).
+unconfirmed.
 
 ### Reconnect
 - Every connect job that brings a session up queues `syncPumpData(onlyIfIdle: true)` through
@@ -901,6 +900,5 @@ integration scenarios.
   returns the general `TandemUICoordinator`, and there is no dedicated recovery screen.
 - **Response validation.** `PacketAssembler` checks the txId, packet countdown, declared length
   and CRC of every received message, but nothing checks the HMAC of a signed response.
-- **Hardware validation.** [docs/hardware-test-plan.md](docs/hardware-test-plan.md) is the manual
-  procedure for the t:slim X2 and the Mobi, but no run of it is recorded, so which pump firmware
+- **Hardware validation.** No run on a t:slim X2 or a Mobi is recorded, so which pump firmware
   versions work is unknown.
