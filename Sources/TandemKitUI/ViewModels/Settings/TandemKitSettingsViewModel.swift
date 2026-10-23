@@ -239,8 +239,8 @@ class TandemKitSettingsViewModel: ObservableObject {
         }
 
         // Control-IQ doses from body weight and total daily insulin, and a pump that has never run
-        // it has neither, so the driver refuses the enable. Open the screen where they can be
-        // entered instead of attempting a request that cannot succeed (#223).
+        // it has neither, so the driver refuses the enable. Say where to set them instead of
+        // attempting a request that cannot succeed.
         guard pumpManager.state.controlIQWeightLbs != nil,
               pumpManager.state.controlIQTotalDailyInsulin != nil
         else {

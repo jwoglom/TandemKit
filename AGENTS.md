@@ -896,6 +896,12 @@ integration scenarios.
     not been confirmed against pump firmware.
   - The legacy 16-character pump-challenge pairing is not implemented; only the 6-digit JPAKE
     code is.
+- **Control-IQ weight and total daily insulin.** The pump applies only `enabled` from
+  `ChangeControlIQSettingsRequest`: a Mobi answered every new total daily insulin OK, logged an
+  `AaEnableSettingChangeHistoryLog` and no `AaTdiSettingChangeHistoryLog`, and read back its own.
+  The last cargo byte, 1 in the captures of Tandem's app switching Control-IQ, is likely a change
+  mask whose other bits are unknown. Until a capture of Tandem's app changing the values shows
+  them, the Control-IQ settings screen shows weight and TDI as the pump reports them, read-only.
 - **Delivery-uncertainty recovery.** `deliveryIsUncertain` is set only for an unconfirmed bolus,
   which the next read of the pump settles on its own; `deliveryUncertaintyRecoveryViewController`
   returns the general `TandemUICoordinator`, and there is no dedicated recovery screen.

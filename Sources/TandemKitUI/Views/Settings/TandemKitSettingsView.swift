@@ -621,17 +621,10 @@ struct TandemKitSettingsView: View {
                         comment: "Title for alert blocking the switch to Control-IQ when weight/TDI are unset"
                     ),
                     message: Text(
-                        "Control-IQ uses your weight and total daily insulin to dose, and your pump does not have them yet.\n\nEnter them in Control-IQ Settings, then try switching again.",
+                        "Control-IQ uses your weight and total daily insulin to dose, and your pump does not have them yet.\n\nSet them on the pump itself, or in the Tandem app, then try switching again.",
                         comment: "Message for alert blocking the switch to Control-IQ when weight/TDI are unset"
                     ),
-                    primaryButton: .default(
-                        Text(
-                            "Control-IQ Settings",
-                            comment: "Button to open Control-IQ settings from the missing-values alert"
-                        ),
-                        action: { viewModel.openControlIQSettings() }
-                    ),
-                    secondaryButton: .cancel(Text("OK", comment: "Button to dismiss an alert"))
+                    dismissButton: .default(Text("OK", comment: "Button to dismiss an alert"))
                 )
             case .diyRestored:
                 return Alert(

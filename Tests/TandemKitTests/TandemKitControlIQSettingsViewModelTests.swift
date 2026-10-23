@@ -4,8 +4,8 @@ import XCTest
 /// Covers the Control-IQ settings screen's save gate and its sleep schedule model.
 ///
 /// Enabling Control-IQ needs a weight and total daily insulin the pump does not have until someone
-/// supplies them, so the screen has to block saving and say which one is missing rather than let the
-/// request go out and come back rejected (#223).
+/// sets them on the pump or in Tandem's app, so the screen has to block saving and say which one is
+/// missing rather than let the request go out and come back rejected (#223).
 @available(macOS 13.0, iOS 14.0, *) final class TandemKitControlIQSettingsViewModelTests: XCTestCase {
     private typealias ViewModel = TandemKitControlIQSettingsViewModel
 
@@ -58,6 +58,18 @@ import XCTest
             message.contains(String(ControlIQSettingsLimits.allowedTotalDailyInsulinUnits.lowerBound)),
             "Expected the minimum to be named. Got: \(message)"
         )
+    }
+
+    func testAMissingValueIsToBeSetOnThePumpOrInTandemsApp() {
+        let messages = [
+            ViewModel.validationMessage(enabled: true, weightLbs: nil, totalDailyInsulin: nil),
+            ViewModel.validationMessage(enabled: true, weightLbs: nil, totalDailyInsulin: 30),
+            ViewModel.validationMessage(enabled: true, weightLbs: 150, totalDailyInsulin: nil)
+        ]
+
+        for message in messages {
+            XCTAssertTrue(message?.contains("Tandem app") == true, "Got: \(String(describing: message))")
+        }
     }
 
     func testNothingBlocksSavingWithBothValuesSet() {

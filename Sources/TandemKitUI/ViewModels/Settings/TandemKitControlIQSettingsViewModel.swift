@@ -3,17 +3,11 @@ import Foundation
 import LoopKit
 
 class TandemKitControlIQSettingsViewModel: ObservableObject {
-    /// Values the pickers scroll from when the pump has none configured. `weightLbs` and
-    /// `totalDailyInsulin` stay nil until the user picks a value, so a seed is never saved as if the
-    /// user had entered it.
-    static let weightSeedLbs = 150
-    static let totalDailyInsulinSeedUnits = 30
-
     @Published var controlIQEnabled = false { didSet { recomputeSaveState() } }
-    /// nil until Control-IQ has been configured on the pump, or the user picks a value.
-    @Published var weightLbs: Int? { didSet { recomputeSaveState() } }
-    /// nil until Control-IQ has been configured on the pump, or the user picks a value.
-    @Published var totalDailyInsulin: Int? { didSet { recomputeSaveState() } }
+    /// What the pump reports; nil until Control-IQ has been configured on it.
+    @Published var weightLbs: Int?
+    /// What the pump reports; nil until Control-IQ has been configured on it.
+    @Published var totalDailyInsulin: Int?
 
     @Published var sleepSchedules: [SleepScheduleSlot] = []
     /// False when the pump cannot accept sleep schedule writes, in which case they are shown but not
@@ -29,8 +23,6 @@ class TandemKitControlIQSettingsViewModel: ObservableObject {
     @Published var validationMessage: String?
 
     private var originalEnabled: Bool = false
-    private var originalWeightLbs: Int?
-    private var originalTDI: Int?
     private var originalSleepSchedules: [SleepScheduleSlot] = []
 
     private let pumpManager: TandemPumpManager?
@@ -42,9 +34,7 @@ class TandemKitControlIQSettingsViewModel: ObservableObject {
             controlIQEnabled = state.useControlIQ
             originalEnabled = state.useControlIQ
             weightLbs = state.controlIQWeightLbs
-            originalWeightLbs = state.controlIQWeightLbs
             totalDailyInsulin = state.controlIQTotalDailyInsulin
-            originalTDI = state.controlIQTotalDailyInsulin
         }
         canEditSleepSchedules = pumpManager?.supports(SetSleepScheduleRequest.self) ?? false
 
@@ -72,9 +62,7 @@ class TandemKitControlIQSettingsViewModel: ObservableObject {
                     self.controlIQEnabled = ciqResponse.getClosedLoopEnabled()
                     self.originalEnabled = ciqResponse.getClosedLoopEnabled()
                     self.weightLbs = reportedWeight == 0 ? nil : reportedWeight
-                    self.originalWeightLbs = self.weightLbs
                     self.totalDailyInsulin = reportedTDI == 0 ? nil : reportedTDI
-                    self.originalTDI = self.totalDailyInsulin
                 }
 
                 if let scheduleResponse {
@@ -119,8 +107,6 @@ class TandemKitControlIQSettingsViewModel: ObservableObject {
                 switch result {
                 case .success:
                     self.originalEnabled = self.controlIQEnabled
-                    self.originalWeightLbs = self.weightLbs
-                    self.originalTDI = self.totalDailyInsulin
                     self.recomputeSaveState()
                 case let .failure(error):
                     // Report what actually went wrong -- an unset weight or TDI, or the status the
@@ -177,8 +163,6 @@ class TandemKitControlIQSettingsViewModel: ObservableObject {
             totalDailyInsulin: totalDailyInsulin
         )
         let dirty = controlIQEnabled != originalEnabled
-            || weightLbs != originalWeightLbs
-            || totalDailyInsulin != originalTDI
 
         // Deferred to the next main-queue turn: `didSet` can fire while the view is reading these
         // properties, and publishing from inside a view update is not allowed. Ordering is FIFO, so
@@ -192,29 +176,24 @@ class TandemKitControlIQSettingsViewModel: ObservableObject {
         disabled = !dirty || message != nil
     }
 
-    /// Why the settings cannot be saved as they stand.
-    ///
-    /// Control-IQ doses from body weight and total daily insulin, and a pump that has never had them
-    /// set reports neither, so both have to be entered before it can be turned on. Sending the
-    /// reported zeroes instead is what produced a bare "Failed to update Control-IQ settings"
-    /// (#223).
+    /// Why the settings cannot be saved as they stand. The pump refuses to turn Control-IQ on without
+    /// a weight and total daily insulin, and only its own screen or Tandem's app can set them.
     static func validationMessage(enabled: Bool, weightLbs: Int?, totalDailyInsulin: Int?) -> String? {
         guard enabled else { return nil }
 
         switch (weightLbs, totalDailyInsulin) {
         case (nil, nil):
             return String(
-                localized: "Enter your weight and total daily insulin to turn on Control-IQ.",
+                localized:
+                "Set your weight and total daily insulin on the pump itself, or in the Tandem app, to turn on Control-IQ.",
                 comment: "Blocking message when both Control-IQ values are missing"
             )
         case (nil, _):
-            return String(
-                localized: "Enter your weight to turn on Control-IQ.",
-                comment: "Blocking message when the Control-IQ weight is missing"
-            )
+            return weightMissingMessage
         case (_, nil):
             return String(
-                localized: "Enter your total daily insulin to turn on Control-IQ.",
+                localized:
+                "Set your total daily insulin on the pump itself, or in the Tandem app, to turn on Control-IQ.",
                 comment: "Blocking message when the Control-IQ total daily insulin is missing"
             )
         default:
@@ -234,13 +213,17 @@ class TandemKitControlIQSettingsViewModel: ObservableObject {
                 String(ControlIQSettingsLimits.allowedTotalDailyInsulinUnits.lowerBound)
             )
         case .weightOutOfRange:
-            return String(
-                localized: "Enter your weight to turn on Control-IQ.",
-                comment: "Blocking message when the Control-IQ weight is missing"
-            )
+            return weightMissingMessage
         case nil:
             return nil
         }
+    }
+
+    private static var weightMissingMessage: String {
+        String(
+            localized: "Set your weight on the pump itself, or in the Tandem app, to turn on Control-IQ.",
+            comment: "Blocking message when the Control-IQ weight is missing"
+        )
     }
 }
 

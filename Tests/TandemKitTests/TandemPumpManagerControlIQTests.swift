@@ -177,17 +177,20 @@ import XCTest
         XCTAssertFalse(bluetooth.didSend(ChangeControlIQSettingsRequest.self))
     }
 
-    func testAcceptedChangeRecordsTheValuesThatWereSent() {
+    func testAcceptedChangeKeepsTheWeightAndTotalDailyInsulinThePumpReported() {
+        // As the pump last reported them.
+        manager.state.controlIQWeightLbs = 170
+        manager.state.controlIQTotalDailyInsulin = 20
         stubAcceptedChange()
 
-        let result = configure(enabled: true, weightLbs: 154, totalDailyInsulinUnits: 42)
+        let result = configure(enabled: true, weightLbs: 154, totalDailyInsulinUnits: 35)
 
         guard case .success = result else {
             return XCTFail("Expected the change to be applied, got \(result)")
         }
         XCTAssertTrue(manager.state.useControlIQ)
-        XCTAssertEqual(manager.state.controlIQWeightLbs, 154)
-        XCTAssertEqual(manager.state.controlIQTotalDailyInsulin, 42)
+        XCTAssertEqual(manager.state.controlIQWeightLbs, 170)
+        XCTAssertEqual(manager.state.controlIQTotalDailyInsulin, 20)
     }
 
     // MARK: - Reading the pump's own values back
