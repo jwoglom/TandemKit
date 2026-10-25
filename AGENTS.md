@@ -275,14 +275,33 @@ edit instead of at the next sync.
   on that session: a second connect to a connected peripheral is never answered. A lost link ends a reconnect's wait at once, but not pairing's, so the setup reports the round it lost:
   only then does a link dropped at key confirmation reach `pairPump` as `pairingCodeRejected`.
   `deactivate` ends a pairing connect still pending, since nothing else would.
-- Once pairing and the onboarding writes are done, `TandemUICoordinator` hands the manager to the
-  host (`pairingCompleted`: created, then onboarded, the order the hosts adopt a manager in) before
-  the setup-complete screen, so a setup left before Finish is in the host's settings, where it can be
-  deleted. Until then the flow owns the manager (`ownsPumpManager`), and a flow that goes away still
-  owning it, dismissed or freed, runs `abandonSetup`, which deactivates the transport. One left
-  mid-connect paired on in the background, and its reconnects then held the pump's one link against
-  every attempt after it (#603). The coordinator's screens capture it weakly, or a dismissed flow
-  lived on with its manager.
+- Once pairing, the onboarding writes and the history load (below) are done, `TandemUICoordinator`
+  hands the manager to the host (`pairingCompleted`: created, then onboarded, the order the hosts
+  adopt a manager in) before the setup-complete screen, so a setup left before Finish is in the host's
+  settings, where it can be deleted. Until then the flow owns the manager (`ownsPumpManager`), and a
+  flow that goes away still owning it, dismissed or freed, runs `abandonSetup`, which deactivates the
+  transport. One left mid-connect paired on in the background, and its reconnects then held the pump's
+  one link against every attempt after it (#603). The coordinator's screens capture it weakly, or a
+  dismissed flow lived on with its manager.
+
+### Setup history load
+- A new manager reports no history from before its ledgers' `trackingSince`, since it cannot tell
+  another host's app boluses from the pump's own, so a pump moved between Loop, Trio and Tandem's app
+  arrived with the insulin it had just given missing from IOB (#607). After pairing, with
+  `historyBackfill` and `historyDoseReporting` on (`canLoadHistoryForSetup`), `pairingFinished` shows
+  the Load Pump History step before the host has the manager. Do Not Load warns that the host assumes
+  no IOB and goes on; nothing changes.
+- Load (`loadHistoryForSetup`) moves both ledgers' `trackingSince` back `setupHistoryLoadWindow`
+  (6 h), and `ReportedBasalLedger.reportHistory` clears `reconciledThrough`, which passes since pairing
+  moved past the chunks they skipped. Then it runs backfill ticks until one reads the deep walk's
+  target and the pump's newest record as of a status read under `setupHistoryLoadMaximumLag` (1 min)
+  old, and its report pass ran. Not the newest record's own age: an idle pump writes one only every 5
+  minutes. Boluses, extended parts and, with `basalHistoryReporting`, basal corrections go out through
+  the usual passes, held until the host attaches; suspends and resumes are not loaded, so the host
+  counts its schedule over a pump suspension, which over-counts IOB. `setupHistoryLoadFailureLimit`
+  (3) ticks in a row that read nothing fail the load, and the step offers only Try Again.
+- Loading history the host already counts (the same pump back in the same app) reports it twice, under
+  history's `raw`: IOB over-counts until it ages out.
 
 ### Onboarding and the basal schedule
 - `applyOnboardingSettings` writes the host's `PumpManagerSetupSettings` to a freshly paired

@@ -5,6 +5,7 @@ import SwiftUI
 enum TandemScreen {
     case setup
     case deviceScanning
+    case loadHistory
     case setupComplete
     case pumpInformation
     case pumpSettings
@@ -35,6 +36,8 @@ enum TandemScreen {
         case .soundSettings:
             return .deviceScanning
         case .deviceScanning:
+            return .loadHistory
+        case .loadHistory:
             return .setupComplete
         case .setupComplete:
             return .pumpSettings
@@ -147,7 +150,7 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
             )
         case .deviceScanning:
             let nextStep: () -> Void = { [weak self] in
-                self?.pairingCompleted()
+                self?.pairingFinished()
             }
 
             let viewModel = TandemKitScanViewModel(pumpManager, nextStep: nextStep)
@@ -155,6 +158,14 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
                 rootView: TandemKitScanView(viewModel: viewModel),
                 title: String(localized: "Tandem Mobi Pairing", comment: "Title for Mobi pairing"),
                 largeTitleDisplayMode: .never
+            )
+        case .loadHistory:
+            let viewModel = TandemKitLoadHistoryViewModel(pumpManager: pumpManager, done: { [weak self] in
+                self?.pairingCompleted()
+            })
+            return hostingController(
+                rootView: TandemKitLoadHistoryView(viewModel: viewModel),
+                title: String(localized: "Load Pump History", comment: "Title for the setup step that loads the pump's history")
             )
         case .setupComplete:
             let view = TandemKitSetupCompleteView(finish: { [weak self] in
@@ -372,9 +383,20 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
         }
     }
 
-    /// Pairing and the onboarding writes are done: the pump holds a key for this phone, so the host
-    /// owns the manager from here, and a setup left before Finish is in its settings, where it can be
-    /// deleted (#603). Created, then onboarded: the order the hosts adopt a manager in.
+    /// Before the host has the manager, so it doses on none of the pump's history until the user has
+    /// chosen whether to load it.
+    func pairingFinished() {
+        guard pumpManager.canLoadHistoryForSetup else {
+            pairingCompleted()
+            return
+        }
+        resetNavigationTo([.loadHistory])
+    }
+
+    /// Pairing, the onboarding writes and the history load are done: the pump holds a key for this
+    /// phone, so the host owns the manager from here, and a setup left before Finish is in its
+    /// settings, where it can be deleted (#603). Created, then onboarded: the order the hosts adopt a
+    /// manager in.
     func pairingCompleted() {
         handPumpManagerToHost()
         resetNavigationTo([.setupComplete])
