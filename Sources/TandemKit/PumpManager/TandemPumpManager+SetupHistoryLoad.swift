@@ -43,6 +43,7 @@ extension TandemPumpManager {
         logger.info("Loading pump history since \(since) for setup")
         state.bolusReportLedger.reportHistory(since: since)
         state.reportedBasal.reportHistory(since: since)
+        state.deliveryTransitions.reportHistory(since: since)
         notifyDelegateStateUpdated()
 
         let progressQueue = DispatchQueue(label: "com.jwoglom.TandemKit.setupHistoryLoad")

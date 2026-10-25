@@ -71,6 +71,26 @@ import XCTest
         ]
     }
 
+    private func pumpSuspension(firstSequenceNum: UInt32, secondsAgo: UInt32, minutes: UInt32) -> [HistoryLog] {
+        let suspended = nowPumpTimeSec - secondsAgo
+        return [
+            PumpingSuspendedHistoryLog(
+                pumpTimeSec: suspended,
+                sequenceNum: firstSequenceNum,
+                preSuspendState: 106,
+                insulinAmount: 150,
+                reasonId: 0,
+                rpaTimeout: 15
+            ),
+            PumpingResumedHistoryLog(
+                pumpTimeSec: suspended + minutes * 60,
+                sequenceNum: firstSequenceNum + 1,
+                preResumeState: 100,
+                insulinAmount: 150
+            )
+        ]
+    }
+
     private func stubPump(serving logs: [HistoryLog]) {
         let bySequence = Dictionary(uniqueKeysWithValues: logs.map { ($0.sequenceNum, $0) })
         let sequences = logs.map(\.sequenceNum)
@@ -126,6 +146,10 @@ import XCTest
         delegate.pumpEventBatches.flatMap(\.events).filter { $0.dose?.type == .bolus }
     }
 
+    private var reportedTransitions: [NewPumpEvent] {
+        delegate.pumpEventBatches.flatMap(\.events).filter { $0.dose?.type == .suspend || $0.dose?.type == .resume }
+    }
+
     // MARK: - Tests
 
     func testWithoutTheLoadABolusFromBeforeSetupIsNotReported() {
@@ -149,6 +173,64 @@ import XCTest
         XCTAssertEqual(event.raw, HistoryLogSyncIdentifier.bolus(pumpSerial: serial, bolusId: 70))
         XCTAssertEqual(event.dose?.deliveredUnits ?? 0, 3.6, accuracy: 0.001)
         XCTAssertEqual(event.dose?.isMutable, false)
+    }
+
+    func testWithoutTheLoadASuspendFromBeforeSetupIsNotReported() {
+        stubPump(serving: pumpSuspension(firstSequenceNum: 1, secondsAgo: 2 * 3600, minutes: 15))
+
+        runTick()
+        adoptByHost()
+
+        XCTAssertTrue(reportedTransitions.isEmpty)
+    }
+
+    func testTheLoadReportsASuspendAndResumeFromBeforeSetupAtThePumpsTimes() throws {
+        stubPump(serving: pumpBolus(bolusId: 74, units: 1.0, firstSequenceNum: 1, secondsAgo: 3 * 3600)
+            + pumpSuspension(firstSequenceNum: 4, secondsAgo: 2 * 3600, minutes: 15))
+        runTick()
+
+        XCTAssertNil(load())
+        adoptByHost()
+
+        XCTAssertEqual(reportedTransitions.map(\.dose?.type), [.suspend, .resume])
+        let suspended = Date().addingTimeInterval(-2 * 3600)
+        XCTAssertEqual(try XCTUnwrap(reportedTransitions.first).date.timeIntervalSince(suspended), 0, accuracy: 5)
+        XCTAssertEqual(try XCTUnwrap(reportedTransitions.last).date.timeIntervalSince(suspended), 15 * 60, accuracy: 5)
+    }
+
+    func testTheLoadReportsNoSuspendOlderThanItsWindow() {
+        stubPump(serving: pumpSuspension(firstSequenceNum: 1, secondsAgo: 6 * 3600 + 900, minutes: 10)
+            + pumpBolus(bolusId: 75, units: 1.0, firstSequenceNum: 3, secondsAgo: 3600))
+
+        XCTAssertNil(load())
+        adoptByHost()
+
+        XCTAssertTrue(reportedTransitions.isEmpty)
+    }
+
+    func testTheTransitionLedgerTakesRecordsFromTheLoadOnBeforeTheOnesItTracks() {
+        var ledger = DeliveryTransitionLedger()
+        ledger.track(pumpSerial: Self.pumpSerial, after: 50)
+        let since = Date().addingTimeInterval(-3600)
+
+        ledger.reportHistory(since: since)
+        ledger.reportHistory(since: Date())
+
+        XCTAssertEqual(ledger.historySince, since)
+        XCTAssertTrue(ledger.isTracked(sequenceNum: 40, date: since.addingTimeInterval(60)))
+        XCTAssertFalse(ledger.isTracked(sequenceNum: 40, date: since.addingTimeInterval(-60)))
+        XCTAssertTrue(ledger.isTracked(sequenceNum: 51, date: since.addingTimeInterval(-60)))
+        XCTAssertEqual(DeliveryTransitionLedger(rawValue: ledger.rawValue), ledger)
+    }
+
+    func testAnotherPumpEndsTheTransitionLedgersLoadedHistory() {
+        var ledger = DeliveryTransitionLedger()
+        ledger.track(pumpSerial: Self.pumpSerial, after: 50)
+        ledger.reportHistory(since: Date().addingTimeInterval(-3600))
+
+        ledger.track(pumpSerial: Self.pumpSerial + 1, after: 10)
+
+        XCTAssertNil(ledger.historySince)
     }
 
     func testTheLoadReportsNothingOlderThanItsWindow() {

@@ -292,13 +292,15 @@ edit instead of at the next sync.
   the Load Pump History step before the host has the manager. Do Not Load warns that the host assumes
   no IOB and goes on; nothing changes.
 - Load (`loadHistoryForSetup`) moves both ledgers' `trackingSince` back `setupHistoryLoadWindow`
-  (6 h), and `ReportedBasalLedger.reportHistory` clears `reconciledThrough`, which passes since pairing
-  moved past the chunks they skipped. Then it runs backfill ticks until one reads the deep walk's
+  (6 h), and `DeliveryTransitionLedger.historySince` to the same date, and
+  `ReportedBasalLedger.reportHistory` clears `reconciledThrough`, which passes since pairing moved
+  past the chunks they skipped. Then it runs backfill ticks until one reads the deep walk's
   target and the pump's newest record as of a status read under `setupHistoryLoadMaximumLag` (1 min)
   old, and its report pass ran. Not the newest record's own age: an idle pump writes one only every 5
-  minutes. Boluses, extended parts and, with `basalHistoryReporting`, basal corrections go out through
-  the usual passes, held until the host attaches; suspends and resumes are not loaded, so the host
-  counts its schedule over a pump suspension, which over-counts IOB. `setupHistoryLoadFailureLimit`
+  minutes. Boluses, extended parts, the pump's suspends and resumes and, with `basalHistoryReporting`,
+  basal corrections go out through the usual passes, held until the host attaches. Basal
+  reconciliation skips the pump's suspended time, so only the reported suspend keeps the host from
+  counting its schedule over it. `setupHistoryLoadFailureLimit`
   (3) ticks in a row that read nothing fail the load, and the step offers only Try Again.
 - Loading history the host already counts (the same pump back in the same app) reports it twice, under
   history's `raw`: IOB over-counts until it ages out.
@@ -524,8 +526,9 @@ edit instead of at the next sync.
     reading can see. The ledger records every suspend and resume the driver reports with the
     span its pump record can fall in, so a record is matched rather than reported twice. It
     tracks one pump from the last record of the first history status it sees (`trackedAfter`),
-    so nothing written before the driver watched the pump is reported; a new serial or an
-    erased log starts it again. Records older than 24 hours or dated ahead of the phone are
+    so nothing written before the driver watched the pump is reported, except from setup's history
+    load on (`historySince`); a new serial or an erased log starts it again, and a new serial ends
+    `historySince`. Records older than 24 hours or dated ahead of the phone are
     ignored.
   - Never sent: a suspend whose resume has not been read while the pump delivers (Trio takes a
     trailing suspend as lasting until now), a resume with no suspend before it in the host's

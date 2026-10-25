@@ -413,7 +413,7 @@ extension TandemPumpManager {
             logger.info("Tracking delivery changes on pump \(serial.rawValue) after record \(pumpRange.upperBound)")
             state.deliveryTransitions.track(pumpSerial: serial.rawValue, after: pumpRange.upperBound)
         }
-        guard let trackedAfter = state.deliveryTransitions.trackedAfter else { return batch }
+        guard state.deliveryTransitions.trackedAfter != nil else { return batch }
         guard let covered = outcome.sessionCovered else {
             if let pending = state.deliveryTransitions.pending, outcome.startedAt >= pending.detectedAt {
                 logger.warning("Pump history was not read; reporting the \(pending.observed) seen at \(pending.detectedAt) at detection")
@@ -455,13 +455,18 @@ extension TandemPumpManager {
 
         var records: [PumpTransition] = []
         for log in stored {
+            let kind: DeliveryTransitionLedger.Kind
             switch log {
-            case is PumpingSuspendedHistoryLog where log.sequenceNum > trackedAfter:
-                records.append(PumpTransition(sequenceNum: log.sequenceNum, kind: .suspend, date: dates.phoneDate(of: log)))
-            case is PumpingResumedHistoryLog where log.sequenceNum > trackedAfter:
-                records.append(PumpTransition(sequenceNum: log.sequenceNum, kind: .resume, date: dates.phoneDate(of: log)))
+            case is PumpingSuspendedHistoryLog:
+                kind = .suspend
+            case is PumpingResumedHistoryLog:
+                kind = .resume
             default:
                 continue
+            }
+            let date = dates.phoneDate(of: log)
+            if state.deliveryTransitions.isTracked(sequenceNum: log.sequenceNum, date: date) {
+                records.append(PumpTransition(sequenceNum: log.sequenceNum, kind: kind, date: date))
             }
         }
         records.removeAll { $0.date < floor || $0.date > now.addingTimeInterval(tolerance) }
