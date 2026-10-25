@@ -4,6 +4,8 @@ import SwiftUI
 struct TandemKitControlIQSettingsView: View {
     @Environment(\.guidanceColors) private var guidanceColors
     @StateObject var viewModel: TandemKitControlIQSettingsViewModel
+    @State private var isEditingWeight = false
+    @State private var isEditingTDI = false
     @State private var editingSlot: Int?
 
     /// Sleep schedule times are a minute count on the wire; offered in five-minute steps, which is
@@ -55,14 +57,15 @@ struct TandemKitControlIQSettingsView: View {
 
     // MARK: - Control-IQ Settings Section
 
-    /// Weight and total daily insulin are not editable: the pump answers a new value OK through
-    /// `ChangeControlIQSettingsRequest` and keeps its own.
+    /// Weight and total daily insulin are shown whether or not Control-IQ is on: they have to be
+    /// entered before it can be turned on, and a pump that has never run Control-IQ reports neither,
+    /// so gating them behind the toggle left no way to supply them (#223).
     private var controlIQSection: some View {
         Section(
             header: Text("Control-IQ", comment: "Header for Control-IQ settings section"),
             footer: Text(
-                "Control-IQ uses your weight and total daily insulin to dose. They can only be changed on the pump itself, or in the Tandem app. Your care team can help you confirm these values.",
-                comment: "Footer explaining what the Control-IQ values are used for and where they are changed"
+                "Control-IQ uses your weight and total daily insulin to dose. Your care team can help you confirm these values.",
+                comment: "Footer explaining what the Control-IQ values are used for"
             )
         ) {
             Toggle(
@@ -70,19 +73,52 @@ struct TandemKitControlIQSettingsView: View {
                 isOn: $viewModel.controlIQEnabled
             )
 
-            valueRow(
-                label: Text("Weight", comment: "Label for weight"),
-                value: viewModel.weightLbs.map {
-                    Text("\($0) lbs", comment: "Control-IQ weight, in pounds")
-                }
-            )
+            weightRow
 
-            valueRow(
-                label: Text("Total Daily Insulin", comment: "Label for total daily insulin"),
-                value: viewModel.totalDailyInsulin.map {
-                    Text("\($0) U", comment: "Control-IQ total daily insulin, in insulin units")
+            if isEditingWeight {
+                Picker("", selection: Binding(
+                    get: { viewModel.weightLbs ?? TandemKitControlIQSettingsViewModel.weightSeedLbs },
+                    set: { viewModel.weightLbs = $0 }
+                )) {
+                    ForEach(
+                        Array(stride(
+                            from: ControlIQSettingsLimits.allowedWeightLbs.lowerBound,
+                            through: 400,
+                            by: 1
+                        )),
+                        id: \.self
+                    ) { lbs in
+                        Text("\(lbs) lbs", comment: "Control-IQ weight picker option, in pounds").tag(lbs)
+                    }
                 }
-            )
+                .pickerStyle(.wheel)
+                .frame(height: 150)
+            }
+
+            totalDailyInsulinRow
+
+            if isEditingTDI {
+                Picker("", selection: Binding(
+                    get: {
+                        viewModel.totalDailyInsulin
+                            ?? TandemKitControlIQSettingsViewModel.totalDailyInsulinSeedUnits
+                    },
+                    set: { viewModel.totalDailyInsulin = $0 }
+                )) {
+                    ForEach(
+                        Array(stride(
+                            from: ControlIQSettingsLimits.allowedTotalDailyInsulinUnits.lowerBound,
+                            through: 200,
+                            by: 1
+                        )),
+                        id: \.self
+                    ) { units in
+                        Text("\(units) U", comment: "Control-IQ total daily insulin picker option, in insulin units").tag(units)
+                    }
+                }
+                .pickerStyle(.wheel)
+                .frame(height: 150)
+            }
 
             if let validationMessage = viewModel.validationMessage {
                 Text(validationMessage)
@@ -92,12 +128,45 @@ struct TandemKitControlIQSettingsView: View {
         }
     }
 
-    private func valueRow(label: Text, value: Text?) -> some View {
+    private var weightRow: some View {
         HStack {
-            label
+            Text("Weight", comment: "Label for weight")
             Spacer()
-            (value ?? Text("Not set", comment: "Shown when a Control-IQ value has never been configured"))
-                .foregroundColor(.secondary)
+            if let weightLbs = viewModel.weightLbs {
+                Text("\(weightLbs) lbs", comment: "Control-IQ weight, in pounds")
+                    .foregroundColor(isEditingWeight ? .accentColor : .secondary)
+            } else {
+                Text("Not set", comment: "Shown when a Control-IQ value has never been configured")
+                    .foregroundColor(isEditingWeight ? .accentColor : .secondary)
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            withAnimation {
+                isEditingWeight.toggle()
+                if isEditingWeight { isEditingTDI = false }
+            }
+        }
+    }
+
+    private var totalDailyInsulinRow: some View {
+        HStack {
+            Text("Total Daily Insulin", comment: "Label for total daily insulin")
+            Spacer()
+            if let totalDailyInsulin = viewModel.totalDailyInsulin {
+                Text("\(totalDailyInsulin) U", comment: "Control-IQ total daily insulin, in insulin units")
+                    .foregroundColor(isEditingTDI ? .accentColor : .secondary)
+            } else {
+                Text("Not set", comment: "Shown when a Control-IQ value has never been configured")
+                    .foregroundColor(isEditingTDI ? .accentColor : .secondary)
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            withAnimation {
+                isEditingTDI.toggle()
+                if isEditingTDI { isEditingWeight = false }
+            }
         }
     }
 

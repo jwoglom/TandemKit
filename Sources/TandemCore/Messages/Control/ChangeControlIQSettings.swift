@@ -24,8 +24,6 @@ public class ChangeControlIQSettingsRequest: PumpRequest {
         totalDailyInsulinUnits = Int(cargo[4])
     }
 
-    /// A Mobi applies only `enabled`: sent a new TDI, it answered OK, logged an `AaEnableSettingChange`
-    /// alone and kept its own. The last byte is likely a change mask whose other bits are unknown.
     public init(enabled: Bool, weightLbs: Int, totalDailyInsulinUnits: Int) {
         cargo = Bytes.combine(
             Data([enabled ? 1 : 0]),

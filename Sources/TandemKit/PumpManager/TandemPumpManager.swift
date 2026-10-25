@@ -2226,8 +2226,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
             if !request.enabled, self.state.useControlIQ {
                 self.state.controlIQEndedAt = self.now
             }
-            // Not the request's weight and TDI, which the pump answers OK and does not apply.
             self.state.useControlIQ = request.enabled
+            self.state.controlIQWeightLbs = request.weightLbs
+            self.state.controlIQTotalDailyInsulin = request.totalDailyInsulinUnits
             self.notifyDelegateStateUpdated()
 
             self.logger.info("Algorithm mode set to \(request.enabled ? "Control-IQ" : "DIY")")
