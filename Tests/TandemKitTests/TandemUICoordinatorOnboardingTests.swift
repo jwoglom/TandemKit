@@ -71,6 +71,32 @@ import XCTest
         XCTAssertFalse(coordinator.ownsPumpManager)
     }
 
+    func testPairingAsksAboutPumpHistoryBeforeTheHostHasTheManager() {
+        let coordinator = makeSetupCoordinator()
+        let host = OnboardingHost()
+        coordinator.pumpManagerOnboardingDelegate = host
+        coordinator.pumpManager.state.featureFlags[.historyBackfill] = true
+        coordinator.pumpManager.state.featureFlags[.historyDoseReporting] = true
+
+        coordinator.pairingFinished()
+
+        XCTAssertEqual(coordinator.screenStack, [.loadHistory])
+        XCTAssertTrue(host.calls.isEmpty)
+        XCTAssertTrue(coordinator.ownsPumpManager)
+    }
+
+    func testWithoutHistoryDoseReportingPairingHandsTheManagerOverAtOnce() {
+        let coordinator = makeSetupCoordinator()
+        let host = OnboardingHost()
+        coordinator.pumpManagerOnboardingDelegate = host
+        coordinator.pumpManager.state.featureFlags[.historyDoseReporting] = false
+
+        coordinator.pairingFinished()
+
+        XCTAssertEqual(coordinator.screenStack, [.setupComplete])
+        XCTAssertEqual(host.calls, ["created", "onboarded"])
+    }
+
     func testAFlowThatGoesAwayStillOwningItsManagerTakesItsTransportDown() {
         let manager: TandemPumpManager = autoreleasepool {
             let coordinator = makeSetupCoordinator()

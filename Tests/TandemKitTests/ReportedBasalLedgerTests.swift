@@ -44,6 +44,24 @@ final class ReportedBasalLedgerTests: XCTestCase {
 
     // MARK: - The fold
 
+    func testLoadingHistoryComparesFromTheLoadAndStartsOverFromTheHistorysStart() {
+        var ledger = ReportedBasalLedger(trackingSince: at(3600), pumpSerial: 1, reconciledThrough: 40)
+
+        ledger.reportHistory(since: at(0))
+
+        XCTAssertEqual(ledger.trackingSince, at(0))
+        XCTAssertNil(ledger.reconciledThrough)
+        XCTAssertTrue(ledger.isTracking(pumpSerial: 1, lastSequenceNum: 40))
+    }
+
+    func testLoadingHistoryNeverMovesTrackingLater() {
+        var ledger = ReportedBasalLedger(trackingSince: at(0))
+
+        ledger.reportHistory(since: at(3600))
+
+        XCTAssertEqual(ledger.trackingSince, at(0))
+    }
+
     func testATempBasalCountsUntilItsEnd() {
         let ledger = ledger([temp(1.5, at: 0, endingAt: 600)])
 

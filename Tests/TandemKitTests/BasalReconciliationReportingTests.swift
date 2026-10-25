@@ -163,6 +163,19 @@ import XCTest
         XCTAssertEqual(events.count, 6, "a second pass reports nothing")
     }
 
+    func testChunksFromBeforeTrackingAreCorrectedOnceSetupLoadsHistory() {
+        enableReporting()
+        manager.state.reportedBasal = ReportedBasalLedger(trackingSince: clock.now)
+        let log = controlIQHour()
+        pass(log)
+        XCTAssertTrue(events.isEmpty)
+
+        manager.state.reportedBasal.reportHistory(since: clock.now.addingTimeInterval(-TandemPumpManager.setupHistoryLoadWindow))
+        pass(log)
+
+        XCTAssertEqual(events.count, 6)
+    }
+
     func testConsecutiveCyclesAtOneRateAreEachCorrected() {
         enableReporting()
         var log = PumpBasalHistory()

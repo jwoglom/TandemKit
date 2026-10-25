@@ -328,6 +328,31 @@ final class HistoryBackfillCoordinator {
 
     // MARK: - Inputs the planner can't compute itself
 
+    var isTickRunning: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return isRunning
+    }
+
+    /// The oldest and newest records this session has read, on the pump's clock.
+    func sessionPumpTimeSpan() -> ClosedRange<Date>? {
+        guard let pumpManager, let serial = pumpManager.historyLogStoreSerial, let covered = sessionCoverage else {
+            return nil
+        }
+        do {
+            guard let oldest = try pumpManager.historyLogStore.logs(pumpSerial: serial.rawValue, in: covered.lowerBound ... covered.lowerBound).first,
+                  let newest = try pumpManager.historyLogStore.logs(pumpSerial: serial.rawValue, in: covered.upperBound ... covered.upperBound).first
+            else {
+                return nil
+            }
+            let dates = [oldest, newest].map { Dates.fromJan12008EpochSecondsToDate(TimeInterval($0.pumpTimeSec)) }
+            return dates.min()! ... dates.max()!
+        } catch {
+            logger.warning("Could not read the span of this session's history: \(error)")
+            return nil
+        }
+    }
+
     private var sessionCoverage: ClosedRange<UInt32>? {
         lock.lock()
         defer { lock.unlock() }
