@@ -1,9 +1,14 @@
 # TandemKit
 
-A LoopKit `PumpManager` for Tandem insulin pumps, ported from
+A LoopKit `PumpManager` for Tandem Mobi, building on
 [pumpX2](https://github.com/jwoglom/pumpX2).
 
-TandemKit is under development and for EXPERIMENTAL USE ONLY.
+
+> There is NO WARRANTY IMPLIED OR EXPRESSED DUE TO USE OF THIS SOFTWARE.\
+> YOU ASSUME ALL RISK FOR ANY MALFUNCTIONS, BUGS, OR INSULIN DELIVERY ACTIONS.\
+> \
+> TandemKit is NOT AFFILIATED WITH OR SUPPORTED by Tandem Diabetes or any other manufacturer.\
+> **It has not been officially approved for use by any regulatory body and is provided as a RESEARCH TOOL ONLY.**
 
 ## Setup
 ### Trio
