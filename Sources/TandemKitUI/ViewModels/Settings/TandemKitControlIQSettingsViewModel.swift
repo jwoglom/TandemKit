@@ -107,10 +107,22 @@ class TandemKitControlIQSettingsViewModel: ObservableObject {
 
         isLoading = true
 
+        var changedFields: ControlIQSettingsFields = []
+        if controlIQEnabled != originalEnabled {
+            changedFields.insert(.enabled)
+        }
+        if weightLbs != originalWeightLbs {
+            changedFields.insert(.weight)
+        }
+        if totalDailyInsulin != originalTDI {
+            changedFields.insert(.totalDailyInsulin)
+        }
+
         let request = ChangeControlIQSettingsRequest(
             enabled: controlIQEnabled,
             weightLbs: weightLbs ?? 0,
-            totalDailyInsulinUnits: totalDailyInsulin ?? 0
+            totalDailyInsulinUnits: totalDailyInsulin ?? 0,
+            changedFields: changedFields
         )
 
         pumpManager?.configureControlIQMode(request) { result in
