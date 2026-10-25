@@ -39,4 +39,16 @@ final class ChangeControlIQSettingsRequestTests: XCTestCase {
         XCTAssertEqual(150, parsed.weightLbs)
         XCTAssertEqual(75, parsed.totalDailyInsulinUnits)
     }
+
+    func testChangedFieldsAreTheLastByte() {
+        let request = ChangeControlIQSettingsRequest(
+            enabled: false,
+            weightLbs: 171,
+            totalDailyInsulinUnits: 35,
+            changedFields: [.weight, .totalDailyInsulin]
+        )
+
+        XCTAssertEqual("00ab00012306", request.cargo.hexadecimalString)
+        XCTAssertEqual([.weight, .totalDailyInsulin], ChangeControlIQSettingsRequest(cargo: request.cargo).changedFields)
+    }
 }
