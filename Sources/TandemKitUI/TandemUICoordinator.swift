@@ -374,9 +374,10 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
         if let nextStep = currentScreen.next() {
             navigateTo(nextStep)
         } else {
-            pumpManager.prepareForDeactivation { [weak self] _ in
+            // Held to the end: Trio's sheet lets this flow go once its pump manager is nil, and then only
+            // this call dismisses the sheet.
+            pumpManager.prepareForDeactivation { _ in
                 DispatchQueue.main.async {
-                    guard let self else { return }
                     self.completionDelegate?.completionNotifyingDidComplete(self)
                 }
             }
