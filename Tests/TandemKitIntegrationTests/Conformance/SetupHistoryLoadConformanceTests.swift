@@ -569,7 +569,7 @@ final class SetupHistoryLoadConformanceTests: ConformanceTestCase {
         XCTAssertGreaterThanOrEqual(compared, window.count, "every BasalDelivery record in the window is compared, not skipped")
         let (loop, trio) = hostOracles()
         XCTAssertTrue(loop.doses.isEmpty, "\(loop.doses.map(LoopDoseStoreOracle.describe))")
-        XCTAssertTrue(trio.events.filter { !$0.isScheduledBasal }.isEmpty, "\(trio.events)")
+        XCTAssertEqual(trio.events.filter { !$0.isScheduledBasal }.map(\.type), [.siteChange], "only the pump added: \(trio.events)")
     }
 
     // MARK: - L4

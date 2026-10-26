@@ -26,7 +26,7 @@ final class TrioCartridgeTests: TrioTestCase {
         let stored = try assertTrioStoredWhatTheOracleExpects().stored
         XCTAssertEqual(
             stored.compactMap(\.eventType).filter { $0 != .tempBasal },
-            [.pumpSuspend, .rewind, .prime, .prime, .siteChange, .pumpResume],
+            [.siteChange, .pumpSuspend, .rewind, .prime, .prime, .siteChange, .pumpResume],
             "\(stored)"
         )
     }

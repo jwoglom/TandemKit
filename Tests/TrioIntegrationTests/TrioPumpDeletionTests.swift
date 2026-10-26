@@ -15,6 +15,10 @@ final class TrioPumpDeletionTests: TrioTestCase {
         try deletePumpManager()
 
         try assertTheDeletedPumpManagerIsGone()
+        let store = try trio.store()
+        try IntegrationWait.until("Trio to store the pump added at pairing and removed at the deletion", timeout: 30) {
+            try store.pumpEvents().filter { $0.eventType == .siteChange }.count == 2
+        }
         try recreatePumpManager()
         try pairTrio(withCode: true)
         try assertTrioHoldsAPumpPairedAfresh(replacing: firstKey)

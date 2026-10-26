@@ -1893,10 +1893,15 @@ public class TandemPumpManager: PumpManager, Pluggable {
     /// finalized dose only once it has ended, so the temp is cut now and its remainder reported on its own.
     func finalizeHeldDosesForDeactivation() {
         settleDeliveryTransition()
+        let removed = state.lastPumpSerial.map { _ in NewPumpEvent.pumpRemoved(date: now) }
         let heldExtendedParts = deactivatedExtendedPartEvents()
         guard state.basalDose.type == .tempBasal || state.bolusDose != nil || state.pendingBolusFinalization != nil
             || !heldExtendedParts.isEmpty
         else {
+            if let removed {
+                logger.info("Pump manager deactivating; reporting the pump removed")
+                emitPumpEvents([removed], replacePendingEvents: false)
+            }
             return
         }
 
@@ -1953,7 +1958,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
         logger.info("Pump manager deactivating; reporting \(events.count) held dose event(s) finalized")
         notifyDelegateStateUpdated()
-        emitPumpEvents(events.sorted { $0.date < $1.date })
+        emitPumpEvents((events + [removed].compactMap { $0 }).sorted { $0.date < $1.date })
     }
 
     /// Called by whichever connect brought the session up. The pump's qualifying events are lost while

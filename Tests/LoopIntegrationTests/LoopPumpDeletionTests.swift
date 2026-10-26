@@ -15,6 +15,11 @@ final class LoopPumpDeletionTests: LoopTestCase {
         try deletePumpManager()
 
         try assertTheDeletedPumpManagerIsGone()
+        let store = try loop.store()
+        let pumpChange = PumpEventType.replaceComponent(componentType: .pump).rawValue
+        try IntegrationWait.until("Loop to store the pump added at pairing and removed at the deletion", timeout: 30) {
+            try store.pumpEvents().filter { $0.type == pumpChange }.count == 2
+        }
         try recreatePumpManager()
         try pairLoop(withCode: true)
         try assertLoopHoldsAPumpPairedAfresh(replacing: firstKey)
@@ -38,6 +43,11 @@ final class LoopPumpDeletionTests: LoopTestCase {
         try deletePumpManager()
 
         try assertTheDeletedPumpManagerIsGone()
+        let store = try loop.store()
+        let pumpChange = PumpEventType.replaceComponent(componentType: .pump).rawValue
+        try IntegrationWait.until("Loop to store the pump added at pairing and removed at the deletion", timeout: 30) {
+            try store.pumpEvents().filter { $0.type == pumpChange }.count == 2
+        }
         try recreatePumpManager()
         try pairLoop(withCode: true)
         try assertLoopHoldsAPumpPairedAfresh(replacing: nil)
