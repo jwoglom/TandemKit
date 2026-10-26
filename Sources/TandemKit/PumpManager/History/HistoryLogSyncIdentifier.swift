@@ -21,9 +21,10 @@ import Foundation
 /// * **Everything else** — the pump assigns no id, so the log's own `sequenceNum` is the only
 ///   stable handle. Use `logSequence` only for events that are reported once, already final: a
 ///   sequence number is not knowable before the pump writes the record, so it cannot bridge an
-///   optimistic report to its confirmation. Its one use is a basal correction, keyed on the
-///   `BasalDeliveryHistoryLog` (279) whose cycle it reports, so there is at most one per
-///   BasalDelivery record.
+///   optimistic report to its confirmation. A basal correction is keyed on the
+///   `BasalDeliveryHistoryLog` whose cycle it reports, so there is at most one per BasalDelivery
+///   record, and a suspend or resume, the app's own included, on its `PumpingSuspended` or
+///   `PumpingResumed` record.
 ///
 /// `bolusId` and `tempRateId` are small pump-assigned counters that are eventually reused, so the
 /// pump serial is part of every identifier, and callers must not treat an id as unique across the
@@ -40,8 +41,9 @@ import Foundation
 /// ```
 ///
 /// **This encoding is frozen**: hosts persist it, so any change re-reports doses under new
-/// identities. The live path keys a temp basal the app set on its `tempRateId`; a bolus it keys on
-/// its own `raw`, which `BolusReportLedger` bridges to this one.
+/// identities. The live path keys a temp basal the app set on its `tempRateId` and a bolus on its
+/// `bolusId`, minted at the command; without the serial then, on its own `raw`, which
+/// `BolusReportLedger` bridges to this one.
 public enum HistoryLogSyncIdentifier {
     /// Which pump-assigned counter the identifier is built from. Values are persisted indirectly by
     /// the host app; never renumber them.
