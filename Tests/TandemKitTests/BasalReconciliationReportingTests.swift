@@ -244,7 +244,7 @@ import XCTest
         loadHistoryOfATemp(setOverBluetooth: false)
 
         XCTAssertEqual(events.count, 6)
-        XCTAssertTrue(events.allSatisfy { HistoryLogSyncIdentifier.decode($0.raw)?.scheme == .logSequence })
+        XCTAssertTrue(events.allSatisfy { $0.dose?.type == .tempBasal && HistoryLogSyncIdentifier.decode($0.raw)?.scheme == .logSequence })
     }
 
     func testAnAppsTempFromBeforePairingIsNotReportedWithoutTheLoad() {
@@ -344,7 +344,7 @@ import XCTest
         let ended = try XCTUnwrap(events.first?.dose)
         XCTAssertEqual(ended.endDate, at(200))
         XCTAssertFalse(ended.isMutable)
-        let corrections = events.filter { HistoryLogSyncIdentifier.decode($0.raw)?.scheme == .logSequence }
+        let corrections = events.filter { $0.dose?.type == .tempBasal && HistoryLogSyncIdentifier.decode($0.raw)?.scheme == .logSequence }
         XCTAssertEqual(corrections.map(\.date), [at(310), at(610)])
         XCTAssertTrue(corrections.allSatisfy { $0.dose?.automatic == true })
         XCTAssertEqual(manager.state.basalDose.type, .basal)

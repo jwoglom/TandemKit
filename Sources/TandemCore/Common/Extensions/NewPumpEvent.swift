@@ -39,7 +39,7 @@ public extension NewPumpEvent {
         )
     }
 
-    /// `record` is the identity of the pump's record of it, which a report without one lacks.
+    /// Keyed on `record`, the identity of the pump's record of it, or else on its type and date.
     static func resume(dose: DoseEntry, date: Date = Date.now, record: Data? = nil) -> NewPumpEvent {
         NewPumpEvent(
             date: date,

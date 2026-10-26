@@ -163,7 +163,12 @@ final class BasalHistoryConformanceTests: ConformanceTestCase {
     }
 
     private func corrections(since count: Int) -> [NewPumpEvent] {
-        eventsSince(count).filter { HistoryLogSyncIdentifier.decode($0.raw)?.scheme == .logSequence }
+        eventsSince(count).filter(Self.isCorrection)
+    }
+
+    /// A suspend or resume is keyed on its record too.
+    private static func isCorrection(_ event: NewPumpEvent) -> Bool {
+        event.dose?.type == .tempBasal && HistoryLogSyncIdentifier.decode(event.raw)?.scheme == .logSequence
     }
 
     private func waitForCorrections(_ count: Int, since batches: Int, timeout: TimeInterval = 120) throws -> [NewPumpEvent] {
@@ -326,7 +331,7 @@ final class BasalHistoryConformanceTests: ConformanceTestCase {
 
         try assertCorrections(found, match: outage)
         let carrying = allPumpEventBatches.dropFirst(before).filter { batch in
-            batch.events.contains { HistoryLogSyncIdentifier.decode($0.raw)?.scheme == .logSequence }
+            batch.events.contains(where: Self.isCorrection)
         }
         XCTAssertEqual(carrying.count, 1, "every correction in one batch")
         XCTAssertEqual(carrying.first?.replacePendingEvents, false)
@@ -412,7 +417,7 @@ final class BasalHistoryConformanceTests: ConformanceTestCase {
         XCTAssertEqual(found[1].dose?.endDate.timeIntervalSince(suspendedAt) ?? -1, 0, accuracy: 1, "the chunk under way ends at the stop")
         XCTAssertGreaterThan(try XCTUnwrap(found[2].dose?.startDate), resumedAt, "never in the resume's second")
         let batch = try XCTUnwrap(allPumpEventBatches.dropFirst(before).first { batch in
-            batch.events.contains { HistoryLogSyncIdentifier.decode($0.raw)?.scheme == .logSequence }
+            batch.events.contains(where: Self.isCorrection)
         })
         XCTAssertTrue(batch.events.contains { $0.type == .suspend }, "the suspend rides with the corrections")
         XCTAssertTrue(batch.events.contains { $0.type == .resume }, "the resume rides with the corrections")
