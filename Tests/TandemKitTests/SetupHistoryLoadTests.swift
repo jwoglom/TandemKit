@@ -196,6 +196,11 @@ import XCTest
         let suspended = Date().addingTimeInterval(-2 * 3600)
         XCTAssertEqual(try XCTUnwrap(reportedTransitions.first).date.timeIntervalSince(suspended), 0, accuracy: 5)
         XCTAssertEqual(try XCTUnwrap(reportedTransitions.last).date.timeIntervalSince(suspended), 15 * 60, accuracy: 5)
+        XCTAssertEqual(
+            reportedTransitions.map(\.raw),
+            [4, 5].map { HistoryLogSyncIdentifier.logSequence(pumpSerial: serial, sequenceNum: $0) },
+            "the identity any pump manager reports these records under"
+        )
     }
 
     func testTheLoadReportsNoSuspendOlderThanItsWindow() {

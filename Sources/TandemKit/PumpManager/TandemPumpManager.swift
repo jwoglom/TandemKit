@@ -1429,24 +1429,28 @@ public class TandemPumpManager: PumpManager, Pluggable {
             guard let response, response.status == 0 else {
                 self.logger.error("Failed to Suspend delivery - Status: \(response?.status ?? -1)")
                 let isSuspended = self.readBackUnconfirmedSuspend(mayHaveApplied: response == nil, sentAt: sentAt)
-                completion(isSuspended ? nil : PumpCommError.noResponse)
+                self.completeOnceTransitionIsReported { completion(isSuspended ? nil : PumpCommError.noResponse) }
                 return
             }
 
             self.recordSuspend(sentAt: sentAt)
             self.logger.info("Insulin Delivery Suspended!")
-            completion(nil)
+            self.completeOnceTransitionIsReported { completion(nil) }
         }
     }
 
-    /// Dated at the answer, or at the reading after a lost one: the later stop counts more insulin.
+    /// Dated by the pump's record, or without history at the answer, or at the reading after a lost
+    /// one: the later stop counts more insulin.
     private func recordSuspend(sentAt: Date) {
         settleDeliveryTransition()
+        state.deliveryTransitions.interruptedTemp = nil
+        if leaveCommandedTransitionForHistory(.suspend, sentAt: sentAt) {
+            return
+        }
         let suspendDose = UnfinalizedDose(suspendStartTime: now)
         var events = getActivePumpEvents(endDate: suspendDose.startDate)
         events.append(NewPumpEvent.suspend(dose: suspendDose.toDoseEntry(), date: suspendDose.startDate))
 
-        state.deliveryTransitions.interruptedTemp = nil
         state.basalDose = suspendDose
         state.lastReconciliation = now
         recordReportedTransition(
@@ -1508,7 +1512,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
             guard let status = self.bluetooth.write(CurrentBasalStatusRequest()),
                   self.observeDeliveryState(status.basalType)
             else {
-                completion(resume())
+                let error = resume()
+                self.completeOnceTransitionIsReported { completion(error) }
                 return
             }
             self.afterHistoryIsReported {
@@ -1517,7 +1522,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
                         completion(error)
                         return
                     }
-                    completion(resume())
+                    let error = resume()
+                    self.completeOnceTransitionIsReported { completion(error) }
                 }
             }
             self.historyBackfillCoordinator.runTick()
@@ -1537,13 +1543,18 @@ public class TandemPumpManager: PumpManager, Pluggable {
             return isDelivering ? nil : PumpCommError.noResponse
         }
 
-        recordResume(at: now)
+        recordResume(at: now, sentAt: sentAt)
         return nil
     }
 
-    /// Dated at the answer, or at the send after a lost one: the earlier start counts more insulin.
-    private func recordResume(at date: Date) {
+    /// Dated by the pump's record, or without history at the answer, or at the send after a lost one:
+    /// the earlier start counts more insulin.
+    private func recordResume(at date: Date, sentAt: Date) {
         settleDeliveryTransition()
+        if leaveCommandedTransitionForHistory(.basal, sentAt: sentAt) {
+            logger.info("Insulin Delivery Resumed!")
+            return
+        }
         var resumedAt = date
         if let host = hostTransition(before: .distantFuture), host.kind == .suspend {
             // Trio's IOB throws on a suspend and resume in the same second.
@@ -1578,7 +1589,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         let held = state.deliveryTransitions.pending?.observed ?? state.basalDose.type
         if mayHaveApplied, status.basalType != .suspend, held == .suspend {
             logger.warning("The pump is delivering though the ResumePumping answer was lost; reporting the resume")
-            recordResume(at: sentAt)
+            recordResume(at: sentAt, sentAt: sentAt)
         } else {
             observeDeliveryState(status.basalType)
         }

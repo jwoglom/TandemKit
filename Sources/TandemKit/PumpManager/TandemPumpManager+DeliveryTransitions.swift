@@ -8,7 +8,8 @@ import LoopKit
 /// counts a non-bolus dose older than its last finished basal (#354). So the first report must
 /// carry the pump's date, and must reach the host before anything the app commands after it.
 /// Behind `historyBackfill` a change is left pending for the next history pass; a sync that saw it
-/// waits for that pass, and an app command reports it first. Without the flag, or without the
+/// waits for that pass, and an app command reports it first. An app suspend or resume waits the
+/// same way, so it reaches the host under its record's identity. Without the flag, or without the
 /// pump's record, it is reported at detection, each end dated the way that counts more insulin.
 extension TandemPumpManager {
     typealias PendingTransition = DeliveryTransitionLedger.PendingTransition
@@ -208,6 +209,30 @@ extension TandemPumpManager {
         }
     }
 
+    /// An app suspend or resume, left for the history pass as a pump-side change is, so it reaches
+    /// the host under its pump record's identity. False without history to date it.
+    func leaveCommandedTransitionForHistory(_ observed: DoseType, sentAt: Date) -> Bool {
+        guard datesTransitionsFromHistory else { return false }
+        let held = state.basalDose
+        let pending = PendingTransition(prior: held, observed: observed, detectedAt: now, lastConfirmed: max(held.startDate, sentAt))
+        state.deliveryTransitions.lastConfirmedObservation = now
+        state.deliveryTransitions.pending = pending
+        state.basalDose = placeholderDose(for: pending)
+        notifyDelegateStateUpdated()
+        return true
+    }
+
+    /// Once a history pass has reported a change the command left pending, or it is reported at
+    /// detection after `transitionHistoryWait`.
+    func completeOnceTransitionIsReported(_ completion: @escaping () -> Void) {
+        guard state.deliveryTransitions.pending != nil else {
+            completion()
+            return
+        }
+        afterHistoryIsReported(completion)
+        historyBackfillCoordinator.runTick()
+    }
+
     /// Before anything the host must hear of after the change: an app command, or a sync's result.
     func settleDeliveryTransition() {
         guard let pending = state.deliveryTransitions.pending else { return }
@@ -398,6 +423,12 @@ extension TandemPumpManager {
         let sequenceNum: UInt32
         let kind: DeliveryTransitionLedger.Kind
         let date: Date
+
+        /// Every pump manager reports this record under it, so a host told by an earlier one keeps
+        /// its row when a later one loads the same history.
+        func raw(_ serial: HistoryLogSyncIdentifier.PumpSerial) -> Data {
+            HistoryLogSyncIdentifier.logSequence(pumpSerial: serial, sequenceNum: sequenceNum)
+        }
     }
 
     /// The pump's suspends and resumes the host was never given, at the pump's time, and a pending
@@ -507,7 +538,7 @@ extension TandemPumpManager {
                     continue
                 }
                 let dose = UnfinalizedDose(suspendStartTime: record.date)
-                events.append(NewPumpEvent.suspend(dose: dose.toDoseEntry(), date: dose.startDate))
+                events.append(NewPumpEvent.suspend(dose: dose.toDoseEntry(), date: dose.startDate, record: record.raw(serial)))
                 recordReportedTransition(.suspend, at: record.date, earliest: record.date, latest: record.date, sequenceNum: record.sequenceNum)
 
             case .resume:
@@ -516,7 +547,7 @@ extension TandemPumpManager {
                     continue
                 }
                 let dose = UnfinalizedDose(resumeStartTime: max(record.date, host.date.addingTimeInterval(1)), insulinType: state.insulinType)
-                events.append(NewPumpEvent.resume(dose: dose.toDoseEntry(), date: dose.startDate))
+                events.append(NewPumpEvent.resume(dose: dose.toDoseEntry(), date: dose.startDate, record: record.raw(serial)))
                 recordReportedTransition(.resume, at: dose.startDate, earliest: record.date, latest: record.date, sequenceNum: record.sequenceNum)
             }
         }

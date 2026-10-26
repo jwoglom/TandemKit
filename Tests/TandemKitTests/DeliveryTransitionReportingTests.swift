@@ -955,15 +955,19 @@ import XCTest
         XCTAssertEqual(events(.suspend).map(\.date), [minutes(30)])
     }
 
-    func testResumeAfterAnAppSuspendDoesNotWaitForHistory() {
+    func testResumeAfterAnAppSuspendDoesNotReadHistoryBeforeResuming() {
         appSuspend()
         advance(to: minutes(30))
         stubBasalStatus(1)
+        let sentBefore = bluetooth.sentMessages.count
 
         appResume()
 
+        let sent = Array(bluetooth.sentMessages.dropFirst(sentBefore))
         XCTAssertEqual(transitions, [.suspend, .resume])
-        XCTAssertFalse(bluetooth.didSend(HistoryLogStatusRequest.self), "the pump is suspended, as the host was told")
+        let resumedAt = try? XCTUnwrap(sent.firstIndex { $0 is ResumePumpingRequest })
+        let historyAt = sent.firstIndex { $0 is HistoryLogStatusRequest } ?? .max
+        XCTAssertLessThan(resumedAt ?? .max, historyAt, "the pump is suspended, as the host was told")
     }
 
     func testResumeStillResumesWhenTheBasalStatusReadFails() {
@@ -973,7 +977,92 @@ import XCTest
 
         XCTAssertEqual(bluetooth.sent(CurrentBasalStatusRequest.self).count, 1)
         XCTAssertTrue(bluetooth.didSend(ResumePumpingRequest.self))
+        XCTAssertTrue(events(.resume).isEmpty, "Trio takes a resume with no suspend before it as suspended since its history began")
+    }
+
+    func testAResumeWhoseBasalStatusReadFailsReportsTheStopItMissedFromHistory() {
+        stubPump(serving: [resumed(at: start.addingTimeInterval(-60)), suspended(at: minutes(10)), resumed(at: minutes(30))])
+        advance(to: minutes(30))
+
+        appResume()
+
+        XCTAssertEqual(transitions, [.suspend, .resume])
+        XCTAssertEqual(events(.suspend).map(\.date), [minutes(10)])
         XCTAssertEqual(events(.resume).map(\.date), [minutes(30)])
+    }
+
+    // MARK: - App commands keyed on the pump's record
+
+    private func identity(of record: HistoryLog) -> Data {
+        HistoryLogSyncIdentifier.logSequence(pumpSerial: serial, sequenceNum: record.sequenceNum)
+    }
+
+    func testAnAppSuspendIsReportedUnderItsPumpRecordAtItsTime() throws {
+        let before = resumed(at: start.addingTimeInterval(-60))
+        let record = suspended(at: start.addingTimeInterval(-1))
+        stubPump(serving: [before, record])
+
+        appSuspend()
+
+        let suspend = try XCTUnwrap(events(.suspend).first)
+        XCTAssertEqual(events(.suspend).count, 1)
+        XCTAssertEqual(suspend.raw, identity(of: record))
+        XCTAssertEqual(suspend.date, start.addingTimeInterval(-1))
+        XCTAssertNil(manager.state.deliveryTransitions.pending)
+        XCTAssertEqual(manager.state.basalDose.type, .suspend)
+    }
+
+    func testAnAppSuspendEndsTheTempBasalWhereThePumpStoppedIt() throws {
+        runningTempBasal(1.5)
+        bluetooth.stub(StopTempRateRequest.self, with: StopTempRateResponse(status: 0, tempRateId: 7))
+        stubPump(serving: [
+            resumed(at: start.addingTimeInterval(-60)),
+            tempRateCompleted(7, at: minutes(10), timeLeft: 1200),
+            suspended(at: minutes(10))
+        ])
+        advance(to: minutes(10))
+        bluetooth.stub(TempRateRequest.self, with: TempRateResponse(active: true, percentage: 150, startTimeRaw: pumpTimeSec(start), duration: 0))
+        bluetooth.stub(SuspendPumpingRequest.self, with: SuspendPumpingResponse(status: 0))
+        let done = expectation(description: "suspendDelivery")
+        manager.suspendDelivery { error in
+            XCTAssertNil(error)
+            done.fulfill()
+        }
+        wait(for: [done], timeout: 60)
+        delegateQueue.sync {}
+
+        let finished = events(.tempBasal).filter { $0.dose?.isMutable == false }
+        XCTAssertEqual(finished.map(\.dose?.endDate), [minutes(10)])
+        XCTAssertEqual(events(.suspend).map(\.date), [minutes(10)])
+        XCTAssertNil(manager.state.deliveryTransitions.interruptedTemp, "the app stopped it; the pump does not run it again")
+    }
+
+    func testAnAppResumeIsReportedUnderItsPumpRecordAtItsTime() throws {
+        let before = resumed(at: start.addingTimeInterval(-60))
+        let suspendRecord = suspended(at: start)
+        stubPump(serving: [before, suspendRecord])
+        appSuspend()
+        let resumeRecord = resumed(at: minutes(10).addingTimeInterval(-1))
+        stubPump(serving: [before, suspendRecord, resumeRecord])
+        advance(to: minutes(10))
+        stubBasalStatus(1)
+
+        appResume()
+
+        let resume = try XCTUnwrap(events(.resume).first)
+        XCTAssertEqual(transitions, [.suspend, .resume])
+        XCTAssertEqual(resume.raw, identity(of: resumeRecord))
+        XCTAssertEqual(resume.date, minutes(10).addingTimeInterval(-1))
+        XCTAssertEqual(manager.state.basalDose.type, .resume)
+    }
+
+    func testAnAppSuspendWhoseHistoryCannotBeReadIsReportedAtTheAnswer() {
+        advance(to: minutes(10))
+
+        appSuspend()
+
+        XCTAssertEqual(events(.suspend).map(\.date), [minutes(10)])
+        XCTAssertNil(manager.state.deliveryTransitions.pending)
     }
 
     func testEnsureCurrentPumpDataSyncsWhileAChangeIsPending() {

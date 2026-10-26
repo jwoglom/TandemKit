@@ -39,20 +39,21 @@ public extension NewPumpEvent {
         )
     }
 
-    static func resume(dose: DoseEntry, date: Date = Date.now) -> NewPumpEvent {
+    /// `record` is the identity of the pump's record of it, which a report without one lacks.
+    static func resume(dose: DoseEntry, date: Date = Date.now, record: Data? = nil) -> NewPumpEvent {
         NewPumpEvent(
             date: date,
             dose: dose,
-            raw: deliveryChangeRaw(.resume, at: date),
+            raw: record ?? deliveryChangeRaw(.resume, at: date),
             title: String(localized: "Resume", comment: "Pump Event title for UnfinalizedDose with doseType of .resume")
         )
     }
 
-    static func suspend(dose: DoseEntry, date: Date = Date.now) -> NewPumpEvent {
+    static func suspend(dose: DoseEntry, date: Date = Date.now, record: Data? = nil) -> NewPumpEvent {
         NewPumpEvent(
             date: date,
             dose: dose,
-            raw: deliveryChangeRaw(.suspend, at: date),
+            raw: record ?? deliveryChangeRaw(.suspend, at: date),
             title: String(localized: "Suspend", comment: "Pump Event title for UnfinalizedDose with doseType of .suspend")
         )
     }
