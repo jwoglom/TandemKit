@@ -98,6 +98,17 @@ final class ReportedBasalLedgerTests: XCTestCase {
         XCTAssertEqual(rate(ledger, at: 1000), 1.5, "as Trio's IOB, a temp basal that outlives a suspend runs again after it")
     }
 
+    func testASuspendUnderItsPumpRecordIsNoBasalCorrection() throws {
+        let serial = HistoryLogSyncIdentifier.PumpSerial(123_456)!
+        let record = HistoryLogSyncIdentifier.logSequence(pumpSerial: serial, sequenceNum: 40)
+        let dose = UnfinalizedDose(suspendStartTime: at(300)).toDoseEntry()
+        var ledger = ReportedBasalLedger(trackingSince: .distantPast, pumpSerial: 123_456)
+        ledger.record([NewPumpEvent.suspend(dose: dose, date: at(300), record: record)], replacePendingEvents: false)
+
+        XCTAssertNil(ledger.correctedSequenceNum(of: try XCTUnwrap(ledger.rows.first)))
+        XCTAssertEqual(ledger.rowEdges(in: DateInterval(start: at(0), end: at(600)), includingCorrections: false), [at(300)])
+    }
+
     // MARK: - Matching
 
     func testAReKeyedReportLandsOnTheRowAtItsDate() {

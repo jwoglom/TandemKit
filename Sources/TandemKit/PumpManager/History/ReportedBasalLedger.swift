@@ -173,9 +173,10 @@ public struct ReportedBasalLedger: Equatable {
         return Set(edges.filter { interval.start < $0 && $0 < interval.end }).sorted()
     }
 
-    /// The BasalDelivery record a basal correction on the tracked pump was reported for.
+    /// The BasalDelivery record a basal correction on the tracked pump was reported for. A suspend or
+    /// resume carries its own record's.
     public func correctedSequenceNum(of row: Row) -> UInt32? {
-        guard let identifier = HistoryLogSyncIdentifier.decode(row.raw), identifier.scheme == .logSequence,
+        guard row.kind == .tempBasal, let identifier = HistoryLogSyncIdentifier.decode(row.raw), identifier.scheme == .logSequence,
               identifier.pumpSerial.rawValue == pumpSerial
         else {
             return nil
