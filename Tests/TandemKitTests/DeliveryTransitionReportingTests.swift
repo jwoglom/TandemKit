@@ -384,6 +384,25 @@ import XCTest
         XCTAssertNotNil(manager.state.deliveryTransitions.pending)
     }
 
+    func testASuspendFromBeforeTrackingIsReportedAtDetectionUnderItsRecord() throws {
+        let record = suspended(at: minutes(-30))
+        manager.state.deliveryTransitions = DeliveryTransitionLedger(pumpSerial: Self.pumpSerial, trackedAfter: record.sequenceNum)
+        advance(to: minutes(1))
+        observe(1)
+
+        pass([record])
+
+        let suspend = try XCTUnwrap(events(.suspend).first)
+        XCTAssertEqual(events(.suspend).count, 1)
+        XCTAssertEqual(suspend.date, minutes(1), "at detection: the record predates what this manager watched")
+        XCTAssertEqual(
+            suspend.raw,
+            HistoryLogSyncIdentifier.logSequence(pumpSerial: serial, sequenceNum: record.sequenceNum),
+            "the identity a pump manager that watched it reported it under"
+        )
+        XCTAssertTrue(manager.state.deliveryTransitions.isHandled(sequenceNum: record.sequenceNum))
+    }
+
     func testATickThatDidNotReadToThePumpsLastRecordReportsTheChangeAtDetection() {
         advance(to: minutes(30))
         observe(1)
