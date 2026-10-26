@@ -179,6 +179,40 @@ import XCTest
         XCTAssertEqual(events.count, 6)
     }
 
+    /// Pass one corrects the first cycle while the second runs; pass two dates every record 0.6 s
+    /// earlier, so the second's record falls inside that correction.
+    private func passWithTheNextRecordDatedInsideTheCorrection(nextRate: Int) {
+        enableReporting()
+        let finished = clock.now
+        clock.set(at(400))
+        var log = PumpBasalHistory()
+        log.pcm(0, .closedLoop)
+        log.delivery(10, source: 3, rate: 2200)
+        log.delivery(310, source: 3, rate: nextRate)
+        pass(log)
+        XCTAssertEqual(events.map(\.date), [at(10)])
+        setupBatches = delegate.pumpEventBatches.count
+
+        clock.set(finished)
+        manager.state.lastPumpTimeCheckDate = clock.now
+        manager.state.currentPumpTime = clock.now.addingTimeInterval(0.6)
+        log.delivery(610, source: 3, rate: 1000)
+        pass(log)
+    }
+
+    func testACycleAtTheScheduleDatedInsideTheLastCorrectionIsNotCorrected() {
+        passWithTheNextRecordDatedInsideTheCorrection(nextRate: 1000)
+
+        XCTAssertTrue(events.isEmpty)
+    }
+
+    func testACycleAtTheLastCorrectionsRateDatedInsideItIsCorrected() {
+        passWithTheNextRecordDatedInsideTheCorrection(nextRate: 2200)
+
+        XCTAssertEqual(events.map { $0.dose?.unitsPerHour }, [2.2])
+        XCTAssertEqual(events.first?.date, at(310))
+    }
+
     func testSetupsLoadCorrectsNothingAManagerDeletedFromThisAppReported() {
         let archive = ReportedHistoryArchive(defaults: nil)
         manager = makeManager(state: Self.state(), archive: archive)

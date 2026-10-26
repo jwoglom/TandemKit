@@ -618,6 +618,11 @@ edit instead of at the next sync.
     chunk never differs, whatever H does later inside it: the host counts a change from its command,
     the pump from its next cycle, and that residual is only logged, once each day is over: net, the
     host's insulin less the pump's, and gross, since a temp's early start and early end cancel.
+  - A correction ending up to `recordDatingTolerance` (2 s) after a chunk's BasalDelivery record counts
+    as ended at it (`hostStart`). A later pass, or the next manager after setup's load, dates the record
+    by its own clock read, up to a second earlier than the pass that reported the correction, so the
+    chunk read as the correction's: a sliver at the schedule's rate was reported after a re-pair's load,
+    and a cycle at the correction's rate would have been left uncorrected.
   - H for a chunk that differs is the row in force from the last change the host was commanded within
     `transitionMatchTolerance` after its BasalDelivery record, and the action starts there; with none,
     the row at the record. A stop that reached the pump just before a record and the next temp just
