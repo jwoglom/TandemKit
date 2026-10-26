@@ -1038,6 +1038,30 @@ import XCTest
         XCTAssertNil(manager.state.deliveryTransitions.interruptedTemp, "the app stopped it; the pump does not run it again")
     }
 
+    func testAnAppSuspendInTheSecondAnAppTempStartedEndsTheTempAtTheSuspendNotAtItsStart() throws {
+        runningTempBasal(1.5, from: minutes(10).addingTimeInterval(0.3))
+        bluetooth.stub(StopTempRateRequest.self, with: StopTempRateResponse(status: 0, tempRateId: 7))
+        stubPump(serving: [
+            resumed(at: start.addingTimeInterval(-60)),
+            tempRateCompleted(7, at: minutes(10), timeLeft: 1800),
+            suspended(at: minutes(10))
+        ])
+        advance(to: minutes(10).addingTimeInterval(0.6))
+        bluetooth.stub(TempRateRequest.self, with: TempRateResponse(active: true, percentage: 150, startTimeRaw: pumpTimeSec(minutes(10)), duration: 0))
+        bluetooth.stub(SuspendPumpingRequest.self, with: SuspendPumpingResponse(status: 0))
+        let done = expectation(description: "suspendDelivery")
+        manager.suspendDelivery { error in
+            XCTAssertNil(error)
+            done.fulfill()
+        }
+        wait(for: [done], timeout: 60)
+        delegateQueue.sync {}
+
+        let finished = try XCTUnwrap(events(.tempBasal).last { $0.dose?.isMutable == false }?.dose)
+        XCTAssertEqual(finished.endDate, minutes(10).addingTimeInterval(0.6), "Loop drops a temp basal of no length, and keeps its mutable copy")
+        XCTAssertEqual(events(.suspend).map(\.date), [minutes(10).addingTimeInterval(0.6)])
+    }
+
     func testAnAppResumeIsReportedUnderItsPumpRecordNoEarlierThanItWasSent() throws {
         let before = resumed(at: start.addingTimeInterval(-60))
         let suspendRecord = suspended(at: start)
