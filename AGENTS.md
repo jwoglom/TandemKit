@@ -302,14 +302,8 @@ edit instead of at the next sync.
   reconciliation skips the pump's suspended time, so only the reported suspend keeps the host from
   counting its schedule over it. `setupHistoryLoadFailureLimit`
   (3) ticks in a row that read nothing fail the load, and the step offers only Try Again.
-- The host drops a deleted manager's state but keeps the doses it was given. So `prepareForDeactivation`
-  archives what the manager reported for its pump in the host app's defaults (`ReportedHistoryArchive`,
-  36 h): finalized boluses, immutable basal rows and reported suspends and resumes. The next manager's load
-  takes them as reported (`inheritArchivedReports`). Without it, the same pump back in the same app had the
-  app's own boluses reported again under history's `raw`, and its own temp basals corrected over. A mutable
-  row is not archived: the next manager's first replacing batch deletes it.
-- Still reported twice: what a manager reported if a build without the archive deleted it. IOB over-counts
-  until it ages out.
+- Loading history the host already counts (the same pump back in the same app) reports it twice, under
+  history's `raw`: IOB over-counts until it ages out.
 
 ### Onboarding and the basal schedule
 - `applyOnboardingSettings` writes the host's `PumpManagerSetupSettings` to a freshly paired
@@ -618,11 +612,6 @@ edit instead of at the next sync.
     chunk never differs, whatever H does later inside it: the host counts a change from its command,
     the pump from its next cycle, and that residual is only logged, once each day is over: net, the
     host's insulin less the pump's, and gross, since a temp's early start and early end cancel.
-  - A correction ending up to `recordDatingTolerance` (2 s) after a chunk's BasalDelivery record counts
-    as ended at it (`hostStart`). A later pass, or the next manager after setup's load, dates the record
-    by its own clock read, up to a second earlier than the pass that reported the correction, so the
-    chunk read as the correction's: a sliver at the schedule's rate was reported after a re-pair's load,
-    and a cycle at the correction's rate would have been left uncorrected.
   - H for a chunk that differs is the row in force from the last change the host was commanded within
     `transitionMatchTolerance` after its BasalDelivery record, and the action starts there; with none,
     the row at the record. A stop that reached the pump just before a record and the next temp just

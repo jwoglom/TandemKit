@@ -141,12 +141,6 @@ public struct DeliveryTransitionLedger: Equatable {
         entries.sort { $0.date < $1.date }
     }
 
-    /// What a manager deleted from this app reported for this pump.
-    public mutating func inherit(_ inherited: [Entry]) {
-        entries += inherited.filter { entry in !entries.contains { $0.kind == entry.kind && $0.date == entry.date } }
-        entries.sort { $0.date < $1.date }
-    }
-
     public func isHandled(sequenceNum: UInt32) -> Bool {
         entries.contains { $0.sequenceNum == sequenceNum }
     }
