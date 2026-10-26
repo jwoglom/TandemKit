@@ -997,17 +997,18 @@ import XCTest
         HistoryLogSyncIdentifier.logSequence(pumpSerial: serial, sequenceNum: record.sequenceNum)
     }
 
-    func testAnAppSuspendIsReportedUnderItsPumpRecordAtItsTime() throws {
+    func testAnAppSuspendIsReportedUnderItsPumpRecordNoEarlierThanItWasSent() throws {
         let before = resumed(at: start.addingTimeInterval(-60))
-        let record = suspended(at: start.addingTimeInterval(-1))
+        let record = suspended(at: minutes(5))
         stubPump(serving: [before, record])
+        advance(to: minutes(5).addingTimeInterval(0.7))
 
         appSuspend()
 
         let suspend = try XCTUnwrap(events(.suspend).first)
         XCTAssertEqual(events(.suspend).count, 1)
         XCTAssertEqual(suspend.raw, identity(of: record))
-        XCTAssertEqual(suspend.date, start.addingTimeInterval(-1))
+        XCTAssertEqual(suspend.date, minutes(5).addingTimeInterval(0.7), "the record is to the pump's second")
         XCTAssertNil(manager.state.deliveryTransitions.pending)
         XCTAssertEqual(manager.state.basalDose.type, .suspend)
     }
@@ -1037,14 +1038,14 @@ import XCTest
         XCTAssertNil(manager.state.deliveryTransitions.interruptedTemp, "the app stopped it; the pump does not run it again")
     }
 
-    func testAnAppResumeIsReportedUnderItsPumpRecordAtItsTime() throws {
+    func testAnAppResumeIsReportedUnderItsPumpRecordNoEarlierThanItWasSent() throws {
         let before = resumed(at: start.addingTimeInterval(-60))
         let suspendRecord = suspended(at: start)
         stubPump(serving: [before, suspendRecord])
         appSuspend()
-        let resumeRecord = resumed(at: minutes(10).addingTimeInterval(-1))
+        let resumeRecord = resumed(at: minutes(10))
         stubPump(serving: [before, suspendRecord, resumeRecord])
-        advance(to: minutes(10))
+        advance(to: minutes(10).addingTimeInterval(0.7))
         stubBasalStatus(1)
 
         appResume()
@@ -1052,7 +1053,7 @@ import XCTest
         let resume = try XCTUnwrap(events(.resume).first)
         XCTAssertEqual(transitions, [.suspend, .resume])
         XCTAssertEqual(resume.raw, identity(of: resumeRecord))
-        XCTAssertEqual(resume.date, minutes(10).addingTimeInterval(-1))
+        XCTAssertEqual(resume.date, minutes(10).addingTimeInterval(0.7), "the record is to the pump's second")
         XCTAssertEqual(manager.state.basalDose.type, .resume)
     }
 

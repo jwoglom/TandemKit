@@ -513,7 +513,10 @@ edit instead of at the next sync.
     that starts after the change dates it if it read the log to its end and reaches back to
     the last reading before the change, and otherwise reports it at detection. An app suspend or
     resume is left the same way once the pump has answered (`leaveCommandedTransitionForHistory`),
-    and the command completes once it is reported, under its record.
+    and the command completes once it is reported, under its record. The record is to the pump's
+    second, so a pending change is dated no earlier than the last reading before it, a command's
+    send, and no later than its detection (`datePendingRecord`): an event the host was told of just
+    before must not come after it, and Loop ignores a suspend older than its last finished basal.
   - A sync, or a wizard's `fetchSuspendStatus`, that leaves a change pending completes once it
     is reported, or after `transitionHistoryWait` (30 s) at detection; `ensureCurrentPumpData`
     is not throttled while one is pending, so the host doses on a sync that has reported it.
