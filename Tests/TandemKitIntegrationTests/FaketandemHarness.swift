@@ -172,6 +172,14 @@ final class FaketandemHarness {
             delegateQueue.sync {}
         }
 
+        /// The host takes a manager made with `attachDelegate: false`, as a setup flow hands it over:
+        /// delegate, then queue, Trio's order.
+        func adoptByHost() {
+            manager.pumpManagerDelegate = delegate
+            manager.delegateQueue = delegateQueue
+            drainDelegate()
+        }
+
         var bolusEvents: [NewPumpEvent] {
             drainDelegate()
             return delegate.pumpEvents.filter { $0.dose?.type == .bolus }
