@@ -154,6 +154,16 @@ public struct BolusReportLedger: Equatable {
         trackingSince = min(trackingSince, date)
     }
 
+    /// What a manager deleted from this app reported, which the host still counts. This ledger's own
+    /// entry for a bolus stays.
+    public mutating func inherit(_ inherited: [Entry]) {
+        let new = inherited.filter { entry in
+            !entries.contains { $0.bolusId == entry.bolusId && $0.pumpSerial == entry.pumpSerial && $0.part == entry.part }
+        }
+        entries.insert(contentsOf: new, at: 0)
+        new.forEach { dropUnreported(matching: $0) }
+    }
+
     /// No-op for a bolus this ledger already has an entry for.
     public mutating func noteUnreported(_ bolus: UnreportedBolus) {
         guard !hasEntry(bolusId: bolus.bolusId, pumpSerial: bolus.pumpSerial),

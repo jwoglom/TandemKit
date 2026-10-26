@@ -85,6 +85,12 @@ public struct ReportedBasalLedger: Equatable {
         reconciledThrough = nil
     }
 
+    /// What a manager deleted from this app reported, which the host still holds, as recorded before
+    /// this ledger's own rows.
+    public mutating func inherit(_ inherited: [Row]) {
+        rows.insert(contentsOf: inherited.filter { row in !rows.contains { $0.raw == row.raw } }, at: 0)
+    }
+
     public mutating func reconcile(through sequenceNum: UInt32) {
         reconciledThrough = max(reconciledThrough ?? sequenceNum, sequenceNum)
     }
