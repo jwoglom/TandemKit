@@ -311,6 +311,9 @@ edit instead of at the next sync.
   record has the id) under those identities, one still running finished at its programmed end as a
   deleted manager left it, so reconciliation compares their cycles with them and not the schedule. A
   temp set on the pump is corrected cycle by cycle under its BasalDelivery records, as by any manager.
+  A suspension the pump is already in when a manager first reads it, as at a re-pair of a stopped
+  pump, is reported at detection, before the load could date it, but under its `PumpingSuspended`
+  record when the session's store holds it.
 - Still reported twice: what a build without these identities reported, a suspend or resume reported
   at detection because history could not be read in time, a bolus or temp whose id was not past the
   last minted, and a temp set on the pump that a manager adopted under its `tempRateId`, whose cycles
@@ -420,8 +423,8 @@ edit instead of at the next sync.
   temp's `tempRateId` and how many cuts precede it, which a later manager counts alike from history.
   Without an `eventRaw` to count from, and after a restatement, it is keyed the second way.
 - A suspend or resume read from history is keyed on its record (`HistoryLogSyncIdentifier.logSequence`).
-  A `.basal` marker, and a suspend or resume reported at detection, is reported once, keyed on its
-  type and its date to the millisecond (#352): of two rows under one `raw`, both hosts keep the first, and two of one type
+  A `.basal` marker, and a suspend or resume reported at detection with no record to key it on, is
+  reported once, keyed on its type and its date to the millisecond (#352): of two rows under one `raw`, both hosts keep the first, and two of one type
   can fall in one second. `getActivePumpEvents(endDate:)` closes a temp basal that ran out with a
   marker at its end only when `endDate`, where each caller reports its own change, is a second or
   more later; in that second the caller's change says the same, and Trio would order the two rows

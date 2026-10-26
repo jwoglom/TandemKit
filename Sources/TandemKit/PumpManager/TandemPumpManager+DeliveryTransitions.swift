@@ -292,6 +292,7 @@ extension TandemPumpManager {
         _ pending: PendingTransition,
         tempRateEnd: Date? = nil,
         adopting adopted: AdoptedTemp? = nil,
+        suspendedBy record: (raw: Data, sequenceNum: UInt32)? = nil,
         into batch: inout HistoryReportBatch
     ) {
         let prior = pending.prior
@@ -334,8 +335,8 @@ extension TandemPumpManager {
             final = UnfinalizedDose(suspendStartTime: host.date)
         case (true, _):
             final = UnfinalizedDose(suspendStartTime: pending.detectedAt)
-            events.append(NewPumpEvent.suspend(dose: final.toDoseEntry(), date: final.startDate))
-            recordReportedTransition(.suspend, at: final.startDate, earliest: earliest, latest: latest)
+            events.append(NewPumpEvent.suspend(dose: final.toDoseEntry(), date: final.startDate, record: record?.raw))
+            recordReportedTransition(.suspend, at: final.startDate, earliest: earliest, latest: latest, sequenceNum: record?.sequenceNum)
         case let (false, host?) where host.kind == .suspend:
             final = UnfinalizedDose(resumeStartTime: max(pending.lastConfirmed, host.date.addingTimeInterval(1)), insulinType: state.insulinType)
             events.append(NewPumpEvent.resume(dose: final.toDoseEntry(), date: final.startDate))
@@ -596,7 +597,15 @@ extension TandemPumpManager {
         let completedAt = tempRateEnd(of: pending.prior, in: stored, dates: dates)
         let end = completedAt.map { dateOfChange($0, in: pending) }
             ?? records.first { $0.kind == .suspend && $0.date > pending.prior.startDate && window.contains($0.date) }?.date
-        closeTransition(pending, tempRateEnd: end, into: &batch)
+        // A suspension from before this manager watched the pump, as after a re-pair, is dated at detection
+        // but keeps the identity of its record, which a manager that watched it reported it under.
+        let suspension = stored.last { $0 is PumpingSuspendedHistoryLog || $0 is PumpingResumedHistoryLog } as? PumpingSuspendedHistoryLog
+        closeTransition(
+            pending,
+            tempRateEnd: end,
+            suspendedBy: suspension.map { (HistoryLogSyncIdentifier.logSequence(pumpSerial: serial, sequenceNum: $0.sequenceNum), $0.sequenceNum) },
+            into: &batch
+        )
         if completedAt != nil {
             state.deliveryTransitions.interruptedTemp = nil
         }
