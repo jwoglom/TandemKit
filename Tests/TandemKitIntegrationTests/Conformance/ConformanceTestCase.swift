@@ -104,9 +104,13 @@ class ConformanceTestCase: FaketandemIntegrationTestCase {
     // MARK: - Driver lifecycle
 
     /// One driver on the shared clock; the harness gives its delegate that clock to journal with.
+    /// Without `attachDelegate` it is a setup flow's, which no host has adopted yet.
     @discardableResult
-    func startDriver(state: TandemPumpManagerState = TandemPumpManagerState(rawValue: [:])) -> FaketandemHarness.Driver {
-        let driver = makeDriver(state: state, clock: manualClock)
+    func startDriver(
+        state: TandemPumpManagerState = TandemPumpManagerState(rawValue: [:]),
+        attachDelegate: Bool = true
+    ) -> FaketandemHarness.Driver {
+        let driver = makeDriver(state: state, clock: manualClock, attachDelegate: attachDelegate)
         delegates.append(driver.delegate)
         return driver
     }
