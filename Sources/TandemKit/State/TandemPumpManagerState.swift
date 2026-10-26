@@ -69,6 +69,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
     public var reportedBasal = ReportedBasalLedger(trackingSince: Date())
     /// The last temp basal `raw` minted from the pump's `tempRateId`; see `tempBasalEventRaw`.
     public var lastTempRateEventRaw: Data?
+    /// The last bolus `raw` minted from the pump's `bolusId`; see `bolusEventRaw`.
+    public var lastBolusEventRaw: Data?
     public var deliveryTransitions = DeliveryTransitionLedger()
     public var bolusState: PumpManagerStatus.BolusState = .noBolus
     public var insulinType: InsulinType?
@@ -211,6 +213,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
               lhs.bolusReportLedger == rhs.bolusReportLedger,
               lhs.reportedBasal == rhs.reportedBasal,
               lhs.lastTempRateEventRaw == rhs.lastTempRateEventRaw,
+              lhs.lastBolusEventRaw == rhs.lastBolusEventRaw,
               lhs.deliveryTransitions == rhs.deliveryTransitions,
               lhs.bolusState == rhs.bolusState,
               lhs.insulinType == rhs.insulinType,
@@ -385,6 +388,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
             reportedBasal = ledger
         }
         lastTempRateEventRaw = rawValue["lastTempRateEventRaw"] as? Data
+        lastBolusEventRaw = rawValue["lastBolusEventRaw"] as? Data
 
         if let ledgerRaw = rawValue["deliveryTransitions"] as? DeliveryTransitionLedger.RawValue,
            let ledger = DeliveryTransitionLedger(rawValue: ledgerRaw)
@@ -606,6 +610,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         raw["bolusReportLedger"] = bolusReportLedger.rawValue
         raw["reportedBasal"] = reportedBasal.rawValue
         raw["lastTempRateEventRaw"] = lastTempRateEventRaw
+        raw["lastBolusEventRaw"] = lastBolusEventRaw
         raw["deliveryTransitions"] = deliveryTransitions.rawValue
 
         if let encodedBolusState = TandemPumpManagerState.encodeBolusState(bolusState) {
@@ -707,6 +712,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         lines += debugSection("bolusReportLedger", bolusReportLedger.debugFields)
         lines += debugSection("reportedBasal", reportedBasal.debugFields)
         lines.append("* lastTempRateEventRaw: \(lastTempRateEventRaw?.hexadecimalString ?? "nil")")
+        lines.append("* lastBolusEventRaw: \(lastBolusEventRaw?.hexadecimalString ?? "nil")")
         lines += debugSection("deliveryTransitions", deliveryTransitions.debugFields)
         lines += [
             "* bolusState: \(bolusState)",

@@ -2,14 +2,19 @@ import Foundation
 import LoopKit
 
 public extension NewPumpEvent {
-    /// Keyed on the programmed amount: `raw` is the dose's identity, so finalizing must not
-    /// change it (#328).
-    static func bolus(dose: DoseEntry, date: Date = Date.now) -> NewPumpEvent {
+    /// `dose` is `bolus` as reported now, under `bolus`'s identity whatever it delivers.
+    static func bolus(dose: DoseEntry, of bolus: UnfinalizedDose) -> NewPumpEvent {
+        .bolus(dose: dose, date: bolus.startDate, eventRaw: bolus.eventRaw)
+    }
+
+    /// Without an `eventRaw`, keyed on the programmed amount: `raw` is the dose's identity, so
+    /// finalizing must not change it (#328).
+    static func bolus(dose: DoseEntry, date: Date = Date.now, eventRaw: Data? = nil) -> NewPumpEvent {
         let dateFormatter = ISO8601DateFormatter()
         return NewPumpEvent(
             date: date,
             dose: dose,
-            raw: "\(DoseType.bolus.rawValue) \(dose.programmedUnits) \(dateFormatter.string(from: date))"
+            raw: eventRaw ?? "\(DoseType.bolus.rawValue) \(dose.programmedUnits) \(dateFormatter.string(from: date))"
                 .data(using: .utf8) ?? Data([]),
             title: String(localized: "Bolus", comment: "Pump Event title for UnfinalizedDose with doseType of .bolus")
         )

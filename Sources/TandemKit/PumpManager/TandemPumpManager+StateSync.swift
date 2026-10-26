@@ -294,7 +294,8 @@ extension TandemPumpManager {
             bolusProgressReport = TandemDoseProgressReporter(
                 pumpManager: self,
                 dose: dose.toDoseEntry(isMutable: true),
-                activationType: dose.automatic ? .automatic : .manualNoRecommendation
+                activationType: dose.automatic ? .automatic : .manualNoRecommendation,
+                eventRaw: dose.eventRaw
             )
         }
 
@@ -346,10 +347,7 @@ extension TandemPumpManager {
                 // and a finalized dose is never revised (#328).
                 logger.error("No delivered volume for finished bolus \(dose.bolusId ?? -1); keeping it mutable")
                 holdForFinalization(dose, fallbackUnits: dose.value)
-                events.append(NewPumpEvent.bolus(
-                    dose: dose.toDoseEntry(isMutable: true),
-                    date: dose.startDate
-                ))
+                events.append(NewPumpEvent.bolus(dose: dose.toDoseEntry(isMutable: true), of: dose))
             } else {
                 // Not the sampled estimate, which is 0 U until a second delivering status (#448).
                 events.append(progressReport.getPumpEvent(actualDeliveredUnits: progressReport.programmedUnits))
@@ -382,14 +380,11 @@ extension TandemPumpManager {
                     ),
                     now: now
                 ),
-                date: dose.startDate
+                of: dose
             ))
         } else {
             holdForFinalization(dose, fallbackUnits: dose.value)
-            events.append(NewPumpEvent.bolus(
-                dose: dose.toDoseEntry(isMutable: true),
-                date: dose.startDate
-            ))
+            events.append(NewPumpEvent.bolus(dose: dose.toDoseEntry(isMutable: true), of: dose))
         }
 
         state.bolusDose = nil
@@ -824,7 +819,7 @@ extension TandemPumpManager {
         }
 
         var events = getActivePumpEvents()
-        events.append(NewPumpEvent.bolus(dose: finalizedDose, date: pending.startDate))
+        events.append(NewPumpEvent.bolus(dose: finalizedDose, of: pending))
 
         state.lastReconciliation = now
         notifyDelegateStateUpdated()
