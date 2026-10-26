@@ -152,7 +152,7 @@ import XCTest
         XCTAssertEqual(manager.state.lastTempRateEventRaw, tempRate(41))
     }
 
-    func testATempBasalCutAtASegmentChangeKeepsItsRawAndTheRestKeepsOneOfItsOwn() {
+    func testATempBasalCutAtASegmentChangeKeepsItsRawAndTheRestIsItsFirstPart() {
         clock.set(at(.hours(14) - .minutes(20)))
         startManager()
         XCTAssertNil(enactTempBasal(unitsPerHour: 1.5))
@@ -166,8 +166,8 @@ import XCTest
         XCTAssertEqual(events.map(\.dose?.startDate), [at(.hours(14) - .minutes(20)), at(.hours(14) - .minutes(20)), at(.hours(14)), at(.hours(14))])
         XCTAssertEqual(events.map(\.dose?.isMutable), [true, false, true, false])
         XCTAssertEqual(events.prefix(2).map(\.raw), [tempRate(41), tempRate(41)])
-        XCTAssertNotEqual(events[2].raw, tempRate(41))
-        XCTAssertEqual(events[3].raw, events[2].raw)
+        let firstPart = HistoryLogSyncIdentifier.tempRatePart(pumpSerial: serial, tempRateId: 41, part: 1)
+        XCTAssertEqual(events.suffix(2).map(\.raw), [firstPart, firstPart])
     }
 
     func testATempBasalSavedWithoutAnEventRawFinishesUnderTheKeyItRanUnder() {

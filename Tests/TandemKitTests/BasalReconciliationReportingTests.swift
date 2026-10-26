@@ -176,6 +176,90 @@ import XCTest
         XCTAssertEqual(events.count, 6)
     }
 
+    /// Setup's load, an hour after an app's 150% temp from 00:15 to 00:45 on a pump this manager
+    /// first sees now.
+    @discardableResult
+    private func loadHistoryOfATemp(setOverBluetooth: Bool) -> PumpBasalHistory {
+        enableReporting()
+        manager.state.reportedBasal = ReportedBasalLedger(trackingSince: clock.now)
+        let since = clock.now.addingTimeInterval(-TandemPumpManager.setupHistoryLoadWindow)
+        manager.state.reportedBasal.reportHistory(since: since)
+        manager.state.deliveryTransitions.reportHistory(since: since)
+        var log = PumpBasalHistory()
+        log.profile(10)
+        if setOverBluetooth {
+            log.tempSet(300, id: 7)
+        }
+        log.tempStarted(300, percent: 150, minutes: 30, id: 7)
+        for cycle in 0 ..< 6 {
+            log.delivery(310 + cycle * 300, source: 2, rate: 1500)
+        }
+        log.tempEnded(2100, id: 7)
+        for cycle in 0 ..< 6 {
+            log.profile(2110 + cycle * 300)
+        }
+        pass(log)
+        return log
+    }
+
+    func testTheLoadReportsAnAppsTempUnderItsIdentityInPlaceOfCorrectingItsCycles() throws {
+        let log = loadHistoryOfATemp(setOverBluetooth: true)
+
+        let temp = try XCTUnwrap(events.first)
+        XCTAssertEqual(events.count, 1, "\(events.map(\.raw.hexadecimalString))")
+        XCTAssertEqual(temp.raw, HistoryLogSyncIdentifier.tempRate(pumpSerial: serial, tempRateId: 7))
+        XCTAssertEqual(temp.dose?.startDate, at(300))
+        XCTAssertEqual(temp.dose?.endDate, at(2100))
+        XCTAssertEqual(temp.dose?.unitsPerHour, 1.5)
+        XCTAssertEqual(temp.dose?.isMutable, false)
+
+        pass(log)
+        XCTAssertEqual(events.count, 1, "a second pass reports nothing")
+    }
+
+    func testTheLoadFinishesAnAppsTempStillRunningAtItsProgrammedEnd() throws {
+        enableReporting()
+        manager.state.reportedBasal = ReportedBasalLedger(trackingSince: clock.now)
+        let since = clock.now.addingTimeInterval(-TandemPumpManager.setupHistoryLoadWindow)
+        manager.state.reportedBasal.reportHistory(since: since)
+        manager.state.deliveryTransitions.reportHistory(since: since)
+        var log = PumpBasalHistory()
+        log.profile(5710)
+        log.tempSet(6000, id: 8)
+        log.tempStarted(6000, percent: 150, minutes: 60, id: 8)
+        for cycle in 0 ..< 4 {
+            log.delivery(6010 + cycle * 300, source: 2, rate: 1500)
+        }
+
+        pass(log)
+
+        let temp = try XCTUnwrap(events.first)
+        XCTAssertEqual(events.count, 1)
+        XCTAssertEqual(temp.raw, HistoryLogSyncIdentifier.tempRate(pumpSerial: serial, tempRateId: 8))
+        XCTAssertEqual(temp.dose?.endDate, at(9600))
+        XCTAssertEqual(temp.dose?.isMutable, false)
+    }
+
+    func testTheLoadCorrectsTheCyclesOfATempSetOnThePump() {
+        loadHistoryOfATemp(setOverBluetooth: false)
+
+        XCTAssertEqual(events.count, 6)
+        XCTAssertTrue(events.allSatisfy { HistoryLogSyncIdentifier.decode($0.raw)?.scheme == .logSequence })
+    }
+
+    func testAnAppsTempFromBeforePairingIsNotReportedWithoutTheLoad() {
+        enableReporting()
+        manager.state.reportedBasal = ReportedBasalLedger(trackingSince: clock.now)
+        var log = PumpBasalHistory()
+        log.tempSet(300, id: 7)
+        log.tempStarted(300, percent: 150, minutes: 30, id: 7)
+        log.tempEnded(2100, id: 7)
+
+        pass(log)
+
+        XCTAssertTrue(events.isEmpty)
+    }
+
     func testConsecutiveCyclesAtOneRateAreEachCorrected() {
         enableReporting()
         var log = PumpBasalHistory()

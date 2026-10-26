@@ -1914,7 +1914,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     tempRateId: running.tempRateId,
                     tempPercent: running.tempPercent
                 )
-                let (finished, last) = splitAtSegmentChanges(remainder, through: end)
+                let (finished, last) = splitAtSegmentChanges(remainder, through: end, partOf: running.eventRaw)
                 events += finished
                 events.append(NewPumpEvent.tempBasal(dose: last.toDoseEntry(isMutable: false, endDate: end, now: now), of: last))
             }
@@ -2878,15 +2878,19 @@ extension TandemPumpManager {
     /// The pump rescales a temp at each segment change, and neither host revises a temp basal once
     /// it is reported finished, so every path that finishes one cuts it here first: the parts
     /// finished at changes before `end`, and the part running at `end` at `tempPercent` of its rate.
+    /// `partOf` is the part of the temp rate `dose` continues, whose next parts the cuts are: `dose`
+    /// itself unless it is a piece of its own.
     func splitAtSegmentChanges(
         _ dose: UnfinalizedDose,
-        through end: Date
+        through end: Date,
+        partOf: Data? = nil
     ) -> (finished: [NewPumpEvent], running: UnfinalizedDose) {
         guard dose.type == .tempBasal, let percent = dose.tempPercent, percent > 0 else {
             return ([], dose)
         }
 
         var running = dose
+        var part = partOf ?? dose.eventRaw
         var finished: [NewPumpEvent] = []
         for change in pumpSegmentChanges(after: dose.startDate, through: min(end, dose.estimatedEndDate))
             where change.date < dose.estimatedEndDate
@@ -2896,6 +2900,7 @@ extension TandemPumpManager {
 
             let entry = running.toDoseEntry(isMutable: false, endDate: change.date, now: now)
             finished.append(NewPumpEvent.tempBasal(dose: entry, of: running))
+            part = part.flatMap(HistoryLogSyncIdentifier.nextTempRatePart(after:))
             running = UnfinalizedDose(
                 tempRate: rate,
                 duration: dose.estimatedEndDate.timeIntervalSince(change.date),
@@ -2903,7 +2908,8 @@ extension TandemPumpManager {
                 insulinType: dose.insulinType,
                 startDate: change.date,
                 tempRateId: dose.tempRateId,
-                tempPercent: percent
+                tempPercent: percent,
+                eventRaw: part
             )
         }
         if !finished.isEmpty {
