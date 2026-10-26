@@ -203,6 +203,21 @@ import XCTest
         )
     }
 
+    func testTheLoadReportsNoSecondSuspendForAPumpSuspendedWhenSetUp() {
+        let suspended = nowPumpTimeSec - 20 * 60
+        stubPump(serving: pumpBolus(bolusId: 76, units: 1.0, firstSequenceNum: 1, secondsAgo: 3600) + [
+            PumpingSuspendedHistoryLog(pumpTimeSec: suspended, sequenceNum: 4, preSuspendState: 106, insulinAmount: 150, reasonId: 0, rpaTimeout: 15),
+        ])
+        // Setup's sync: its reading of the pump, then its tick.
+        manager.observeDeliveryState(.suspend)
+        runTick()
+
+        XCTAssertNil(load())
+        adoptByHost()
+
+        XCTAssertEqual(reportedTransitions.map(\.dose?.type), [.suspend])
+    }
+
     func testTheLoadReportsNoSuspendOlderThanItsWindow() {
         stubPump(serving: pumpSuspension(firstSequenceNum: 1, secondsAgo: 6 * 3600 + 900, minutes: 10)
             + pumpBolus(bolusId: 75, units: 1.0, firstSequenceNum: 3, secondsAgo: 3600))

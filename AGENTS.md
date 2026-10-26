@@ -310,6 +310,10 @@ edit instead of at the next sync.
   record has the id) under those identities, one still running finished at its programmed end as a
   deleted manager left it, so reconciliation compares their cycles with them and not the schedule. A
   temp set on the pump is corrected cycle by cycle under its BasalDelivery records, as by any manager.
+- A pump already suspended when setup first reads it is reported suspended from that reading, its
+  record predating tracking. A change on a pump never read before may have come at any time before
+  it, so the load takes the record for that suspend rather than reporting a second one in a row,
+  and the host counts the schedule over the stop before pairing.
 - Still reported twice: what a build without these identities reported, a suspend or resume reported
   at detection because history could not be read in time, a bolus or temp whose id was not past the
   last minted, and a temp set on the pump that a manager adopted under its `tempRateId`, whose cycles
