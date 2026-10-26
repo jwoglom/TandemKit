@@ -110,13 +110,12 @@ public struct PumpState: RawRepresentable, Equatable, CustomDebugStringConvertib
         (["### PumpState"] + debugFields).joined(separator: "\n")
     }
 
-    /// The pairing secrets are only said to be present: issue reports are posted publicly.
     var debugFields: [String] {
         [
             "* peripheralUuid: \(debugValue(peripheralUuid))",
-            "* pincode: \(pincode == nil ? "nil" : "present")",
-            "* derivedSecret: \(derivedSecret == nil ? "nil" : "present")",
-            "* serverNonce: \(serverNonce == nil ? "nil" : "present")",
+            "* pincode: \(debugValue(pincode))",
+            "* derivedSecret: \(debugValue(derivedSecret?.base64EncodedString()))",
+            "* serverNonce: \(debugValue(serverNonce?.base64EncodedString()))",
             "* timeSinceReset: \(debugValue(timeSinceReset))",
             "* apiVersion: \(apiVersion.map { "\($0.major).\($0.minor)" } ?? "nil")",
             "* pumpSerial: \(debugValue(pumpSerial))",

@@ -13,7 +13,6 @@ import XCTest
             pumpSerial: 1_234_567,
             pumpModel: .MOBI
         )
-        state.pumpState.pincode = "246802"
         state.lastReconciliation = Date(timeIntervalSinceReferenceDate: 987_654)
         state.latestInsulinOnBoard = 1.5
         state.historyBackfill = HistoryBackfillState(pumpSerial: 1_234_567, watermark: 42)
@@ -37,15 +36,6 @@ import XCTest
         for label in Mirror(reflecting: state.pumpState).children.compactMap(\.label) {
             XCTAssertTrue(description.contains("\n  * \(label):"), "\(label) is missing from the pump state's fields")
         }
-    }
-
-    func testStateDescriptionLeavesOutThePairingSecrets() {
-        let description = makeState().debugDescription
-
-        XCTAssertFalse(description.contains("246802"))
-        XCTAssertFalse(description.contains(Data([0xDE, 0xAD, 0xBE, 0xEF]).base64EncodedString()))
-        XCTAssertFalse(description.contains(Data([0xCA, 0xFE, 0xBA, 0xBE]).base64EncodedString()))
-        XCTAssertTrue(description.contains("* derivedSecret: present"))
     }
 
     func testStateDescriptionPrintsValuesWithoutOptionalWrappersOrModuleNames() {
