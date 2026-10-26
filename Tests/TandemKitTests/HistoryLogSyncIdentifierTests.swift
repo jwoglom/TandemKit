@@ -28,6 +28,25 @@ final class HistoryLogSyncIdentifierTests: XCTestCase {
             HistoryLogSyncIdentifier.logSequence(pumpSerial: pumpSerial, sequenceNum: 42).hexadecimalString,
             "0103393000002a000000"
         )
+        XCTAssertEqual(
+            HistoryLogSyncIdentifier.tempRatePart(pumpSerial: pumpSerial, tempRateId: 42, part: 1).hexadecimalString,
+            "0105393000002a000100"
+        )
+    }
+
+    func testThePartsOfATempRateCountOnFromItsIdentity() throws {
+        let pumpSerial = try serial(12345)
+        let temp = HistoryLogSyncIdentifier.tempRate(pumpSerial: pumpSerial, tempRateId: 42)
+
+        let first = try XCTUnwrap(HistoryLogSyncIdentifier.nextTempRatePart(after: temp))
+
+        XCTAssertEqual(first, HistoryLogSyncIdentifier.tempRatePart(pumpSerial: pumpSerial, tempRateId: 42, part: 1))
+        XCTAssertEqual(
+            HistoryLogSyncIdentifier.nextTempRatePart(after: first),
+            HistoryLogSyncIdentifier.tempRatePart(pumpSerial: pumpSerial, tempRateId: 42, part: 2)
+        )
+        XCTAssertNil(HistoryLogSyncIdentifier.nextTempRatePart(after: HistoryLogSyncIdentifier.bolus(pumpSerial: pumpSerial, bolusId: 42)))
+        XCTAssertNil(HistoryLogSyncIdentifier.nextTempRatePart(after: Data("tempBasal 0.75 2026-01-01T00:00:00Z".utf8)))
     }
 
     func testIdentifiersAreTenBytes() throws {
@@ -48,10 +67,11 @@ final class HistoryLogSyncIdentifierTests: XCTestCase {
         let identifiers = Set([
             HistoryLogSyncIdentifier.bolus(pumpSerial: pumpSerial, bolusId: 5),
             HistoryLogSyncIdentifier.tempRate(pumpSerial: pumpSerial, tempRateId: 5),
-            HistoryLogSyncIdentifier.logSequence(pumpSerial: pumpSerial, sequenceNum: 5)
+            HistoryLogSyncIdentifier.logSequence(pumpSerial: pumpSerial, sequenceNum: 5),
+            HistoryLogSyncIdentifier.tempRatePart(pumpSerial: pumpSerial, tempRateId: 5, part: 0)
         ])
 
-        XCTAssertEqual(identifiers.count, 3)
+        XCTAssertEqual(identifiers.count, 4)
     }
 
     /// bolusIds and tempRateIds are small pump counters that repeat across pumps.

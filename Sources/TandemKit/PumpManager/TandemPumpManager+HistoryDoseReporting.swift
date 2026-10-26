@@ -86,7 +86,7 @@ extension TandemPumpManager {
                     reports.append(report)
                     finalizesHeldDose = finalizesHeldDose || held != nil
                 }
-            case .tempRate, .logSequence:
+            case .tempRate, .tempRatePart, .logSequence:
                 continue
             }
         }

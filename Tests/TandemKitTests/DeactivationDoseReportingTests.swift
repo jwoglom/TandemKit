@@ -229,6 +229,9 @@ import XCTest
         XCTAssertEqual(doses.map(\.unitsPerHour), [1.5, 1.5, 3.0])
         XCTAssertEqual(doses.compactMap(\.deliveredUnits), [0.125, 0.25, 0.75])
         XCTAssertEqual(manager.state.basalDose.value, 2.0)
+        let serial = try XCTUnwrap(HistoryLogSyncIdentifier.PumpSerial(Self.pumpSerial))
+        XCTAssertEqual(temps.last?.raw, HistoryLogSyncIdentifier.tempRatePart(pumpSerial: serial, tempRateId: 41, part: 1), "as a later pump manager counts the temp's parts from history")
+        XCTAssertFalse([tempRaw, temps.last?.raw].contains(temps[1].raw))
     }
 
     func testATempBasalStartedThisSecondIsCutASecondOn() throws {

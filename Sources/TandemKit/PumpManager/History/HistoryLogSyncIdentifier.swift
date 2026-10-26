@@ -57,6 +57,9 @@ public enum HistoryLogSyncIdentifier {
         case logSequence = 3
         /// `bolusId` of the extended part (`BolexActivated`/`BolexCompleted`) of a bolus.
         case extendedBolus = 4
+        /// `tempRateId` in the low 16 bits, and in the high 16 which part of the temp rate it is,
+        /// counting from 1 the segment changes the pump rescaled it at.
+        case tempRatePart = 5
     }
 
     /// A pump serial known to be real, which is the only kind that may enter an identifier.
@@ -113,6 +116,26 @@ public enum HistoryLogSyncIdentifier {
     /// Identity of a temp rate, from the pump-assigned `tempRateId`.
     public static func tempRate(pumpSerial: PumpSerial, tempRateId: Int) -> Data {
         data(scheme: .tempRate, pumpSerial: pumpSerial, identifier: UInt32(clamping: tempRateId))
+    }
+
+    /// Identity of the part of a temp rate after its `part`th rescaling at a segment change.
+    public static func tempRatePart(pumpSerial: PumpSerial, tempRateId: Int, part: Int) -> Data {
+        let identifier = UInt32(UInt16(truncatingIfNeeded: tempRateId)) | UInt32(UInt16(clamping: part)) << 16
+        return data(scheme: .tempRatePart, pumpSerial: pumpSerial, identifier: identifier)
+    }
+
+    /// The part after `raw`'s next segment change, for a temp rate or a part of one; nil for any
+    /// other identity. Every pump manager counts the parts of one temp rate alike.
+    public static func nextTempRatePart(after raw: Data) -> Data? {
+        guard let decoded = decode(raw) else { return nil }
+        switch decoded.scheme {
+        case .tempRate:
+            return tempRatePart(pumpSerial: decoded.pumpSerial, tempRateId: Int(decoded.identifier), part: 1)
+        case .tempRatePart:
+            return tempRatePart(pumpSerial: decoded.pumpSerial, tempRateId: Int(decoded.identifier & 0xFFFF), part: Int(decoded.identifier >> 16) + 1)
+        case .bolus, .logSequence, .extendedBolus:
+            return nil
+        }
     }
 
     /// Identity of an event the pump assigns no id to, from the history log's sequence number.
