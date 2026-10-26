@@ -313,7 +313,7 @@ edit instead of at the next sync.
   temp set on the pump is corrected cycle by cycle under its BasalDelivery records, as by any manager.
   A suspension the pump is already in when a manager first reads it, as at a re-pair of a stopped
   pump, is reported at detection, before the load could date it, but under its `PumpingSuspended`
-  record when the session's store holds it.
+  record when the session's store holds it. Scenarios: conformance group K.
 - Still reported twice: what a build without these identities reported, a suspend or resume reported
   at detection because history could not be read in time, a bolus or temp whose id was not past the
   last minted, and a temp set on the pump that a manager adopted under its `tempRateId`, whose cycles
@@ -469,9 +469,11 @@ edit instead of at the next sync.
   of its programmed amount up to then under its own `raw`, and the rest a finalized dose of its own
   to its programmed end under a new `raw`.
 - Still open: Loop leaves the remainder out of IOB from a boundary past its end that came with no
-  save (the next pump manager's empty batch) until that manager's next non-empty batch.
+  save (the next pump manager's empty batch) until that manager's next non-empty batch. A part of the
+  remainder after a segment change starts ahead of Trio's clock, and Trio stores a row at its clock, so
+  in the remainder's second, and its IOB counts only one of the two (conformance K3).
 - The integration harness's `shutDownDriver()` is the app going away (a relaunch), which tells the
-  host nothing; `deactivateDriver()` is the deletion. Scenarios: conformance D7 and J5; unit tests
+  host nothing; `deactivateDriver()` is the deletion. Scenarios: conformance D7, J5 and group K; unit tests
   in `DeactivationDoseReportingTests` and `ExtendedBolusReportingTests`.
 
 ### History backfill and dose reporting
