@@ -310,3 +310,28 @@ public class UnfinalizedDose: Equatable {
         )
     }
 }
+
+extension UnfinalizedDose: CustomDebugStringConvertible {
+    public var debugDescription: String {
+        var parts: [String]
+        switch type {
+        case .bolus:
+            parts = ["bolus \(value) U, delivered \(deliveredUnits) U"]
+        case .basal,
+             .tempBasal:
+            parts = ["\(type) \(value) U/hr"]
+        case .resume,
+             .suspend:
+            parts = ["\(type)"]
+        }
+        parts.append(estimatedEndDate == startDate ? "at \(startDate)" : "\(startDate) to \(estimatedEndDate)")
+        if let deliveryStartDate { parts.append("delivery started \(deliveryStartDate)") }
+        if automatic { parts.append("automatic") }
+        if let bolusId { parts.append("bolusId \(bolusId)") }
+        if let tempRateId { parts.append("tempRateId \(tempRateId)") }
+        if let tempPercent { parts.append("tempPercent \(tempPercent)%") }
+        if let eventRaw { parts.append("eventRaw \(eventRaw.hexadecimalString)") }
+        if isUnconfirmed { parts.append("unconfirmed") }
+        return parts.joined(separator: ", ")
+    }
+}

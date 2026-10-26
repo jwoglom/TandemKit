@@ -82,7 +82,8 @@ come back, with tests of their own: the packet layer `TandemBLE` held is `Packet
 ### Commit stamp
 The `Stamp Git Commit` phase on the `TandemKit` framework target writes the short commit, with
 `-dirty` for a modified tree, into the built framework's Info.plist as `TandemKitGitCommit`, which
-`TandemPumpManager` logs at init so a field log can be tied to a build. It reads the git directory
+`TandemPumpManager` logs at init and prints in its `debugDescription` (the host's issue report), so
+a field log or report can be tied to a build. It reads the git directory
 (a submodule's lives in the host's) and edits the built plist, neither of which the script sandbox
 allows, so that target sets `ENABLE_USER_SCRIPT_SANDBOXING = NO`. A phase runs only if the target
 lists it: the first version of this one was never listed, and every log read `commit unknown`
