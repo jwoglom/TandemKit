@@ -69,6 +69,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
     public var reportedBasal = ReportedBasalLedger(trackingSince: Date())
     /// The last temp basal `raw` minted from the pump's `tempRateId`; see `tempBasalEventRaw`.
     public var lastTempRateEventRaw: Data?
+    /// The last bolus `raw` minted from the pump's `bolusId`; see `bolusEventRaw`.
+    public var lastBolusEventRaw: Data?
     public var deliveryTransitions = DeliveryTransitionLedger()
     public var bolusState: PumpManagerStatus.BolusState = .noBolus
     public var insulinType: InsulinType?
@@ -211,6 +213,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
               lhs.bolusReportLedger == rhs.bolusReportLedger,
               lhs.reportedBasal == rhs.reportedBasal,
               lhs.lastTempRateEventRaw == rhs.lastTempRateEventRaw,
+              lhs.lastBolusEventRaw == rhs.lastBolusEventRaw,
               lhs.deliveryTransitions == rhs.deliveryTransitions,
               lhs.bolusState == rhs.bolusState,
               lhs.insulinType == rhs.insulinType,
@@ -385,6 +388,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
             reportedBasal = ledger
         }
         lastTempRateEventRaw = rawValue["lastTempRateEventRaw"] as? Data
+        lastBolusEventRaw = rawValue["lastBolusEventRaw"] as? Data
 
         if let ledgerRaw = rawValue["deliveryTransitions"] as? DeliveryTransitionLedger.RawValue,
            let ledger = DeliveryTransitionLedger(rawValue: ledgerRaw)
@@ -606,6 +610,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         raw["bolusReportLedger"] = bolusReportLedger.rawValue
         raw["reportedBasal"] = reportedBasal.rawValue
         raw["lastTempRateEventRaw"] = lastTempRateEventRaw
+        raw["lastBolusEventRaw"] = lastBolusEventRaw
         raw["deliveryTransitions"] = deliveryTransitions.rawValue
 
         if let encodedBolusState = TandemPumpManagerState.encodeBolusState(bolusState) {
@@ -690,6 +695,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
             "* bolusReportLedger: \(bolusReportLedger)",
             "* reportedBasal: \(reportedBasal.rows.count) row(s) since \(reportedBasal.trackingSince)",
             "* lastTempRateEventRaw: \(lastTempRateEventRaw?.hexadecimalString ?? "nil")",
+            "* lastBolusEventRaw: \(lastBolusEventRaw?.hexadecimalString ?? "nil")",
             "* deliveryTransitions: \(deliveryTransitions)",
             "* bolusState: \(bolusState)",
             "* basalRateSchedule: \(String(describing: basalRateSchedule))",

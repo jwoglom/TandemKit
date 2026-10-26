@@ -11,7 +11,7 @@ public class UnfinalizedDose: Equatable {
     public var tempRateId: Int?
     /// The percent of the pump's profile a temp rate the app set runs at.
     public var tempPercent: Int?
-    /// A temp basal's `raw` from the pump's `tempRateId`, minted when it started. See `tempBasalRaw`.
+    /// The `raw` minted from the pump's `bolusId` or `tempRateId` when the app commanded the dose.
     public var eventRaw: Data?
     public let type: DoseType
     /// When the driver programmed the dose. This is the dose's identity — the date every

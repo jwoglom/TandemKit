@@ -892,6 +892,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             now: startDate
         )
         dose.isUnconfirmed = isUnconfirmed
+        dose.eventRaw = bolusEventRaw(bolusId: bolusId)
 
         let doseEntry = dose.toDoseEntry(isMutable: true)
         // An unconfirmed bolus gets one once the pump is seen delivering it.
@@ -899,11 +900,12 @@ public class TandemPumpManager: PumpManager, Pluggable {
             bolusProgressReport = TandemDoseProgressReporter(
                 pumpManager: self,
                 dose: doseEntry,
-                activationType: activationType
+                activationType: activationType,
+                eventRaw: dose.eventRaw
             )
         }
 
-        let event = NewPumpEvent.bolus(dose: doseEntry, date: dose.startDate)
+        let event = NewPumpEvent.bolus(dose: doseEntry, of: dose)
         state.bolusReportLedger.prune(now: now)
         state.bolusReportLedger.record(BolusReportLedger.Entry(
             bolusId: bolusId,
@@ -1002,7 +1004,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
                 let mutableDose = bolusDose.toDoseEntry(isMutable: true)
                 var events = self.getActivePumpEvents()
-                events.append(NewPumpEvent.bolus(dose: mutableDose, date: bolusDose.startDate))
+                events.append(NewPumpEvent.bolus(dose: mutableDose, of: bolusDose))
 
                 self.state.lastReconciliation = self.now
                 self.notifyDelegateStateUpdated()
@@ -1027,8 +1029,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             var events = self.getActivePumpEvents()
             // A zero delivery is finalized at 0 U, not withdrawn: Loop purges nothing on an empty batch,
             // and keeps a 0 U bolus out of IOB and HealthKit itself.
-            // bolusDose.startDate, not the dose's: the date it was first reported under.
-            events.append(NewPumpEvent.bolus(dose: canceledDose, date: bolusDose.startDate))
+            events.append(NewPumpEvent.bolus(dose: canceledDose, of: bolusDose))
 
             self.state.lastReconciliation = self.now
             self.notifyDelegateStateUpdated()
@@ -1316,6 +1317,23 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
         let raw = HistoryLogSyncIdentifier.tempRate(pumpSerial: serial, tempRateId: tempRateId)
         state.lastTempRateEventRaw = raw
+        return raw
+    }
+
+    /// As `tempBasalEventRaw`, from the pump's `bolusId`. History reports the bolus under the same
+    /// `raw`, so a later pump manager's history load finds the host already holds it.
+    func bolusEventRaw(bolusId: Int) -> Data? {
+        guard bolusId > 0, let serial = historyLogStoreSerial else {
+            return nil
+        }
+        if let last = state.lastBolusEventRaw.flatMap(HistoryLogSyncIdentifier.decode), last.pumpSerial == serial,
+           bolusId <= last.identifier
+        {
+            logger.warning("Bolus id \(bolusId) is not past \(last.identifier); keying the bolus on what was programmed")
+            return nil
+        }
+        let raw = HistoryLogSyncIdentifier.bolus(pumpSerial: serial, bolusId: bolusId)
+        state.lastBolusEventRaw = raw
         return raw
     }
 
@@ -1907,7 +1925,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 pumpTimestamp: record.map { hostDate(forPumpDate: $0.pumpTimestamp) },
                 detectedAt: now
             )
-            let event = NewPumpEvent.bolus(dose: dose.toDoseEntry(endDate: end, now: now), date: dose.startDate)
+            let event = NewPumpEvent.bolus(dose: dose.toDoseEntry(endDate: end, now: now), of: dose)
             if bolusRaws.insert(event.raw).inserted {
                 events.append(event)
             }
@@ -2649,7 +2667,7 @@ extension TandemPumpManager {
     /// leaves one out deletes it, and Loop never revives a deleted dose (#330).
     func inProgressBolusEvents() -> [NewPumpEvent] {
         let events = [state.bolusDose, state.pendingBolusFinalization].compactMap { dose in
-            dose.map { NewPumpEvent.bolus(dose: $0.toDoseEntry(isMutable: true), date: $0.startDate) }
+            dose.map { NewPumpEvent.bolus(dose: $0.toDoseEntry(isMutable: true), of: $0) }
         } + heldExtendedPartEvents()
         var seen = Set<Data>()
         return events.filter { seen.insert($0.raw).inserted }

@@ -11,6 +11,11 @@ import XCTest
 
     private static let bolusId = 5150
     private static let programmedUnits = 2.0
+    private static let pumpSerial: UInt32 = 123_456
+    private static let pumpsIdentity = HistoryLogSyncIdentifier.bolus(
+        pumpSerial: HistoryLogSyncIdentifier.PumpSerial(pumpSerial)!,
+        bolusId: bolusId
+    )
 
     override func setUp() {
         super.setUp()
@@ -147,6 +152,42 @@ import XCTest
         manager.finalizePendingBolus()
 
         XCTAssertGreaterThanOrEqual(bolusEvents.count, 3)
+        assertOneIdentity()
+    }
+
+    // MARK: - The pump's identity
+
+    func testWithTheSerialABolusIsReportedUnderTheIdentityHistoryReportsItUnder() {
+        manager.state.pumpState.pumpSerial = Self.pumpSerial
+        startBolus()
+        stubLastBolus(deliveredVolume: 1949)
+
+        reportBolusFinished()
+
+        XCTAssertGreaterThanOrEqual(bolusEvents.count, 2)
+        XCTAssertEqual(Set(bolusEvents.map(\.raw)), [Self.pumpsIdentity])
+    }
+
+    func testWithTheSerialACancelledBolusIsFinalizedUnderThePumpsIdentity() {
+        manager.state.pumpState.pumpSerial = Self.pumpSerial
+        startBolus()
+        stubLastBolus(deliveredVolume: 1041)
+
+        cancelBolus()
+
+        XCTAssertEqual(bolusEvents.last?.dose?.isMutable, false)
+        XCTAssertEqual(Set(bolusEvents.map(\.raw)), [Self.pumpsIdentity])
+    }
+
+    func testABolusIdNotPastTheLastOneMintedIsKeyedOnWhatWasProgrammed() {
+        manager.state.pumpState.pumpSerial = Self.pumpSerial
+        // The pump's counter restarted, or it gave the id of a bolus that never started again.
+        manager.state.lastBolusEventRaw = Self.pumpsIdentity
+        startBolus()
+        stubLastBolus(deliveredVolume: 1949)
+
+        reportBolusFinished()
+
         assertOneIdentity()
     }
 
