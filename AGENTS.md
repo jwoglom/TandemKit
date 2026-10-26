@@ -303,8 +303,14 @@ edit instead of at the next sync.
   reconciliation skips the pump's suspended time, so only the reported suspend keeps the host from
   counting its schedule over it. `setupHistoryLoadFailureLimit`
   (3) ticks in a row that read nothing fail the load, and the step offers only Try Again.
-- Loading history the host already counts (the same pump back in the same app) reports it twice, under
-  history's `raw`: IOB over-counts until it ages out.
+- The host drops a deleted manager's state but keeps the doses it was given. So `prepareForDeactivation`
+  archives what the manager reported for its pump in the host app's defaults (`ReportedHistoryArchive`,
+  36 h): finalized boluses, immutable basal rows and reported suspends and resumes. The next manager's load
+  takes them as reported (`inheritArchivedReports`). Without it, the same pump back in the same app had the
+  app's own boluses reported again under history's `raw`, and its own temp basals corrected over. A mutable
+  row is not archived: the next manager's first replacing batch deletes it.
+- Still reported twice: what a manager reported if a build without the archive deleted it. IOB over-counts
+  until it ages out.
 
 ### Onboarding and the basal schedule
 - `applyOnboardingSettings` writes the host's `PumpManagerSetupSettings` to a freshly paired

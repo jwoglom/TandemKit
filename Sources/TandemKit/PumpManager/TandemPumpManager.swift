@@ -16,6 +16,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     public typealias RawStateValue = [String: Any]
 
     let bluetooth: PumpBluetoothConnection
+    let reportedHistoryArchive: ReportedHistoryArchive
 
     /// Every time-dependent decision below reads `now` rather than the wall clock, so tests can
     /// drive the finalization window, the sync throttle and dose dates without waiting.
@@ -256,16 +257,22 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     public convenience init(state: TandemPumpManagerState) {
-        self.init(state: state, bluetooth: TandemBluetoothManager())
+        self.init(state: state, bluetooth: TandemBluetoothManager(), reportedHistoryArchive: ReportedHistoryArchive(defaults: .standard))
     }
 
     /// Designated initializer. Tests inject a stub `bluetooth` here to drive command sequences
     /// without CoreBluetooth; production goes through `init(state:)`.
-    init(state: TandemPumpManagerState, bluetooth: PumpBluetoothConnection, clock: TandemClock = SystemClock()) {
+    init(
+        state: TandemPumpManagerState,
+        bluetooth: PumpBluetoothConnection,
+        clock: TandemClock = SystemClock(),
+        reportedHistoryArchive: ReportedHistoryArchive = ReportedHistoryArchive(defaults: nil)
+    ) {
         _state = state
         oldState = TandemPumpManagerState(rawValue: state.rawValue)
         self.bluetooth = bluetooth
         self.clock = clock
+        self.reportedHistoryArchive = reportedHistoryArchive
         bluetooth.pumpManager = self
         logInitialization()
         #if TANDEMKIT_VIRTUAL_PUMP
@@ -1845,6 +1852,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         bluetooth.deactivate()
         telemetryScheduler.cancelAll()
         finalizeHeldDosesForDeactivation()
+        archiveReportedHistory()
 
         notifyDelegateOfDeactivation {
             completion(nil)

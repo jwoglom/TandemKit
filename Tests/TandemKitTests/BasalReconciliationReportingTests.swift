@@ -39,8 +39,11 @@ import XCTest
         return state
     }
 
-    private func makeManager(state: TandemPumpManagerState) -> TandemPumpManager {
-        let manager = TandemPumpManager(state: state, bluetooth: bluetooth)
+    private func makeManager(
+        state: TandemPumpManagerState,
+        archive: ReportedHistoryArchive = ReportedHistoryArchive(defaults: nil)
+    ) -> TandemPumpManager {
+        let manager = TandemPumpManager(state: state, bluetooth: bluetooth, reportedHistoryArchive: archive)
         manager.clock = clock
         delegate = MockPumpManagerDelegate()
         delegateQueue = DispatchQueue(label: "basal-reconciliation-reporting-test")
@@ -174,6 +177,28 @@ import XCTest
         pass(log)
 
         XCTAssertEqual(events.count, 6)
+    }
+
+    func testSetupsLoadCorrectsNothingAManagerDeletedFromThisAppReported() {
+        let archive = ReportedHistoryArchive(defaults: nil)
+        manager = makeManager(state: Self.state(), archive: archive)
+        enableReporting()
+        told([(appTemp(2.2, from: 310, id: 5), 610)])
+        let log = controlIQHour()
+        pass(log)
+        XCTAssertEqual(events.count, 5)
+        manager.archiveReportedHistory()
+
+        var state = Self.state()
+        state.reportedBasal = ReportedBasalLedger(trackingSince: clock.now)
+        manager = makeManager(state: state, archive: archive)
+        setupBatches = 0
+        enableReporting()
+        manager.inheritArchivedReports()
+        manager.state.reportedBasal.reportHistory(since: clock.now.addingTimeInterval(-TandemPumpManager.setupHistoryLoadWindow))
+        pass(log)
+
+        XCTAssertTrue(events.isEmpty)
     }
 
     func testConsecutiveCyclesAtOneRateAreEachCorrected() {
