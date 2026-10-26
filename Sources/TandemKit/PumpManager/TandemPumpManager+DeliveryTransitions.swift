@@ -501,6 +501,9 @@ extension TandemPumpManager {
             }
         }
         records.removeAll { $0.date < floor || $0.date > now.addingTimeInterval(tolerance) }
+        if let pending = state.deliveryTransitions.pending {
+            datePendingRecord(of: pending, in: &records)
+        }
 
         let isSuspendedNow = (state.deliveryTransitions.pending?.observed ?? state.basalDose.type) == .suspend
         func leaveUnreported(_ record: PumpTransition) {
@@ -598,6 +601,27 @@ extension TandemPumpManager {
             state.deliveryTransitions.interruptedTemp = nil
         }
         return batch
+    }
+
+    /// A record is dated to the pump's second, up to a second before the change: the change itself came
+    /// after the last reading of the state before it, an app command's send, and by its detection.
+    private func datePendingRecord(of pending: PendingTransition, in records: inout [PumpTransition]) {
+        let kind: DeliveryTransitionLedger.Kind
+        if pending.observed == .suspend {
+            kind = .suspend
+        } else if pending.prior.type == .suspend {
+            kind = .resume
+        } else {
+            return
+        }
+        let window = pending.lastConfirmed.addingTimeInterval(-Self.transitionMatchTolerance) ... pending.detectedAt.addingTimeInterval(Self.transitionMatchTolerance)
+        guard let index = records.firstIndex(where: { $0.kind == kind && window.contains($0.date) }) else { return }
+        let record = records[index]
+        records[index] = PumpTransition(
+            sequenceNum: record.sequenceNum,
+            kind: record.kind,
+            date: min(max(record.date, pending.lastConfirmed), pending.detectedAt)
+        )
     }
 
     /// The pump's `TempRateCompleted` for `dose`, on the phone's clock.
