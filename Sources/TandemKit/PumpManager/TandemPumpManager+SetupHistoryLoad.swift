@@ -41,7 +41,6 @@ extension TandemPumpManager {
     public func loadHistoryForSetup(progress: @escaping (Double) -> Void, completion: @escaping (Error?) -> Void) {
         let since = now.addingTimeInterval(-Self.setupHistoryLoadWindow)
         logger.info("Loading pump history since \(since) for setup")
-        inheritArchivedReports()
         state.bolusReportLedger.reportHistory(since: since)
         state.reportedBasal.reportHistory(since: since)
         state.deliveryTransitions.reportHistory(since: since)
@@ -67,52 +66,6 @@ extension TandemPumpManager {
                 completion(error)
             }
         }
-    }
-
-    /// The host still counts what managers deleted from this app reported for the pump.
-    func inheritArchivedReports() {
-        guard let serial = state.pumpState.pumpSerial,
-              let reported = reportedHistoryArchive.reported(pumpSerial: serial, now: now)
-        else {
-            return
-        }
-        logger.info(
-            "Taking \(reported.boluses.count) bolus(es), \(reported.basalRows.count) basal row(s) and \(reported.transitions.count) suspend/resume(s) this app was given for pump \(serial) as reported"
-        )
-        state.bolusReportLedger.inherit(reported.boluses)
-        state.reportedBasal.inherit(reported.basalRows)
-        state.deliveryTransitions.inherit(reported.transitions)
-    }
-
-    /// For the next manager this app sets up for the pump, with what earlier ones archived. Only what the
-    /// host keeps: the next manager's first replacing batch deletes a mutable row.
-    func archiveReportedHistory() {
-        guard let serial = state.pumpState.pumpSerial else {
-            return
-        }
-        var boluses = state.bolusReportLedger
-        var basal = state.reportedBasal
-        var transitions = state.deliveryTransitions
-        if let earlier = reportedHistoryArchive.reported(pumpSerial: serial, now: now) {
-            boluses.inherit(earlier.boluses)
-            basal.inherit(earlier.basalRows)
-            transitions.inherit(earlier.transitions)
-        }
-        boluses.prune(now: now)
-        basal.prune(now: now)
-        transitions.prune(before: now.addingTimeInterval(-DeliveryTransitionLedger.retention))
-        // Another pump's record numbers would mark this one's records as reported.
-        let transitionsAreThisPumps = transitions.pumpSerial.map { $0 == serial } ?? true
-        let reported = ReportedHistoryArchive.Reported(
-            savedAt: now,
-            boluses: boluses.entries.filter { $0.isFinalized && $0.pumpSerial == serial },
-            basalRows: basal.rows.filter { !$0.isMutable },
-            transitions: transitionsAreThisPumps ? transitions.entries.filter(\.isReported) : []
-        )
-        reportedHistoryArchive.save(reported, pumpSerial: serial)
-        logger.info(
-            "Archived \(reported.boluses.count) bolus(es), \(reported.basalRows.count) basal row(s) and \(reported.transitions.count) suspend/resume(s) given for pump \(serial)"
-        )
     }
 
     /// The share of the window from `since` to the pump's clock now that the session's store spans.
