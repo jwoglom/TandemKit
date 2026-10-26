@@ -79,6 +79,8 @@ import XCTest
         let recorder = CompletionRecorder(expectation(description: "the host is told the flow is done"))
         var coordinator: TandemUICoordinator? = TandemUICoordinator(pumpManager: manager, colorPalette: palette, allowDebugFeatures: false)
         coordinator?.completionDelegate = recorder
+        // What viewWillAppear shows a manager the host already has.
+        coordinator?.screenStack = [.pumpSettings]
 
         coordinator?.stepFinished()
         // Trio's sheet drops the flow as soon as its pump manager is nil.
