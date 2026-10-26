@@ -104,9 +104,13 @@ class ConformanceTestCase: FaketandemIntegrationTestCase {
     // MARK: - Driver lifecycle
 
     /// One driver on the shared clock; the harness gives its delegate that clock to journal with.
+    /// `attachDelegate: false` is a setup flow's manager, which `Driver.adoptByHost()` hands over.
     @discardableResult
-    func startDriver(state: TandemPumpManagerState = TandemPumpManagerState(rawValue: [:])) -> FaketandemHarness.Driver {
-        let driver = makeDriver(state: state, clock: manualClock)
+    func startDriver(
+        state: TandemPumpManagerState = TandemPumpManagerState(rawValue: [:]),
+        attachDelegate: Bool = true
+    ) -> FaketandemHarness.Driver {
+        let driver = makeDriver(state: state, clock: manualClock, attachDelegate: attachDelegate)
         delegates.append(driver.delegate)
         return driver
     }
@@ -234,6 +238,14 @@ class ConformanceTestCase: FaketandemIntegrationTestCase {
     func sync(timeout: TimeInterval? = nil) throws -> Date? {
         let running = try XCTUnwrap(driver, "no driver")
         return try harness.sync(running, timeout: timeout ?? syncTimeout)
+    }
+
+    /// Setup's Load Pump History step with Load chosen; returns the load's error.
+    func loadHistoryForSetup(timeout: TimeInterval? = nil) throws -> Error? {
+        let manager = try XCTUnwrap(driver, "no driver").manager
+        let box = ResultBox<Error?>()
+        manager.loadHistoryForSetup(progress: { _ in }) { box.set($0) }
+        return try box.wait("loadHistoryForSetup completion", timeout: timeout ?? syncTimeout)
     }
 
     /// Drains the current delegate queue so the journal holds every callback issued so far.

@@ -266,6 +266,29 @@ on and ends with both oracles and the complete-batch check. `ExtendedBolusConfor
 | J6 | A `BolexCompleted` never read | Held through the programmed end and `extendedPartFinalizationWindow` after it, then finalized at its programmed amount, ending at its programmed end, in a replacing batch |
 | J7 | An app bolus, a quick bolus on the pump, an extended bolus, then an app bolus that still runs when history reads the extended part's end | The app boluses reported live and never again from history, the quick bolus once from history; the batch that finalizes the extended part carries the running app bolus; each finalized once; four rows in Trio |
 
+## K. The pump set up again (#350, #607)
+
+The host deletes the pump manager (`deactivateDriver`) and sets the same pump up again. Each manager is
+set up as TandemKitUI does it: paired before the host has it (`startDriver(attachDelegate: false)`), the
+sync `TandemKitScanViewModel.finishSetup` runs, the Load Pump History step with Load chosen
+(`loadHistoryForSetup()`), and only then adopted (`Driver.adoptByHost()`). Both managers' batches reach
+one host, which must hold every dose the pump gave once: the second manager reports what the first one
+did under the same `raw` (AGENTS.md "Setup history load"), and the pump's doses while no manager was
+attached reach it from the load. faketandem's basal cycle runs throughout, so the app's temps carry
+`SetTempRateResponse` records and both managers reconcile basal. Every scenario checks both oracles for
+duplicates, nothing live dropped and nothing left mutable, and that both hosts count what each closed
+BasalDelivery record delivered, except a cycle a change the app commanded falls in.
+`RepairConformanceTests`.
+
+| ID | Scenario | Assert |
+|---|---|---|
+| K1 | Before any manager the pump boluses and stops for 10 minutes; the first manager loads them. With it the app gives a bolus, a temp it cancels, a suspend and resume, and the pump a bolus and a 175% temp; the app's next temp and a slow bolus run at the deletion. With no manager the pump finishes both, boluses, stops for 10 minutes and runs a 50% temp. The second manager loads | Every report the second manager makes of something before the deletion carries a `raw` the first made, and it does re-report the boluses, both app temps and the first's corrections; no Trio row before the deletion comes from the second; five boluses, each once at the pump's delivered amount under `HistoryLogSyncIdentifier.bolus`, the interim's `wasProgrammedByPumpUI`; three suspends, each closed at its resume and keyed on its record; one correction per cycle of the pump's two temps and no difference logged over the app's; the app's temps under their temp rate ids and the deletion's remainder |
+| K2 | The app's temp runs at the deletion; the pump is set up again 3 minutes later and the new manager's temp replaces it | The load reports the temp under its id and nothing is corrected; Loop holds it to the deletion, the remainder cut where the new temp starts, and the new temp |
+| K3 | As K2 with a profile segment change in the remainder; set up again once the temp has run out | The deletion cuts the remainder at the change into the temp's first part (`tempRatePart`), which the load reports under the same identity; Loop holds three rows at 2.0, 2.0 and the rescaled 1.6 U/hr. Trio stores the part, which starts ahead of its clock, at its clock in the remainder's second, and counts one of the two: strict expected failure |
+| K4a | The app's suspend stands at the deletion; the pump is resumed on its screen before it is set up again | The load's resume, keyed on its record, closes the suspend the host holds; one suspend in each host |
+| K4b | As K4a, the pump still stopped when set up again; the new manager resumes it | The new manager's first reading reports the suspension at detection under its `PumpingSuspended` record, which both hosts already hold, so neither gains a second suspend; its resume closes it |
+| K5 | The app's temp runs at the deletion, the pump boluses meanwhile, and the user chooses Do Not Load | Nothing from before the pairing is reported, the interim bolus included; the temp's cycles after the pairing are corrected at the pump's rate, which both hosts take in place of the remainder |
+
 ## Execution order
 
 1. Oracles + the delegate journal + `PumpTimeline` + `advanceBoth` (shared infrastructure; the oracles

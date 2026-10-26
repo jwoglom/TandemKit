@@ -306,7 +306,7 @@ jobs:
   # together: integration_fault takes the conformance groups built on pump-side failures and
   # outages (D and F in docs/conformance-test-plan.md), integration_commands the groups that
   # interrupt, cancel and repeat the app's own commands (A-C), integration_history the history
-  # reads (H and G, and HistoryBackfillIntegrationTests), and integration everything else, skipping
+  # reads (H, G and K, and HistoryBackfillIntegrationTests), and integration everything else, skipping
   # the other shards' classes, so a new class lands in integration unless it is added to one of the
   # *_SUITES regexes below.
   integration:
@@ -331,7 +331,7 @@ jobs:
       TANDEMKIT_INTEGRATION_TESTS: '1'
       FAULT_SUITES: 'TandemKitIntegrationTests\.(PumpSide|Outage)ConformanceTests'
       COMMAND_SUITES: 'TandemKitIntegrationTests\.(Interrupt|Idempotency|Cancel)ConformanceTests'
-      HISTORY_SUITES: 'TandemKitIntegrationTests\.(BasalHistoryConformance|HistoryBackfillIntegration|TimeChangeConformance)Tests'
+      HISTORY_SUITES: 'TandemKitIntegrationTests\.(BasalHistoryConformance|HistoryBackfillIntegration|TimeChangeConformance|RepairConformance)Tests'
     defaults:
       run:
         shell: bash
