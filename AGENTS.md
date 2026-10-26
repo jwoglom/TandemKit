@@ -515,8 +515,9 @@ edit instead of at the next sync.
     resume is left the same way once the pump has answered (`leaveCommandedTransitionForHistory`),
     and the command completes once it is reported, under its record. The record is to the pump's
     second, so a pending change is dated no earlier than the last reading before it, a command's
-    send, and no later than its detection (`datePendingRecord`): an event the host was told of just
-    before must not come after it, and Loop ignores a suspend older than its last finished basal.
+    send, and no later than its detection (`dateOfChange`), as is the `TempRateCompleted` of a temp
+    it ends: an event the host was told of just before must not come after it, Loop ignores a
+    suspend older than its last finished basal, and drops a temp basal of no length.
   - A sync, or a wizard's `fetchSuspendStatus`, that leaves a change pending completes once it
     is reported, or after `transitionHistoryWait` (30 s) at detection; `ensureCurrentPumpData`
     is not throttled while one is pending, so the host doses on a sync that has reported it.

@@ -594,7 +594,7 @@ extension TandemPumpManager {
 
         let window = pending.lastConfirmed.addingTimeInterval(-tolerance) ... pending.detectedAt.addingTimeInterval(tolerance)
         let completedAt = tempRateEnd(of: pending.prior, in: stored, dates: dates)
-        let end = completedAt
+        let end = completedAt.map { dateOfChange($0, in: pending) }
             ?? records.first { $0.kind == .suspend && $0.date > pending.prior.startDate && window.contains($0.date) }?.date
         closeTransition(pending, tempRateEnd: end, into: &batch)
         if completedAt != nil {
@@ -603,8 +603,6 @@ extension TandemPumpManager {
         return batch
     }
 
-    /// A record is dated to the pump's second, up to a second before the change: the change itself came
-    /// after the last reading of the state before it, an app command's send, and by its detection.
     private func datePendingRecord(of pending: PendingTransition, in records: inout [PumpTransition]) {
         let kind: DeliveryTransitionLedger.Kind
         if pending.observed == .suspend {
@@ -614,14 +612,22 @@ extension TandemPumpManager {
         } else {
             return
         }
-        let window = pending.lastConfirmed.addingTimeInterval(-Self.transitionMatchTolerance) ... pending.detectedAt.addingTimeInterval(Self.transitionMatchTolerance)
-        guard let index = records.firstIndex(where: { $0.kind == kind && window.contains($0.date) }) else { return }
+        guard let index = records.firstIndex(where: { $0.kind == kind && isInWindow($0.date, of: pending) }) else { return }
         let record = records[index]
-        records[index] = PumpTransition(
-            sequenceNum: record.sequenceNum,
-            kind: record.kind,
-            date: min(max(record.date, pending.lastConfirmed), pending.detectedAt)
-        )
+        records[index] = PumpTransition(sequenceNum: record.sequenceNum, kind: record.kind, date: dateOfChange(record.date, in: pending))
+    }
+
+    /// A record is to the pump's second, up to a second before the change, which came after the last
+    /// reading of the state before it (an app command's send) and by its detection. One outside that
+    /// window is not the change's own and keeps its date.
+    private func dateOfChange(_ date: Date, in pending: PendingTransition) -> Date {
+        guard isInWindow(date, of: pending) else { return date }
+        return min(max(date, pending.lastConfirmed), pending.detectedAt)
+    }
+
+    private func isInWindow(_ date: Date, of pending: PendingTransition) -> Bool {
+        let tolerance = Self.transitionMatchTolerance
+        return pending.lastConfirmed.addingTimeInterval(-tolerance) <= date && date <= pending.detectedAt.addingTimeInterval(tolerance)
     }
 
     /// The pump's `TempRateCompleted` for `dose`, on the phone's clock.
