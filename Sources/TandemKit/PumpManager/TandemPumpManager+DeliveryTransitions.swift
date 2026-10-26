@@ -80,13 +80,11 @@ extension TandemPumpManager {
             return false
         }
 
-        // A pump never read before may have changed at any time before: its record, read later, is this change's.
-        let neverRead = state.deliveryTransitions.lastConfirmedObservation == nil && state.deliveryTransitions.trackedAfter == nil
         let pending = PendingTransition(
             prior: held,
             observed: observed,
             detectedAt: now,
-            lastConfirmed: neverRead ? .distantPast : max(held.startDate, state.deliveryTransitions.lastConfirmedObservation ?? .distantPast)
+            lastConfirmed: max(held.startDate, state.deliveryTransitions.lastConfirmedObservation ?? .distantPast)
         )
         state.deliveryTransitions.lastConfirmedObservation = now
         guard datesTransitionsFromHistory else {

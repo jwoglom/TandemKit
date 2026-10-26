@@ -309,11 +309,13 @@ edit instead of at the next sync.
   `tempRateId` and a part of one on `tempRatePart`, by every pump manager alike. The load reports the
   temps an app set over Bluetooth before pairing (`appTempBasalsBeforePairing`: a `SetTempRateResponse`
   record has the id) under those identities, one still running finished at its programmed end as a
-  deleted manager left it, so reconciliation compares their cycles with them and not the schedule. A
+  deleted manager left it, so reconciliation compares their cycles with them and not the schedule; and
+  as there, Loop leaves that one out of IOB from a boundary past its end until its next save. A
   temp set on the pump is corrected cycle by cycle under its BasalDelivery records, as by any manager.
   A suspension the pump is already in when a manager first reads it, as at a re-pair of a stopped
   pump, is reported at detection, before the load could date it, but under its `PumpingSuspended`
-  record when the session's store holds it. Scenarios: conformance group K.
+  record when the session's store holds it. Scenarios: conformance groups K (set up again) and L (a
+  first connection, loaded or not).
 - Still reported twice: what a build without these identities reported, a suspend or resume reported
   at detection because history could not be read in time, a bolus or temp whose id was not past the
   last minted, and a temp set on the pump that a manager adopted under its `tempRateId`, whose cycles

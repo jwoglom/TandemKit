@@ -331,7 +331,7 @@ jobs:
       TANDEMKIT_INTEGRATION_TESTS: '1'
       FAULT_SUITES: 'TandemKitIntegrationTests\.(PumpSide|Outage)ConformanceTests'
       COMMAND_SUITES: 'TandemKitIntegrationTests\.(Interrupt|Idempotency|Cancel)ConformanceTests'
-      HISTORY_SUITES: 'TandemKitIntegrationTests\.(BasalHistoryConformance|HistoryBackfillIntegration|TimeChangeConformance|RepairConformance)Tests'
+      HISTORY_SUITES: 'TandemKitIntegrationTests\.(BasalHistoryConformance|HistoryBackfillIntegration|TimeChangeConformance|RepairConformance|SetupHistoryLoadConformance)Tests'
     defaults:
       run:
         shell: bash
