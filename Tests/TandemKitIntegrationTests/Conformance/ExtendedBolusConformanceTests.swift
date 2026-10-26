@@ -467,9 +467,8 @@ final class ExtendedBolusConformanceTests: ConformanceTestCase {
         for raw in [firstAppRaw, pumpRaw, held.raw, secondAppRaw] {
             XCTAssertEqual(events.filter { $0.raw == raw && $0.dose?.isMutable == false }.count, 1, "finalized once: \(LoopDoseStoreOracle.describe(raw))")
         }
-        for appBolusId in [firstAppBolusId, secondAppBolusId] {
-            let historyRaw = try upFrontPartRaw(bolusId: appBolusId, driver)
-            XCTAssertFalse(events.contains { $0.raw == historyRaw }, "an app bolus is not reported again from history")
+        for (appBolusId, appRaw) in [(firstAppBolusId, firstAppRaw), (secondAppBolusId, secondAppRaw)] {
+            XCTAssertEqual(try upFrontPartRaw(bolusId: appBolusId, driver), appRaw, "an app bolus is keyed as history keys it")
         }
         assertNothingLiveDropped()
 
