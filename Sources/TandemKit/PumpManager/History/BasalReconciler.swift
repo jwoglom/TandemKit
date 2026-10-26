@@ -10,6 +10,10 @@ enum BasalReconciler {
     /// Milliunits per hour.
     static let rateTolerance = 10
 
+    /// How much earlier a later pass, or the next manager after setup's load, can date the record a
+    /// correction ends at: each dates by its own clock read, which trails the pump's by up to a second.
+    static let recordDatingTolerance: TimeInterval = 2
+
     struct Difference: Equatable {
         let chunk: PumpBasalTimeline.Chunk
         /// What the host counts from `from`.
@@ -117,20 +121,30 @@ enum BasalReconciler {
         guard chunk.kind != .suspended, chunk.start >= max(floor, ledger.trackingSince), chunk.end <= now, !isExempt(chunk) else {
             return .skipped
         }
-        let host = ledger.hostBasal(at: chunk.start, schedule: schedule)
+        let start = hostStart(of: chunk, in: ledger)
+        let host = ledger.hostBasal(at: start, schedule: schedule)
         guard host.source != .suspended else {
             return .skipped
         }
-        guard matches(chunk, ledger: ledger, schedule: schedule) else {
+        guard matches(chunk, from: start, ledger: ledger, schedule: schedule) else {
             // The row a change just after the record ended may hold only a second of the chunk.
             let from = ledger.rowEdges(
-                in: DateInterval(start: chunk.start, end: min(chunk.end, chunk.start.addingTimeInterval(TandemPumpManager.transitionMatchTolerance))),
+                in: DateInterval(start: start, end: min(chunk.end, chunk.start.addingTimeInterval(TandemPumpManager.transitionMatchTolerance))),
                 includingCorrections: false
-            ).last ?? chunk.start
+            ).last ?? start
             return .differs(ledger.hostBasal(at: from, schedule: schedule), from: from)
         }
         let interval = DateInterval(start: chunk.start, end: chunk.end)
         return .matches(residual: ledger.hostUnits(in: interval, schedule: schedule) - chunk.units)
+    }
+
+    /// The chunk's start, or the previous chunk's correction's end when the record is dated just before it.
+    private static func hostStart(of chunk: PumpBasalTimeline.Chunk, in ledger: ReportedBasalLedger) -> Date {
+        ledger.rows
+            .filter { ledger.correctedSequenceNum(of: $0) != nil }
+            .map(\.end)
+            .filter { chunk.start < $0 && $0 <= chunk.start.addingTimeInterval(recordDatingTolerance) }
+            .max() ?? chunk.start
     }
 
     /// The host's rate at the chunk's start, or either side of a change it was commanded to make
@@ -139,6 +153,7 @@ enum BasalReconciler {
     /// the previous chunk's.
     private static func matches(
         _ chunk: PumpBasalTimeline.Chunk,
+        from start: Date,
         ledger: ReportedBasalLedger,
         schedule: HostBasalSchedule
     ) -> Bool {
@@ -153,7 +168,7 @@ enum BasalReconciler {
         )
         let commands = Set(ledger.changes(in: window, schedule: schedule, includingCorrections: false))
         let points = [window.start] + ledger.changes(in: window, schedule: schedule)
-        let instants = [chunk.start] + points.indices.dropFirst()
+        let instants = [start] + points.indices.dropFirst()
             .filter { commands.contains(points[$0]) }
             .flatMap { [points[$0 - 1], points[$0]] }
         return instants.contains { instant in
