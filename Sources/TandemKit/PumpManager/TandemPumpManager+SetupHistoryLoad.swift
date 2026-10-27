@@ -1,5 +1,39 @@
 import Foundation
 
+/// What the pump reports about its delivery when setup has just paired it.
+public struct SetupDeliveryReading: Equatable, CustomStringConvertible {
+    public enum LastBolus: Equatable {
+        case unread
+        /// The pump reports no bolus.
+        case none
+        /// On the phone's clock.
+        case delivered(at: Date)
+    }
+
+    public var insulinOnBoard: Double?
+    public var lastBolus: LastBolus
+    /// Nil while suspended.
+    public var currentBasalRate: Double?
+    public var isSuspended: Bool
+
+    public init(
+        insulinOnBoard: Double? = nil,
+        lastBolus: LastBolus = .unread,
+        currentBasalRate: Double? = nil,
+        isSuspended: Bool = false
+    ) {
+        self.insulinOnBoard = insulinOnBoard
+        self.lastBolus = lastBolus
+        self.currentBasalRate = currentBasalRate
+        self.isSuspended = isSuspended
+    }
+
+    public var description: String {
+        "IOB \(insulinOnBoard.map { "\($0) U" } ?? "unread"), last bolus \(lastBolus), "
+            + (isSuspended ? "suspended" : "basal \(currentBasalRate.map { "\($0) U/hr" } ?? "unread")")
+    }
+}
+
 public enum SetupHistoryLoadError: Error, Equatable {
     case historyUnreadable
 }
@@ -35,6 +69,68 @@ extension TandemPumpManager {
     /// Bolus reporting is what makes the load matter; without the backfill there is nothing to read.
     public var canLoadHistoryForSetup: Bool {
         state.featureFlags.historyBackfill && state.featureFlags.historyDoseReporting
+    }
+
+    /// A pump whose last bolus is older than the window has nothing the load would add to the host's IOB.
+    public func offersHistoryLoad(after reading: SetupDeliveryReading) -> Bool {
+        guard canLoadHistoryForSetup else {
+            return false
+        }
+        switch reading.lastBolus {
+        case .unread:
+            return true
+        case .none:
+            return false
+        case let .delivered(at):
+            return now.timeIntervalSince(at) <= Self.setupHistoryLoadWindow
+        }
+    }
+
+    /// Run once pairing is done and before setup writes anything, so it reads what the pump was doing
+    /// for its last user. The pump's clock is read first, for the last bolus's date on the phone's.
+    public func readDeliveryForSetup(completion: @escaping (SetupDeliveryReading) -> Void) {
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.warning("Pump delivery not read during setup: \(error.localizedDescription)")
+                completion(SetupDeliveryReading())
+                return
+            }
+            self.fetchPumpInformation()
+            self.fetchTimeSinceReset()
+            // The IOB opcode is known only once the pump has answered a Control-IQ read.
+            self.fetchControlIQStatus()
+
+            let basal = self.bluetooth.write(CurrentBasalStatusRequest())
+            let reading = SetupDeliveryReading(
+                insulinOnBoard: self.readInsulinOnBoardForSetup(),
+                lastBolus: self.readLastBolusForSetup(),
+                currentBasalRate: basal.flatMap { $0.basalType == .suspend ? nil : $0.currentBasalRate },
+                isSuspended: basal?.basalType == .suspend
+            )
+            self.logger.info("Pump delivery before setup: \(reading)")
+            completion(reading)
+        }
+    }
+
+    private func readInsulinOnBoardForSetup() -> Double? {
+        guard state.controlIQEnabled != nil, let response = bluetooth.write(ControlIQIOBRequest()) else {
+            return nil
+        }
+        return Double(response.pumpDisplayedIOB) / 1000
+    }
+
+    private func readLastBolusForSetup() -> SetupDeliveryReading.LastBolus {
+        let request = LastBolusRequestBuilder.create(apiVersion: state.pumpState.apiVersion, pumpModel: state.pumpState.pumpModel)
+        guard let response = bluetooth.write(request) as? LastBolusStatusAbstractResponse else {
+            return .unread
+        }
+        let pumpDate: Date?
+        if let v3 = response as? LastBolusStatusV3Response {
+            pumpDate = v3.sections.filter { $0.timestamp != 0 }.map(\.timestampDate).max()
+        } else {
+            pumpDate = response.timestamp == 0 ? nil : response.timestampDate
+        }
+        return pumpDate.map { .delivered(at: hostDate(forPumpDate: $0)) } ?? .none
     }
 
     /// `progress` is called from 0 to 1 on an unspecified queue while the load runs, `completion` once.

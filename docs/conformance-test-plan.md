@@ -270,8 +270,9 @@ on and ends with both oracles and the complete-batch check. `ExtendedBolusConfor
 
 The host deletes the pump manager (`deactivateDriver`) and sets the same pump up again. Each manager is
 set up as TandemKitUI does it: paired before the host has it (`startDriver(attachDelegate: false)`), the
-sync `TandemKitScanViewModel.finishSetup` runs, the Load Pump History step with Load chosen
-(`loadHistoryForSetup()`), and only then adopted (`Driver.adoptByHost()`). Both managers' batches reach
+pump read (`readDeliveryForSetup()`), the sync `TandemKitSetupCompleteViewModel` runs, the history load
+the Load Pump History step chose (`loadHistoryForSetup()`), and only then adopted
+(`Driver.adoptByHost()`). Both managers' batches reach
 one host, which must hold every dose the pump gave once: the second manager reports what the first one
 did under the same `raw` (AGENTS.md "Setup history load"), and the pump's doses while no manager was
 attached reach it from the load. faketandem's basal cycle runs throughout, so the app's temps carry
@@ -291,9 +292,9 @@ BasalDelivery record delivered, except a cycle a change the app commanded falls 
 
 ## L. A first connection to a pump with history (#607)
 
-Setup as `TandemKitScanViewModel` and the Load Pump History step run it: pairing, Control-IQ turned
-off if the pump runs it, the onboarding writes and a sync, all with no host attached, then the load
-or not, then the host adopting the manager, which is handed what was held (AGENTS.md "Setup history
+Setup as TandemKitUI runs it: pairing and the reading of the pump, Control-IQ turned off if the
+pump runs it, the onboarding writes and a sync, all with no host attached, then the load or not,
+then the host adopting the manager, which is handed what was held (AGENTS.md "Setup history
 load"). The pump's past is staged on the shared clock before this app's driver exists: on the pump's
 screen, and by another app, a second driver with its own key, over Bluetooth before it goes away. The
 pump runs its basal cycle unless a scenario says otherwise, and staged changes fall mid-cycle.

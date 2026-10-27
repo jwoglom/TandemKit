@@ -19,46 +19,30 @@ struct TandemKitLoadHistoryView: View {
                         Spacer()
                     }
 
-                    switch viewModel.phase {
-                    case .choosing:
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text(viewModel.explanation)
-                            Text(viewModel.guidance)
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(viewModel.introduction)
+                        VStack(alignment: .leading, spacing: 4) {
+                            ForEach(viewModel.readings, id: \.self) { line in
+                                Text(line)
+                            }
                         }
-                    case .loading:
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text(viewModel.loadingMessage)
-                            ProgressView(value: viewModel.progress)
-                            Text(viewModel.progress, format: .percent.precision(.fractionLength(0)))
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
+                        Text(viewModel.question)
                     }
                 }
             }
 
-            switch viewModel.phase {
-            case .choosing:
-                VStack {
-                    ContinueButton(text: Text(viewModel.loadButtonTitle)) {
-                        viewModel.load()
-                    }
-                    ContinueButton(
-                        text: Text(String(localized: "Do Not Load", comment: "Setup button that skips loading the pump's history")),
-                        buttonStyle: .secondary
-                    ) {
-                        viewModel.doNotLoad()
-                    }
+            VStack {
+                ContinueButton(
+                    text: Text(String(localized: "Do Not Load", comment: "Setup button that skips loading the pump's history")),
+                    buttonStyle: .secondary
+                ) {
+                    viewModel.doNotLoad()
                 }
-                .padding(.horizontal)
-            case .loading:
-                HStack {
-                    Spacer()
-                    ActivityIndicator(isAnimating: .constant(true), style: .medium)
-                    Spacer()
+                ContinueButton(text: Text(viewModel.loadButtonTitle)) {
+                    viewModel.load()
                 }
-                .padding()
             }
+            .padding(.horizontal)
         }
         .edgesIgnoringSafeArea(.bottom)
         .navigationBarHidden(false)
@@ -72,17 +56,6 @@ struct TandemKitLoadHistoryView: View {
                 }
             },
             message: { Text(viewModel.notLoadedMessage) }
-        )
-        .alert(
-            String(localized: "Pump History Not Loaded Yet", comment: "Title of the setup error when the pump's history could not be read"),
-            isPresented: $viewModel.isShowingLoadFailedAlert,
-            presenting: $viewModel.loadFailedMessage,
-            actions: { _ in
-                Button(String(localized: "Try Again", comment: "Retry button")) {
-                    viewModel.load()
-                }
-            },
-            message: { detail in Text(detail.wrappedValue ?? "") }
         )
     }
 }

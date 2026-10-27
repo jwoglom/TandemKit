@@ -171,12 +171,14 @@ final class SetupHistoryLoadConformanceTests: ConformanceTestCase {
 
     // MARK: - Setup
 
-    /// As `TandemKitScanViewModel` runs it: pairing, Control-IQ turned off if the pump runs it, the
-    /// onboarding writes and a sync, with no host.
+    /// As TandemKitUI runs it up to the history load: pairing, the reading of the pump the Load Pump
+    /// History step shows, then `TandemKitSetupCompleteViewModel`'s Control-IQ turned off if the pump
+    /// runs it, the onboarding writes and a sync, with no host.
     private func pairThisApp() throws -> FaketandemHarness.Driver {
         hostDelegatesFrom = delegates.count
         let driver = startDriver(state: try appState(), attachDelegate: false)
         try harness.pair(driver)
+        _ = try readDeliveryForSetup()
         let controlIQ = ResultBox<Bool>()
         driver.manager.controlIQNeedsTurningOffForSetup { controlIQ.set($0) }
         if try controlIQ.wait("the Control-IQ check", timeout: 60) {

@@ -160,15 +160,19 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
                 largeTitleDisplayMode: .never
             )
         case .loadHistory:
-            let viewModel = TandemKitLoadHistoryViewModel(pumpManager: pumpManager, done: { [weak self] in
-                self?.pairingCompleted()
+            let viewModel = TandemKitLoadHistoryViewModel(reading: setupDeliveryReading, done: { [weak self] loads in
+                self?.loadsSetupHistory = loads
+                self?.resetNavigationTo([.setupComplete])
             })
             return hostingController(
                 rootView: TandemKitLoadHistoryView(viewModel: viewModel),
                 title: String(localized: "Load Pump History", comment: "Title for the setup step that loads the pump's history")
             )
         case .setupComplete:
-            let view = TandemKitSetupCompleteView(finish: { [weak self] in
+            let viewModel = TandemKitSetupCompleteViewModel(pumpManager: pumpManager, loadsHistory: loadsSetupHistory, pumpIsSetUp: { [weak self] in
+                self?.handPumpManagerToHost()
+            })
+            let view = TandemKitSetupCompleteView(viewModel: viewModel, finish: { [weak self] in
                 guard let self else { return }
                 self.completionDelegate?.completionNotifyingDidComplete(self)
             })
@@ -384,25 +388,29 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
         }
     }
 
-    /// Before the host has the manager, so it doses on none of the pump's history until the user has
-    /// chosen whether to load it.
+    /// What the pump reported right after pairing, for the Load Pump History step.
+    private(set) var setupDeliveryReading = SetupDeliveryReading()
+    private(set) var loadsSetupHistory = false
+
+    /// Before setup writes anything, so the readings are what the pump's last user left, and before the
+    /// host has the manager, so it doses on none of the pump's history until the user has chosen.
     func pairingFinished() {
-        guard pumpManager.canLoadHistoryForSetup else {
-            pairingCompleted()
-            return
+        pumpManager.readDeliveryForSetup { [weak self] reading in
+            DispatchQueue.main.async {
+                self?.showStepAfterPairing(reading)
+            }
         }
-        resetNavigationTo([.loadHistory])
     }
 
-    /// Pairing, the onboarding writes and the history load are done: the pump holds a key for this
+    func showStepAfterPairing(_ reading: SetupDeliveryReading) {
+        setupDeliveryReading = reading
+        resetNavigationTo([pumpManager.offersHistoryLoad(after: reading) ? .loadHistory : .setupComplete])
+    }
+
+    /// Pairing, the history load and the onboarding writes are done: the pump holds a key for this
     /// phone, so the host owns the manager from here, and a setup left before Finish is in its
     /// settings, where it can be deleted (#603). Created, then onboarded: the order the hosts adopt a
     /// manager in.
-    func pairingCompleted() {
-        handPumpManagerToHost()
-        resetNavigationTo([.setupComplete])
-    }
-
     func handPumpManagerToHost() {
         pumpManager.state.onboarded = true
         pumpManager.notifyDelegateStateUpdated()
