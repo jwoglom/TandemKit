@@ -107,19 +107,24 @@ public struct PumpState: RawRepresentable, Equatable, CustomDebugStringConvertib
     }
 
     public var debugDescription: String {
+        (["### PumpState"] + debugFields).joined(separator: "\n")
+    }
+
+    var debugFields: [String] {
         [
-            "### PumpState",
-            "* peripheralUuid: \(String(describing: peripheralUuid))",
-            "* derivedSecret: \(String(describing: derivedSecret?.base64EncodedString()))",
-            "* serverNonce: \(String(describing: serverNonce?.base64EncodedString()))",
-            "* timeSinceReset: \(String(describing: timeSinceReset))",
-            "* apiVersion: \(String(describing: apiVersion))",
-            "* pumpSerial: \(String(describing: pumpSerial))",
-            "* modelNumber: \(String(describing: modelNumber))",
-            "* softwareName: \(String(describing: softwareName))",
-            "* controlBitsA: \(String(describing: controlBitsA))",
-            "* controlBitsB: \(String(describing: controlBitsB))",
-            "* pumpModel: \(String(describing: pumpModel))"
-        ].joined(separator: "\n")
+            "* peripheralUuid: \(debugValue(peripheralUuid))",
+            "* pincode: \(debugValue(pincode))",
+            "* derivedSecret: \(debugValue(derivedSecret?.base64EncodedString()))",
+            "* serverNonce: \(debugValue(serverNonce?.base64EncodedString()))",
+            "* timeSinceReset: \(debugValue(timeSinceReset))",
+            "* apiVersion: \(apiVersion.map { "\($0.major).\($0.minor)" } ?? "nil")",
+            "* pumpSerial: \(debugValue(pumpSerial))",
+            "* modelNumber: \(debugValue(modelNumber))",
+            "* pcbSerialNumber: \(debugValue(pcbSerialNumber))",
+            "* softwareName: \(debugValue(softwareName))",
+            "* controlBitsA: \(debugValue(controlBitsA))",
+            "* controlBitsB: \(debugValue(controlBitsB))",
+            "* pumpModel: \(debugValue(pumpModel))"
+        ]
     }
 }

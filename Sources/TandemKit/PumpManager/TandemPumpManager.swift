@@ -296,12 +296,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     private func logInitialization() {
-        let commit = Bundle(for: TandemPumpManager.self).object(forInfoDictionaryKey: "TandemKitGitCommit") as? String ?? "unknown"
         let app = Bundle.main.bundleIdentifier ?? "unknown"
         let info = Bundle.main.infoDictionary
         let version = info?["CFBundleShortVersionString"] as? String ?? "unknown"
         let build = info?["CFBundleVersion"] as? String
-        logger.info("TandemKit initialized, commit \(commit) running in \(app) version \(version)\(build.map { " (\($0))" } ?? "")")
+        logger.info("TandemKit initialized, commit \(Self.gitCommit) running in \(app) version \(version)\(build.map { " (\($0))" } ?? "")")
     }
 
     public required convenience init?(rawState: RawStateValue) {
@@ -317,7 +316,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     public var debugDescription: String {
-        "TandemPumpManager(state: \(state))"
+        ["## TandemPumpManager", "* gitCommit: \(Self.gitCommit)", state.debugDescription].joined(separator: "\n")
+    }
+
+    private static var gitCommit: String {
+        Bundle(for: TandemPumpManager.self).object(forInfoDictionaryKey: "TandemKitGitCommit") as? String ?? "unknown"
     }
 
     public var isOnboarded: Bool {
