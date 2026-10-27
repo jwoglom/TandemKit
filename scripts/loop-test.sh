@@ -50,17 +50,51 @@ LOOP_APP="$LOOP_DERIVED_DATA/Build/Products/Debug-iphonesimulator/Loop.app"
 # Signed ad hoc with no team, as Trio is: Loop derives its bundle id and app group from the team, so
 # the main bundle id is given outright. Loop's store and settings live in the app group, which an
 # unsigned build would not have.
-build_loop() {
-  if [[ ! -f "$LOOP_DIR/LoopWorkspace.xcworkspace/contents.xcworkspacedata" || ! -d "$LOOP_DIR/TandemKit/Sources" ]]; then
-    echo "No LoopWorkspace checkout with TandemKit at $LOOP_DIR; set LOOP_DIR" >&2
-    exit 1
-  fi
-  xcodebuild build -workspace "$LOOP_DIR/LoopWorkspace.xcworkspace" -scheme LoopWorkspace -configuration Debug \
+build_scheme() {
+  local scheme="$1"; shift
+  xcodebuild build -workspace "$LOOP_DIR/LoopWorkspace.xcworkspace" -scheme "$scheme" -configuration Debug \
     -destination "${DESTINATION:-platform=iOS Simulator,id=$UDID}" -derivedDataPath "$LOOP_DERIVED_DATA" \
     -xcconfig "$ROOT/VirtualPump.xcconfig" -skipMacroValidation -skipPackagePluginValidation \
     MAIN_APP_BUNDLE_IDENTIFIER="com.$LOOP_TEAM.loopkit.Loop" \
     DEVELOPMENT_TEAM= CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- PROVISIONING_PROFILE_SPECIFIER= \
     "$@"
+}
+
+# LoopWorkspace's scheme with only its .loopplugin targets, in the workspace's git-ignored xcuserdata.
+write_plugins_scheme() {
+  local workspace="$LOOP_DIR/LoopWorkspace.xcworkspace"
+  local schemes="$workspace/xcuserdata/$(id -un).xcuserdatad/xcschemes"
+  mkdir -p "$schemes"
+  python3 - "$workspace/xcshareddata/xcschemes/LoopWorkspace.xcscheme" "$schemes/$PLUGINS_SCHEME.xcscheme" <<'EOF'
+import sys
+import xml.etree.ElementTree as ET
+
+scheme = ET.parse(sys.argv[1]).getroot()
+build = scheme.find("BuildAction")
+entries = build.find("BuildActionEntries")
+for entry in list(entries):
+    if not entry.find("BuildableReference").get("BuildableName", "").endswith(".loopplugin"):
+        entries.remove(entry)
+if len(entries) == 0:
+    sys.exit(f"no .loopplugin targets in {sys.argv[1]}")
+for action in list(scheme):
+    if action is not build:
+        scheme.remove(action)
+ET.ElementTree(scheme).write(sys.argv[2], encoding="UTF-8", xml_declaration=True)
+EOF
+}
+
+PLUGINS_SCHEME="LoopWorkspacePlugins"
+build_loop() {
+  if [[ ! -f "$LOOP_DIR/LoopWorkspace.xcworkspace/contents.xcworkspacedata" || ! -d "$LOOP_DIR/TandemKit/Sources" ]]; then
+    echo "No LoopWorkspace checkout with TandemKit at $LOOP_DIR; set LOOP_DIR" >&2
+    exit 1
+  fi
+  # Loop's Install Plugins phase embeds each .loopplugin it finds, and Loop.app depends on none of
+  # them, so the scheme's parallel build embedded one still building, with no Info.plist yet.
+  write_plugins_scheme
+  build_scheme "$PLUGINS_SCHEME" "$@"
+  build_scheme LoopWorkspace "$@"
 }
 
 if [[ "$mode" == "build" ]]; then
