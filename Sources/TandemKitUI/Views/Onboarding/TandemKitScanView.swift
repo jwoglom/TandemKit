@@ -201,6 +201,7 @@ struct TandemKitScanView: View {
             Text("Place your Mobi on the charging pad", comment: "Place on charging pad explanation")
                 .font(.headline)
                 .bold()
+                .multilineTextAlignment(.center)
 
             Image(imageName: "mobi_on_pad")
                 .resizable()
@@ -208,6 +209,7 @@ struct TandemKitScanView: View {
                 .padding(.horizontal)
                 .frame(height: 150)
         }
+        .frame(maxWidth: .infinity)
     }
 
     @ViewBuilder var DoubleTapView: some View {
