@@ -826,6 +826,9 @@ edit instead of at the next sync.
   acknowledges those and is retried once (`ResumeWithAlarmAcknowledgement`), from the host's resume
   and the settings screen's alike: the host shows only its own error, and the alarms ask for the
   resume being made (#170). Any other alarm is left for the user to dismiss.
+- A pump clock more than `pumpClockSmallSkewThreshold` (1 min) off the phone's
+  (`showPumpTimeSyncWarning`) shows the settings screen's "Time Change Detected" notice and the
+  time-sync badge, and nothing else.
 - A pump clock more than `pumpClockSkewThreshold` (5 min) off the phone's (`isPumpClockSkewed`)
   raises a LoopKit alert, retracted once the clock agrees (`pumpClockSkewAlertIssued`, persisted),
   and a status highlight; the settings screen syncs the clock. While skewed, wherever the host
