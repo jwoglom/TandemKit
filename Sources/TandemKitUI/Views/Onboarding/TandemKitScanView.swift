@@ -141,7 +141,7 @@ struct TandemKitScanView: View {
             } else {
                 VStack {
                     Text(String(
-                        localized: "Enter the pairing code from your pump",
+                        localized: "Enter the 6-digit number labeled 'PIN' on the side of the Tandem Mobi inside the cartridge area",
                         comment: "Tandem pairing code prompt message"
                     ))
                     Text(String(
