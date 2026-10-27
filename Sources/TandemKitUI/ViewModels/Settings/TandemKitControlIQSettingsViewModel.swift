@@ -78,13 +78,7 @@ class TandemKitControlIQSettingsViewModel: ObservableObject {
                 }
 
                 if let scheduleResponse {
-                    self.sleepSchedules = [
-                        scheduleResponse.schedule0,
-                        scheduleResponse.schedule1,
-                        scheduleResponse.schedule2,
-                        scheduleResponse.schedule3
-                    ].enumerated().map { SleepScheduleSlot(from: $0.element, index: $0.offset) }
-                    self.originalSleepSchedules = self.sleepSchedules
+                    self.showSleepSchedules(scheduleResponse)
                 }
 
                 self.isFetching = false
@@ -135,11 +129,7 @@ class TandemKitControlIQSettingsViewModel: ObservableObject {
                     self.originalTDI = self.totalDailyInsulin
                     self.recomputeSaveState()
                 case let .failure(error):
-                    // Report what actually went wrong -- an unset weight or TDI, or the status the
-                    // pump rejected the change with -- instead of blaming the connection.
-                    self.saveError = [error.localizedDescription, (error as? LocalizedError)?.recoverySuggestion]
-                        .compactMap { $0 }
-                        .joined(separator: " ")
+                    self.saveError = Self.message(for: error)
                 }
             }
         }
@@ -162,25 +152,36 @@ class TandemKitControlIQSettingsViewModel: ObservableObject {
         isLoading = true
 
         let schedule = sleepSchedules[slot].toProtocol()
-        pumpManager?.setSleepSchedule(slot: slot, schedule: schedule) { success in
+        pumpManager?.setSleepSchedule(slot: slot, schedule: schedule) { error, readBack in
             DispatchQueue.main.async {
                 self.isLoading = false
-                if success {
-                    if slot < self.originalSleepSchedules.count {
+                if slot < self.sleepSchedules.count, slot < self.originalSleepSchedules.count {
+                    if let held = readBack?.schedule(at: slot) {
+                        self.sleepSchedules[slot] = SleepScheduleSlot(from: held, index: slot)
+                        self.originalSleepSchedules[slot] = self.sleepSchedules[slot]
+                    } else if error == nil {
                         self.originalSleepSchedules[slot] = self.sleepSchedules[slot]
                     }
-                } else {
-                    self.saveError = String(
-                        localized:
-                        "Failed to update sleep schedule. Check pump connection.",
-                        comment: "Error when sleep schedule save fails"
-                    )
+                }
+                if let error {
+                    self.saveError = Self.message(for: error)
                 }
             }
         }
     }
 
+    private func showSleepSchedules(_ response: ControlIQSleepScheduleResponse) {
+        sleepSchedules = response.schedules.enumerated().map { SleepScheduleSlot(from: $0.element, index: $0.offset) }
+        originalSleepSchedules = sleepSchedules
+    }
+
     // MARK: - Helpers
+
+    static func message(for error: Error) -> String {
+        [error.localizedDescription, (error as? LocalizedError)?.recoverySuggestion]
+            .compactMap { $0 }
+            .joined(separator: " ")
+    }
 
     private func recomputeSaveState() {
         let message = Self.validationMessage(
@@ -304,8 +305,12 @@ struct SleepScheduleSlot: Identifiable, Equatable {
         return String(format: "%d:%02d", h, m)
     }
 
-    /// Day-of-week letters in the order of the pump's `activeDays` bitmask, bit 0 being Sunday.
-    static let dayLetters = Calendar.current.veryShortWeekdaySymbols
+    /// Day-of-week letters in the order of the pump's `activeDays` bitmask (`MultiDay`), bit 0 being
+    /// Monday. `veryShortWeekdaySymbols` starts on Sunday.
+    static let dayLetters: [String] = {
+        let symbols = Calendar.current.veryShortWeekdaySymbols
+        return Array(symbols.dropFirst()) + symbols.prefix(1)
+    }()
 
     func isActive(day: Int) -> Bool {
         activeDays & (1 << day) != 0

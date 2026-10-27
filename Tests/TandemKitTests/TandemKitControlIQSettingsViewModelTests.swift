@@ -88,8 +88,8 @@ import XCTest
     func testActiveDaysRoundTripThroughTheBitmask() {
         var slot = SleepScheduleSlot(id: 0)
 
-        slot.setActive(day: 0, true) // Sunday
-        slot.setActive(day: 6, true) // Saturday
+        slot.setActive(day: 0, true) // Monday
+        slot.setActive(day: 6, true) // Sunday
         XCTAssertEqual(slot.activeDays, 0b100_0001)
         XCTAssertTrue(slot.isActive(day: 0))
         XCTAssertTrue(slot.isActive(day: 6))
@@ -98,6 +98,17 @@ import XCTest
         slot.setActive(day: 0, false)
         XCTAssertEqual(slot.activeDays, 0b100_0000)
         XCTAssertFalse(slot.isActive(day: 0))
+    }
+
+    func testDaysAreInThePumpsOrderMondayFirst() {
+        var slot = SleepScheduleSlot(id: 0)
+        slot.setActive(day: 0, true)
+        slot.setActive(day: 6, true)
+
+        XCTAssertEqual(MultiDay.fromBitmask(slot.activeDays), [.monday, .sunday])
+        XCTAssertEqual(SleepScheduleSlot.dayLetters.count, 7)
+        XCTAssertEqual(SleepScheduleSlot.dayLetters[0], Calendar.current.veryShortWeekdaySymbols[1])
+        XCTAssertEqual(SleepScheduleSlot.dayLetters[6], Calendar.current.veryShortWeekdaySymbols[0])
     }
 
     func testEditsSurviveTheRoundTripToTheWireFormat() {

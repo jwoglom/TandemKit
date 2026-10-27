@@ -92,3 +92,56 @@ extension ControlIQConfigurationError: LocalizedError {
         }
     }
 }
+
+public enum SleepScheduleWriteError: Error, Equatable {
+    case unsupported
+    case pumpRejected(status: Int)
+    case noResponse
+    /// The pump answered OK, but reading the schedules back shows the slot unchanged or different.
+    case notApplied
+}
+
+extension SleepScheduleWriteError: LocalizedError {
+    public var errorDescription: String? {
+        switch self {
+        case .unsupported:
+            return String(
+                localized: "This pump does not accept sleep schedule changes from the app.",
+                comment: "Error when the pump cannot accept a sleep schedule write"
+            )
+        case let .pumpRejected(status):
+            return String(
+                format: String(
+                    localized: "The pump rejected the sleep schedule (status %@).",
+                    comment: "Error when the pump returns a non-OK status for a sleep schedule change"
+                ),
+                String(status)
+            )
+        case .noResponse:
+            return PumpCommError.noResponse.errorDescription
+        case .notApplied:
+            return String(
+                localized: "The pump accepted the sleep schedule but did not save it.",
+                comment: "Error when a sleep schedule reads back from the pump unchanged after a write"
+            )
+        }
+    }
+
+    public var recoverySuggestion: String? {
+        switch self {
+        case .unsupported:
+            return String(
+                localized: "Change sleep schedules on the pump itself, or in the Tandem app.",
+                comment: "Recovery suggestion when the pump cannot accept a sleep schedule write"
+            )
+        case .notApplied,
+             .pumpRejected:
+            return String(
+                localized: "Check the schedule's days and times, then try again.",
+                comment: "Recovery suggestion when the pump rejects or does not save a sleep schedule"
+            )
+        case .noResponse:
+            return PumpCommError.noResponse.recoverySuggestion
+        }
+    }
+}

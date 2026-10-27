@@ -62,12 +62,20 @@ public class ControlIQSleepScheduleResponse: Message {
         self.schedule3 = schedule3
     }
 
+    public var schedules: [SleepSchedule] {
+        [schedule0, schedule1, schedule2, schedule3]
+    }
+
+    public func schedule(at slot: Int) -> SleepSchedule? {
+        schedules.indices.contains(slot) ? schedules[slot] : nil
+    }
+
     public var description: String {
         "ControlIQSleepScheduleResponse(cargo=\(cargo.hexadecimalString), schedule0=\(schedule0), schedule1=\(schedule1), schedule2=\(schedule2), schedule3=\(schedule3))"
     }
 
     /// Represents a single sleep schedule block.
-    public struct SleepSchedule {
+    public struct SleepSchedule: Equatable {
         public var enabled: Int
         public var activeDays: Int
         public var startTime: Int
