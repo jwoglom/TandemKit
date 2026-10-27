@@ -1242,13 +1242,13 @@
         }
       }
     },
-    "Enter the pairing code from your pump" : {
+    "Enter the 6-digit number labeled 'PIN' on the side of the Tandem Mobi inside the cartridge area" : {
       "comment" : "Tandem pairing code prompt message",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Enter the pairing code from your pump"
+            "value" : "Enter the 6-digit number labeled 'PIN' on the side of the Tandem Mobi inside the cartridge area"
           }
         }
       }
@@ -1815,13 +1815,13 @@
         }
       }
     },
-    "Found the " : {
+    "Found device " : {
       "comment" : "Found device prefix text",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Found the "
+            "value" : "Found device "
           }
         }
       }

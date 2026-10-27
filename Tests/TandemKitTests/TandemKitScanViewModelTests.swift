@@ -7,6 +7,40 @@ import XCTest
     private let basalError = PumpCommError.noResponse
     private let limitsError = PumpCommError.invalidPacket
 
+    private func connectedElsewhereViewModel(_ names: [String]) -> TandemKitScanViewModel {
+        let bluetooth = StubPumpBluetooth()
+        bluetooth.connectedNames = names
+        let manager = TandemPumpManager(state: TandemPumpManagerState(rawValue: [:]), bluetooth: bluetooth)
+        return TandemKitScanViewModel(manager, nextStep: {})
+    }
+
+    func testAPumpConnectedToThePhoneRaisesTheForgetPromptNamingIt() {
+        let viewModel = connectedElsewhereViewModel(["Tandem Mobi 1234"])
+
+        viewModel.checkForConnectedPump()
+
+        XCTAssertTrue(viewModel.isConnectedElsewhere)
+        XCTAssertTrue(viewModel.connectedElsewhereMessage.contains("Tandem Mobi 1234"))
+    }
+
+    func testNoConnectedPumpRaisesNoPrompt() {
+        let viewModel = connectedElsewhereViewModel([])
+
+        viewModel.checkForConnectedPump()
+
+        XCTAssertFalse(viewModel.isConnectedElsewhere)
+    }
+
+    func testDismissingThePromptSilencesItUntilTheIntervalPasses() {
+        let viewModel = connectedElsewhereViewModel(["Tandem Mobi 1234"])
+        viewModel.checkForConnectedPump()
+
+        viewModel.connectedElsewhereDismissed()
+        viewModel.checkForConnectedPump()
+
+        XCTAssertFalse(viewModel.isConnectedElsewhere)
+    }
+
     func testBasalFailureMessageNamesBasalRatesAndLeadsWithTheBasalError() {
         let message = TandemKitScanViewModel.message(
             for: OnboardingSettingsFailure(basalSchedule: basalError, deliveryLimits: limitsError)

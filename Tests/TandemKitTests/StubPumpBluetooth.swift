@@ -147,6 +147,10 @@ final class StubPumpBluetooth: PumpBluetoothConnection {
 
     func stopScan() {}
 
+    var connectedNames: [String] = []
+
+    func connectedPumpNames() -> [String] { connectedNames }
+
     /// Set to hold `connect`'s completion in `heldConnectCompletion` for the test to call, as a real
     /// attempt's arrives later.
     var holdsConnectCompletion = false

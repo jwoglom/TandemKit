@@ -27,6 +27,7 @@ struct TandemKitScanView: View {
         }
         .onAppear {
             viewModel.startScan()
+            viewModel.startCheckingForConnectedPump()
         }
         .safeAreaInset(edge: .bottom) {
             VStack {
@@ -59,6 +60,16 @@ struct TandemKitScanView: View {
                 viewModel.stopScan()
             }
         }
+        .alert(
+            String(localized: "Pump Already Connected", comment: "Title of the warning when the pump is connected to the phone"),
+            isPresented: $viewModel.isConnectedElsewhere,
+            actions: {
+                Button(String(localized: "OK", comment: "OK button")) {
+                    viewModel.connectedElsewhereDismissed()
+                }
+            },
+            message: { Text(viewModel.connectedElsewhereMessage) }
+        )
         .alert(
             viewModel.connectionErrorTitle,
             isPresented: $viewModel.isConnectionError,
@@ -130,7 +141,7 @@ struct TandemKitScanView: View {
             } else {
                 VStack {
                     Text(String(
-                        localized: "Enter the pairing code from your pump",
+                        localized: "Enter the 6-digit number labeled 'PIN' on the side of the Tandem Mobi inside the cartridge area",
                         comment: "Tandem pairing code prompt message"
                     ))
                     Text(String(
@@ -201,6 +212,7 @@ struct TandemKitScanView: View {
             Text("Place your Mobi on the charging pad", comment: "Place on charging pad explanation")
                 .font(.headline)
                 .bold()
+                .multilineTextAlignment(.center)
 
             Image(imageName: "mobi_on_pad")
                 .resizable()
@@ -208,20 +220,23 @@ struct TandemKitScanView: View {
                 .padding(.horizontal)
                 .frame(height: 150)
         }
+        .frame(maxWidth: .infinity)
     }
 
     @ViewBuilder var DoubleTapView: some View {
         VStack(alignment: .center, spacing: 40) {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .center, spacing: 10) {
                 Text(
                     "Pick up your pump, wait a second, then double-press the T button",
                     comment: "Double-tap explanation"
                 )
                 .font(.headline)
                 .bold()
+                .multilineTextAlignment(.center)
 
-                Text(String(localized: "Found the ", comment: "Found device prefix text") + (viewModel.connectingTo ?? ""))
+                Text(String(localized: "Found device ", comment: "Found device prefix text") + (viewModel.connectingTo ?? ""))
                     .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
             }
 
             Image(imageName: "mobi_double_tap")
@@ -234,7 +249,9 @@ struct TandemKitScanView: View {
 
             Text("You should hear two beeps after double-pressing the button.", comment: "Beep explanation")
                 .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
         }
+        .frame(maxWidth: .infinity)
     }
 
     @ViewBuilder var AuthenticatingView: some View {
