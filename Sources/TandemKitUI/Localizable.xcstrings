@@ -647,6 +647,17 @@
         }
       }
     },
+    "Delivery Records Processed" : {
+      "comment" : "Title of the setup alert after the pump's history loaded",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delivery Records Processed"
+          }
+        }
+      }
+    },
     "Dismiss all notifications before completing tubing fill" : {
       "comment" : "Warning message",
       "localizations" : {
@@ -3417,6 +3428,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Stopping..."
+          }
+        }
+      }
+    },
+    "Successfully processed %1$d pump bolus records and %2$d pump basal records from your Tandem Mobi. %3$d bolus records and %4$d basal records were added to %5$@.\n\nTo check what was imported, go to %5$@'s insulin treatments page." : {
+      "comment" : "Setup alert after the pump's history loaded (1: the pump's bolus records read, 2: its basal records read, 3: bolus records reported to the app, 4: basal records reported to the app, 5: app name)",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Successfully processed %1$d pump bolus records and %2$d pump basal records from your Tandem Mobi. %3$d bolus records and %4$d basal records were added to %5$@.\n\nTo check what was imported, go to %5$@'s insulin treatments page."
           }
         }
       }

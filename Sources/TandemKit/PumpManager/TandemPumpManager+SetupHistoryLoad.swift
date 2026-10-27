@@ -34,6 +34,23 @@ public struct SetupDeliveryReading: Equatable, CustomStringConvertible {
     }
 }
 
+/// What setup's history load read and reported.
+public struct SetupHistoryLoadSummary: Equatable {
+    /// The pump's bolus and basal records in the window, every one the reporting passes read.
+    public var pumpBolusRecords: Int
+    public var pumpBasalRecords: Int
+    /// The doses the load reported to the host, by `raw`.
+    public var reportedBolusRecords: Int
+    public var reportedBasalRecords: Int
+
+    public init(pumpBolusRecords: Int, pumpBasalRecords: Int, reportedBolusRecords: Int, reportedBasalRecords: Int) {
+        self.pumpBolusRecords = pumpBolusRecords
+        self.pumpBasalRecords = pumpBasalRecords
+        self.reportedBolusRecords = reportedBolusRecords
+        self.reportedBasalRecords = reportedBasalRecords
+    }
+}
+
 public enum SetupHistoryLoadError: Error, Equatable {
     case historyUnreadable
 }
@@ -65,6 +82,17 @@ extension TandemPumpManager {
     static let setupHistoryLoadRetryDelay: TimeInterval = .seconds(2)
 
     static let setupHistoryLoadProgressInterval: TimeInterval = .seconds(1)
+
+    static let pumpBolusRecordTypes = [
+        BolusActivatedHistoryLog.typeId, BolusRequestedMsg2HistoryLog.typeId, BolusDeliveryHistoryLog.typeId,
+        BolusCompletedHistoryLog.typeId, BolexActivatedHistoryLog.typeId, BolexCompletedHistoryLog.typeId
+    ]
+
+    static let pumpBasalRecordTypes = [
+        BasalDeliveryHistoryLog.typeId, DailyBasalHistoryLog.typeId, TempRateActivatedHistoryLog.typeId,
+        TempRateCompletedHistoryLog.typeId, SetTempRateResponseHistoryLog.typeId,
+        PumpingSuspendedHistoryLog.typeId, PumpingResumedHistoryLog.typeId
+    ]
 
     /// Bolus reporting is what makes the load matter; without the backfill there is nothing to read.
     public var canLoadHistoryForSetup: Bool {
@@ -134,13 +162,17 @@ extension TandemPumpManager {
     }
 
     /// `progress` is called from 0 to 1 on an unspecified queue while the load runs, `completion` once.
-    public func loadHistoryForSetup(progress: @escaping (Double) -> Void, completion: @escaping (Error?) -> Void) {
+    public func loadHistoryForSetup(
+        progress: @escaping (Double) -> Void,
+        completion: @escaping (Result<SetupHistoryLoadSummary, Error>) -> Void
+    ) {
         let since = now.addingTimeInterval(-Self.setupHistoryLoadWindow)
         logger.info("Loading pump history since \(since) for setup")
         state.bolusReportLedger.reportHistory(since: since)
         state.reportedBasal.reportHistory(since: since)
         state.deliveryTransitions.reportHistory(since: since)
         notifyDelegateStateUpdated()
+        _ = heldEventsSinceSetupHistoryLoadStarted(starting: true)
 
         let progressQueue = DispatchQueue(label: "com.jwoglom.TandemKit.setupHistoryLoad")
         let timer = DispatchSource.makeTimerSource(queue: progressQueue)
@@ -155,12 +187,53 @@ extension TandemPumpManager {
             timer.cancel()
             // Behind a reading already under way, so none lands after the last.
             progressQueue.async {
-                if error == nil {
-                    self.logger.info("Loaded pump history for setup")
-                    progress(1)
+                if let error {
+                    completion(.failure(error))
+                    return
                 }
-                completion(error)
+                let summary = self.setupHistoryLoadSummary(since: since)
+                self.logger.info("Loaded pump history for setup: \(summary)")
+                progress(1)
+                completion(.success(summary))
             }
+        }
+    }
+
+    func setupHistoryLoadSummary(since: Date) -> SetupHistoryLoadSummary {
+        var reportedBoluses = Set<Data>()
+        var reportedBasal = Set<Data>()
+        for event in heldEventsSinceSetupHistoryLoadStarted(starting: false) {
+            switch event.dose?.type {
+            case .bolus?:
+                reportedBoluses.insert(event.raw)
+            case .basal?, .tempBasal?, .suspend?, .resume?:
+                reportedBasal.insert(event.raw)
+            case nil:
+                break
+            }
+        }
+        return SetupHistoryLoadSummary(
+            pumpBolusRecords: pumpRecordCount(ofTypes: Self.pumpBolusRecordTypes, since: since),
+            pumpBasalRecords: pumpRecordCount(ofTypes: Self.pumpBasalRecordTypes, since: since),
+            reportedBolusRecords: reportedBoluses.count,
+            reportedBasalRecords: reportedBasal.count
+        )
+    }
+
+    private func pumpRecordCount(ofTypes typeIds: [Int], since: Date) -> Int {
+        guard let serial = historyLogStoreSerial else {
+            return 0
+        }
+        let pumpSince = Dates.fromInstantToJan12008EpochSeconds(since.addingTimeInterval(state.pumpClockOffset))
+        do {
+            return try historyLogStore.logs(
+                pumpSerial: serial.rawValue,
+                ofTypes: typeIds,
+                sincePumpTimeSec: UInt32(clamping: Int(max(0, pumpSince)))
+            ).count
+        } catch {
+            logger.warning("Could not count the pump's records for setup: \(error)")
+            return 0
         }
     }
 

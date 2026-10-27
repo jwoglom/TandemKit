@@ -310,6 +310,12 @@ edit instead of at the next sync.
   reconciliation skips the pump's suspended time, so only the reported suspend keeps the host from
   counting its schedule over it. `setupHistoryLoadFailureLimit`
   (3) ticks in a row that read nothing fail the load, and the step offers only Try Again.
+- A load that completes gives a `SetupHistoryLoadSummary`, which the Delivery Records Processed alert
+  shows before the host gets the manager: the pump's records in the window of the types the reporting
+  passes read for boluses (`pumpBolusRecordTypes`) and for basal (`pumpBasalRecordTypes`), then the
+  bolus and basal doses the load reported, by `raw`: what it added to the held events since its first
+  attempt started. A dose the host already holds under that `raw` (the same pump in the same app) is
+  counted though the host keeps only one row.
 - History the host already holds (the same pump back in the same app) arrives under the `raw` it was
   told it under, and both hosts keep the row they hold: an app bolus is keyed on its `bolusId`, a
   suspend or resume on its `PumpingSuspended`/`PumpingResumed` record, a temp basal on its

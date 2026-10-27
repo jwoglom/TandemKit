@@ -195,6 +195,9 @@ final class SetupHistoryLoadConformanceTests: ConformanceTestCase {
         return driver
     }
 
+    /// The last load's, as the setup-complete screen shows it.
+    private var loadSummary: SetupHistoryLoadSummary?
+
     private final class ProgressLog {
         private let lock = NSLock()
         private var values: [Double] = []
@@ -219,9 +222,14 @@ final class SetupHistoryLoadConformanceTests: ConformanceTestCase {
         try clock.advanceBoth(seconds: .minutes(1), ticks: 1)
         let since = clock.now.addingTimeInterval(-TandemPumpManager.setupHistoryLoadWindow)
         let progress = ProgressLog()
-        let loaded = ResultBox<Error?>()
+        let loaded = ResultBox<Result<SetupHistoryLoadSummary, Error>>()
         driver.manager.loadHistoryForSetup(progress: progress.append, completion: { loaded.set($0) })
-        XCTAssertNil(try loaded.wait("the setup history load", timeout: 300), "the load completes", file: file, line: line)
+        switch try loaded.wait("the setup history load", timeout: 300) {
+        case let .success(summary):
+            loadSummary = summary
+        case let .failure(error):
+            XCTFail("the load completes: \(error)", file: file, line: line)
+        }
         XCTAssertEqual(progress.all.last, 1, "the progress reaches 100%: \(progress.all)", file: file, line: line)
         XCTAssertTrue(progress.all.allSatisfy { (0 ... 1).contains($0) }, "\(progress.all)", file: file, line: line)
         return since
@@ -393,6 +401,11 @@ final class SetupHistoryLoadConformanceTests: ConformanceTestCase {
         let pairedAt = clock.now
         let driver = try pairThisApp()
         let since = try loadHistory(driver)
+        let summary = try XCTUnwrap(loadSummary)
+        XCTAssertEqual(summary.reportedBolusRecords, 4, "the window's boluses: \(summary)")
+        XCTAssertGreaterThan(summary.pumpBolusRecords, summary.reportedBolusRecords, "several records a bolus: \(summary)")
+        XCTAssertGreaterThan(summary.reportedBasalRecords, 0, "\(summary)")
+        XCTAssertGreaterThan(summary.pumpBasalRecords, summary.reportedBasalRecords, "\(summary)")
         adopt(driver)
         _ = try sync()
         try waitForHistoryPass(driver)
@@ -554,6 +567,11 @@ final class SetupHistoryLoadConformanceTests: ConformanceTestCase {
         try at(392)
         let driver = try pairThisApp()
         let since = try loadHistory(driver)
+        let summary = try XCTUnwrap(loadSummary)
+        XCTAssertEqual(summary.pumpBolusRecords, 0, "\(summary)")
+        XCTAssertGreaterThanOrEqual(summary.pumpBasalRecords, 72, "a BasalDelivery record every 5 minutes: \(summary)")
+        XCTAssertEqual(summary.reportedBolusRecords, 0, "\(summary)")
+        XCTAssertEqual(summary.reportedBasalRecords, 0, "\(summary)")
         adopt(driver)
         _ = try sync()
         try syncEveryCycle(until: 412)
@@ -825,9 +843,11 @@ final class SetupHistoryLoadConformanceTests: ConformanceTestCase {
         let fault = try XCTUnwrap(try harness.client.armFault(unanswered))
         let mark = try harness.client.snapshot().requestLog.lastSeq
 
-        let failed = ResultBox<Error?>()
+        let failed = ResultBox<Result<SetupHistoryLoadSummary, Error>>()
         driver.manager.loadHistoryForSetup(progress: { _ in }, completion: { failed.set($0) })
-        let error = try failed.wait("the setup history load", timeout: 120)
+        guard case let .failure(error) = try failed.wait("the setup history load", timeout: 120) else {
+            return XCTFail("the load fails")
+        }
         XCTAssertEqual(error as? SetupHistoryLoadError, .historyUnreadable)
         let statusReads = try harness.requestsSeen(since: mark).filter { $0.message == "HistoryLogStatusRequest" }.count
         XCTAssertEqual(statusReads, TandemPumpManager.setupHistoryLoadFailureLimit, "one read a tick, until the limit")

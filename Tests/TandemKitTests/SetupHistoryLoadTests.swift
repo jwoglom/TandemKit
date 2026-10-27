@@ -121,12 +121,19 @@ import XCTest
         wait(for: [ticked], timeout: 90.0)
     }
 
+    private var loadSummary: SetupHistoryLoadSummary?
+
     @discardableResult
     private func load(progress: ((Double) -> Void)? = nil) -> Error? {
         var result: Error?
         let loaded = expectation(description: "history load completes")
-        manager.loadHistoryForSetup(progress: { progress?($0) }) { error in
-            result = error
+        manager.loadHistoryForSetup(progress: { progress?($0) }) { outcome in
+            switch outcome {
+            case let .success(summary):
+                self.loadSummary = summary
+            case let .failure(error):
+                result = error
+            }
             loaded.fulfill()
         }
         wait(for: [loaded], timeout: 90.0)
@@ -173,6 +180,22 @@ import XCTest
         XCTAssertEqual(event.raw, HistoryLogSyncIdentifier.bolus(pumpSerial: serial, bolusId: 70))
         XCTAssertEqual(event.dose?.deliveredUnits ?? 0, 3.6, accuracy: 0.001)
         XCTAssertEqual(event.dose?.isMutable, false)
+    }
+
+    func testTheLoadCountsThePumpsRecordsInItsWindowAndTheDosesItReported() throws {
+        stubPump(serving: pumpBolus(bolusId: 60, units: 2.0, firstSequenceNum: 1, secondsAgo: 8 * 3600)
+            + pumpBolus(bolusId: 61, units: 1.5, firstSequenceNum: 4, secondsAgo: 3 * 3600)
+            + pumpSuspension(firstSequenceNum: 7, secondsAgo: 2 * 3600, minutes: 15))
+        runTick()
+
+        XCTAssertNil(load())
+
+        XCTAssertEqual(loadSummary, SetupHistoryLoadSummary(
+            pumpBolusRecords: 3,
+            pumpBasalRecords: 2,
+            reportedBolusRecords: 1,
+            reportedBasalRecords: 2
+        ))
     }
 
     func testWithoutTheLoadASuspendFromBeforeSetupIsNotReported() {

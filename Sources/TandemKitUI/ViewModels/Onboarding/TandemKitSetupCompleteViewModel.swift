@@ -10,6 +10,8 @@ class TandemKitSetupCompleteViewModel: ObservableObject {
     @Published var progress: Double = 0
     @Published var isShowingLoadFailedAlert = false
     @Published var loadFailedMessage: String?
+    @Published var isShowingLoadSummary = false
+    @Published var loadSummaryMessage: String?
     @Published var isSettingsError = false
     @Published var settingsErrorMessage: String?
     @Published var isPromptingControlIQOff = false
@@ -125,19 +127,33 @@ class TandemKitSetupCompleteViewModel: ObservableObject {
                     self.progress = max(self.progress, value)
                 }
             },
-            completion: { error in
+            completion: { outcome in
                 DispatchQueue.main.async {
-                    guard let error else {
+                    switch outcome {
+                    case let .success(summary):
                         self.progress = 1
                         self.isLoadingHistory = false
-                        self.handOver()
-                        return
+                        self.loadSummaryMessage = Self.message(for: summary)
+                        self.isShowingLoadSummary = true
+                    case let .failure(error):
+                        self.loadFailedMessage = error.localizedDescription
+                        self.isShowingLoadFailedAlert = true
                     }
-                    self.loadFailedMessage = error.localizedDescription
-                    self.isShowingLoadFailedAlert = true
                 }
             }
         )
+    }
+
+    func loadSummaryAcknowledged() {
+        handOver()
+    }
+
+    static func message(for summary: SetupHistoryLoadSummary) -> String {
+        let appName = HostApp.current.appName
+        return String(format: String(
+            localized: "Successfully processed %1$d pump bolus records and %2$d pump basal records from your Tandem Mobi. %3$d bolus records and %4$d basal records were added to %5$@.\n\nTo check what was imported, go to %5$@'s insulin treatments page.",
+            comment: "Setup alert after the pump's history loaded (1: the pump's bolus records read, 2: its basal records read, 3: bolus records reported to the app, 4: basal records reported to the app, 5: app name)"
+        ), summary.pumpBolusRecords, summary.pumpBasalRecords, summary.reportedBolusRecords, summary.reportedBasalRecords, appName)
     }
 
     private func handOver() {

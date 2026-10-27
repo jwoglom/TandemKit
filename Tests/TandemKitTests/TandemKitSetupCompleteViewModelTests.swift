@@ -212,9 +212,38 @@ import XCTest
         viewModel.isShowingLoadFailedAlert = false // as the alert does when Try Again is tapped
         viewModel.loadHistory()
 
-        waitUntil { viewModel.isFinished }
-        XCTAssertEqual(handedToHost, 1)
+        waitUntil { viewModel.isShowingLoadSummary }
         XCTAssertEqual(viewModel.progress, 1)
         XCTAssertFalse(viewModel.isLoadingHistory)
+        XCTAssertEqual(viewModel.loadSummaryMessage, ViewModel.message(for: SetupHistoryLoadSummary(
+            pumpBolusRecords: 0,
+            pumpBasalRecords: 0,
+            reportedBolusRecords: 0,
+            reportedBasalRecords: 0
+        )))
+        XCTAssertEqual(handedToHost, 0, "the host gets the manager once the summary is dismissed")
+        XCTAssertFalse(viewModel.isFinished)
+
+        viewModel.loadSummaryAcknowledged()
+
+        XCTAssertEqual(handedToHost, 1)
+        XCTAssertTrue(viewModel.isFinished)
+    }
+
+    func testTheLoadSummaryCountsThePumpsRecordsThenWhatWasAdded() {
+        let message = ViewModel.message(for: SetupHistoryLoadSummary(
+            pumpBolusRecords: 12,
+            pumpBasalRecords: 80,
+            reportedBolusRecords: 4,
+            reportedBasalRecords: 9
+        ))
+        let app = HostApp.current.appName
+
+        XCTAssertEqual(
+            message,
+            "Successfully processed 12 pump bolus records and 80 pump basal records from your Tandem Mobi. "
+                + "4 bolus records and 9 basal records were added to \(app).\n\n"
+                + "To check what was imported, go to \(app)'s insulin treatments page."
+        )
     }
 }

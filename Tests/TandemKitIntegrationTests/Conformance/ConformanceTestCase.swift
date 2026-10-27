@@ -252,7 +252,13 @@ class ConformanceTestCase: FaketandemIntegrationTestCase {
     func loadHistoryForSetup(timeout: TimeInterval? = nil) throws -> Error? {
         let manager = try XCTUnwrap(driver, "no driver").manager
         let box = ResultBox<Error?>()
-        manager.loadHistoryForSetup(progress: { _ in }) { box.set($0) }
+        manager.loadHistoryForSetup(progress: { _ in }) { outcome in
+            if case let .failure(error) = outcome {
+                box.set(error)
+            } else {
+                box.set(nil)
+            }
+        }
         return try box.wait("loadHistoryForSetup completion", timeout: timeout ?? syncTimeout)
     }
 

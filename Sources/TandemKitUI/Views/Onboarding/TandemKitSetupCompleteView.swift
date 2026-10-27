@@ -89,6 +89,17 @@ struct TandemKitSetupCompleteView: View {
             message: { detail in Text(detail.wrappedValue ?? "") }
         )
         .alert(
+            String(localized: "Delivery Records Processed", comment: "Title of the setup alert after the pump's history loaded"),
+            isPresented: $viewModel.isShowingLoadSummary,
+            presenting: $viewModel.loadSummaryMessage,
+            actions: { _ in
+                Button(String(localized: "OK", comment: "OK button")) {
+                    viewModel.loadSummaryAcknowledged()
+                }
+            },
+            message: { detail in Text(detail.wrappedValue ?? "") }
+        )
+        .alert(
             String(localized: "Pump History Not Loaded Yet", comment: "Title of the setup error when the pump's history could not be read"),
             isPresented: $viewModel.isShowingLoadFailedAlert,
             presenting: $viewModel.loadFailedMessage,
