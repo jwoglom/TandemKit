@@ -59,6 +59,22 @@ final class SetSleepScheduleRequestTests: XCTestCase {
         XCTAssertEqual(parsed.changedFields, [.base, .enabled])
     }
 
+    func testSetSleepScheduleRequest_constructorSetsFields() {
+        let request = SetSleepScheduleRequest(
+            slot: 1,
+            schedule: SleepSchedule(enabled: 1, activeDays: 31, startTime: 60, endTime: 600),
+            changedFields: SleepScheduleFields(rawValue: 5)
+        )
+
+        MessageTester.assertHexEquals(Data([0x01, 0x01, 0x1F, 0x3C, 0x00, 0x58, 0x02, 0x05]), request.cargo)
+        XCTAssertEqual(request.slot, 1)
+        XCTAssertEqual(request.changedFields.rawValue, 5)
+        XCTAssertEqual(request.changedFields, [.base, .activeDays])
+        XCTAssertEqual(MultiDay.fromBitmask(request.schedule.activeDays), weekdays)
+        XCTAssertEqual(MinsTime(request.schedule.startTime), MinsTime(hour: 1, min: 0))
+        XCTAssertEqual(MinsTime(request.schedule.endTime), MinsTime(hour: 10, min: 0))
+    }
+
     func testBuiltRequestAlwaysCarriesBase() {
         let request = SetSleepScheduleRequest(
             slot: 1,
@@ -66,10 +82,7 @@ final class SetSleepScheduleRequestTests: XCTestCase {
             changedFields: .activeDays
         )
 
-        MessageTester.assertHexEquals(Data([0x01, 0x01, 0x1F, 0x3C, 0x00, 0x58, 0x02, 0x05]), request.cargo)
-        XCTAssertEqual(request.slot, 1)
         XCTAssertEqual(request.changedFields, [.base, .activeDays])
-        XCTAssertEqual(MultiDay.fromBitmask(request.schedule.activeDays), weekdays)
     }
 
     func testUnchangedScheduleFlagsOnlyBase() {
