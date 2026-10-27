@@ -87,15 +87,42 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
         _modify {
             stateLock.lock()
-            defer { stateLock.unlock() }
+            defer {
+                recordLogDeviceIdentifier()
+                stateLock.unlock()
+            }
             yield &_state
         }
         set {
             stateLock.lock()
-            defer { stateLock.unlock() }
+            defer {
+                recordLogDeviceIdentifier()
+                stateLock.unlock()
+            }
             _state = newValue
         }
     }
+
+    // Every log line reads it, from queues that may hold locks of their own, so it is copied out of
+    // state rather than read under stateLock. Written only with stateLock held.
+    private var loggedPumpSerial: UInt32?
+    private let logDeviceIdentifierLock = NSLock()
+
+    /// The pump's serial number, which the host files `TandemLogger`'s lines under.
+    var logDeviceIdentifier: String? {
+        logDeviceIdentifierLock.lock()
+        defer { logDeviceIdentifierLock.unlock() }
+        return loggedPumpSerial.map { String($0) }
+    }
+
+    private func recordLogDeviceIdentifier() {
+        let serial = _state.pumpState.pumpSerial
+        guard serial != loggedPumpSerial else { return }
+        logDeviceIdentifierLock.lock()
+        loggedPumpSerial = serial
+        logDeviceIdentifierLock.unlock()
+    }
+
     internal let logger = TandemLogger(category: "TandemPumpManager")
     internal let telemetryScheduler = PumpTelemetryScheduler(label: "com.loopkit.TandemKit.TelemetryScheduler")
 
@@ -263,6 +290,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     /// without CoreBluetooth; production goes through `init(state:)`.
     init(state: TandemPumpManagerState, bluetooth: PumpBluetoothConnection, clock: TandemClock = SystemClock()) {
         _state = state
+        loggedPumpSerial = state.pumpState.pumpSerial
         oldState = TandemPumpManagerState(rawValue: state.rawValue)
         self.bluetooth = bluetooth
         self.clock = clock
@@ -503,6 +531,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     private func deliverStateMissedByTheDelegate() {
         guard pumpDelegate.delegate != nil, hasDelegateQueue else { return }
 
+        TandemLogger.pumpManager = self
         bluetooth.pumpManagerWasAdopted()
         // Not pumpManagerDidUpdateState: Loop and Trio save rawValue on the main thread right after
         // attaching, and its save from their delegate queue races that one.

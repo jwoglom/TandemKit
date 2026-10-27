@@ -29,6 +29,12 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
         let replacePendingEvents: Bool
     }
 
+    struct DeviceLogEntry {
+        let deviceIdentifier: String?
+        let type: DeviceLogEntryType
+        let message: String
+    }
+
     /// One delegate call in the order it arrived.
     struct JournalEntry {
         enum Kind {
@@ -78,6 +84,7 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
     private var _willDeactivateCount = 0
     private var _pumpWasReplacedCount = 0
     private var _clockAdjustments: [TimeInterval] = []
+    private var _deviceLogEntries: [DeviceLogEntry] = []
     private var _journal: [JournalEntry] = []
 
     private func synchronized<T>(_ body: () -> T) -> T {
@@ -97,6 +104,7 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
     var willDeactivateCount: Int { synchronized { _willDeactivateCount } }
     var pumpWasReplacedCount: Int { synchronized { _pumpWasReplacedCount } }
     var clockAdjustments: [TimeInterval] { synchronized { _clockAdjustments } }
+    var deviceLogEntries: [DeviceLogEntry] { synchronized { _deviceLogEntries } }
     var journal: [JournalEntry] { synchronized { _journal } }
 
     /// When set, every journal entry also carries this clock's `now`. Give it the driver's clock.
@@ -202,12 +210,15 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
 
     func deviceManager(
         _ manager: DeviceManager,
-        logEventForDeviceIdentifier _: String?,
-        type _: DeviceLogEntryType,
-        message _: String,
+        logEventForDeviceIdentifier deviceIdentifier: String?,
+        type: DeviceLogEntryType,
+        message: String,
         completion: ((Error?) -> Void)?
     ) {
         expectDelegateQueue(of: manager)
+        synchronized {
+            _deviceLogEntries.append(DeviceLogEntry(deviceIdentifier: deviceIdentifier, type: type, message: message))
+        }
         completion?(nil)
     }
 
