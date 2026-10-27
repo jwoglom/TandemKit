@@ -71,7 +71,6 @@ class TandemKitSettingsViewModel: ObservableObject {
     /// Why the pump cannot be reached, or nil when it can. Drives the banner at the top.
     @Published var connectionIssue: PumpConnectionIssue?
     @Published var lastKnownBasalDelivery: LastKnownBasalDelivery?
-    @Published var isRefreshing: Bool = false
     @Published var isPlayingSound: Bool = false
     @Published var useControlIQ: Bool = false
     @Published var showReenableClosedLoopPrompt: Bool = false
@@ -162,18 +161,16 @@ class TandemKitSettingsViewModel: ObservableObject {
 
     // MARK: - Refresh Methods
 
-    func refreshPumpStatus() {
+    /// Returns when the sync completes, which is what ends the pull-to-refresh spinner.
+    func refreshPumpStatus() async {
         guard let pumpManager else {
             log.debug("Skipping TandemPumpSettings refresh – pump not connected/paired")
             return
         }
 
-        guard !isRefreshing else { return }
-        isRefreshing = true
-
-        pumpManager.syncPumpData { _ in
-            DispatchQueue.main.async {
-                self.isRefreshing = false
+        await withCheckedContinuation { continuation in
+            pumpManager.syncPumpData { _ in
+                continuation.resume()
             }
         }
     }

@@ -3460,9 +3460,6 @@
         }
       }
     },
-    "Sync Pump Data" : {
-
-    },
     "Tandem Mobi Pairing" : {
       "comment" : "Title for Mobi pairing",
       "localizations" : {
