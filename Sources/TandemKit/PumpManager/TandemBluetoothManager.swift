@@ -220,6 +220,12 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
         }
     }
 
+    func connectedPumpNames() -> [String] {
+        guard let manager else { return [] }
+        return manager.retrieveConnectedPeripherals(withServices: [ServiceUUID.PUMP_SERVICE])
+            .map { $0.name ?? "Tandem Mobi" }
+    }
+
     /// Pairing's connect, as a command job: a job queued meanwhile finds the session up instead of
     /// connecting again, which took over this connect's completion and left pairing waiting forever.
     func connect(_ peripheral: CBPeripheral, completion: @escaping (Error?) -> Void) {

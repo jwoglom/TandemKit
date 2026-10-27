@@ -27,6 +27,7 @@ struct TandemKitScanView: View {
         }
         .onAppear {
             viewModel.startScan()
+            viewModel.startCheckingForConnectedPump()
         }
         .safeAreaInset(edge: .bottom) {
             VStack {
@@ -59,6 +60,16 @@ struct TandemKitScanView: View {
                 viewModel.stopScan()
             }
         }
+        .alert(
+            String(localized: "Pump Already Connected", comment: "Title of the warning when the pump is connected to the phone"),
+            isPresented: $viewModel.isConnectedElsewhere,
+            actions: {
+                Button(String(localized: "OK", comment: "OK button")) {
+                    viewModel.connectedElsewhereDismissed()
+                }
+            },
+            message: { Text(viewModel.connectedElsewhereMessage) }
+        )
         .alert(
             viewModel.connectionErrorTitle,
             isPresented: $viewModel.isConnectionError,
