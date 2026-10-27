@@ -336,12 +336,36 @@ import XCTest
         XCTAssertEqual(sent.first?.schedule, sleepSchedule())
     }
 
-    func testSleepScheduleWriteCarriesTheFlagTandemsAppSends() {
+    func testSleepScheduleWriteFlagsOnlyTheFieldsThatDifferFromThePump() {
+        stubMobiHoldingSleepSchedules()
+        var edited = allDay
+        edited.endTime = 10 * 60
+
+        let (error, readBack) = setSleepSchedule(slot: 0, edited)
+
+        XCTAssertNil(error)
+        XCTAssertEqual(readBack?.schedule0, edited)
+        XCTAssertEqual(bluetooth.sent(SetSleepScheduleRequest.self).first?.changedFields, [.base, .endTime])
+    }
+
+    func testSleepScheduleTheSameAsThePumpsIsNotWritten() {
         stubMobiHoldingSleepSchedules()
 
-        _ = setSleepSchedule(slot: 0, sleepSchedule())
+        let (error, readBack) = setSleepSchedule(slot: 0, allDay)
 
-        XCTAssertEqual(bluetooth.sent(SetSleepScheduleRequest.self).first?.flag, 3)
+        XCTAssertNil(error)
+        XCTAssertEqual(readBack?.schedule0, allDay)
+        XCTAssertFalse(bluetooth.didSend(SetSleepScheduleRequest.self))
+    }
+
+    func testSleepScheduleIsNotWrittenWhenThePumpsCannotBeRead() {
+        stubMobiHoldingSleepSchedules()
+        bluetooth.stub(ControlIQSleepScheduleRequest.self) { _ in nil }
+
+        let (error, _) = setSleepSchedule(slot: 1, sleepSchedule())
+
+        XCTAssertEqual(error as? SleepScheduleWriteError, .noResponse)
+        XCTAssertFalse(bluetooth.didSend(SetSleepScheduleRequest.self))
     }
 
     func testSleepScheduleThePumpAcceptsButDoesNotSaveFailsAsNotApplied() {

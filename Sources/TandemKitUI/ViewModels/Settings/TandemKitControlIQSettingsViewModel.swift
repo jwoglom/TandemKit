@@ -305,8 +305,12 @@ struct SleepScheduleSlot: Identifiable, Equatable {
         return String(format: "%d:%02d", h, m)
     }
 
-    /// Day-of-week letters in the order of the pump's `activeDays` bitmask, bit 0 being Sunday.
-    static let dayLetters = Calendar.current.veryShortWeekdaySymbols
+    /// Day-of-week letters in the order of the pump's `activeDays` bitmask (`MultiDay`), bit 0 being
+    /// Monday. `veryShortWeekdaySymbols` starts on Sunday.
+    static let dayLetters: [String] = {
+        let symbols = Calendar.current.veryShortWeekdaySymbols
+        return Array(symbols.dropFirst()) + symbols.prefix(1)
+    }()
 
     func isActive(day: Int) -> Bool {
         activeDays & (1 << day) != 0

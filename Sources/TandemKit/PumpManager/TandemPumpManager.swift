@@ -2319,12 +2319,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
         )
     }
 
-    /// Tandem's app sends 3 with every sleep schedule write, enabling and disabling alike (pumpX2's
-    /// captures). A Mobi answered 1 with OK and kept the slot unchanged.
-    static let sleepScheduleWriteFlag = 3
-
-    /// Writes one sleep schedule slot, then reads the schedules back, since an OK alone did not mean
-    /// the pump saved it. The read-back, when the pump answers it, is what the pump holds.
+    /// Writes one sleep schedule slot, flagging the fields that differ from what the pump holds, then
+    /// reads the schedules back. The pump answers OK and keeps a field it is sent unflagged. The
+    /// read-back, when the pump answers it, is what the pump holds.
     func setSleepSchedule(
         slot: Int,
         schedule: ControlIQSleepScheduleResponse.SleepSchedule,
@@ -2345,10 +2342,23 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
+            guard let current = self.bluetooth.write(ControlIQSleepScheduleRequest()),
+                  let previous = current.schedule(at: slot)
+            else {
+                self.logger.error("Failed to read sleep schedules before setting one")
+                completion(SleepScheduleWriteError.noResponse, nil)
+                return
+            }
+
+            guard previous != schedule else {
+                completion(nil, current)
+                return
+            }
+
             guard let response = self.bluetooth.write(SetSleepScheduleRequest(
                 slot: slot,
-                schedule: schedule,
-                flag: Self.sleepScheduleWriteFlag
+                previous: previous,
+                updated: schedule
             )) else {
                 self.logger.error("Failed to set sleep schedule")
                 completion(SleepScheduleWriteError.noResponse, nil)
