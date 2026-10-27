@@ -315,38 +315,106 @@ import XCTest
         manager.state.pumpState.apiVersion = KnownApiVersion.apiV3_4.value
         bluetooth.stub(SetSleepScheduleRequest.self, with: SetSleepScheduleResponse(status: 0))
 
-        var reportedSuccess: Bool?
-        let expectation = expectation(description: "setSleepSchedule")
-        manager.setSleepSchedule(slot: 0, schedule: sleepSchedule()) {
-            reportedSuccess = $0
-            expectation.fulfill()
-        }
-        wait(for: [expectation], timeout: 5.0)
+        let (error, _) = setSleepSchedule(slot: 0, sleepSchedule())
 
-        XCTAssertEqual(reportedSuccess, false)
+        XCTAssertEqual(error as? SleepScheduleWriteError, .unsupported)
         XCTAssertFalse(bluetooth.didSend(SetSleepScheduleRequest.self))
         XCTAssertFalse(manager.supports(SetSleepScheduleRequest.self))
     }
 
     func testSleepScheduleWriteIsSentOnASupportedPump() {
-        manager.state.pumpState.pumpModel = .MOBI
-        manager.state.pumpState.apiVersion = KnownApiVersion.mobiApiV3_5.value
-        bluetooth.stub(SetSleepScheduleRequest.self, with: SetSleepScheduleResponse(status: 0))
+        stubMobiHoldingSleepSchedules()
 
-        var reportedSuccess: Bool?
-        let expectation = expectation(description: "setSleepSchedule")
-        manager.setSleepSchedule(slot: 1, schedule: sleepSchedule()) {
-            reportedSuccess = $0
-            expectation.fulfill()
-        }
-        wait(for: [expectation], timeout: 5.0)
+        let (error, readBack) = setSleepSchedule(slot: 1, sleepSchedule())
 
-        XCTAssertEqual(reportedSuccess, true)
+        XCTAssertNil(error)
+        XCTAssertEqual(readBack?.schedule1, sleepSchedule())
         XCTAssertTrue(manager.supports(SetSleepScheduleRequest.self))
         let sent = bluetooth.sent(SetSleepScheduleRequest.self)
         XCTAssertEqual(sent.count, 1)
         XCTAssertEqual(sent.first?.slot, 1)
-        XCTAssertEqual(sent.first?.schedule.startTime, 22 * 60 + 30)
+        XCTAssertEqual(sent.first?.schedule, sleepSchedule())
+    }
+
+    func testSleepScheduleWriteCarriesTheFlagTandemsAppSends() {
+        stubMobiHoldingSleepSchedules()
+
+        _ = setSleepSchedule(slot: 0, sleepSchedule())
+
+        XCTAssertEqual(bluetooth.sent(SetSleepScheduleRequest.self).first?.flag, 3)
+    }
+
+    func testSleepScheduleThePumpAcceptsButDoesNotSaveFailsAsNotApplied() {
+        stubMobiHoldingSleepSchedules()
+        bluetooth.stub(SetSleepScheduleRequest.self, with: SetSleepScheduleResponse(status: 0))
+
+        let (error, readBack) = setSleepSchedule(slot: 0, sleepSchedule())
+
+        XCTAssertEqual(error as? SleepScheduleWriteError, .notApplied)
+        XCTAssertEqual(readBack?.schedule0, allDay)
+    }
+
+    func testRefusedSleepScheduleFailsWithThePumpsStatusAndWhatItHolds() {
+        stubMobiHoldingSleepSchedules()
+        bluetooth.stub(SetSleepScheduleRequest.self, with: SetSleepScheduleResponse(status: 1))
+
+        let (error, readBack) = setSleepSchedule(slot: 1, sleepSchedule())
+
+        XCTAssertEqual(error as? SleepScheduleWriteError, .pumpRejected(status: 1))
+        XCTAssertEqual(readBack?.schedule1, unused)
+    }
+
+    func testUnansweredSleepScheduleWriteFailsAsNoResponse() {
+        stubMobiHoldingSleepSchedules()
+        bluetooth.stub(SetSleepScheduleRequest.self) { _ in nil }
+
+        let (error, readBack) = setSleepSchedule(slot: 1, sleepSchedule())
+
+        XCTAssertEqual(error as? SleepScheduleWriteError, .noResponse)
+        XCTAssertNil(readBack)
+    }
+
+    private let allDay = ControlIQSleepScheduleResponse.SleepSchedule(
+        enabled: 1,
+        activeDays: 0b111_1111,
+        startTime: 0,
+        endTime: 23 * 60 + 59
+    )
+
+    private let unused = ControlIQSleepScheduleResponse.SleepSchedule(
+        enabled: 0,
+        activeDays: 0,
+        startTime: 23 * 60,
+        endTime: 7 * 60
+    )
+
+    /// A Mobi that saves what it is sent with OK, and answers schedule reads with what it holds.
+    private func stubMobiHoldingSleepSchedules() {
+        manager.state.pumpState.pumpModel = .MOBI
+        manager.state.pumpState.apiVersion = KnownApiVersion.mobiApiV3_5.value
+        var held = [allDay, unused, unused, unused]
+        bluetooth.stub(SetSleepScheduleRequest.self) { message in
+            let request = message as! SetSleepScheduleRequest
+            held[request.slot] = request.schedule
+            return SetSleepScheduleResponse(status: 0)
+        }
+        bluetooth.stub(ControlIQSleepScheduleRequest.self) { _ in
+            ControlIQSleepScheduleResponse(schedule0: held[0], schedule1: held[1], schedule2: held[2], schedule3: held[3])
+        }
+    }
+
+    private func setSleepSchedule(
+        slot: Int,
+        _ schedule: ControlIQSleepScheduleResponse.SleepSchedule
+    ) -> (Error?, ControlIQSleepScheduleResponse?) {
+        var result: (Error?, ControlIQSleepScheduleResponse?) = (nil, nil)
+        let expectation = expectation(description: "setSleepSchedule")
+        manager.setSleepSchedule(slot: slot, schedule: schedule) {
+            result = ($0, $1)
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: 5.0)
+        return result
     }
 
     private func sleepSchedule() -> ControlIQSleepScheduleResponse.SleepSchedule {

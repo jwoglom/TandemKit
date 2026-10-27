@@ -2319,41 +2319,57 @@ public class TandemPumpManager: PumpManager, Pluggable {
         )
     }
 
+    /// Tandem's app sends 3 with every sleep schedule write, enabling and disabling alike (pumpX2's
+    /// captures). A Mobi answered 1 with OK and kept the slot unchanged.
+    static let sleepScheduleWriteFlag = 3
+
+    /// Writes one sleep schedule slot, then reads the schedules back, since an OK alone did not mean
+    /// the pump saved it. The read-back, when the pump answers it, is what the pump holds.
     func setSleepSchedule(
         slot: Int,
         schedule: ControlIQSleepScheduleResponse.SleepSchedule,
-        completion: @escaping (Bool) -> Void
+        completion: @escaping (Error?, ControlIQSleepScheduleResponse?) -> Void
     ) {
-        logger.info("Setting sleep schedule")
+        logger.info("Setting sleep schedule \(slot)")
 
         guard supports(SetSleepScheduleRequest.self) else {
             logger.error("Pump does not support setting sleep schedules")
-            completion(false)
+            completion(SleepScheduleWriteError.unsupported, nil)
             return
         }
 
         bluetooth.ensureConnected { error in
             if let error {
                 self.logger.error("Failed to connect for sleep schedule: \(error.localizedDescription)")
-                completion(false)
+                completion(error, nil)
                 return
             }
 
             guard let response = self.bluetooth.write(SetSleepScheduleRequest(
-                    slot: slot,
-                    schedule: schedule,
-                    flag: 1
-                )) else {
+                slot: slot,
+                schedule: schedule,
+                flag: Self.sleepScheduleWriteFlag
+            )) else {
                 self.logger.error("Failed to set sleep schedule")
-                completion(false)
+                completion(SleepScheduleWriteError.noResponse, nil)
                 return
             }
 
-            if !response.isStatusOK {
+            let readBack = self.bluetooth.write(ControlIQSleepScheduleRequest())
+
+            guard response.isStatusOK else {
                 self.logger.error("Failed to set sleep schedule - Status: \(response.status)")
+                completion(SleepScheduleWriteError.pumpRejected(status: response.status), readBack)
+                return
             }
 
-            completion(response.isStatusOK)
+            if let held = readBack?.schedule(at: slot), held != schedule {
+                self.logger.error("Sleep schedule \(slot) reads back as \(held) after writing \(schedule)")
+                completion(SleepScheduleWriteError.notApplied, readBack)
+                return
+            }
+
+            completion(nil, readBack)
         }
     }
 

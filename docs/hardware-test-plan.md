@@ -78,6 +78,7 @@ turned off or on from their defaults.
 | C3 | As C1, with History Basal Reporting on. Leave Control-IQ running for 30 minutes. | For each 5-minute cycle that Control-IQ ran off the profile, the host gets a temp basal correction at the pump's rate. Each one arrives some minutes after its cycle ends, never while the cycle runs. | conformance H1, `BasalHistoryConformanceTests` |
 | C4 | As C3, then switch back from Control-IQ. | The host's temp basals are accepted again. Syncs wait until history has reported Control-IQ's basal up to the switch. | conformance H1, `TandemPumpManagerControlIQTests` |
 | C5 | Before pairing, turn Control-IQ on at the pump (in Tandem's app, or on a t:slim X2's screen), then pair (P2). Repeat with Control-IQ Support on (rerun the initial setup from Debug Options). | Right after pairing, both times, the alert "Control-IQ Is On" says Control-IQ will be turned off so that the host uses its own algorithm. OK is its only button. After OK, onboarding finishes, Control-IQ is off at the pump, and the "Control-IQ On" status never appears. | `TandemPumpManagerOnboardingTests`, `TandemKitScanViewModelTests` |
+| C6 | On a Mobi, open TandemKit's Control-IQ Settings. Change an enabled sleep schedule's end time and save it, then turn on an unused schedule with one day and a few hours that overlap no other, and save. Leave the screen and return. | Each save completes without an error, and both schedules read back as saved, on the screen and on the pump. Record the status of any refusal. | `TandemPumpManagerControlIQTests` |
 
 ## What this plan settles
 
@@ -99,6 +100,8 @@ the run's notes, and correct AGENTS.md if a pump says otherwise.
 - **W2.** Which open cartridge procedures make the pump refuse change-cartridge mode
   (`CartridgeModeRecovery`).
 - **C1.** What the host does when every automatic dose is refused under Control-IQ.
+- **C6.** Whether a Mobi saves a sleep schedule written with flag 3, as Tandem's app sends. One
+  written with flag 1 was answered OK and not saved.
 
 ## Runs
 

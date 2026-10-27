@@ -1637,17 +1637,6 @@
         }
       }
     },
-    "Failed to update sleep schedule. Check pump connection." : {
-      "comment" : "Error when sleep schedule save fails",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Failed to update sleep schedule. Check pump connection."
-          }
-        }
-      }
-    },
     "Feature not implemented" : {
       "comment" : "Error message shown when a feature is not yet implemented",
       "localizations" : {
