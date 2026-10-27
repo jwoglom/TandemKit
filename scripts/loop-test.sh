@@ -60,23 +60,22 @@ build_scheme() {
     "$@"
 }
 
-# LoopWorkspace's scheme with only its .loopplugin targets, in the workspace's git-ignored xcuserdata.
-write_plugins_scheme() {
+# LoopWorkspace's scheme without Loop.app, in the workspace's git-ignored xcuserdata.
+write_before_loop_scheme() {
   local workspace="$LOOP_DIR/LoopWorkspace.xcworkspace"
   local schemes="$workspace/xcuserdata/$(id -un).xcuserdatad/xcschemes"
   mkdir -p "$schemes"
-  python3 - "$workspace/xcshareddata/xcschemes/LoopWorkspace.xcscheme" "$schemes/$PLUGINS_SCHEME.xcscheme" <<'EOF'
+  python3 - "$workspace/xcshareddata/xcschemes/LoopWorkspace.xcscheme" "$schemes/$BEFORE_LOOP_SCHEME.xcscheme" <<'EOF'
 import sys
 import xml.etree.ElementTree as ET
 
 scheme = ET.parse(sys.argv[1]).getroot()
 build = scheme.find("BuildAction")
 entries = build.find("BuildActionEntries")
-for entry in list(entries):
-    if not entry.find("BuildableReference").get("BuildableName", "").endswith(".loopplugin"):
-        entries.remove(entry)
-if len(entries) == 0:
-    sys.exit(f"no .loopplugin targets in {sys.argv[1]}")
+apps = [e for e in entries if e.find("BuildableReference").get("BuildableName") == "Loop.app"]
+if len(apps) != 1:
+    sys.exit(f"expected one Loop.app entry in {sys.argv[1]}, found {len(apps)}")
+entries.remove(apps[0])
 for action in list(scheme):
     if action is not build:
         scheme.remove(action)
@@ -84,7 +83,7 @@ ET.ElementTree(scheme).write(sys.argv[2], encoding="UTF-8", xml_declaration=True
 EOF
 }
 
-PLUGINS_SCHEME="LoopWorkspacePlugins"
+BEFORE_LOOP_SCHEME="LoopWorkspaceBeforeLoop"
 build_loop() {
   if [[ ! -f "$LOOP_DIR/LoopWorkspace.xcworkspace/contents.xcworkspacedata" || ! -d "$LOOP_DIR/TandemKit/Sources" ]]; then
     echo "No LoopWorkspace checkout with TandemKit at $LOOP_DIR; set LOOP_DIR" >&2
@@ -92,8 +91,8 @@ build_loop() {
   fi
   # Loop's Install Plugins phase embeds each .loopplugin it finds, and Loop.app depends on none of
   # them, so the scheme's parallel build embedded one still building, with no Info.plist yet.
-  write_plugins_scheme
-  build_scheme "$PLUGINS_SCHEME" "$@"
+  write_before_loop_scheme
+  build_scheme "$BEFORE_LOOP_SCHEME" "$@"
   build_scheme LoopWorkspace "$@"
 }
 
