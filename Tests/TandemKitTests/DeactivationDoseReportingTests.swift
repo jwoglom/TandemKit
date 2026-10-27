@@ -47,6 +47,7 @@ import XCTest
         state.hasSyncedBasalRateSchedule = true
         state.insulinType = .novolog
         state.pumpState.pumpSerial = Self.pumpSerial
+        state.lastPumpSerial = Self.pumpSerial
         state.basalDose = UnfinalizedDose(basalRate: 1.0, insulinType: .novolog, startDate: clock.now)
         manager = TandemPumpManager(state: state, bluetooth: bluetooth, clock: clock)
         delegate = MockPumpManagerDelegate()
@@ -186,6 +187,7 @@ import XCTest
         XCTAssertEqual(bolus.endDate, deactivatedAt, "Loop stores a finalized dose only once it has ended")
 
         XCTAssertFalse(final.events.contains { $0.type == .suspend || $0.type == .basal }, "\(final.events)")
+        XCTAssertEqual(final.events.filter { $0.type == .replaceComponent(componentType: .pump) }.map(\.date), [deactivatedAt], "the removal rides the same batch")
         XCTAssertNil(manager.state.bolusDose)
         XCTAssertEqual(manager.state.bolusState, .noBolus)
         XCTAssertEqual(manager.state.basalDose.type, .basal)
@@ -316,8 +318,27 @@ import XCTest
 
     // MARK: - Nothing held
 
-    func testWithNothingHeldTheHostIsOnlyToldOfTheDeactivation() {
+    func testWithNothingHeldTheHostIsToldOnlyThatThePumpWasRemoved() throws {
         startManager()
+        clock.advance(by: .minutes(3))
+        let before = batchCount
+
+        deactivate()
+
+        let batch = try XCTUnwrap(batches(since: before).first)
+        XCTAssertEqual(batches(since: before).count, 1)
+        XCTAssertFalse(batch.replacePendingEvents, "an empty replacing batch would purge what Trio holds as mutable")
+        XCTAssertEqual(batch.events.map(\.type), [.replaceComponent(componentType: .pump)])
+        XCTAssertEqual(batch.events.first?.title, "Pump Removed")
+        XCTAssertEqual(batch.events.first?.date, clock.now)
+        let order = lastBatchAndDeactivation()
+        XCTAssertLessThan(try XCTUnwrap(order.batch), try XCTUnwrap(order.willDeactivate))
+        XCTAssertEqual(delegate.willDeactivateCount, 1)
+    }
+
+    func testAManagerThatNeverReadAPumpReportsNoneRemoved() {
+        startManager()
+        manager.state.lastPumpSerial = nil
 
         deactivate()
 

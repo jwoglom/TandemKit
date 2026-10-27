@@ -362,7 +362,7 @@ final class IdempotencyConformanceTests: ConformanceTestCase {
             XCTAssertEqual(loop.lastReconciliation, reported, "round \(round): the host's boundary follows every call")
             XCTAssertEqual(loop.callCount, batchesFedToOracles, "round \(round): every batch reached the host")
             XCTAssertTrue(loop.doses.isEmpty, "round \(round): no dose was ever delivered: \(loop.doses.map(LoopDoseStoreOracle.describe))")
-            XCTAssertTrue(trio.events.isEmpty, "round \(round): \(trio.events)")
+            XCTAssertEqual(trio.events.map(\.type), [.siteChange], "round \(round): only the pump added: \(trio.events)")
         }
 
         XCTAssertEqual(boundaries, boundaries.sorted(), "the boundary never goes backwards: \(boundaries)")
@@ -1024,7 +1024,7 @@ final class IdempotencyConformanceTests: ConformanceTestCase {
         let (loop, trio) = feedOracles()
         XCTAssertEqual(loop.lastReconciliation, reported)
         XCTAssertTrue(loop.doses.isEmpty, "\(loop.doses.map(LoopDoseStoreOracle.describe))")
-        XCTAssertTrue(trio.events.isEmpty, "\(trio.events)")
+        XCTAssertEqual(trio.events.map(\.type), [.siteChange], "only the pump added: \(trio.events)")
         try timeline().assertMatches(loop, tolerance: .exact, "a quiet relaunch")
     }
 

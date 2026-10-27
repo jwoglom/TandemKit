@@ -109,10 +109,16 @@ extension TandemPumpManager {
         }
 
         let serial = pumpVersionResponse.serialNumber
-        if let previous = state.lastPumpSerial, previous != serial {
+        switch state.lastPumpSerial {
+        case nil:
+            logger.info("First pump this pump manager has read; reporting it added")
+            emitPumpEvents([NewPumpEvent.pumpAdded(date: now)], replacePendingEvents: false)
+        case let previous? where previous != serial:
             logger.warning("A different pump is paired; reporting a pump replacement")
             emitPumpEvents([NewPumpEvent.pumpReplacement(date: now)], replacePendingEvents: false)
             pumpDelegate.notify { $0?.pumpManagerPumpWasReplaced(self) }
+        default:
+            break
         }
         state.lastPumpSerial = serial
         state.pumpState.pumpSerial = serial

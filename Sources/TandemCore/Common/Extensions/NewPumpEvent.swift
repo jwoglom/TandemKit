@@ -121,12 +121,36 @@ public extension NewPumpEvent {
 
     /// Trio stores it as a site change, as it does a pod's.
     static func pumpReplacement(date: Date = Date.now) -> NewPumpEvent {
+        pumpChange(
+            "replacePump",
+            date: date,
+            title: String(localized: "Pump Replaced", comment: "Pump Event title for a different pump paired in place of the last one")
+        )
+    }
+
+    static func pumpAdded(date: Date = Date.now) -> NewPumpEvent {
+        pumpChange(
+            "pumpAdded",
+            date: date,
+            title: String(localized: "Pump Added", comment: "Pump Event title for the first pump a newly added Tandem pump manager paired")
+        )
+    }
+
+    static func pumpRemoved(date: Date = Date.now) -> NewPumpEvent {
+        pumpChange(
+            "pumpRemoved",
+            date: date,
+            title: String(localized: "Pump Removed", comment: "Pump Event title for the Tandem pump being deleted from the app")
+        )
+    }
+
+    private static func pumpChange(_ kind: String, date: Date, title: String) -> NewPumpEvent {
         let dateFormatter = ISO8601DateFormatter()
         return NewPumpEvent(
             date: date,
             dose: nil,
-            raw: "replacePump \(dateFormatter.string(from: date))".data(using: .utf8) ?? Data([]),
-            title: String(localized: "Pump Replaced", comment: "Pump Event title for a different pump paired in place of the last one"),
+            raw: "\(kind) \(dateFormatter.string(from: date))".data(using: .utf8) ?? Data([]),
+            title: title,
             type: .replaceComponent(componentType: .pump)
         )
     }

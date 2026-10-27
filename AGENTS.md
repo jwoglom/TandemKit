@@ -457,6 +457,9 @@ edit instead of at the next sync.
   next replacing batch, from whichever pump manager comes next, deletes what it holds. A Tandem
   pump keeps delivering after the app forgets it, so nothing is stopped and no `.suspend` is due.
   A pending delivery change is reported at detection first. `lastReconciliation` moves to the deletion.
+  The batch also carries a "Pump Removed" `.replaceComponent(.pump)` if the manager ever read a pump
+  (`lastPumpSerial`); with nothing held, that marker goes alone, non-replacing, since an empty
+  replacing batch purges Trio's mutable rows.
 - A running temp basal is finalized at the deletion, a second after its start at least, and what
   remains of it to its scheduled end is a finalized dose of its own, keyed on its amount and start,
   and cut at the segment changes in it into the temp's next parts. Loop stores a finalized dose only once it has ended, and a
@@ -928,11 +931,13 @@ Events with no dose, each in a `replacePendingEvents: false` batch under a `raw`
   diffs them against `reportedPumpAlarmIdentifiers` (persisted), as it does the LoopKit alerts.
   Alerts, reminders and CGM alerts are not faults and are not reported. Trio stores an alarm as
   `PumpAlarm`, its title the note, and nothing for a clear.
-- A pump whose serial differs from `lastPumpSerial` (persisted, and kept through
-  `deleteSavedPumpState`) is reported as `.replaceComponent(.pump)`, which Trio stores as a site
-  change, and through `pumpManagerPumpWasReplaced`, which both hosts ignore. The first pump paired is
-  not a replacement. The serial is read with the daily settings, which `deleteSavedPumpState` makes
-  due, so the sync after a re-pair reads the next pump's.
+- A pump change is a `.replaceComponent(.pump)`, which Trio stores as a site change, so it shows in
+  both hosts' event history. The first pump a manager reads (no `lastPumpSerial`) is "Pump Added",
+  at the pairing sync, held until the host adopts the manager. One whose serial differs from
+  `lastPumpSerial` (persisted, and kept through `deleteSavedPumpState`) is "Pump Replaced", and also
+  goes through `pumpManagerPumpWasReplaced`, which both hosts ignore. Deleting the manager reports
+  "Pump Removed" (below). The serial is read with the daily settings, which `deleteSavedPumpState`
+  makes due, so the sync after a re-pair reads the next pump's.
 
 ## Open work
 Beyond the missing tests and the history items above. The `loopkit-conformance` issues track
