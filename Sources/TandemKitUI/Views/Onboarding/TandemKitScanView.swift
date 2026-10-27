@@ -82,41 +82,6 @@ struct TandemKitScanView: View {
             message: { detail in Text(detail.wrappedValue ?? "") }
         )
         .alert(
-            String(localized: "Control-IQ Is On", comment: "Title of the setup prompt when the paired pump is running Control-IQ"),
-            isPresented: $viewModel.isPromptingControlIQOff,
-            actions: {
-                Button(String(localized: "OK", comment: "OK button")) {
-                    viewModel.turnOffControlIQ()
-                }
-            },
-            message: { Text(viewModel.controlIQOffPromptMessage) }
-        )
-        .alert(
-            String(localized: "Control-IQ Not Turned Off", comment: "Title of the setup error when turning Control-IQ off failed"),
-            isPresented: $viewModel.isControlIQOffError,
-            presenting: $viewModel.controlIQOffErrorMessage,
-            actions: { _ in
-                Button(String(localized: "Try Again", comment: "Retry button")) {
-                    viewModel.turnOffControlIQ()
-                }
-            },
-            message: { detail in Text(detail.wrappedValue ?? "") }
-        )
-        .alert(
-            String(localized: "Pump Settings Not Saved", comment: "Onboarding settings write failure"),
-            isPresented: $viewModel.isSettingsError,
-            presenting: $viewModel.settingsErrorMessage,
-            actions: { _ in
-                Button(String(localized: "Try Again", comment: "Retry button")) {
-                    viewModel.applyOnboardingSettings()
-                }
-                Button(String(localized: "Continue Anyway", comment: "Continue button"), role: .destructive) {
-                    viewModel.continueWithoutOnboardingSettings()
-                }
-            },
-            message: { detail in Text(detail.wrappedValue ?? "") }
-        )
-        .alert(
             String(localized: "Enter Pairing code", comment: "Enter Pairing code instruction"),
             isPresented: $viewModel.isPromptingPincode
         ) {

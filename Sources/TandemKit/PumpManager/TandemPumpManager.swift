@@ -59,6 +59,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
     /// decision to hold rather than send has to be made synchronously.
     private var pendingPumpEventBatches: [PendingPumpEventBatch] = []
     private let pendingPumpEventLock = NSLock()
+    /// What was held when setup's first history load started, so a Try Again counts what the failed
+    /// attempt reported as the load's.
+    private var heldBeforeSetupHistoryLoad: Set<Data>?
 
     /// Setup sets the pump's clock before the host adopts the manager.
     private var pendingPumpClockAdjustments: [TimeInterval] = []
@@ -2908,6 +2911,19 @@ extension TandemPumpManager {
         let batches = pendingPumpEventBatches
         pendingPumpEventBatches = []
         return batches
+    }
+
+    /// The held events the setup history load reported: what was not held when its first attempt started.
+    func heldEventsSinceSetupHistoryLoadStarted(starting: Bool) -> [NewPumpEvent] {
+        pendingPumpEventLock.lock()
+        defer { pendingPumpEventLock.unlock() }
+
+        let held = pendingPumpEventBatches.flatMap(\.events)
+        if starting, heldBeforeSetupHistoryLoad == nil {
+            heldBeforeSetupHistoryLoad = Set(held.map(\.raw))
+        }
+        let before = heldBeforeSetupHistoryLoad ?? []
+        return held.filter { !before.contains($0.raw) }
     }
 
     /// Test seam.

@@ -78,7 +78,8 @@ final class RepairConformanceTests: ConformanceTestCase {
         state.basalRateSchedule = try schedule()
         let driver = startDriver(state: state, attachDelegate: false)
         try harness.pair(driver)
-        // `TandemKitScanViewModel.finishSetup`, which reads the serial the load keys its reports on.
+        _ = try readDeliveryForSetup()
+        // `TandemKitSetupCompleteViewModel`'s sync, whose reconciliation boundary the load's reports need.
         _ = try sync()
         if loadingHistory {
             XCTAssertNil(try loadHistoryForSetup(), "the pump's history loads")

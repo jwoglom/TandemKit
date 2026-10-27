@@ -101,6 +101,10 @@ import XCTest
         XCTAssertFalse(coordinator.ownsPumpManager)
     }
 
+    private func bolusReading(hoursAgo: Double) -> SetupDeliveryReading {
+        SetupDeliveryReading(lastBolus: .delivered(at: Date().addingTimeInterval(-hoursAgo * 3600)))
+    }
+
     func testPairingAsksAboutPumpHistoryBeforeTheHostHasTheManager() {
         let coordinator = makeSetupCoordinator()
         let host = OnboardingHost()
@@ -108,23 +112,36 @@ import XCTest
         coordinator.pumpManager.state.featureFlags[.historyBackfill] = true
         coordinator.pumpManager.state.featureFlags[.historyDoseReporting] = true
 
-        coordinator.pairingFinished()
+        coordinator.showStepAfterPairing(bolusReading(hoursAgo: 5))
 
         XCTAssertEqual(coordinator.screenStack, [.loadHistory])
         XCTAssertTrue(host.calls.isEmpty)
         XCTAssertTrue(coordinator.ownsPumpManager)
     }
 
-    func testWithoutHistoryDoseReportingPairingHandsTheManagerOverAtOnce() {
+    func testALastBolusOverSixHoursAgoGoesStraightToTheSetupWrites() {
+        let coordinator = makeSetupCoordinator()
+        let host = OnboardingHost()
+        coordinator.pumpManagerOnboardingDelegate = host
+        coordinator.pumpManager.state.featureFlags[.historyBackfill] = true
+        coordinator.pumpManager.state.featureFlags[.historyDoseReporting] = true
+
+        coordinator.showStepAfterPairing(bolusReading(hoursAgo: 7))
+
+        XCTAssertEqual(coordinator.screenStack, [.setupComplete])
+        XCTAssertTrue(host.calls.isEmpty, "the host gets the manager once the setup writes are done")
+    }
+
+    func testWithoutHistoryDoseReportingPairingGoesStraightToTheSetupWrites() {
         let coordinator = makeSetupCoordinator()
         let host = OnboardingHost()
         coordinator.pumpManagerOnboardingDelegate = host
         coordinator.pumpManager.state.featureFlags[.historyDoseReporting] = false
 
-        coordinator.pairingFinished()
+        coordinator.showStepAfterPairing(bolusReading(hoursAgo: 1))
 
         XCTAssertEqual(coordinator.screenStack, [.setupComplete])
-        XCTAssertEqual(host.calls, ["created", "onboarded"])
+        XCTAssertTrue(host.calls.isEmpty)
     }
 
     func testAFlowThatGoesAwayStillOwningItsManagerTakesItsTransportDown() {

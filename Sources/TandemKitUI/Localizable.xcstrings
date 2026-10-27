@@ -4,13 +4,13 @@
     "" : {
 
     },
-    "%1$@ can read your pump history of boluses and basal delivery from before you connected to %2$@." : {
-      "comment" : "Setup explanation of loading the pump's history (1: app name at the start of a sentence, 2: app name)",
+    "%@ will not count insulin this pump delivered before you connected it." : {
+      "comment" : "Setup alert after the user chose not to load the pump's history (1: app name at the start of a sentence)",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%1$@ can read your pump history of boluses and basal delivery from before you connected to %2$@."
+            "value" : "%@ will not count insulin this pump delivered before you connected it."
           }
         }
       }
@@ -635,6 +635,28 @@
     },
     "Checksum mismatch" : {
 
+    },
+    "Current basal rate: %@ u/hr" : {
+      "comment" : "Setup line with the pump's current basal rate (1: units per hour, to two decimals)",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Current basal rate: %@ u/hr"
+          }
+        }
+      }
+    },
+    "Delivery Records Processed" : {
+      "comment" : "Title of the setup alert after the pump's history loaded",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delivery Records Processed"
+          }
+        }
+      }
     },
     "Dismiss all notifications before completing tubing fill" : {
       "comment" : "Warning message",
@@ -1404,13 +1426,35 @@
         }
       }
     },
-    "If you were previously using this Tandem Mobi device with the Tandem app, it is essential to load history so that %1$@ knows your current IOB and does not over-deliver insulin in the hours following setup. If you were previously using a different pump with %1$@, and it is already aware of any active insulin doses, you can skip this step." : {
-      "comment" : "Setup guidance on whether to load the pump's history (1: app name)",
+    "Insulin delivery currently suspended" : {
+      "comment" : "Setup line when the paired pump has insulin delivery suspended",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "If you were previously using this Tandem Mobi device with the Tandem app, it is essential to load history so that %1$@ knows your current IOB and does not over-deliver insulin in the hours following setup. If you were previously using a different pump with %1$@, and it is already aware of any active insulin doses, you can skip this step."
+            "value" : "Insulin delivery currently suspended"
+          }
+        }
+      }
+    },
+    "Insulin on Board: %@ units" : {
+      "comment" : "Setup line with the pump's insulin on board (1: units, to two decimals)",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Insulin on Board: %@ units"
+          }
+        }
+      }
+    },
+    "Last bolus delivery: %1$@ (%2$@)" : {
+      "comment" : "Setup line with the pump's last bolus (1: time of day, 2: how long ago)",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last bolus delivery: %1$@ (%2$@)"
           }
         }
       }
@@ -3377,6 +3421,17 @@
         }
       }
     },
+    "Successfully processed %1$d pump bolus records and %2$d pump basal records from your Tandem Mobi. %3$d bolus records and %4$d basal records were added to %5$@.\n\nTo check what was imported, go to %5$@'s insulin treatments page." : {
+      "comment" : "Setup alert after the pump's history loaded (1: the pump's bolus records read, 2: its basal records read, 3: bolus records reported to the app, 4: basal records reported to the app, 5: app name)",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Successfully processed %1$d pump bolus records and %2$d pump basal records from your Tandem Mobi. %3$d bolus records and %4$d basal records were added to %5$@.\n\nTo check what was imported, go to %5$@'s insulin treatments page."
+          }
+        }
+      }
+    },
     "Suspend" : {
 
     },
@@ -3772,6 +3827,17 @@
         }
       }
     },
+    "The Tandem Mobi you just connected reports the following insulin delivery information:" : {
+      "comment" : "Setup introduction to what the paired pump reports about its insulin delivery",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The Tandem Mobi you just connected reports the following insulin delivery information:"
+          }
+        }
+      }
+    },
     "The time on your pump is different from the current time. Do you want to update the time on your pump to the current time?" : {
       "comment" : "Message for pod sync time action sheet",
       "localizations" : {
@@ -3889,17 +3955,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "This page configures the connection between your pump and Dexcom G7. "
-          }
-        }
-      }
-    },
-    "This Tandem Mobi pump's past bolus and basal records were not loaded, so %@ assumes you have 0 units of Insulin on Board. Please monitor your glucose accordingly." : {
-      "comment" : "Setup alert after the user chose not to load the pump's history (1: app name)",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This Tandem Mobi pump's past bolus and basal records were not loaded, so %@ assumes you have 0 units of Insulin on Board. Please monitor your glucose accordingly."
           }
         }
       }
@@ -4220,6 +4275,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "When configured, the pump can vibrate or beep to deliver CGM notifications at all times. When Control-IQ is on, it will be used for automated insulin delivery with the built-in pump algorithm."
+          }
+        }
+      }
+    },
+    "Would you like to load this insulin delivery information into %@ so it is included in your IOB?" : {
+      "comment" : "Setup question whether to load the pump's history (1: app name)",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Would you like to load this insulin delivery information into %@ so it is included in your IOB?"
           }
         }
       }

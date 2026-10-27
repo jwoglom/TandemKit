@@ -7,7 +7,7 @@ import XCTest
 
     private var bluetooth: StubPumpBluetooth!
     private var manager: TandemPumpManager!
-    private var doneCount = 0
+    private var choices: [Bool] = []
 
     override func setUp() {
         super.setUp()
@@ -17,7 +17,7 @@ import XCTest
         state.featureFlags[.historyDoseReporting] = true
         state.pumpState.pumpSerial = 123_456
         manager = TandemPumpManager(state: state, bluetooth: bluetooth)
-        doneCount = 0
+        choices = []
     }
 
     override func tearDown() {
@@ -26,44 +26,64 @@ import XCTest
         super.tearDown()
     }
 
-    private func makeViewModel() -> ViewModel {
-        ViewModel(pumpManager: manager, done: { [weak self] in self?.doneCount += 1 })
-    }
+    private let now = Date(timeIntervalSinceReferenceDate: 800_000_000)
 
-    private func waitUntil(_ condition: () -> Bool, timeout: TimeInterval = 30) {
-        let deadline = Date().addingTimeInterval(timeout)
-        while !condition(), Date() < deadline {
-            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
-        }
+    private func makeViewModel(_ reading: SetupDeliveryReading = SetupDeliveryReading()) -> ViewModel {
+        ViewModel(reading: reading, now: { [now] in now }, done: { [weak self] in self?.choices.append($0) })
     }
 
     func testTheScreenOpensOnTheChoiceAndNamesTheApp() {
         let viewModel = makeViewModel()
 
-        XCTAssertEqual(viewModel.phase, .choosing)
-        XCTAssertTrue(viewModel.explanation.contains("connected to \(viewModel.appName)."))
-        XCTAssertTrue(viewModel.guidance.contains("so that \(viewModel.appName) knows your current IOB"))
+        XCTAssertEqual(
+            viewModel.introduction,
+            "The Tandem Mobi you just connected reports the following insulin delivery information:"
+        )
+        XCTAssertEqual(
+            viewModel.question,
+            "Would you like to load this insulin delivery information into \(viewModel.appName) so it is included in your IOB?"
+        )
         XCTAssertEqual(viewModel.loadButtonTitle, "Load Pump History into \(viewModel.appName)")
     }
 
-    func testTheExplanationOpensWithACapital() throws {
-        let first = try XCTUnwrap(makeViewModel().explanation.first)
+    func testTheReadingsAreTheInsulinOnBoardTheLastBolusAndTheBasalRate() throws {
+        let viewModel = makeViewModel(SetupDeliveryReading(
+            insulinOnBoard: 2.3,
+            lastBolus: .delivered(at: now.addingTimeInterval(-80 * 60)),
+            currentBasalRate: 0.85
+        ))
 
-        XCTAssertTrue(first.isUppercase)
+        XCTAssertEqual(viewModel.readings.count, 3)
+        XCTAssertEqual(viewModel.readings[0], "Insulin on Board: 2.30 units")
+        XCTAssertTrue(viewModel.readings[1].hasPrefix("Last bolus delivery: "))
+        XCTAssertTrue(viewModel.readings[1].hasSuffix(" (1 hour 20 minutes ago)"), viewModel.readings[1])
+        XCTAssertEqual(viewModel.readings[2], "Current basal rate: 0.85 u/hr")
     }
 
-    func testNotLoadingWarnsOfZeroInsulinOnBoardBeforeSetupGoesOn() {
+    func testASuspendedPumpSaysSoInPlaceOfItsBasalRate() {
+        let viewModel = makeViewModel(SetupDeliveryReading(insulinOnBoard: 0, lastBolus: .none, isSuspended: true))
+
+        XCTAssertEqual(viewModel.readings, ["Insulin on Board: 0.00 units", "Insulin delivery currently suspended"])
+    }
+
+    func testAReadingThePumpDidNotAnswerIsLeftOut() {
+        XCTAssertEqual(makeViewModel().readings, [])
+    }
+
+    func testNotLoadingSaysTheAppWillNotCountThePumpsInsulinBeforeSetupGoesOn() throws {
         let viewModel = makeViewModel()
 
         viewModel.doNotLoad()
 
         XCTAssertTrue(viewModel.isShowingNotLoadedAlert)
-        XCTAssertTrue(viewModel.notLoadedMessage.contains("assumes you have 0 units of Insulin on Board"))
-        XCTAssertEqual(doneCount, 0)
+        let first = try XCTUnwrap(viewModel.notLoadedMessage.first)
+        XCTAssertTrue(first.isUppercase)
+        XCTAssertTrue(viewModel.notLoadedMessage.hasSuffix(" will not count insulin this pump delivered before you connected it."))
+        XCTAssertEqual(choices, [])
 
         viewModel.notLoadedAcknowledged()
 
-        XCTAssertEqual(doneCount, 1)
+        XCTAssertEqual(choices, [false])
     }
 
     func testNotLoadingLeavesTheLedgersWhereTheyWere() {
@@ -76,28 +96,12 @@ import XCTest
         XCTAssertEqual(manager.state.bolusReportLedger.trackingSince, trackingSince)
     }
 
-    func testLoadingShowsProgressAndAFailureKeepsSetupOnTheScreen() {
-        let viewModel = makeViewModel()
+    func testLoadingIsChosenHereAndRunsAfterTheSetupSync() {
+        let trackingSince = manager.state.bolusReportLedger.trackingSince
 
-        viewModel.load()
+        makeViewModel().load()
 
-        XCTAssertEqual(viewModel.phase, .loading)
-        waitUntil { viewModel.isShowingLoadFailedAlert }
-        XCTAssertTrue(viewModel.isShowingLoadFailedAlert)
-        XCTAssertEqual(viewModel.loadFailedMessage, SetupHistoryLoadError.historyUnreadable.localizedDescription)
-        XCTAssertEqual(viewModel.phase, .loading)
-        XCTAssertEqual(doneCount, 0)
-    }
-
-    func testALoadThatReadsThePumpToItsEndGoesOn() {
-        bluetooth.stub(HistoryLogStatusRequest.self, with: HistoryLogStatusResponse(numEntries: 0, firstSequenceNum: 0, lastSequenceNum: 0))
-        let viewModel = makeViewModel()
-
-        viewModel.load()
-
-        waitUntil { self.doneCount > 0 }
-        XCTAssertEqual(doneCount, 1)
-        XCTAssertEqual(viewModel.progress, 1)
-        XCTAssertFalse(viewModel.isShowingLoadFailedAlert)
+        XCTAssertEqual(choices, [true])
+        XCTAssertEqual(manager.state.bolusReportLedger.trackingSince, trackingSince)
     }
 }

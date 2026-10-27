@@ -1,44 +1,73 @@
 import Combine
 import Foundation
 
-enum LoadHistoryPhase {
-    case choosing
-    case loading
-}
-
+/// Asks before setup writes anything, with what the pump read then; the load itself runs after the
+/// setup sync (`TandemKitSetupCompleteViewModel`), whose reconciliation boundary its reports need.
 final class TandemKitLoadHistoryViewModel: ObservableObject {
-    @Published var phase = LoadHistoryPhase.choosing
-    /// 0 to 1, never moving back.
-    @Published var progress: Double = 0
     @Published var isShowingNotLoadedAlert = false
-    @Published var isShowingLoadFailedAlert = false
-    @Published var loadFailedMessage: String?
 
-    private let pumpManager: TandemPumpManager
-    private let done: () -> Void
+    let reading: SetupDeliveryReading
+    private let now: () -> Date
+    /// Whether the user chose to load.
+    private let done: (Bool) -> Void
 
-    init(pumpManager: TandemPumpManager, done: @escaping () -> Void) {
-        self.pumpManager = pumpManager
+    init(reading: SetupDeliveryReading, now: @escaping () -> Date = Date.init, done: @escaping (Bool) -> Void) {
+        self.reading = reading
+        self.now = now
         self.done = done
     }
 
     var appName: String { HostApp.current.appName }
 
-    var explanation: String {
-        // "this app" opens the sentence for a host that is neither Trio nor Loop.
-        let sentenceStart = appName.prefix(1).uppercased() + appName.dropFirst()
-        return String(format: String(
-            localized: "%1$@ can read your pump history of boluses and basal delivery from before you connected to %2$@.",
-            comment: "Setup explanation of loading the pump's history (1: app name at the start of a sentence, 2: app name)"
-        ), sentenceStart, appName)
+    var introduction: String {
+        String(
+            localized: "The Tandem Mobi you just connected reports the following insulin delivery information:",
+            comment: "Setup introduction to what the paired pump reports about its insulin delivery"
+        )
     }
 
-    var guidance: String {
+    /// One line per reading the pump answered.
+    var readings: [String] {
+        var lines: [String] = []
+        if let insulinOnBoard = reading.insulinOnBoard {
+            lines.append(String(format: String(
+                localized: "Insulin on Board: %@ units",
+                comment: "Setup line with the pump's insulin on board (1: units, to two decimals)"
+            ), String(format: "%.2f", insulinOnBoard)))
+        }
+        if case let .delivered(at) = reading.lastBolus {
+            lines.append(String(format: String(
+                localized: "Last bolus delivery: %1$@ (%2$@)",
+                comment: "Setup line with the pump's last bolus (1: time of day, 2: how long ago)"
+            ), Self.timeFormatter.string(from: at), LastKnownBasalDelivery.elapsedDescription(now().timeIntervalSince(at))))
+        }
+        if reading.isSuspended {
+            lines.append(String(
+                localized: "Insulin delivery currently suspended",
+                comment: "Setup line when the paired pump has insulin delivery suspended"
+            ))
+        } else if let rate = reading.currentBasalRate {
+            lines.append(String(format: String(
+                localized: "Current basal rate: %@ u/hr",
+                comment: "Setup line with the pump's current basal rate (1: units per hour, to two decimals)"
+            ), String(format: "%.2f", rate)))
+        }
+        return lines
+    }
+
+    var question: String {
         String(format: String(
-            localized: "If you were previously using this Tandem Mobi device with the Tandem app, it is essential to load history so that %1$@ knows your current IOB and does not over-deliver insulin in the hours following setup. If you were previously using a different pump with %1$@, and it is already aware of any active insulin doses, you can skip this step.",
-            comment: "Setup guidance on whether to load the pump's history (1: app name)"
+            localized: "Would you like to load this insulin delivery information into %@ so it is included in your IOB?",
+            comment: "Setup question whether to load the pump's history (1: app name)"
         ), appName)
     }
+
+    private static let timeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
+        return formatter
+    }()
 
     var loadButtonTitle: String {
         String(format: String(
@@ -48,17 +77,12 @@ final class TandemKitLoadHistoryViewModel: ObservableObject {
     }
 
     var notLoadedMessage: String {
-        String(format: String(
-            localized: "This Tandem Mobi pump's past bolus and basal records were not loaded, so %@ assumes you have 0 units of Insulin on Board. Please monitor your glucose accordingly.",
-            comment: "Setup alert after the user chose not to load the pump's history (1: app name)"
-        ), appName)
-    }
-
-    var loadingMessage: String {
-        String(format: String(
-            localized: "Reading the past %1$@ hours of your pump's history into %2$@. Keep the pump near your phone.",
-            comment: "Setup message while the pump's history loads (1: number of hours, 2: app name)"
-        ), String(Int(TandemPumpManager.setupHistoryLoadWindow / .hours(1))), appName)
+        // "this app" opens the sentence for a host that is neither Trio nor Loop.
+        let sentenceStart = appName.prefix(1).uppercased() + appName.dropFirst()
+        return String(format: String(
+            localized: "%@ will not count insulin this pump delivered before you connected it.",
+            comment: "Setup alert after the user chose not to load the pump's history (1: app name at the start of a sentence)"
+        ), sentenceStart)
     }
 
     func doNotLoad() {
@@ -66,28 +90,10 @@ final class TandemKitLoadHistoryViewModel: ObservableObject {
     }
 
     func notLoadedAcknowledged() {
-        done()
+        done(false)
     }
 
     func load() {
-        phase = .loading
-        pumpManager.loadHistoryForSetup(
-            progress: { value in
-                DispatchQueue.main.async {
-                    self.progress = max(self.progress, value)
-                }
-            },
-            completion: { error in
-                DispatchQueue.main.async {
-                    guard let error else {
-                        self.progress = 1
-                        self.done()
-                        return
-                    }
-                    self.loadFailedMessage = error.localizedDescription
-                    self.isShowingLoadFailedAlert = true
-                }
-            }
-        )
+        done(true)
     }
 }

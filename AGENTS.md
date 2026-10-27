@@ -276,10 +276,11 @@ edit instead of at the next sync.
   on that session: a second connect to a connected peripheral is never answered. A lost link ends a reconnect's wait at once, but not pairing's, so the setup reports the round it lost:
   only then does a link dropped at key confirmation reach `pairPump` as `pairingCodeRejected`.
   `deactivate` ends a pairing connect still pending, since nothing else would.
-- Once pairing, the onboarding writes and the history load (below) are done, `TandemUICoordinator`
-  hands the manager to the host (`pairingCompleted`: created, then onboarded, the order the hosts
-  adopt a manager in) before the setup-complete screen, so a setup left before Finish is in the host's
-  settings, where it can be deleted. Until then the flow owns the manager (`ownsPumpManager`), and a
+- Setup runs pairing, the Load Pump History step (below), then the setup-complete screen
+  (`TandemKitSetupCompleteViewModel`), which turns Control-IQ off, makes the onboarding writes,
+  syncs and runs the history load if the user chose it. Then it hands the manager to the host
+  (`handPumpManagerToHost`: created, then onboarded, the order the hosts adopt a manager in) and
+  offers Finish, so a setup left before Finish is in the host's settings, where it can be deleted. Until then the flow owns the manager (`ownsPumpManager`), and a
   flow that goes away still owning it, dismissed or freed, runs `abandonSetup`, which deactivates the
   transport. One left mid-connect paired on in the background, and its reconnects then held the pump's
   one link against every attempt after it (#603). The coordinator's screens capture it weakly, or a
@@ -288,10 +289,16 @@ edit instead of at the next sync.
 ### Setup history load
 - A new manager reports no history from before its ledgers' `trackingSince`, since it cannot tell
   another host's app boluses from the pump's own, so a pump moved between Loop, Trio and Tandem's app
-  arrived with the insulin it had just given missing from IOB (#607). After pairing, with
-  `historyBackfill` and `historyDoseReporting` on (`canLoadHistoryForSetup`), `pairingFinished` shows
-  the Load Pump History step before the host has the manager. Do Not Load warns that the host assumes
-  no IOB and goes on; nothing changes.
+  arrived with the insulin it had just given missing from IOB (#607). After pairing,
+  `readDeliveryForSetup` reads the pump before setup writes to it: its IOB, last bolus
+  (`LastBolusStatus`), basal rate or suspension, and with them the serial the load keys its reports on
+  and the clock it dates them by. With `historyBackfill` and `historyDoseReporting` on
+  (`canLoadHistoryForSetup`), the Load Pump History step shows those readings and asks whether to
+  load, unless the last bolus is more than `setupHistoryLoadWindow` ago (`offersHistoryLoad`); one
+  that could not be read still asks. Do Not Load says the host will not count what the pump delivered
+  before, and goes on; nothing changes. Load runs after the setup sync, not at the step: Loop saves
+  no dose from a batch without a reconciliation boundary, which only a sync gives, and that sync's
+  first basal reading is what the load matches a suspension the pump is in against.
 - Load (`loadHistoryForSetup`) moves both ledgers' `trackingSince` back `setupHistoryLoadWindow`
   (6 h), and `DeliveryTransitionLedger.historySince` to the same date, and
   `ReportedBasalLedger.reportHistory` clears `reconciledThrough`, which passes since pairing moved
@@ -303,6 +310,12 @@ edit instead of at the next sync.
   reconciliation skips the pump's suspended time, so only the reported suspend keeps the host from
   counting its schedule over it. `setupHistoryLoadFailureLimit`
   (3) ticks in a row that read nothing fail the load, and the step offers only Try Again.
+- A load that completes gives a `SetupHistoryLoadSummary`, which the Delivery Records Processed alert
+  shows before the host gets the manager: the pump's records in the window of the types the reporting
+  passes read for boluses (`pumpBolusRecordTypes`) and for basal (`pumpBasalRecordTypes`), then the
+  bolus and basal doses the load reported, by `raw`: what it added to the held events since its first
+  attempt started. A dose the host already holds under that `raw` (the same pump in the same app) is
+  counted though the host keeps only one row.
 - History the host already holds (the same pump back in the same app) arrives under the `raw` it was
   told it under, and both hosts keep the row they hold: an app bolus is keyed on its `bolusId`, a
   suspend or resume on its `PumpingSuspended`/`PumpingResumed` record, a temp basal on its
@@ -334,7 +347,7 @@ edit instead of at the next sync.
 - Then, with `quickBolusButtonSupport` off, it reads the pump globals and turns the quick bolus
   button off, which otherwise stayed live until the first sync (#353 P20-1). A failed read or a
   refused write is logged, doesn't stop setup, and is left to the first sync.
-- Before `applyOnboardingSettings`, whatever the feature flags, `TandemKitScanViewModel` asks
+- Before `applyOnboardingSettings`, whatever the feature flags, `TandemKitSetupCompleteViewModel` asks
   `controlIQNeedsTurningOffForSetup` whether the pump runs Control-IQ, which refuses the host's
   automatic doses and whose basal reaches the host only with `basalHistoryReporting`. If it does,
   an alert says Control-IQ will be turned off, and its OK runs `turnOffControlIQForSetup`: one
@@ -936,7 +949,7 @@ Events with no dose, each in a `replacePendingEvents: false` batch under a `raw`
   `PumpAlarm`, its title the note, and nothing for a clear.
 - A pump change is a `.replaceComponent(.pump)`, which Trio stores as a site change, so it shows in
   both hosts' event history. The first pump a manager reads (no `lastPumpSerial`) is "Pump Added",
-  at the pairing sync, held until the host adopts the manager. One whose serial differs from
+  at the reading after pairing, held until the host adopts the manager. One whose serial differs from
   `lastPumpSerial` (persisted, and kept through `deleteSavedPumpState`) is "Pump Replaced", and also
   goes through `pumpManagerPumpWasReplaced`, which both hosts ignore. Deleting the manager reports
   "Pump Removed" (below). The serial is read with the daily settings, which `deleteSavedPumpState`

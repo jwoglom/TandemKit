@@ -240,11 +240,25 @@ class ConformanceTestCase: FaketandemIntegrationTestCase {
         return try harness.sync(running, timeout: timeout ?? syncTimeout)
     }
 
+    /// What setup reads off the pump before its Load Pump History step.
+    func readDeliveryForSetup(timeout: TimeInterval? = nil) throws -> SetupDeliveryReading {
+        let manager = try XCTUnwrap(driver, "no driver").manager
+        let box = ResultBox<SetupDeliveryReading>()
+        manager.readDeliveryForSetup { box.set($0) }
+        return try box.wait("readDeliveryForSetup completion", timeout: timeout ?? syncTimeout)
+    }
+
     /// Setup's Load Pump History step with Load chosen; returns the load's error.
     func loadHistoryForSetup(timeout: TimeInterval? = nil) throws -> Error? {
         let manager = try XCTUnwrap(driver, "no driver").manager
         let box = ResultBox<Error?>()
-        manager.loadHistoryForSetup(progress: { _ in }) { box.set($0) }
+        manager.loadHistoryForSetup(progress: { _ in }) { outcome in
+            if case let .failure(error) = outcome {
+                box.set(error)
+            } else {
+                box.set(nil)
+            }
+        }
         return try box.wait("loadHistoryForSetup completion", timeout: timeout ?? syncTimeout)
     }
 

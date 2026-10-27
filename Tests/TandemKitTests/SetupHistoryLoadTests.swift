@@ -121,12 +121,19 @@ import XCTest
         wait(for: [ticked], timeout: 90.0)
     }
 
+    private var loadSummary: SetupHistoryLoadSummary?
+
     @discardableResult
     private func load(progress: ((Double) -> Void)? = nil) -> Error? {
         var result: Error?
         let loaded = expectation(description: "history load completes")
-        manager.loadHistoryForSetup(progress: { progress?($0) }) { error in
-            result = error
+        manager.loadHistoryForSetup(progress: { progress?($0) }) { outcome in
+            switch outcome {
+            case let .success(summary):
+                self.loadSummary = summary
+            case let .failure(error):
+                result = error
+            }
             loaded.fulfill()
         }
         wait(for: [loaded], timeout: 90.0)
@@ -173,6 +180,22 @@ import XCTest
         XCTAssertEqual(event.raw, HistoryLogSyncIdentifier.bolus(pumpSerial: serial, bolusId: 70))
         XCTAssertEqual(event.dose?.deliveredUnits ?? 0, 3.6, accuracy: 0.001)
         XCTAssertEqual(event.dose?.isMutable, false)
+    }
+
+    func testTheLoadCountsThePumpsRecordsInItsWindowAndTheDosesItReported() throws {
+        stubPump(serving: pumpBolus(bolusId: 60, units: 2.0, firstSequenceNum: 1, secondsAgo: 8 * 3600)
+            + pumpBolus(bolusId: 61, units: 1.5, firstSequenceNum: 4, secondsAgo: 3 * 3600)
+            + pumpSuspension(firstSequenceNum: 7, secondsAgo: 2 * 3600, minutes: 15))
+        runTick()
+
+        XCTAssertNil(load())
+
+        XCTAssertEqual(loadSummary, SetupHistoryLoadSummary(
+            pumpBolusRecords: 3,
+            pumpBasalRecords: 2,
+            reportedBolusRecords: 1,
+            reportedBasalRecords: 2
+        ))
     }
 
     func testWithoutTheLoadASuspendFromBeforeSetupIsNotReported() {
@@ -306,5 +329,139 @@ import XCTest
         ledger.reportHistory(since: Date())
 
         XCTAssertEqual(ledger.trackingSince, since)
+    }
+
+    // MARK: - The pump's delivery at setup
+
+    private func readDelivery() -> SetupDeliveryReading {
+        var result: SetupDeliveryReading?
+        let read = expectation(description: "delivery read")
+        manager.readDeliveryForSetup { reading in
+            result = reading
+            read.fulfill()
+        }
+        wait(for: [read], timeout: 10)
+        return result ?? SetupDeliveryReading()
+    }
+
+    private func stubPumpBeforeSetup(pumpClockAhead: TimeInterval, lastBolusSecondsAgo: UInt32?, basal: CurrentBasalStatusResponse) {
+        bluetooth.stub(ApiVersionRequest.self, with: ApiVersionResponse(majorVersion: 3, minorVersion: 4))
+        bluetooth.stub(PumpVersionBRequest.self, with: PumpVersionBResponse(
+            softwareName: "t:slim X2",
+            configurationBitsA: 0,
+            configurationBitsB: 0,
+            serialNumber: 654_321,
+            modelNumber: PumpModel.TSLIM_X2.rawValue,
+            pumpRevision: "A",
+            pcbPartNumberA: 0,
+            pcbSerialNumberA: 0,
+            pcbRevisionNumberA: "A"
+        ))
+        bluetooth.stub(TimeSinceResetRequest.self, with: TimeSinceResetResponse(
+            currentTime: nowPumpTimeSec + UInt32(pumpClockAhead),
+            pumpTimeSinceReset: 1000
+        ))
+        bluetooth.stub(ControlIQInfoV2Request.self, with: ControlIQInfoV2Response(
+            closedLoopEnabled: true,
+            weight: 150,
+            weightUnit: ControlIQInfoAbstractResponse.WeightUnit.pounds.rawValue,
+            totalDailyInsulin: 40,
+            currentUserModeType: 0,
+            byte6: 0,
+            byte7: 0,
+            byte8: 0,
+            controlStateType: 0,
+            exerciseChoice: 0,
+            exerciseDuration: 0,
+            exerciseTimeRemaining: 0
+        ))
+        bluetooth.stub(ControlIQIOBRequest.self, with: ControlIQIOBResponse(
+            mudaliarIOB: 1200,
+            timeRemainingSeconds: 600,
+            mudaliarTotalIOB: 1500,
+            swan6hrIOB: 2300,
+            iobType: 1
+        ))
+        bluetooth.stub(LastBolusStatusV2Request.self, with: LastBolusStatusV2Response(
+            status: 0,
+            bolusId: 77,
+            timestamp: lastBolusSecondsAgo.map { nowPumpTimeSec + UInt32(pumpClockAhead) - $0 } ?? 0,
+            deliveredVolume: 4000,
+            bolusStatusId: LastBolusStatusAbstractResponseBolusStatus.complete.rawValue,
+            bolusSourceId: 0,
+            bolusTypeBitmask: 1,
+            extendedBolusDuration: 0,
+            requestedVolume: 4000
+        ))
+        bluetooth.stub(CurrentBasalStatusRequest.self, with: basal)
+    }
+
+    func testThePumpIsReadAsItsLastUserLeftItBeforeSetupWritesAnything() throws {
+        stubPumpBeforeSetup(
+            pumpClockAhead: 120,
+            lastBolusSecondsAgo: 80 * 60,
+            basal: CurrentBasalStatusResponse(profileBasalRate: 800, currentBasalRate: 1100, basalModifiedBitmask: 0)
+        )
+
+        let reading = readDelivery()
+
+        XCTAssertEqual(try XCTUnwrap(reading.insulinOnBoard), 2.3, accuracy: 0.0005, "the IOB the pump shows")
+        guard case let .delivered(at) = reading.lastBolus else {
+            return XCTFail("last bolus \(reading.lastBolus)")
+        }
+        XCTAssertEqual(Date().timeIntervalSince(at), 80 * 60, accuracy: 5, "on the phone's clock")
+        XCTAssertEqual(try XCTUnwrap(reading.currentBasalRate), 1.1, accuracy: 0.0005)
+        XCTAssertFalse(reading.isSuspended)
+        XCTAssertEqual(manager.state.pumpState.pumpSerial, 654_321, "the serial the load keys its reports on")
+        XCTAssertEqual(
+            Set(bluetooth.sentMessages.map { String(describing: type(of: $0)) }),
+            [
+                "ApiVersionRequest", "PumpVersionBRequest", "TimeSinceResetRequest", "ControlIQInfoV2Request",
+                "ControlIQIOBRequest", "LastBolusStatusV2Request", "CurrentBasalStatusRequest"
+            ],
+            "reads alone"
+        )
+    }
+
+    func testASuspendedPumpReadsSuspendedWithNoBasalRate() {
+        stubPumpBeforeSetup(
+            pumpClockAhead: 0,
+            lastBolusSecondsAgo: 60,
+            basal: CurrentBasalStatusResponse(profileBasalRate: 800, currentBasalRate: 0, basalModifiedBitmask: 0x01)
+        )
+
+        let reading = readDelivery()
+
+        XCTAssertTrue(reading.isSuspended)
+        XCTAssertNil(reading.currentBasalRate)
+    }
+
+    func testAPumpThatNeverBolusedReadsNoLastBolus() {
+        stubPumpBeforeSetup(
+            pumpClockAhead: 0,
+            lastBolusSecondsAgo: nil,
+            basal: CurrentBasalStatusResponse(profileBasalRate: 800, currentBasalRate: 800, basalModifiedBitmask: 0)
+        )
+
+        XCTAssertEqual(readDelivery().lastBolus, SetupDeliveryReading.LastBolus.none)
+    }
+
+    func testAPumpThatDoesNotAnswerReadsNothing() {
+        XCTAssertEqual(readDelivery(), SetupDeliveryReading())
+    }
+
+    func testTheLoadIsOfferedUnlessTheLastBolusIsOverSixHoursAgo() {
+        let hours: (Double) -> SetupDeliveryReading = {
+            SetupDeliveryReading(lastBolus: .delivered(at: Date().addingTimeInterval(-$0 * 3600)))
+        }
+
+        XCTAssertTrue(manager.offersHistoryLoad(after: hours(5.9)))
+        XCTAssertFalse(manager.offersHistoryLoad(after: hours(6.1)))
+        XCTAssertFalse(manager.offersHistoryLoad(after: SetupDeliveryReading(lastBolus: .none)))
+        XCTAssertTrue(manager.offersHistoryLoad(after: SetupDeliveryReading()), "a last bolus that could not be read")
+
+        manager.state.featureFlags[.historyDoseReporting] = false
+
+        XCTAssertFalse(manager.offersHistoryLoad(after: hours(1)))
     }
 }
