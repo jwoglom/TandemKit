@@ -658,8 +658,8 @@ extension TandemBluetoothManager: CBCentralManagerDelegate {
             // locks instead of waiting for the stack to come back.
             logger.info("Bluetooth not powered on; cancelling pending operations")
             cancelReconnectRetry()
-            cancelInFlightConnect()
             peripheralManager?.linkWentDown(.bluetooth)
+            cancelInFlightConnect()
             // No didDisconnectPeripheral arrives for those, so this is the only notice.
             markLinkDown()
             return
@@ -743,8 +743,10 @@ extension TandemBluetoothManager: CBCentralManagerDelegate {
         // sit on the command queue until its bounded timeout. Cancelling lets it unwind promptly.
         // Also release any in-flight connect attempt (e.g. a disconnect mid-performInitialSetup),
         // which would otherwise block awaitConnect for its full timeout.
-        cancelInFlightConnect()
+        // linkWentDown first: the connect job this releases clears peripheralManager, and a setup
+        // task never told of the drop went on to write JPAKE on the next connection.
         peripheralManager?.linkWentDown(TandemPeripheralManager.LinkLoss(disconnectError: error))
+        cancelInFlightConnect()
         markLinkDown()
 
         if let pendingConnect {
