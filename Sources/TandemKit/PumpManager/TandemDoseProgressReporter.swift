@@ -12,6 +12,7 @@ class TandemDoseProgressReporter: DoseProgressReporter {
     private let pumpManager: TandemPumpManager
     private let dose: DoseEntry
     private let activationType: BolusActivationType
+    private let eventRaw: Data?
     private let total: Double
 
     // notify() runs on the command and telemetry queues while hosts read progress on their own.
@@ -23,10 +24,11 @@ class TandemDoseProgressReporter: DoseProgressReporter {
 
     var programmedUnits: Double { total }
 
-    public init(pumpManager: TandemPumpManager, dose: DoseEntry, activationType: BolusActivationType) {
+    public init(pumpManager: TandemPumpManager, dose: DoseEntry, activationType: BolusActivationType, eventRaw: Data? = nil) {
         self.pumpManager = pumpManager
         self.dose = dose
         self.activationType = activationType
+        self.eventRaw = eventRaw
         total = dose.programmedUnits
     }
 
@@ -62,7 +64,8 @@ class TandemDoseProgressReporter: DoseProgressReporter {
             ),
             // The event date stays the moment the bolus was programmed even when the dose starts
             // later: hosts key pump events on it, and moving it would report a second bolus.
-            date: dose.startDate
+            date: dose.startDate,
+            eventRaw: eventRaw
         )
     }
 

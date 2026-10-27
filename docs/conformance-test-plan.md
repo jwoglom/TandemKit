@@ -266,6 +266,53 @@ on and ends with both oracles and the complete-batch check. `ExtendedBolusConfor
 | J6 | A `BolexCompleted` never read | Held through the programmed end and `extendedPartFinalizationWindow` after it, then finalized at its programmed amount, ending at its programmed end, in a replacing batch |
 | J7 | An app bolus, a quick bolus on the pump, an extended bolus, then an app bolus that still runs when history reads the extended part's end | The app boluses reported live and never again from history, the quick bolus once from history; the batch that finalizes the extended part carries the running app bolus; each finalized once; four rows in Trio |
 
+## K. The pump set up again (#350, #607)
+
+The host deletes the pump manager (`deactivateDriver`) and sets the same pump up again. Each manager is
+set up as TandemKitUI does it: paired before the host has it (`startDriver(attachDelegate: false)`), the
+sync `TandemKitScanViewModel.finishSetup` runs, the Load Pump History step with Load chosen
+(`loadHistoryForSetup()`), and only then adopted (`Driver.adoptByHost()`). Both managers' batches reach
+one host, which must hold every dose the pump gave once: the second manager reports what the first one
+did under the same `raw` (AGENTS.md "Setup history load"), and the pump's doses while no manager was
+attached reach it from the load. faketandem's basal cycle runs throughout, so the app's temps carry
+`SetTempRateResponse` records and both managers reconcile basal. Every scenario checks both oracles for
+duplicates, nothing live dropped and nothing left mutable, and that both hosts count what each closed
+BasalDelivery record delivered, except a cycle a change the app commanded falls in.
+`RepairConformanceTests`.
+
+| ID | Scenario | Assert |
+|---|---|---|
+| K1 | Before any manager the pump boluses and stops for 10 minutes; the first manager loads them. With it the app gives a bolus, a temp it cancels, a suspend and resume, and the pump a bolus and a 175% temp; the app's next temp and a slow bolus run at the deletion. With no manager the pump finishes both, boluses, stops for 10 minutes and runs a 50% temp. The second manager loads | Every report the second manager makes of something before the deletion carries a `raw` the first made, and it does re-report the boluses, both app temps and the first's corrections; no Trio row before the deletion comes from the second; five boluses, each once at the pump's delivered amount under `HistoryLogSyncIdentifier.bolus`, the interim's `wasProgrammedByPumpUI`; three suspends, each closed at its resume and keyed on its record; one correction per cycle of the pump's two temps and no difference logged over the app's; the app's temps under their temp rate ids and the deletion's remainder |
+| K2 | The app's temp runs at the deletion; the pump is set up again 3 minutes later and the new manager's temp replaces it | The load reports the temp under its id and nothing is corrected; Loop holds it to the deletion, the remainder cut where the new temp starts, and the new temp |
+| K3 | As K2 with a profile segment change in the remainder; set up again once the temp has run out | The deletion cuts the remainder at the change into the temp's first part (`tempRatePart`), which the load reports under the same identity; Loop holds three rows at 2.0, 2.0 and the rescaled 1.6 U/hr. Trio stores the part, which starts ahead of its clock, at its clock in the remainder's second, and counts one of the two: strict expected failure |
+| K4a | The app's suspend stands at the deletion; the pump is resumed on its screen before it is set up again | The load's resume, keyed on its record, closes the suspend the host holds; one suspend in each host |
+| K4b | As K4a, the pump still stopped when set up again; the new manager resumes it | The new manager's first reading reports the suspension at detection under its `PumpingSuspended` record, which both hosts already hold, so neither gains a second suspend; its resume closes it |
+| K5 | The app's temp runs at the deletion, the pump boluses meanwhile, and the user chooses Do Not Load | Nothing from before the pairing is reported, the interim bolus included; the temp's cycles after the pairing are corrected at the pump's rate, which both hosts take in place of the remainder |
+
+## L. A first connection to a pump with history (#607)
+
+Setup as `TandemKitScanViewModel` and the Load Pump History step run it: pairing, Control-IQ turned
+off if the pump runs it, the onboarding writes and a sync, all with no host attached, then the load
+or not, then the host adopting the manager, which is handed what was held (AGENTS.md "Setup history
+load"). The pump's past is staged on the shared clock before this app's driver exists: on the pump's
+screen, and by another app, a second driver with its own key, over Bluetooth before it goes away. The
+pump runs its basal cycle unless a scenario says otherwise, and staged changes fall mid-cycle.
+History backfill, dose reporting and basal reporting are on. Only this app's host's batches feed the
+oracles. `SetupHistoryLoadConformanceTests`.
+
+| ID | Scenario | Assert |
+|---|---|---|
+| L1 | Six and a half hours before pairing: on the pump's screen boluses (one stopped part-way), a 150% temp and a suspend and resume; another app's bolus, a temp that runs out and one with 40 minutes left; a bolus and a suspend older than six hours; then the load and 45 minutes of syncs | The load completes with its progress at 100%; the four boluses in the window once each under `HistoryLogSyncIdentifier.bolus`, at the pump's start and volume; the suspend in the window at the pump's times, not the older one; the other app's temps under their `tempRateId`, the running one finished at its programmed end; one correction per BasalDelivery record of the pump's own temp and nothing else; nothing reported again by later passes; both hosts count the pump's bolus insulin and net basal over the window. Loop leaves the running temp out of IOB from a boundary past its end until its next save (strict expected failure, AGENTS.md "Deleting the pump manager") |
+| L2 | K1's pump, not loaded; then a bolus, a suspend and a resume on the pump | Nothing from before pairing, none of the other app's temps; the running one corrected from the first BasalDelivery record after pairing; the later bolus and suspend reported once at the pump's times; both hosts count the pump's basal from pairing |
+| L3 | Six and a half hours of scheduled basal, an alarm raised and cleared and fill records | The load completes at 100%; every BasalDelivery record in the window compared, none differs, nothing reported, no alarm |
+| L4 | An empty log; then an app bolus, temp, suspend and resume and a bolus on the pump | The load completes on its first tick; nothing reported; each later dose once, at the pump's times, and never again from history |
+| L5 | A log of a few fill and alarm records written on a clock 51 hours behind, which setup sets; then a bolus on the pump | The load completes; nothing reported; one clock adjustment of the time it was behind; the bolus once at its time |
+| L6 | A pump bolus, a suspend and another app's running temp, loaded; then an app bolus, a temp replacing the other app's, a suspend and a resume | Each once under its own identity, nothing loaded reported again, no correction; both hosts count the pump's basal but for what they count from a command the pump runs from its next cycle |
+| L7 | A bolus on the pump's screen delivering through pairing and the load | Reported once when history reads its completion, at the pump's start and volume; no boundary held for it after |
+| L8 | A pump suspended on its screen before pairing and still suspended when paired, resumed from the app | One suspend in each host, closed at the resume: setup's sync reports the suspend under its `PumpingSuspended` record, which the load then takes as reported rather than a second one in a row. Dated from that sync rather than the pump's stop, so both hosts count the schedule over the stop before pairing (strict expected failure) |
+| L9 | The history log status unanswered at the load, then answered | The load fails with `historyUnreadable` after `setupHistoryLoadFailureLimit` reads; Try Again loads |
+| L10 | An hour of Control-IQ before pairing, still on when paired | Setup turns it off; one automatic correction per Control-IQ BasalDelivery record off the schedule; both hosts count the pump's basal |
+
 ## Execution order
 
 1. Oracles + the delegate journal + `PumpTimeline` + `advanceBoth` (shared infrastructure; the oracles

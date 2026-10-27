@@ -924,6 +924,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             now: startDate
         )
         dose.isUnconfirmed = isUnconfirmed
+        dose.eventRaw = bolusEventRaw(bolusId: bolusId)
 
         let doseEntry = dose.toDoseEntry(isMutable: true)
         // An unconfirmed bolus gets one once the pump is seen delivering it.
@@ -931,11 +932,12 @@ public class TandemPumpManager: PumpManager, Pluggable {
             bolusProgressReport = TandemDoseProgressReporter(
                 pumpManager: self,
                 dose: doseEntry,
-                activationType: activationType
+                activationType: activationType,
+                eventRaw: dose.eventRaw
             )
         }
 
-        let event = NewPumpEvent.bolus(dose: doseEntry, date: dose.startDate)
+        let event = NewPumpEvent.bolus(dose: doseEntry, of: dose)
         state.bolusReportLedger.prune(now: now)
         state.bolusReportLedger.record(BolusReportLedger.Entry(
             bolusId: bolusId,
@@ -1034,7 +1036,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
                 let mutableDose = bolusDose.toDoseEntry(isMutable: true)
                 var events = self.getActivePumpEvents()
-                events.append(NewPumpEvent.bolus(dose: mutableDose, date: bolusDose.startDate))
+                events.append(NewPumpEvent.bolus(dose: mutableDose, of: bolusDose))
 
                 self.state.lastReconciliation = self.now
                 self.notifyDelegateStateUpdated()
@@ -1059,8 +1061,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             var events = self.getActivePumpEvents()
             // A zero delivery is finalized at 0 U, not withdrawn: Loop purges nothing on an empty batch,
             // and keeps a 0 U bolus out of IOB and HealthKit itself.
-            // bolusDose.startDate, not the dose's: the date it was first reported under.
-            events.append(NewPumpEvent.bolus(dose: canceledDose, date: bolusDose.startDate))
+            events.append(NewPumpEvent.bolus(dose: canceledDose, of: bolusDose))
 
             self.state.lastReconciliation = self.now
             self.notifyDelegateStateUpdated()
@@ -1351,6 +1352,23 @@ public class TandemPumpManager: PumpManager, Pluggable {
         return raw
     }
 
+    /// As `tempBasalEventRaw`, from the pump's `bolusId`. History reports the bolus under the same
+    /// `raw`, so a later pump manager's history load finds the host already holds it.
+    func bolusEventRaw(bolusId: Int) -> Data? {
+        guard bolusId > 0, let serial = historyLogStoreSerial else {
+            return nil
+        }
+        if let last = state.lastBolusEventRaw.flatMap(HistoryLogSyncIdentifier.decode), last.pumpSerial == serial,
+           bolusId <= last.identifier
+        {
+            logger.warning("Bolus id \(bolusId) is not past \(last.identifier); keying the bolus on what was programmed")
+            return nil
+        }
+        let raw = HistoryLogSyncIdentifier.bolus(pumpSerial: serial, bolusId: bolusId)
+        state.lastBolusEventRaw = raw
+        return raw
+    }
+
     /// How long before the pump's rate changes a temp basal is worked out against the larger of the
     /// two rates, about one host loop cycle.
     static let segmentChangeWindow: TimeInterval = .minutes(5)
@@ -1443,24 +1461,28 @@ public class TandemPumpManager: PumpManager, Pluggable {
             guard let response, response.status == 0 else {
                 self.logger.error("Failed to Suspend delivery - Status: \(response?.status ?? -1)")
                 let isSuspended = self.readBackUnconfirmedSuspend(mayHaveApplied: response == nil, sentAt: sentAt)
-                completion(isSuspended ? nil : PumpCommError.noResponse)
+                self.completeOnceTransitionIsReported { completion(isSuspended ? nil : PumpCommError.noResponse) }
                 return
             }
 
             self.recordSuspend(sentAt: sentAt)
             self.logger.info("Insulin Delivery Suspended!")
-            completion(nil)
+            self.completeOnceTransitionIsReported { completion(nil) }
         }
     }
 
-    /// Dated at the answer, or at the reading after a lost one: the later stop counts more insulin.
+    /// Dated by the pump's record, or without history at the answer, or at the reading after a lost
+    /// one: the later stop counts more insulin.
     private func recordSuspend(sentAt: Date) {
         settleDeliveryTransition()
+        state.deliveryTransitions.interruptedTemp = nil
+        if leaveCommandedTransitionForHistory(.suspend, sentAt: sentAt) {
+            return
+        }
         let suspendDose = UnfinalizedDose(suspendStartTime: now)
         var events = getActivePumpEvents(endDate: suspendDose.startDate)
         events.append(NewPumpEvent.suspend(dose: suspendDose.toDoseEntry(), date: suspendDose.startDate))
 
-        state.deliveryTransitions.interruptedTemp = nil
         state.basalDose = suspendDose
         state.lastReconciliation = now
         recordReportedTransition(
@@ -1522,7 +1544,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
             guard let status = self.bluetooth.write(CurrentBasalStatusRequest()),
                   self.observeDeliveryState(status.basalType)
             else {
-                completion(resume())
+                let error = resume()
+                self.completeOnceTransitionIsReported { completion(error) }
                 return
             }
             self.afterHistoryIsReported {
@@ -1531,7 +1554,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
                         completion(error)
                         return
                     }
-                    completion(resume())
+                    let error = resume()
+                    self.completeOnceTransitionIsReported { completion(error) }
                 }
             }
             self.historyBackfillCoordinator.runTick()
@@ -1551,13 +1575,18 @@ public class TandemPumpManager: PumpManager, Pluggable {
             return isDelivering ? nil : PumpCommError.noResponse
         }
 
-        recordResume(at: now)
+        recordResume(at: now, sentAt: sentAt)
         return nil
     }
 
-    /// Dated at the answer, or at the send after a lost one: the earlier start counts more insulin.
-    private func recordResume(at date: Date) {
+    /// Dated by the pump's record, or without history at the answer, or at the send after a lost one:
+    /// the earlier start counts more insulin.
+    private func recordResume(at date: Date, sentAt: Date) {
         settleDeliveryTransition()
+        if leaveCommandedTransitionForHistory(.basal, sentAt: sentAt) {
+            logger.info("Insulin Delivery Resumed!")
+            return
+        }
         var resumedAt = date
         if let host = hostTransition(before: .distantFuture), host.kind == .suspend {
             // Trio's IOB throws on a suspend and resume in the same second.
@@ -1592,7 +1621,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         let held = state.deliveryTransitions.pending?.observed ?? state.basalDose.type
         if mayHaveApplied, status.basalType != .suspend, held == .suspend {
             logger.warning("The pump is delivering though the ResumePumping answer was lost; reporting the resume")
-            recordResume(at: sentAt)
+            recordResume(at: sentAt, sentAt: sentAt)
         } else {
             observeDeliveryState(status.basalType)
         }
@@ -1917,7 +1946,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     tempRateId: running.tempRateId,
                     tempPercent: running.tempPercent
                 )
-                let (finished, last) = splitAtSegmentChanges(remainder, through: end)
+                let (finished, last) = splitAtSegmentChanges(remainder, through: end, partOf: running.eventRaw)
                 events += finished
                 events.append(NewPumpEvent.tempBasal(dose: last.toDoseEntry(isMutable: false, endDate: end, now: now), of: last))
             }
@@ -1939,7 +1968,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 pumpTimestamp: record.map { hostDate(forPumpDate: $0.pumpTimestamp) },
                 detectedAt: now
             )
-            let event = NewPumpEvent.bolus(dose: dose.toDoseEntry(endDate: end, now: now), date: dose.startDate)
+            let event = NewPumpEvent.bolus(dose: dose.toDoseEntry(endDate: end, now: now), of: dose)
             if bolusRaws.insert(event.raw).inserted {
                 events.append(event)
             }
@@ -2681,7 +2710,7 @@ extension TandemPumpManager {
     /// leaves one out deletes it, and Loop never revives a deleted dose (#330).
     func inProgressBolusEvents() -> [NewPumpEvent] {
         let events = [state.bolusDose, state.pendingBolusFinalization].compactMap { dose in
-            dose.map { NewPumpEvent.bolus(dose: $0.toDoseEntry(isMutable: true), date: $0.startDate) }
+            dose.map { NewPumpEvent.bolus(dose: $0.toDoseEntry(isMutable: true), of: $0) }
         } + heldExtendedPartEvents()
         var seen = Set<Data>()
         return events.filter { seen.insert($0.raw).inserted }
@@ -2881,15 +2910,19 @@ extension TandemPumpManager {
     /// The pump rescales a temp at each segment change, and neither host revises a temp basal once
     /// it is reported finished, so every path that finishes one cuts it here first: the parts
     /// finished at changes before `end`, and the part running at `end` at `tempPercent` of its rate.
+    /// `partOf` is the part of the temp rate `dose` continues, whose next parts the cuts are: `dose`
+    /// itself unless it is a piece of its own.
     func splitAtSegmentChanges(
         _ dose: UnfinalizedDose,
-        through end: Date
+        through end: Date,
+        partOf: Data? = nil
     ) -> (finished: [NewPumpEvent], running: UnfinalizedDose) {
         guard dose.type == .tempBasal, let percent = dose.tempPercent, percent > 0 else {
             return ([], dose)
         }
 
         var running = dose
+        var part = partOf ?? dose.eventRaw
         var finished: [NewPumpEvent] = []
         for change in pumpSegmentChanges(after: dose.startDate, through: min(end, dose.estimatedEndDate))
             where change.date < dose.estimatedEndDate
@@ -2899,6 +2932,7 @@ extension TandemPumpManager {
 
             let entry = running.toDoseEntry(isMutable: false, endDate: change.date, now: now)
             finished.append(NewPumpEvent.tempBasal(dose: entry, of: running))
+            part = part.flatMap(HistoryLogSyncIdentifier.nextTempRatePart(after:))
             running = UnfinalizedDose(
                 tempRate: rate,
                 duration: dose.estimatedEndDate.timeIntervalSince(change.date),
@@ -2906,7 +2940,8 @@ extension TandemPumpManager {
                 insulinType: dose.insulinType,
                 startDate: change.date,
                 tempRateId: dose.tempRateId,
-                tempPercent: percent
+                tempPercent: percent,
+                eventRaw: part
             )
         }
         if !finished.isEmpty {

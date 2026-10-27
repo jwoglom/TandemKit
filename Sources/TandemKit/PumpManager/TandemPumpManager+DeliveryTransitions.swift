@@ -8,7 +8,8 @@ import LoopKit
 /// counts a non-bolus dose older than its last finished basal (#354). So the first report must
 /// carry the pump's date, and must reach the host before anything the app commands after it.
 /// Behind `historyBackfill` a change is left pending for the next history pass; a sync that saw it
-/// waits for that pass, and an app command reports it first. Without the flag, or without the
+/// waits for that pass, and an app command reports it first. An app suspend or resume waits the
+/// same way, so it reaches the host under its record's identity. Without the flag, or without the
 /// pump's record, it is reported at detection, each end dated the way that counts more insulin.
 extension TandemPumpManager {
     typealias PendingTransition = DeliveryTransitionLedger.PendingTransition
@@ -208,6 +209,30 @@ extension TandemPumpManager {
         }
     }
 
+    /// An app suspend or resume, left for the history pass as a pump-side change is, so it reaches
+    /// the host under its pump record's identity. False without history to date it.
+    func leaveCommandedTransitionForHistory(_ observed: DoseType, sentAt: Date) -> Bool {
+        guard datesTransitionsFromHistory else { return false }
+        let held = state.basalDose
+        let pending = PendingTransition(prior: held, observed: observed, detectedAt: now, lastConfirmed: max(held.startDate, sentAt))
+        state.deliveryTransitions.lastConfirmedObservation = now
+        state.deliveryTransitions.pending = pending
+        state.basalDose = placeholderDose(for: pending)
+        notifyDelegateStateUpdated()
+        return true
+    }
+
+    /// Once a history pass has reported a change the command left pending, or it is reported at
+    /// detection after `transitionHistoryWait`.
+    func completeOnceTransitionIsReported(_ completion: @escaping () -> Void) {
+        guard state.deliveryTransitions.pending != nil else {
+            completion()
+            return
+        }
+        afterHistoryIsReported(completion)
+        historyBackfillCoordinator.runTick()
+    }
+
     /// Before anything the host must hear of after the change: an app command, or a sync's result.
     func settleDeliveryTransition() {
         guard let pending = state.deliveryTransitions.pending else { return }
@@ -267,6 +292,7 @@ extension TandemPumpManager {
         _ pending: PendingTransition,
         tempRateEnd: Date? = nil,
         adopting adopted: AdoptedTemp? = nil,
+        suspendedBy record: (raw: Data, sequenceNum: UInt32)? = nil,
         into batch: inout HistoryReportBatch
     ) {
         let prior = pending.prior
@@ -309,8 +335,8 @@ extension TandemPumpManager {
             final = UnfinalizedDose(suspendStartTime: host.date)
         case (true, _):
             final = UnfinalizedDose(suspendStartTime: pending.detectedAt)
-            events.append(NewPumpEvent.suspend(dose: final.toDoseEntry(), date: final.startDate))
-            recordReportedTransition(.suspend, at: final.startDate, earliest: earliest, latest: latest)
+            events.append(NewPumpEvent.suspend(dose: final.toDoseEntry(), date: final.startDate, record: record?.raw))
+            recordReportedTransition(.suspend, at: final.startDate, earliest: earliest, latest: latest, sequenceNum: record?.sequenceNum)
         case let (false, host?) where host.kind == .suspend:
             final = UnfinalizedDose(resumeStartTime: max(pending.lastConfirmed, host.date.addingTimeInterval(1)), insulinType: state.insulinType)
             events.append(NewPumpEvent.resume(dose: final.toDoseEntry(), date: final.startDate))
@@ -398,6 +424,12 @@ extension TandemPumpManager {
         let sequenceNum: UInt32
         let kind: DeliveryTransitionLedger.Kind
         let date: Date
+
+        /// Every pump manager reports this record under it, so a host told by an earlier one keeps
+        /// its row when a later one loads the same history.
+        func raw(_ serial: HistoryLogSyncIdentifier.PumpSerial) -> Data {
+            HistoryLogSyncIdentifier.logSequence(pumpSerial: serial, sequenceNum: sequenceNum)
+        }
     }
 
     /// The pump's suspends and resumes the host was never given, at the pump's time, and a pending
@@ -413,7 +445,7 @@ extension TandemPumpManager {
             logger.info("Tracking delivery changes on pump \(serial.rawValue) after record \(pumpRange.upperBound)")
             state.deliveryTransitions.track(pumpSerial: serial.rawValue, after: pumpRange.upperBound)
         }
-        guard let trackedAfter = state.deliveryTransitions.trackedAfter else { return batch }
+        guard state.deliveryTransitions.trackedAfter != nil else { return batch }
         guard let covered = outcome.sessionCovered else {
             if let pending = state.deliveryTransitions.pending, outcome.startedAt >= pending.detectedAt {
                 logger.warning("Pump history was not read; reporting the \(pending.observed) seen at \(pending.detectedAt) at detection")
@@ -455,16 +487,24 @@ extension TandemPumpManager {
 
         var records: [PumpTransition] = []
         for log in stored {
+            let kind: DeliveryTransitionLedger.Kind
             switch log {
-            case is PumpingSuspendedHistoryLog where log.sequenceNum > trackedAfter:
-                records.append(PumpTransition(sequenceNum: log.sequenceNum, kind: .suspend, date: dates.phoneDate(of: log)))
-            case is PumpingResumedHistoryLog where log.sequenceNum > trackedAfter:
-                records.append(PumpTransition(sequenceNum: log.sequenceNum, kind: .resume, date: dates.phoneDate(of: log)))
+            case is PumpingSuspendedHistoryLog:
+                kind = .suspend
+            case is PumpingResumedHistoryLog:
+                kind = .resume
             default:
                 continue
             }
+            let date = dates.phoneDate(of: log)
+            if state.deliveryTransitions.isTracked(sequenceNum: log.sequenceNum, date: date) {
+                records.append(PumpTransition(sequenceNum: log.sequenceNum, kind: kind, date: date))
+            }
         }
         records.removeAll { $0.date < floor || $0.date > now.addingTimeInterval(tolerance) }
+        if let pending = state.deliveryTransitions.pending {
+            datePendingRecord(of: pending, in: &records)
+        }
 
         let isSuspendedNow = (state.deliveryTransitions.pending?.observed ?? state.basalDose.type) == .suspend
         func leaveUnreported(_ record: PumpTransition) {
@@ -502,7 +542,7 @@ extension TandemPumpManager {
                     continue
                 }
                 let dose = UnfinalizedDose(suspendStartTime: record.date)
-                events.append(NewPumpEvent.suspend(dose: dose.toDoseEntry(), date: dose.startDate))
+                events.append(NewPumpEvent.suspend(dose: dose.toDoseEntry(), date: dose.startDate, record: record.raw(serial)))
                 recordReportedTransition(.suspend, at: record.date, earliest: record.date, latest: record.date, sequenceNum: record.sequenceNum)
 
             case .resume:
@@ -511,7 +551,7 @@ extension TandemPumpManager {
                     continue
                 }
                 let dose = UnfinalizedDose(resumeStartTime: max(record.date, host.date.addingTimeInterval(1)), insulinType: state.insulinType)
-                events.append(NewPumpEvent.resume(dose: dose.toDoseEntry(), date: dose.startDate))
+                events.append(NewPumpEvent.resume(dose: dose.toDoseEntry(), date: dose.startDate, record: record.raw(serial)))
                 recordReportedTransition(.resume, at: dose.startDate, earliest: record.date, latest: record.date, sequenceNum: record.sequenceNum)
             }
         }
@@ -555,13 +595,48 @@ extension TandemPumpManager {
 
         let window = pending.lastConfirmed.addingTimeInterval(-tolerance) ... pending.detectedAt.addingTimeInterval(tolerance)
         let completedAt = tempRateEnd(of: pending.prior, in: stored, dates: dates)
-        let end = completedAt
+        let end = completedAt.map { dateOfChange($0, in: pending) }
             ?? records.first { $0.kind == .suspend && $0.date > pending.prior.startDate && window.contains($0.date) }?.date
-        closeTransition(pending, tempRateEnd: end, into: &batch)
+        // A suspension from before this manager watched the pump, as after a re-pair, is dated at detection
+        // but keeps the identity of its record, which a manager that watched it reported it under.
+        let suspension = stored.last { $0 is PumpingSuspendedHistoryLog || $0 is PumpingResumedHistoryLog } as? PumpingSuspendedHistoryLog
+        closeTransition(
+            pending,
+            tempRateEnd: end,
+            suspendedBy: suspension.map { (HistoryLogSyncIdentifier.logSequence(pumpSerial: serial, sequenceNum: $0.sequenceNum), $0.sequenceNum) },
+            into: &batch
+        )
         if completedAt != nil {
             state.deliveryTransitions.interruptedTemp = nil
         }
         return batch
+    }
+
+    private func datePendingRecord(of pending: PendingTransition, in records: inout [PumpTransition]) {
+        let kind: DeliveryTransitionLedger.Kind
+        if pending.observed == .suspend {
+            kind = .suspend
+        } else if pending.prior.type == .suspend {
+            kind = .resume
+        } else {
+            return
+        }
+        guard let index = records.firstIndex(where: { $0.kind == kind && isInWindow($0.date, of: pending) }) else { return }
+        let record = records[index]
+        records[index] = PumpTransition(sequenceNum: record.sequenceNum, kind: record.kind, date: dateOfChange(record.date, in: pending))
+    }
+
+    /// A record is to the pump's second, up to a second before the change, which came after the last
+    /// reading of the state before it (an app command's send) and by its detection. One outside that
+    /// window is not the change's own and keeps its date.
+    private func dateOfChange(_ date: Date, in pending: PendingTransition) -> Date {
+        guard isInWindow(date, of: pending) else { return date }
+        return min(max(date, pending.lastConfirmed), pending.detectedAt)
+    }
+
+    private func isInWindow(_ date: Date, of pending: PendingTransition) -> Bool {
+        let tolerance = Self.transitionMatchTolerance
+        return pending.lastConfirmed.addingTimeInterval(-tolerance) <= date && date <= pending.detectedAt.addingTimeInterval(tolerance)
     }
 
     /// The pump's `TempRateCompleted` for `dose`, on the phone's clock.

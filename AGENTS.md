@@ -276,14 +276,50 @@ edit instead of at the next sync.
   on that session: a second connect to a connected peripheral is never answered. A lost link ends a reconnect's wait at once, but not pairing's, so the setup reports the round it lost:
   only then does a link dropped at key confirmation reach `pairPump` as `pairingCodeRejected`.
   `deactivate` ends a pairing connect still pending, since nothing else would.
-- Once pairing and the onboarding writes are done, `TandemUICoordinator` hands the manager to the
-  host (`pairingCompleted`: created, then onboarded, the order the hosts adopt a manager in) before
-  the setup-complete screen, so a setup left before Finish is in the host's settings, where it can be
-  deleted. Until then the flow owns the manager (`ownsPumpManager`), and a flow that goes away still
-  owning it, dismissed or freed, runs `abandonSetup`, which deactivates the transport. One left
-  mid-connect paired on in the background, and its reconnects then held the pump's one link against
-  every attempt after it (#603). The coordinator's screens capture it weakly, or a dismissed flow
-  lived on with its manager.
+- Once pairing, the onboarding writes and the history load (below) are done, `TandemUICoordinator`
+  hands the manager to the host (`pairingCompleted`: created, then onboarded, the order the hosts
+  adopt a manager in) before the setup-complete screen, so a setup left before Finish is in the host's
+  settings, where it can be deleted. Until then the flow owns the manager (`ownsPumpManager`), and a
+  flow that goes away still owning it, dismissed or freed, runs `abandonSetup`, which deactivates the
+  transport. One left mid-connect paired on in the background, and its reconnects then held the pump's
+  one link against every attempt after it (#603). The coordinator's screens capture it weakly, or a
+  dismissed flow lived on with its manager.
+
+### Setup history load
+- A new manager reports no history from before its ledgers' `trackingSince`, since it cannot tell
+  another host's app boluses from the pump's own, so a pump moved between Loop, Trio and Tandem's app
+  arrived with the insulin it had just given missing from IOB (#607). After pairing, with
+  `historyBackfill` and `historyDoseReporting` on (`canLoadHistoryForSetup`), `pairingFinished` shows
+  the Load Pump History step before the host has the manager. Do Not Load warns that the host assumes
+  no IOB and goes on; nothing changes.
+- Load (`loadHistoryForSetup`) moves both ledgers' `trackingSince` back `setupHistoryLoadWindow`
+  (6 h), and `DeliveryTransitionLedger.historySince` to the same date, and
+  `ReportedBasalLedger.reportHistory` clears `reconciledThrough`, which passes since pairing moved
+  past the chunks they skipped. Then it runs backfill ticks until one reads the deep walk's
+  target and the pump's newest record as of a status read under `setupHistoryLoadMaximumLag` (1 min)
+  old, and its report pass ran. Not the newest record's own age: an idle pump writes one only every 5
+  minutes. Boluses, extended parts, the pump's suspends and resumes and, with `basalHistoryReporting`,
+  basal corrections go out through the usual passes, held until the host attaches. Basal
+  reconciliation skips the pump's suspended time, so only the reported suspend keeps the host from
+  counting its schedule over it. `setupHistoryLoadFailureLimit`
+  (3) ticks in a row that read nothing fail the load, and the step offers only Try Again.
+- History the host already holds (the same pump back in the same app) arrives under the `raw` it was
+  told it under, and both hosts keep the row they hold: an app bolus is keyed on its `bolusId`, a
+  suspend or resume on its `PumpingSuspended`/`PumpingResumed` record, a temp basal on its
+  `tempRateId` and a part of one on `tempRatePart`, by every pump manager alike. The load reports the
+  temps an app set over Bluetooth before pairing (`appTempBasalsBeforePairing`: a `SetTempRateResponse`
+  record has the id) under those identities, one still running finished at its programmed end as a
+  deleted manager left it, so reconciliation compares their cycles with them and not the schedule; and
+  as there, Loop leaves that one out of IOB from a boundary past its end until its next save. A
+  temp set on the pump is corrected cycle by cycle under its BasalDelivery records, as by any manager.
+  A suspension the pump is already in when a manager first reads it, as at a re-pair of a stopped
+  pump, is reported at detection, before the load could date it, but under its `PumpingSuspended`
+  record when the session's store holds it. Scenarios: conformance groups K (set up again) and L (a
+  first connection, loaded or not).
+- Still reported twice: what a build without these identities reported, a suspend or resume reported
+  at detection because history could not be read in time, a bolus or temp whose id was not past the
+  last minted, and a temp set on the pump that a manager adopted under its `tempRateId`, whose cycles
+  the next manager's load corrects.
 
 ### Onboarding and the basal schedule
 - `applyOnboardingSettings` writes the host's `PumpManagerSetupSettings` to a freshly paired
@@ -385,9 +421,12 @@ edit instead of at the next sync.
   `tempBasalRaw` keys it on its programmed amount and start, as builds before `eventRaw` did while
   it ran. An id not past `lastTempRateEventRaw` mints nothing: the pump's 16-bit counter may
   restart, and a host still holding a row under the id's earlier use would swallow the new temp.
-  The part after a segment cut or a restatement is a dose of its own, keyed the second way.
-- A `.basal` marker, suspend or resume is reported once, keyed on its type and its date to the
-  millisecond (#352): of two rows under one `raw`, both hosts keep the first, and two of one type
+  The part after a segment cut is a dose of its own under `HistoryLogSyncIdentifier.tempRatePart`: the
+  temp's `tempRateId` and how many cuts precede it, which a later manager counts alike from history.
+  Without an `eventRaw` to count from, and after a restatement, it is keyed the second way.
+- A suspend or resume read from history is keyed on its record (`HistoryLogSyncIdentifier.logSequence`).
+  A `.basal` marker, and a suspend or resume reported at detection with no record to key it on, is
+  reported once, keyed on its type and its date to the millisecond (#352): of two rows under one `raw`, both hosts keep the first, and two of one type
   can fall in one second. `getActivePumpEvents(endDate:)` closes a temp basal that ran out with a
   marker at its end only when `endDate`, where each caller reports its own change, is a second or
   more later; in that second the caller's change says the same, and Trio would order the two rows
@@ -419,8 +458,8 @@ edit instead of at the next sync.
   pump keeps delivering after the app forgets it, so nothing is stopped and no `.suspend` is due.
   A pending delivery change is reported at detection first. `lastReconciliation` moves to the deletion.
 - A running temp basal is finalized at the deletion, a second after its start at least, and what
-  remains of it to its scheduled end is a finalized dose of its own, keyed as a segment cut's part
-  and cut at the segment changes in it. Loop stores a finalized dose only once it has ended, and a
+  remains of it to its scheduled end is a finalized dose of its own, keyed on its amount and start,
+  and cut at the segment changes in it into the temp's next parts. Loop stores a finalized dose only once it has ended, and a
   mutable copy it soft-deletes before then can never be replaced, so one finalized whole would
   leave Loop's IOB once a boundary passed its end. Loop counts the remainder from its `PumpEvent`
   row until it can store it, at its first save behind a later boundary, which only the next pump
@@ -432,9 +471,11 @@ edit instead of at the next sync.
   of its programmed amount up to then under its own `raw`, and the rest a finalized dose of its own
   to its programmed end under a new `raw`.
 - Still open: Loop leaves the remainder out of IOB from a boundary past its end that came with no
-  save (the next pump manager's empty batch) until that manager's next non-empty batch.
+  save (the next pump manager's empty batch) until that manager's next non-empty batch. A part of the
+  remainder after a segment change starts ahead of Trio's clock, and Trio stores a row at its clock, so
+  in the remainder's second, and its IOB counts only one of the two (conformance K3).
 - The integration harness's `shutDownDriver()` is the app going away (a relaunch), which tells the
-  host nothing; `deactivateDriver()` is the deletion. Scenarios: conformance D7 and J5; unit tests
+  host nothing; `deactivateDriver()` is the deletion. Scenarios: conformance D7, J5 and group K; unit tests
   in `DeactivationDoseReportingTests` and `ExtendedBolusReportingTests`.
 
 ### History backfill and dose reporting
@@ -478,7 +519,13 @@ edit instead of at the next sync.
     `DeliveryTransitionLedger`, with a placeholder in `basalDose` for status, until a history
     pass dates it from `PumpingSuspended`/`PumpingResumed`/`TempRateCompleted`. The first tick
     that starts after the change dates it if it read the log to its end and reaches back to
-    the last reading before the change, and otherwise reports it at detection.
+    the last reading before the change, and otherwise reports it at detection. An app suspend or
+    resume is left the same way once the pump has answered (`leaveCommandedTransitionForHistory`),
+    and the command completes once it is reported, under its record. The record is to the pump's
+    second, so a pending change is dated no earlier than the last reading before it, a command's
+    send, and no later than its detection (`dateOfChange`), as is the `TempRateCompleted` of a temp
+    it ends: an event the host was told of just before must not come after it, Loop ignores a
+    suspend older than its last finished basal, and drops a temp basal of no length.
   - A sync, or a wizard's `fetchSuspendStatus`, that leaves a change pending completes once it
     is reported, or after `transitionHistoryWait` (30 s) at detection; `ensureCurrentPumpData`
     is not throttled while one is pending, so the host doses on a sync that has reported it.
@@ -506,8 +553,9 @@ edit instead of at the next sync.
     reading can see. The ledger records every suspend and resume the driver reports with the
     span its pump record can fall in, so a record is matched rather than reported twice. It
     tracks one pump from the last record of the first history status it sees (`trackedAfter`),
-    so nothing written before the driver watched the pump is reported; a new serial or an
-    erased log starts it again. Records older than 24 hours or dated ahead of the phone are
+    so nothing written before the driver watched the pump is reported, except from setup's history
+    load on (`historySince`); a new serial or an erased log starts it again, and a new serial ends
+    `historySince`. Records older than 24 hours or dated ahead of the phone are
     ignored.
   - Never sent: a suspend whose resume has not been read while the pump delivers (Trio takes a
     trailing suspend as lasting until now), a resume with no suspend before it in the host's
@@ -520,7 +568,9 @@ edit instead of at the next sync.
     finished basal (#354). Trio counts it either way.
   - Scenarios: conformance group F, `OutageConformanceTests`; unit tests in
     `DeliveryTransitionReportingTests`.
-- The live path and history identify one bolus differently (#344), so `BolusReportLedger`
+- With the serial known, the live path keys an app bolus on its `bolusId` from `InitiateBolus`
+  (`bolusEventRaw`; an id not past `lastBolusEventRaw` mints nothing, as for a temp), as history
+  does. Without it the two identify one bolus differently (#344), so `BolusReportLedger`
   (persisted) records each app bolus's `bolusId`, live `raw` and event date at `InitiateBolus`,
   and `emitPumpEvents` marks it finalized when an immutable report with that `raw` goes out. It
   keeps entries 12 h past the 24 h reporting horizon, since history dates an app bolus at
@@ -762,11 +812,12 @@ edit instead of at the next sync.
   the driver never sees reaches the host after the fact, through basal reconciliation.
 - `suspendDelivery` stops a running temp, then sends `SuspendPumping`; `write` gives nil for a lost
   answer and a refusal alike (#340). Unless the suspend is confirmed it reads `CurrentBasalStatus`.
-  Suspended after a nil, where the driver held no suspend, is the app's suspend, reported at the
-  reading; any other reading goes to `observeDeliveryState`, which ends a temp the stop ended. The
+  Suspended after a nil, where the driver held no suspend, is the app's suspend, as an answered one
+  is; any other reading goes to `observeDeliveryState`, which ends a temp the stop ended. The
   command succeeds whenever the pump reads suspended, so a cartridge wizard can go on.
 - `ResumePumping` is read back the same way. Delivering after a nil, where the driver held a
-  suspend, is the app's resume, reported at the send, the earliest the pump could have resumed. The
+  suspend, is the app's resume, which at detection is dated at the send, the earliest the pump could
+  have resumed. A resume where the host holds no suspend is never reported at detection. The
   command succeeds whenever the pump reads delivering, so no alarm is acknowledged for a resume that
   went through. One the pump refuses while it raises `RESUME_PUMP_ALARM` or `RESUME_PUMP_ALARM2`
   acknowledges those and is retried once (`ResumeWithAlarmAcknowledgement`), from the host's resume

@@ -47,6 +47,11 @@ struct PumpBasalHistory {
         ))
     }
 
+    /// The record an app's `SetTempRate` leaves.
+    mutating func tempSet(_ seconds: Int, id: Int) {
+        logs.append(SetTempRateResponseHistoryLog(pumpTimeSec: Self.origin + UInt32(seconds), sequenceNum: next(), status: 0, unknown11: 0, tempRateId: id))
+    }
+
     mutating func tempEnded(_ seconds: Int, id: Int, timeLeft: UInt32 = 0) {
         logs.append(TempRateCompletedHistoryLog(pumpTimeSec: Self.origin + UInt32(seconds), sequenceNum: next(), tempRateId: id, timeLeft: timeLeft))
     }

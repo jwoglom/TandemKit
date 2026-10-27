@@ -799,7 +799,8 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         XCTAssertLessThanOrEqual(suspend?.date ?? .distantFuture, checkedAt, "dated no later than the check that found it")
         let stored = loop.doses.first { $0.dose.type == .suspend }
         XCTAssertEqual(stored?.isMutable, false, "the resume closes the host's suspend: \(loop.doses.map(LoopDoseStoreOracle.describe))")
-        XCTAssertEqual(suspend?.date.timeIntervalSince(suspendedAt) ?? .infinity, 0, accuracy: 1, "the suspend is dated at the pump's stop")
+        // The record is to the pump's second, and the clock offset trails the pump's by up to a second plus the read's latency.
+        XCTAssertEqual(suspend?.date.timeIntervalSince(suspendedAt) ?? .infinity, 0, accuracy: 2, "the suspend is dated at the pump's stop")
         timeline.assertMatches(loop)
     }
 

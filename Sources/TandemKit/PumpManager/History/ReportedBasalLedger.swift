@@ -52,8 +52,9 @@ public struct ReportedBasalLedger: Equatable {
     /// Past the 24 h a history pass compares, and the hours a temp basal can run before it.
     public static let retention: TimeInterval = .hours(36)
 
-    /// When this build started recording what it reports; nothing before it is compared.
-    public let trackingSince: Date
+    /// When this build started recording what it reports, or how far back setup loaded history from;
+    /// nothing before it is compared.
+    public private(set) var trackingSince: Date
     public private(set) var rows: [Row]
     /// The pump `reconciledThrough` counts on.
     public private(set) var pumpSerial: UInt32?
@@ -75,6 +76,13 @@ public struct ReportedBasalLedger: Equatable {
 
     public func isTracking(pumpSerial: UInt32, lastSequenceNum: UInt32) -> Bool {
         self.pumpSerial == pumpSerial && (reconciledThrough ?? 0) <= lastSequenceNum
+    }
+
+    /// Compares basal from `date` on, as setup's history load does. Passes that ran meanwhile marked the
+    /// earlier chunks done without comparing them, so the next starts over.
+    public mutating func reportHistory(since date: Date) {
+        trackingSince = min(trackingSince, date)
+        reconciledThrough = nil
     }
 
     public mutating func reconcile(through sequenceNum: UInt32) {
@@ -165,9 +173,10 @@ public struct ReportedBasalLedger: Equatable {
         return Set(edges.filter { interval.start < $0 && $0 < interval.end }).sorted()
     }
 
-    /// The BasalDelivery record a basal correction on the tracked pump was reported for.
+    /// The BasalDelivery record a basal correction on the tracked pump was reported for. A suspend or
+    /// resume carries its own record's.
     public func correctedSequenceNum(of row: Row) -> UInt32? {
-        guard let identifier = HistoryLogSyncIdentifier.decode(row.raw), identifier.scheme == .logSequence,
+        guard row.kind == .tempBasal, let identifier = HistoryLogSyncIdentifier.decode(row.raw), identifier.scheme == .logSequence,
               identifier.pumpSerial.rawValue == pumpSerial
         else {
             return nil

@@ -85,8 +85,8 @@ public struct BolusReportLedger: Equatable {
     /// after its entry, and one pruned too soon is reported again as a pump-UI bolus.
     public static let retention: TimeInterval = reportingHorizon + .hours(12)
 
-    /// When this build started recording commanded boluses.
-    public let trackingSince: Date
+    /// When this build started recording commanded boluses, or how far back setup loaded history from.
+    public private(set) var trackingSince: Date
 
     public private(set) var entries: [Entry]
     public private(set) var unreported: [UnreportedBolus]
@@ -146,6 +146,12 @@ public struct BolusReportLedger: Equatable {
             total += units
         }
         return total
+    }
+
+    /// Reports history boluses from `date` on, as setup's history load does: the user has said no host
+    /// already counts them, which is all `trackingSince` stands in for.
+    public mutating func reportHistory(since date: Date) {
+        trackingSince = min(trackingSince, date)
     }
 
     /// No-op for a bolus this ledger already has an entry for.
