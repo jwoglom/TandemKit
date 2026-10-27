@@ -1815,13 +1815,13 @@
         }
       }
     },
-    "Found the " : {
+    "Found device " : {
       "comment" : "Found device prefix text",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Found the "
+            "value" : "Found device "
           }
         }
       }

@@ -225,16 +225,18 @@ struct TandemKitScanView: View {
 
     @ViewBuilder var DoubleTapView: some View {
         VStack(alignment: .center, spacing: 40) {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .center, spacing: 10) {
                 Text(
                     "Pick up your pump, wait a second, then double-press the T button",
                     comment: "Double-tap explanation"
                 )
                 .font(.headline)
                 .bold()
+                .multilineTextAlignment(.center)
 
-                Text(String(localized: "Found the ", comment: "Found device prefix text") + (viewModel.connectingTo ?? ""))
+                Text(String(localized: "Found device ", comment: "Found device prefix text") + (viewModel.connectingTo ?? ""))
                     .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
             }
 
             Image(imageName: "mobi_double_tap")
@@ -247,7 +249,9 @@ struct TandemKitScanView: View {
 
             Text("You should hear two beeps after double-pressing the button.", comment: "Beep explanation")
                 .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
         }
+        .frame(maxWidth: .infinity)
     }
 
     @ViewBuilder var AuthenticatingView: some View {
