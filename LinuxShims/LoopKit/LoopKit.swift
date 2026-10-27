@@ -67,8 +67,9 @@
         case send
         case receive
         case error
+        case delegate
+        case delegateResponse
         case connection
-        case delegated
     }
 
     public protocol DeviceManager: AnyObject, CustomDebugStringConvertible {

@@ -86,7 +86,7 @@ pieces fit together. Paths are relative to the repository root.
 | `PumpCommError.swift` | Driver error type surfaced to LoopKit. |
 | `Common/TandemClock.swift` | `TandemClock`, `SystemClock` and `ManualClock`. |
 | `Common/TandemDispatchGroup.swift` | Single-shot wait/signal used for every BLE operation. |
-| `Common/TandemLogger.swift` | OSLog plus file logging on Apple platforms; swift-log on Linux. |
+| `Common/TandemLogger.swift` | OSLog plus file logging on Apple platforms; swift-log on Linux. Info, warning and error lines also go to the host's device log, under the pump's serial. |
 | `Common/UnfinalizedDose.swift` | An in-flight bolus, temp basal or suspend before it is finalized. |
 | `Common/TandemPumpCapabilities.swift` | Supported bolus volumes and basal rates. |
 | `Common/HistoryLogTimeIndex.swift` | Maps between sequence numbers and dates for the history viewer. |
