@@ -82,7 +82,7 @@ public struct LastKnownBasalDelivery: Equatable {
         }
     }
 
-    static func elapsedDescription(_ interval: TimeInterval) -> String {
+    public static func elapsedDescription(_ interval: TimeInterval) -> String {
         let minutes = Int(max(0, interval) / 60)
         guard minutes > 0 else {
             return String(localized: "less than a minute ago", comment: "How long ago the pump last connected, under a minute")

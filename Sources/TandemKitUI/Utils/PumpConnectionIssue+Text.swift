@@ -37,7 +37,12 @@ extension PumpConnectionIssue {
     }
 
     /// What it means and what to do, for the screens with room for a sentence or two.
-    func detail(appName: String, lastKnownDelivery: LastKnownBasalDelivery? = nil, now: Date = Date()) -> String {
+    func detail(
+        appName: String,
+        lastKnownDelivery: LastKnownBasalDelivery? = nil,
+        lastSync: Date? = nil,
+        now: Date = Date()
+    ) -> String {
         switch self {
         case .bluetoothOff:
             return String(
@@ -80,12 +85,26 @@ extension PumpConnectionIssue {
                 appName
             )
         case .noRecentSync:
+            guard let lastSync else {
+                return String(
+                    format: String(
+                        localized: "Your pump has not sent %@ an update recently, so the values shown may be out of date. Your pump keeps delivering insulin from its own settings.",
+                        comment: "detail for the stale pump data notice"
+                    ),
+                    appName
+                )
+            }
+            let formatter = DateFormatter()
+            formatter.timeStyle = .short
+            formatter.dateStyle = abs(lastSync.timeIntervalSince(now)) < .hours(12) ? .none : .medium
             return String(
                 format: String(
-                    localized: "Your pump has not sent %@ an update recently, so the values shown may be out of date. Your pump keeps delivering insulin from its own settings.",
-                    comment: "detail for the stale pump data notice"
+                    localized: "Your pump has not sent %1$@ an update since %2$@ (%3$@), so the values shown may be out of date. Your pump keeps delivering insulin from its own settings.",
+                    comment: "detail for the stale pump data notice; the placeholders are the app's name, the time of the last update and how long ago that was"
                 ),
-                appName
+                appName,
+                formatter.string(from: lastSync),
+                LastKnownBasalDelivery.elapsedDescription(now.timeIntervalSince(lastSync))
             )
         }
     }
