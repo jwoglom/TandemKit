@@ -262,6 +262,7 @@ struct TandemKitSettingsView: View {
                                     Text(connectionIssue.detail(
                                         appName: viewModel.appName,
                                         lastKnownDelivery: viewModel.lastKnownBasalDelivery,
+                                        lastSync: viewModel.lastSync,
                                         now: context.date
                                     ))
                                     .font(Font.footnote.weight(.semibold))
@@ -375,17 +376,6 @@ struct TandemKitSettingsView: View {
                         }
                     }.disabled(true)
                 }
-
-                Button(action: { viewModel.refreshPumpStatus() }) {
-                    HStack {
-                        Text("Sync Pump Data", comment: "refresh pump data")
-                        Spacer()
-                        if viewModel.isRefreshing {
-                            ActivityIndicator(isAnimating: .constant(true), style: .medium)
-                        }
-                    }
-                }
-                .disabled(viewModel.isRefreshing)
             }
             Section(header: SectionHeader(label: String(
                 localized:
@@ -540,6 +530,9 @@ struct TandemKitSettingsView: View {
             }
         }
         .listStyle(InsetGroupedListStyle())
+        .refreshable {
+            await viewModel.refreshPumpStatus()
+        }
         .sheet(item: $viewModel.commandFailure) { failure in
             errorSheetView(for: failure)
         }
@@ -1021,7 +1014,7 @@ struct TandemKitSettingsView: View {
 private extension TandemKitSettingsViewModel {
     static var previewData: TandemKitSettingsViewModel {
         // TODO: Create mock TandemPumpManager with populated state for preview
-        let viewModel = PreviewTandemKitSettingsViewModel(
+        let viewModel = TandemKitSettingsViewModel(
             nextStep: {},
             openPumpInformation: {},
             openNotifications: {},
@@ -1057,7 +1050,7 @@ private extension TandemKitSettingsViewModel {
     }
 
     static var previewDataInProgress: TandemKitSettingsViewModel {
-        let viewModel = PreviewTandemKitSettingsViewModel(
+        let viewModel = TandemKitSettingsViewModel(
             nextStep: {},
             openPumpInformation: {},
             openNotifications: {},
@@ -1074,12 +1067,6 @@ private extension TandemKitSettingsViewModel {
         viewModel.reservoirValue = SimpleReservoirValue(startDate: Date(), unitVolume: 180)
         viewModel.isUpdatingPumpState = true
         return viewModel
-    }
-}
-
-private final class PreviewTandemKitSettingsViewModel: TandemKitSettingsViewModel {
-    override func refreshPumpStatus() {
-        // Disable background refresh for previews so mocked data stays visible
     }
 }
 

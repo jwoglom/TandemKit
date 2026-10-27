@@ -25,6 +25,10 @@ protocol PumpBluetoothConnection: AnyObject {
 
     func stopScan()
 
+    /// Names of the pumps iOS already holds a connection to, which another app or the system's
+    /// Bluetooth settings made. A pump connected that way never advertises, so a scan cannot find it.
+    func connectedPumpNames() -> [String]
+
     /// Connects to the peripheral the user picked during pairing, as a serialized command job:
     /// `completion` runs on the command queue once the session is up, or with an error.
     func connect(_ peripheral: CBPeripheral, completion: @escaping (Error?) -> Void)

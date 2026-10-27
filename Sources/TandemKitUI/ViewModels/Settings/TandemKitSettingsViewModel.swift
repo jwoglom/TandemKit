@@ -71,7 +71,7 @@ class TandemKitSettingsViewModel: ObservableObject {
     /// Why the pump cannot be reached, or nil when it can. Drives the banner at the top.
     @Published var connectionIssue: PumpConnectionIssue?
     @Published var lastKnownBasalDelivery: LastKnownBasalDelivery?
-    @Published var isRefreshing: Bool = false
+    @Published var lastSync: Date?
     @Published var isPlayingSound: Bool = false
     @Published var useControlIQ: Bool = false
     @Published var showReenableClosedLoopPrompt: Bool = false
@@ -150,6 +150,7 @@ class TandemKitSettingsViewModel: ObservableObject {
         reservoirValue = pumpManager?.reservoirLevel
         connectionIssue = pumpManager?.connectionIssue
         lastKnownBasalDelivery = pumpManager?.lastKnownBasalDelivery
+        lastSync = pumpManager?.lastSync
         showPumpTimeSyncWarning = pumpManager?.state.showPumpTimeSyncWarning ?? false
         basalProfileUpdateStatus = pumpManager?.state.basalProfileUpdateStatus ?? .none
         basalDose = pumpManager?.state.basalDose
@@ -162,18 +163,16 @@ class TandemKitSettingsViewModel: ObservableObject {
 
     // MARK: - Refresh Methods
 
-    func refreshPumpStatus() {
+    /// Returns when the sync completes, which is what ends the pull-to-refresh spinner.
+    func refreshPumpStatus() async {
         guard let pumpManager else {
             log.debug("Skipping TandemPumpSettings refresh – pump not connected/paired")
             return
         }
 
-        guard !isRefreshing else { return }
-        isRefreshing = true
-
-        pumpManager.syncPumpData { _ in
-            DispatchQueue.main.async {
-                self.isRefreshing = false
+        await withCheckedContinuation { continuation in
+            pumpManager.syncPumpData { _ in
+                continuation.resume()
             }
         }
     }
@@ -438,6 +437,7 @@ extension TandemKitSettingsViewModel: PumpManagerStatusObserver {
         DispatchQueue.main.async {
             self.connectionIssue = pumpManager.connectionIssue
             self.lastKnownBasalDelivery = pumpManager.lastKnownBasalDelivery
+            self.lastSync = pumpManager.lastSync
             self.reservoirValue = pumpManager.reservoirLevel
             self.showPumpTimeSyncWarning = pumpManager.state.showPumpTimeSyncWarning
             self.basalProfileUpdateStatus = pumpManager.state.basalProfileUpdateStatus

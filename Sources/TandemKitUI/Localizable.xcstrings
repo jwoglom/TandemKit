@@ -1264,13 +1264,13 @@
         }
       }
     },
-    "Enter the pairing code from your pump" : {
+    "Enter the 6-digit number labeled 'PIN' on the side of the Tandem Mobi inside the cartridge area" : {
       "comment" : "Tandem pairing code prompt message",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Enter the pairing code from your pump"
+            "value" : "Enter the 6-digit number labeled 'PIN' on the side of the Tandem Mobi inside the cartridge area"
           }
         }
       }
@@ -1681,17 +1681,6 @@
         }
       }
     },
-    "Failed to update sleep schedule. Check pump connection." : {
-      "comment" : "Error when sleep schedule save fails",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Failed to update sleep schedule. Check pump connection."
-          }
-        }
-      }
-    },
     "Feature not implemented" : {
       "comment" : "Error message shown when a feature is not yet implemented",
       "localizations" : {
@@ -1859,13 +1848,13 @@
         }
       }
     },
-    "Found the " : {
+    "Found device " : {
       "comment" : "Found device prefix text",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Found the "
+            "value" : "Found device "
           }
         }
       }
@@ -3514,9 +3503,6 @@
           }
         }
       }
-    },
-    "Sync Pump Data" : {
-
     },
     "Tandem Mobi Pairing" : {
       "comment" : "Title for Mobi pairing",

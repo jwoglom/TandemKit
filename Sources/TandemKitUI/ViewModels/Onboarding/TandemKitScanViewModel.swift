@@ -21,11 +21,16 @@ class TandemKitScanViewModel: ObservableObject {
     )
     @Published var connectionErrorMessage: String?
     @Published var devicePinCode = ""
+    @Published var isConnectedElsewhere = false
+    @Published var connectedElsewhereName = ""
 
     private let log = TandemLogger(category: "TandemKitScanViewModel")
     private var pumpManager: TandemPumpManager?
     private var nextStep: () -> Void
     private var selectedPeripheral: CBPeripheral?
+    private var connectedCheckTimer: Timer?
+    private var connectedCheckSilencedUntil = Date.distantPast
+    static let connectedAlertSilenceInterval: TimeInterval = 10
 
     init(_ pumpManager: TandemPumpManager? = nil, nextStep: @escaping () -> Void) {
         self.pumpManager = pumpManager
@@ -41,6 +46,43 @@ class TandemKitScanViewModel: ObservableObject {
 
     func stopScan() {
         pumpManager?.bluetooth.stopScan()
+        stopCheckingForConnectedPump()
+    }
+
+    /// A pump connected to the phone elsewhere does not advertise, so pairing could never find it.
+    func startCheckingForConnectedPump() {
+        connectedCheckTimer?.invalidate()
+        checkForConnectedPump()
+        connectedCheckTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+            self?.checkForConnectedPump()
+        }
+    }
+
+    func stopCheckingForConnectedPump() {
+        connectedCheckTimer?.invalidate()
+        connectedCheckTimer = nil
+    }
+
+    func checkForConnectedPump() {
+        guard currentPhase == .mobiOnPad, !isConnectedElsewhere, Date() >= connectedCheckSilencedUntil,
+              let name = pumpManager?.bluetooth.connectedPumpNames().first
+        else {
+            return
+        }
+        connectedElsewhereName = name
+        isConnectedElsewhere = true
+    }
+
+    func connectedElsewhereDismissed() {
+        isConnectedElsewhere = false
+        connectedCheckSilencedUntil = Date().addingTimeInterval(Self.connectedAlertSilenceInterval)
+    }
+
+    var connectedElsewhereMessage: String {
+        String(format: String(
+            localized: "The device %@ is currently connected to this phone. Please go to iOS Bluetooth Settings, tap %@ and choose Forget, then come back to this screen.",
+            comment: "Pairing warning when the pump is already connected to the phone (1: pump name, 2: pump name)"
+        ), connectedElsewhereName, connectedElsewhereName)
     }
 
     func cancelPinPrompt() {

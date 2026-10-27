@@ -17,6 +17,7 @@ struct TandemKitTroubleshootConnectionView: View {
                             Text(connectionIssue.detail(
                                 appName: viewModel.appName,
                                 lastKnownDelivery: viewModel.lastKnownBasalDelivery,
+                                lastSync: viewModel.lastSync,
                                 now: context.date
                             ))
                             .font(.footnote)

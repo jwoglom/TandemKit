@@ -12,6 +12,13 @@ struct TandemKitControlIQSettingsView: View {
     /// the granularity the pump's own screens use.
     private static let timeStepMinutes = 5
 
+    /// The grid, plus 23:59, which Tandem's app ends an all-day schedule at, and the slot's own time,
+    /// so a time off the grid stays selected rather than leaving the picker blank.
+    private static func timeOptions(including current: Int) -> [Int] {
+        let grid = stride(from: 0, to: 24 * 60, by: timeStepMinutes)
+        return Set(grid).union([24 * 60 - 1, current]).sorted()
+    }
+
     var body: some View {
         VStack(alignment: .leading) {
             if viewModel.isFetching {
@@ -319,10 +326,7 @@ struct TandemKitControlIQSettingsView: View {
             label
             Spacer()
             Picker("", selection: minutes) {
-                ForEach(
-                    Array(stride(from: 0, to: 24 * 60, by: Self.timeStepMinutes)),
-                    id: \.self
-                ) { minute in
+                ForEach(Self.timeOptions(including: minutes.wrappedValue), id: \.self) { minute in
                     Text(SleepScheduleSlot.formatMinutes(minute)).tag(minute)
                 }
             }

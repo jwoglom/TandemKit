@@ -639,6 +639,9 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         return currentPumpTime.timeIntervalSince(lastPumpTimeCheckDate) + TimeInterval(zoneChange)
     }
 
+    /// Past this the settings screen shows its time-change notice; nothing else acts on it.
+    public static let pumpClockSmallSkewThreshold: TimeInterval = .minutes(1)
+
     /// Past this the pump's segments sit a host loop cycle or more from the host's, so temp basals
     /// are worked out against the pump's own and the user is told to sync its clock.
     public static let pumpClockSkewThreshold: TimeInterval = .minutes(5)
@@ -673,8 +676,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
     }
 
     public var showPumpTimeSyncWarning: Bool {
-        // Allow 10s time drift
-        abs(pumpClockOffset) > .seconds(10)
+        abs(pumpClockOffset) > Self.pumpClockSmallSkewThreshold
     }
 
     public var debugDescription: String {
