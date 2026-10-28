@@ -399,7 +399,10 @@ real thing as well as the driver against the oracle.
 - `scripts/loop-test.sh build` builds the `LoopWorkspace` scheme signed ad hoc with no team, as Trio
   is. Loop derives its bundle id and app group from the team, so the script sets
   `MAIN_APP_BUNDLE_IDENTIFIER` to `com.$LOOP_TEAM.loopkit.Loop` (app group
-  `group.com.$LOOP_TEAM.loopkit.LoopGroup`).
+  `group.com.$LOOP_TEAM.loopkit.LoopGroup`). It builds everything else first, under a copy of
+  that scheme without Loop in the workspace's `xcuserdata`: Loop's Install Plugins phase
+  embeds whichever plugins it finds built, and Loop depends on none of them, so in one parallel
+  build a plugin still building was embedded without its Info.plist.
 - `scripts/loop-test.sh test` runs `scripts/app-launcher.py --host loop`. Loop keeps its store
   (`com.loopkit.LoopKit/Model.sqlite`) and its settings and onboarding state (the UserDefaults suite
   named by `AppGroupIdentifier`) in its app group container, which the simulator keeps across
