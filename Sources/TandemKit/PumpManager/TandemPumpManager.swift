@@ -1945,18 +1945,28 @@ public class TandemPumpManager: PumpManager, Pluggable {
             events += getActivePumpEvents(endDate: cut)
             let running = state.basalDose
             if cut < end, running.type == .tempBasal {
+                let percent = Double(running.tempPercent ?? 0)
+                let laterRates = percent > 0
+                    ? pumpSegmentChanges(after: cut, through: end).filter { $0.date < end }.map {
+                        roundToSupportedBasalRate(unitsPerHour: $0.rate * percent / 100)
+                    }
+                    : []
+                let rescaled = laterRates.contains {
+                    TandemPumpCapabilities.milliunits($0) != TandemPumpCapabilities.milliunits(running.value)
+                }
+                // One dose at its highest rate (the host can only over-count), keyed as the part a later load reports:
+                // a part from a future segment change would start ahead of Trio's clock, which stores it at its own.
                 let remainder = UnfinalizedDose(
-                    tempRate: running.value,
+                    tempRate: laterRates.reduce(running.value, max),
                     duration: end.timeIntervalSince(cut),
                     automatic: running.automatic,
                     insulinType: running.insulinType,
                     startDate: cut,
                     tempRateId: running.tempRateId,
-                    tempPercent: running.tempPercent
+                    tempPercent: running.tempPercent,
+                    eventRaw: rescaled ? running.eventRaw.flatMap(HistoryLogSyncIdentifier.nextTempRatePart(after:)) : nil
                 )
-                let (finished, last) = splitAtSegmentChanges(remainder, through: end, partOf: running.eventRaw)
-                events += finished
-                events.append(NewPumpEvent.tempBasal(dose: last.toDoseEntry(isMutable: false, endDate: end, now: now), of: last))
+                events.append(NewPumpEvent.tempBasal(dose: remainder.toDoseEntry(isMutable: false, endDate: end, now: now), of: remainder))
             }
             state.basalDose = UnfinalizedDose(basalRate: scheduledBasalRateInForce(at: end), insulinType: state.insulinType, startDate: end)
         }
@@ -2957,19 +2967,16 @@ extension TandemPumpManager {
     /// The pump rescales a temp at each segment change, and neither host revises a temp basal once
     /// it is reported finished, so every path that finishes one cuts it here first: the parts
     /// finished at changes before `end`, and the part running at `end` at `tempPercent` of its rate.
-    /// `partOf` is the part of the temp rate `dose` continues, whose next parts the cuts are: `dose`
-    /// itself unless it is a piece of its own.
     func splitAtSegmentChanges(
         _ dose: UnfinalizedDose,
-        through end: Date,
-        partOf: Data? = nil
+        through end: Date
     ) -> (finished: [NewPumpEvent], running: UnfinalizedDose) {
         guard dose.type == .tempBasal, let percent = dose.tempPercent, percent > 0 else {
             return ([], dose)
         }
 
         var running = dose
-        var part = partOf ?? dose.eventRaw
+        var part = dose.eventRaw
         var finished: [NewPumpEvent] = []
         for change in pumpSegmentChanges(after: dose.startDate, through: min(end, dose.estimatedEndDate))
             where change.date < dose.estimatedEndDate

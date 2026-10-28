@@ -474,12 +474,17 @@ edit instead of at the next sync.
   (`lastPumpSerial`); with nothing held, that marker goes alone, non-replacing, since an empty
   replacing batch purges Trio's mutable rows.
 - A running temp basal is finalized at the deletion, a second after its start at least, and what
-  remains of it to its scheduled end is a finalized dose of its own, keyed on its amount and start,
-  and cut at the segment changes in it into the temp's next parts. Loop stores a finalized dose only once it has ended, and a
+  remains of it to its scheduled end is a finalized dose of its own, keyed on its amount and start.
+  Loop stores a finalized dose only once it has ended, and a
   mutable copy it soft-deletes before then can never be replaced, so one finalized whole would
   leave Loop's IOB once a boundary passed its end. Loop counts the remainder from its `PumpEvent`
   row until it can store it, at its first save behind a later boundary, which only the next pump
   manager gives it.
+- A remainder the pump rescales at a segment change is still one dose, at the highest rate the pump
+  runs it at, so both hosts count at least what it delivers, and under the identity of the temp's
+  next part (`tempRatePart`), which a later manager's load reports for the part after the change.
+  Cut there, the part after the change started ahead of Trio's clock, Trio stored it at its own, in
+  the remainder's second, and its IOB counted only one of the two (conformance K3).
 - A held bolus is finalized with its `BolusCompleted` record if backfill has read one; otherwise a
   running bolus at its programmed amount, ended no later than the deletion so Loop stores it at
   once, and one with an unconfirmed volume at the fallback it was held with. A held extended part,
@@ -487,9 +492,9 @@ edit instead of at the next sync.
   of its programmed amount up to then under its own `raw`, and the rest a finalized dose of its own
   to its programmed end under a new `raw`.
 - Still open: Loop leaves the remainder out of IOB from a boundary past its end that came with no
-  save (the next pump manager's empty batch) until that manager's next non-empty batch. A part of the
-  remainder after a segment change starts ahead of Trio's clock, and Trio stores a row at its clock, so
-  in the remainder's second, and its IOB counts only one of the two (conformance K3).
+  save (the next pump manager's empty batch) until that manager's next non-empty batch. Across a
+  segment change the remainder over-counts wherever the pump runs it below its highest rate; across two
+  or more, a later manager's load reports the parts past the first again, which both hosts count too.
 - The integration harness's `shutDownDriver()` is the app going away (a relaunch), which tells the
   host nothing; `deactivateDriver()` is the deletion. Scenarios: conformance D7, J5 and group K; unit tests
   in `DeactivationDoseReportingTests` and `ExtendedBolusReportingTests`.

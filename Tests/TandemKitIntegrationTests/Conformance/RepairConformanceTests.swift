@@ -174,6 +174,7 @@ final class RepairConformanceTests: ConformanceTestCase {
         loop: LoopDoseStoreOracle?,
         trio: TrioDoseStoreOracle?,
         exceptCyclesHolding commands: [Date],
+        overCounting: (during: ClosedRange<Date>, upTo: Double)? = nil,
         file: StaticString = #filePath,
         line: UInt = #line
     ) throws {
@@ -183,14 +184,24 @@ final class RepairConformanceTests: ConformanceTestCase {
         }
         XCTAssertFalse(cycles.isEmpty, file: file, line: line)
         for cycle in cycles {
-            let pump = cycle.rate * cycle.end.timeIntervalSince(cycle.start) / .hours(1)
-                - TrioDoseStoreOracle.integrate(from: cycle.start, to: cycle.end, scheduled)
+            let hours = cycle.end.timeIntervalSince(cycle.start) / .hours(1)
+            let scheduledUnits = TrioDoseStoreOracle.integrate(from: cycle.start, to: cycle.end, scheduled)
+            let pump = cycle.rate * hours - scheduledUnits
+            let most = overCounting.flatMap { $0.during.contains(cycle.start) && $0.during.contains(cycle.end) ? $0.upTo * hours - scheduledUnits : nil }
             let span = "cycle \(cycle.sequence) from \(cycle.start) at \(cycle.rate) U/hr"
+            func check(_ host: Double, _ name: String) {
+                if let most {
+                    XCTAssertGreaterThanOrEqual(host, pump - 0.002, "\(name) never counts less than the pump: \(span)", file: file, line: line)
+                    XCTAssertLessThanOrEqual(host, most + 0.002, "\(name) counts \(span) at no more than \(overCounting?.upTo ?? 0) U/hr", file: file, line: line)
+                } else {
+                    XCTAssertEqual(host, pump, accuracy: 0.002, "\(name) counts \(span)", file: file, line: line)
+                }
+            }
             if let loop {
-                XCTAssertEqual(loop.netBasalUnits(from: cycle.start, to: cycle.end, scheduledRate: scheduled), pump, accuracy: 0.002, "Loop counts \(span)", file: file, line: line)
+                check(loop.netBasalUnits(from: cycle.start, to: cycle.end, scheduledRate: scheduled), "Loop")
             }
             if let trio {
-                XCTAssertEqual(try trio.netBasalUnits(from: cycle.start, to: cycle.end, clock: clock.now, scheduledRate: scheduled), pump, accuracy: 0.002, "Trio counts \(span)", file: file, line: line)
+                check(try trio.netBasalUnits(from: cycle.start, to: cycle.end, clock: clock.now, scheduledRate: scheduled), "Trio")
             }
         }
     }
@@ -380,14 +391,6 @@ final class RepairConformanceTests: ConformanceTestCase {
         }
     }
 
-    /// A strict expected failure: the assertions inside must fail today, and a fix turns the block
-    /// into an unexpected pass so the wrapper is removed with it.
-    private func expectDefect<R>(_ reason: String, _ body: () throws -> R) rethrows -> R {
-        let options = XCTExpectedFailure.Options()
-        options.isStrict = true
-        return try XCTExpectFailure(reason, options: options, failingBlock: body)
-    }
-
     // MARK: - K2
 
     /// The host deletes the manager while the app's temp runs and sets the pump up again before it
@@ -432,10 +435,10 @@ final class RepairConformanceTests: ConformanceTestCase {
 
     // MARK: - K3
 
-    /// A profile segment change falls in what remains of the app's temp after the deletion. The
-    /// deleted manager cut the remainder at the change into the temp's first part, as the pump rescales
-    /// it there, and the next manager's load reports the temp and that part under the same identities.
-    func testK3_aSegmentChangeInTheRemainderIsCountedOnceAtThePumpsRates() throws {
+    /// A profile segment change, where the pump rescales the app's temp, falls in what remains of it
+    /// after the deletion. The deleted manager reports the remainder as one dose at the higher of the
+    /// two rates under the identity of the temp's first part, which the next manager's load reports.
+    func testK3_aSegmentChangeInTheRemainderIsCountedOnceAndNeverUnder() throws {
         let calendar = Calendar.current
         var start = try XCTUnwrap(calendar.nextDate(after: clock.now, matching: DateComponents(second: 0), matchingPolicy: .nextTime))
         // Clear of midnight, where the schedule changes again.
@@ -460,8 +463,7 @@ final class RepairConformanceTests: ConformanceTestCase {
         try deactivateDriver()
         let deletion = try XCTUnwrap(first.delegate.pumpEventBatches.last?.events.filter { $0.dose?.type == .tempBasal })
         let firstPart = HistoryLogSyncIdentifier.tempRatePart(pumpSerial: serial, tempRateId: tempRateId, part: 1)
-        XCTAssertEqual(deletion.count, 3, "the temp to the deletion, the remainder to the change and the temp's first part: \(deletion)")
-        XCTAssertTrue(deletion.contains { $0.raw == firstPart }, "\(deletion)")
+        XCTAssertEqual(deletion.map(\.raw), [tempB, firstPart], "the temp to the deletion, and the remainder: \(deletion)")
 
         let tempBEnd = tempBStart.addingTimeInterval(.minutes(60))
         try advance(by: tempBEnd.timeIntervalSince(clock.now))
@@ -471,22 +473,22 @@ final class RepairConformanceTests: ConformanceTestCase {
         try settle(second)
 
         let (loop, trio) = feedOracles()
-        assertHostsHoldEachDoseOnce(loop: loop, trio: nil)
+        assertHostsHoldEachDoseOnce(loop: loop, trio: trio)
         let secondsTemps = second.delegate.pumpEvents.filter { $0.dose?.type == .tempBasal }
         XCTAssertEqual(Set(secondsTemps.map(\.raw)), [tempB, firstPart], "\(secondsTemps)")
         XCTAssertTrue(first.manager.loggedBasalDifferences.isEmpty, "\(first.manager.loggedBasalDifferences.sorted())")
         XCTAssertTrue(second.manager.loggedBasalDifferences.isEmpty, "\(second.manager.loggedBasalDifferences.sorted())")
         let temps = loop.doses.filter { $0.dose.type == .tempBasal }.sorted { $0.dose.startDate < $1.dose.startDate }
-        XCTAssertEqual(Set(temps.compactMap(\.raw)), Set(deletion.map(\.raw)), "\(temps.map(LoopDoseStoreOracle.describe))")
-        XCTAssertEqual(temps.map(\.dose.unitsPerHour), [2.0, 2.0, 1.6], "the pump rescales the temp at the change")
-        XCTAssertEqual(temps.last?.dose.startDate.timeIntervalSince(change) ?? .infinity, 0, accuracy: 1)
+        XCTAssertEqual(temps.compactMap(\.raw), [tempB, firstPart], "\(temps.map(LoopDoseStoreOracle.describe))")
+        XCTAssertEqual(temps.map(\.dose.unitsPerHour), [2.0, 2.0], "the higher of 2.0 and the rescaled 1.6 U/hr")
         XCTAssertEqual(temps.last?.dose.endDate.timeIntervalSince(tempBEnd) ?? .infinity, 0, accuracy: 1)
-        XCTAssertEqual(trio.tempBasals.count, 3, "\(trio.tempBasals)")
-        try assertHostsCountThePumpsBasal(loop: loop, trio: nil, exceptCyclesHolding: [tempBStart, change, tempBEnd])
-        try expectDefect("The deletion reports the part after the segment change starting ahead of Trio's clock; Trio stores it at its clock, in the remainder's second, and its IOB counts one of the two") {
-            assertHostsHoldEachDoseOnce(loop: nil, trio: trio)
-            try assertHostsCountThePumpsBasal(loop: nil, trio: trio, exceptCyclesHolding: [tempBStart, change, tempBEnd])
-        }
+        XCTAssertEqual(trio.tempBasals.compactMap(\.syncIdentifier), [tempB, firstPart].map(\.hexadecimalString), "\(trio.tempBasals)")
+        try assertHostsCountThePumpsBasal(
+            loop: loop,
+            trio: trio,
+            exceptCyclesHolding: [tempBStart, change, tempBEnd],
+            overCounting: (during: change ... tempBEnd, upTo: 2.0)
+        )
     }
 
     // MARK: - K4
