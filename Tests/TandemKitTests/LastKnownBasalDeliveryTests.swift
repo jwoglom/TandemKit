@@ -184,7 +184,7 @@ import XCTest
 
         XCTAssertEqual(
             try describe(manager.lastKnownBasalDelivery, at: Self.lastContact.addingTimeInterval(.minutes(5))),
-            "Trio last connected to your pump 5 minutes ago. At that time, the pump was delivering basal at a temp rate of 0.40 U/hr, and will return to the profile basal rate of 1.20 U/hr at \(time(end)) if not reconnected."
+            "Trio has not connected to your pump since \(time(Self.lastContact)) (5 minutes ago). At that time, the pump was delivering basal at a temp rate of 0.40 U/hr, and will return to the profile basal rate of 1.20 U/hr at \(time(end)) if not reconnected."
         )
     }
 
@@ -194,14 +194,14 @@ import XCTest
 
         XCTAssertEqual(
             try describe(manager.lastKnownBasalDelivery, at: end),
-            "Trio last connected to your pump 45 minutes ago. At that time, the pump was delivering basal at 0.40 U/hr with a planned end time of \(time(end)). We expect the pump to have returned to its profile basal rate of 1.20 U/hr and it will continue as programmed until reconnected."
+            "Trio has not connected to your pump since \(time(Self.lastContact)) (45 minutes ago). At that time, the pump was delivering basal at 0.40 U/hr with a planned end time of \(time(end)). We expect the pump to have returned to its profile basal rate of 1.20 U/hr and it will continue as programmed until reconnected."
         )
     }
 
     func testNoTempBasalSaysThePumpContinuesAsProgrammed() throws {
         XCTAssertEqual(
             try describe(manager.lastKnownBasalDelivery, at: Self.lastContact.addingTimeInterval(.minutes(1))),
-            "Trio last connected to your pump 1 minute ago. At that time, the pump was delivering basal at the profile basal rate of 0.80 U/hr and will continue to deliver basal as programmed until reconnected."
+            "Trio has not connected to your pump since \(time(Self.lastContact)) (1 minute ago). At that time, the pump was delivering basal at the profile basal rate of 0.80 U/hr and will continue to deliver basal as programmed until reconnected."
         )
     }
 
@@ -210,7 +210,7 @@ import XCTest
 
         XCTAssertEqual(
             try describe(manager.lastKnownBasalDelivery, at: Self.lastContact.addingTimeInterval(.minutes(16))),
-            "Trio last connected to your pump 16 minutes ago. At that time, insulin delivery was suspended. Trio cannot tell whether it has been resumed since."
+            "Trio has not connected to your pump since \(time(Self.lastContact)) (16 minutes ago). At that time, insulin delivery was suspended. Trio cannot tell whether it has been resumed since."
         )
     }
 
@@ -219,7 +219,7 @@ import XCTest
 
         XCTAssertEqual(
             try describe(manager.lastKnownBasalDelivery, at: Self.lastContact.addingTimeInterval(.minutes(20))),
-            "Trio last connected to your pump 20 minutes ago. At that time, the pump's Control-IQ algorithm was adjusting basal delivery, and it keeps running on the pump whether or not Trio is connected."
+            "Trio has not connected to your pump since \(time(Self.lastContact)) (20 minutes ago). At that time, the pump's Control-IQ algorithm was adjusting basal delivery, and it keeps running on the pump whether or not Trio is connected."
         )
     }
 
@@ -235,6 +235,22 @@ import XCTest
 
         XCTAssertTrue(text.contains(dateFormatter.string(from: end)), text)
         XCTAssertTrue(text.contains(time(end)), text)
+    }
+
+    func testAContactMoreThanHalfADayAgoCarriesItsDate() throws {
+        let now = Self.lastContact.addingTimeInterval(.hours(20))
+        let dateFormatter = DateFormatter()
+        dateFormatter.locale = Self.locale
+        dateFormatter.timeZone = .current
+        dateFormatter.dateStyle = .medium
+        dateFormatter.timeStyle = .short
+
+        let text = try describe(manager.lastKnownBasalDelivery, at: now)
+
+        XCTAssertTrue(
+            text.hasPrefix("Trio has not connected to your pump since \(dateFormatter.string(from: Self.lastContact)) (20 hours ago)."),
+            text
+        )
     }
 
     func testTheTimeSinceTheLastContactReadsInTheLargestUnitsThatFit() {
