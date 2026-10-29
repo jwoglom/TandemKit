@@ -54,20 +54,26 @@ import XCTest
         ))
 
         XCTAssertEqual(viewModel.readings.count, 3)
-        XCTAssertEqual(viewModel.readings[0], "Insulin on Board: 2.30 units")
-        XCTAssertTrue(viewModel.readings[1].hasPrefix("Last bolus delivery: "))
-        XCTAssertTrue(viewModel.readings[1].hasSuffix(" (1 hour 20 minutes ago)"), viewModel.readings[1])
-        XCTAssertEqual(viewModel.readings[2], "Current basal rate: 0.85 u/hr")
+        XCTAssertEqual(viewModel.readings[0], ViewModel.Reading(label: "Insulin on Board:", value: "2.30 units"))
+        XCTAssertEqual(viewModel.readings[1].label, "Last bolus delivery:")
+        XCTAssertTrue(viewModel.readings[1].value.hasSuffix(" (1 hour 20 minutes ago)"), viewModel.readings[1].value)
+        XCTAssertEqual(viewModel.readings[2], ViewModel.Reading(label: "Current basal rate:", value: "0.85 u/hr"))
     }
 
     func testASuspendedPumpSaysSoInPlaceOfItsBasalRate() {
         let viewModel = makeViewModel(SetupDeliveryReading(insulinOnBoard: 0, lastBolus: .none, isSuspended: true))
 
-        XCTAssertEqual(viewModel.readings, ["Insulin on Board: 0.00 units", "Insulin delivery currently suspended"])
+        XCTAssertEqual(viewModel.readings, [
+            ViewModel.Reading(label: "Insulin on Board:", value: "0.00 units"),
+            ViewModel.Reading(label: nil, value: "Insulin delivery currently suspended")
+        ])
     }
 
     func testAReadingThePumpDidNotAnswerIsLeftOut() {
-        XCTAssertEqual(makeViewModel(SetupDeliveryReading(insulinOnBoard: 1)).readings, ["Insulin on Board: 1.00 units"])
+        XCTAssertEqual(
+            makeViewModel(SetupDeliveryReading(insulinOnBoard: 1)).readings,
+            [ViewModel.Reading(label: "Insulin on Board:", value: "1.00 units")]
+        )
     }
 
     func testAPumpThatReportedNothingIsStillAskedAbout() {
