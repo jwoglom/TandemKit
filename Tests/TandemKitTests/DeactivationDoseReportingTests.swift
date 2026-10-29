@@ -213,7 +213,7 @@ import XCTest
         )
     }
 
-    func testATempBasalIsCutWhereThePumpRescalesItAtASegmentChange() throws {
+    func testATempRescaledUpAfterTheDeletionLeavesOneRemainderAtItsHigherRate() throws {
         clock.set(at(.hours(13) + .minutes(45)))
         startManager()
         let tempRaw = try XCTUnwrap(enactTempBasal(unitsPerHour: 1.5))
@@ -225,15 +225,35 @@ import XCTest
         let temps = try XCTUnwrap(batches(since: before).last).events.filter { $0.dose?.type == .tempBasal }
         XCTAssertEqual(temps.first?.raw, tempRaw)
         let doses = temps.compactMap(\.dose)
-        XCTAssertEqual(doses.map(\.isMutable), [false, false, false])
-        XCTAssertEqual(doses.map(\.startDate), [at(.hours(13) + .minutes(45)), at(.hours(13) + .minutes(50)), at(.hours(14))])
-        XCTAssertEqual(doses.map(\.endDate), [at(.hours(13) + .minutes(50)), at(.hours(14)), at(.hours(14) + .minutes(15))])
-        XCTAssertEqual(doses.map(\.unitsPerHour), [1.5, 1.5, 3.0])
-        XCTAssertEqual(doses.compactMap(\.deliveredUnits), [0.125, 0.25, 0.75])
+        XCTAssertEqual(doses.map(\.isMutable), [false, false])
+        XCTAssertEqual(doses.map(\.startDate), [at(.hours(13) + .minutes(45)), at(.hours(13) + .minutes(50))])
+        XCTAssertEqual(doses.map(\.endDate), [at(.hours(13) + .minutes(50)), at(.hours(14) + .minutes(15))])
+        XCTAssertEqual(doses.map(\.unitsPerHour), [1.5, 3.0])
+        XCTAssertEqual(doses.compactMap(\.deliveredUnits), [0.125, 1.25])
         XCTAssertEqual(manager.state.basalDose.value, 2.0)
         let serial = try XCTUnwrap(HistoryLogSyncIdentifier.PumpSerial(Self.pumpSerial))
         XCTAssertEqual(temps.last?.raw, HistoryLogSyncIdentifier.tempRatePart(pumpSerial: serial, tempRateId: 41, part: 1), "as a later pump manager counts the temp's parts from history")
-        XCTAssertFalse([tempRaw, temps.last?.raw].contains(temps[1].raw))
+    }
+
+    func testARemainderCrossingTwoSegmentChangesIsOneDoseAtTheHighestRateUnderTheTempsFirstPart() throws {
+        clock.set(at(.hours(13) + .minutes(45)))
+        startManager()
+        let tempRaw = try XCTUnwrap(enactTempBasal(unitsPerHour: 1.5, for: .hours(11)))
+        clock.advance(by: .minutes(5))
+        let before = batchCount
+
+        deactivate()
+
+        let temps = try XCTUnwrap(batches(since: before).last).events.filter { $0.dose?.type == .tempBasal }
+        XCTAssertEqual(temps.first?.raw, tempRaw)
+        let remainder = try XCTUnwrap(temps.last?.dose)
+        XCTAssertEqual(temps.count, 2, "\(temps)")
+        XCTAssertEqual(remainder.startDate, at(.hours(13) + .minutes(50)))
+        XCTAssertEqual(remainder.endDate, at(.hours(24) + .minutes(45)))
+        XCTAssertEqual(remainder.unitsPerHour, 3.0, "the pump runs it at 3.0 U/hr from 14:00 and at 1.5 U/hr from midnight")
+        let serial = try XCTUnwrap(HistoryLogSyncIdentifier.PumpSerial(Self.pumpSerial))
+        XCTAssertEqual(temps.last?.raw, HistoryLogSyncIdentifier.tempRatePart(pumpSerial: serial, tempRateId: 41, part: 1))
+        XCTAssertEqual(manager.state.basalDose.value, 1.0)
     }
 
     func testATempBasalStartedThisSecondIsCutASecondOn() throws {
