@@ -71,6 +71,16 @@ struct TandemKitScanView: View {
             message: { Text(viewModel.connectedElsewhereMessage) }
         )
         .alert(
+            String(localized: "Multiple Pumps Found", comment: "Title of the notice when more than one pump is advertising"),
+            isPresented: $viewModel.isMultiplePumpsFound,
+            actions: {
+                Button(String(localized: "OK", comment: "OK button")) {
+                    viewModel.multiplePumpsDismissed()
+                }
+            },
+            message: { Text(viewModel.multiplePumpsMessage) }
+        )
+        .alert(
             viewModel.connectionErrorTitle,
             isPresented: $viewModel.isConnectionError,
             presenting: $viewModel.connectionErrorMessage,

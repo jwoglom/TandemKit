@@ -38,6 +38,142 @@ import XCTest
         XCTAssertFalse(viewModel.isConnectedElsewhere)
     }
 
+    private func scanViewModel() -> TandemKitScanViewModel {
+        let viewModel = TandemKitScanViewModel(nextStep: {})
+        viewModel.codeStepSettleInterval = 0.05
+        return viewModel
+    }
+
+    private func waitPastTheSettleInterval() {
+        let settled = expectation(description: "settle interval passed")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { settled.fulfill() }
+        wait(for: [settled], timeout: 5)
+    }
+
+    func testThePumpPickedUpIsFollowedThoughAnotherWasHeardFirst() {
+        let viewModel = scanViewModel()
+        viewModel.pumpHeard("emulator", name: "Tandem Mobi 123", step: 0x10)
+        viewModel.pumpHeard("mobi", name: "Tandem Mobi 994", step: 0x11)
+
+        XCTAssertEqual(viewModel.currentPhase, .doubleTap)
+        XCTAssertEqual(viewModel.connectingTo, "Tandem Mobi 994")
+
+        viewModel.pumpHeard("emulator", name: "Tandem Mobi 123", step: 0x10)
+        viewModel.pumpHeard("mobi", name: "Tandem Mobi 994", step: 0x12)
+        viewModel.multiplePumpsDismissed()
+        waitPastTheSettleInterval()
+
+        XCTAssertTrue(viewModel.isPromptingPincode)
+        XCTAssertEqual(viewModel.connectingTo, "Tandem Mobi 994")
+    }
+
+    func testAPumpAtTheCodeStepWhileThePlaceOnPadStepShowsGoesStraightToTheCode() {
+        let viewModel = scanViewModel()
+        viewModel.pumpHeard("mobi", name: "Tandem Mobi 994", step: 0x10)
+        XCTAssertEqual(viewModel.currentPhase, .mobiOnPad)
+
+        viewModel.pumpHeard("mobi", name: "Tandem Mobi 994", step: 0x12)
+        waitPastTheSettleInterval()
+
+        XCTAssertTrue(viewModel.isPromptingPincode)
+    }
+
+    func testTwoPumpsAtTheCodeStepPairNeitherUntilOneLeavesIt() {
+        let viewModel = scanViewModel()
+        viewModel.pumpHeard("a", name: "Tandem Mobi 123", step: 0x12)
+        viewModel.pumpHeard("b", name: "Tandem Mobi 994", step: 0x12)
+        viewModel.multiplePumpsDismissed()
+        waitPastTheSettleInterval()
+
+        XCTAssertFalse(viewModel.isPromptingPincode)
+        XCTAssertEqual(viewModel.currentPhase, .doubleTap)
+
+        viewModel.pumpHeard("a", name: "Tandem Mobi 123", step: 0x10)
+        waitPastTheSettleInterval()
+
+        XCTAssertTrue(viewModel.isPromptingPincode)
+        XCTAssertEqual(viewModel.connectingTo, "Tandem Mobi 994")
+    }
+
+    func testAPumpThatGoesQuietKeepsTheStepItLastAdvertised() {
+        let viewModel = scanViewModel()
+        viewModel.pumpHeard("a", name: "Tandem Mobi 123", step: 0x12)
+        viewModel.pumpHeard("b", name: "Tandem Mobi 994", step: 0x12)
+        viewModel.multiplePumpsDismissed()
+
+        for _ in 0 ..< 5 { viewModel.pumpHeard("b", name: "Tandem Mobi 994", step: 0x12) }
+        waitPastTheSettleInterval()
+
+        XCTAssertFalse(viewModel.isPromptingPincode)
+    }
+
+    func testAnAdvertWithNoPairingStepLeavesTheLastOne() {
+        let viewModel = scanViewModel()
+        viewModel.pumpHeard("mobi", name: "Tandem Mobi 994", step: 0x11)
+
+        viewModel.pumpHeard("mobi", name: "", step: nil)
+
+        XCTAssertEqual(viewModel.currentPhase, .doubleTap)
+        XCTAssertEqual(viewModel.connectingTo, "Tandem Mobi 994")
+    }
+
+    func testASecondPumpRaisesTheMultiplePumpsNoticeNamingBoth() {
+        let viewModel = scanViewModel()
+        viewModel.pumpHeard("a", name: "Tandem Mobi 123", step: 0x10)
+        XCTAssertFalse(viewModel.isMultiplePumpsFound)
+
+        viewModel.pumpHeard("b", name: "Tandem Mobi 994", step: nil)
+
+        XCTAssertTrue(viewModel.isMultiplePumpsFound)
+        XCTAssertTrue(viewModel.multiplePumpsMessage.contains("Tandem Mobi 123"))
+        XCTAssertTrue(viewModel.multiplePumpsMessage.contains("Tandem Mobi 994"))
+    }
+
+    func testAPumpHeardWhileTheNoticeShowsJoinsItAndOnlyANewPumpRaisesItAgain() {
+        let viewModel = scanViewModel()
+        viewModel.pumpHeard("a", name: "Tandem Mobi 123", step: 0x10)
+        viewModel.pumpHeard("b", name: "Tandem Mobi 994", step: 0x10)
+
+        viewModel.pumpHeard("c", name: "Tandem Mobi 555", step: 0x10)
+        XCTAssertTrue(viewModel.multiplePumpsMessage.contains("Tandem Mobi 555"))
+        viewModel.multiplePumpsDismissed()
+        viewModel.pumpHeard("a", name: "Tandem Mobi 123", step: 0x11)
+        XCTAssertFalse(viewModel.isMultiplePumpsFound)
+
+        viewModel.pumpHeard("d", name: "Tandem Mobi 777", step: 0x10)
+        XCTAssertTrue(viewModel.isMultiplePumpsFound)
+    }
+
+    func testTheCodePromptWaitsForTheMultiplePumpsNoticeToBeDismissed() {
+        let viewModel = scanViewModel()
+        viewModel.pumpHeard("a", name: "Tandem Mobi 123", step: 0x10)
+        viewModel.pumpHeard("b", name: "Tandem Mobi 994", step: 0x12)
+        waitPastTheSettleInterval()
+
+        XCTAssertTrue(viewModel.isMultiplePumpsFound)
+        XCTAssertFalse(viewModel.isPromptingPincode)
+
+        viewModel.multiplePumpsDismissed()
+
+        XCTAssertTrue(viewModel.isPromptingPincode)
+    }
+
+    func testACancelledCodePromptWaitsForThePumpToAdvertiseTheCodeStepAgain() {
+        let viewModel = scanViewModel()
+        viewModel.pumpHeard("mobi", name: "Tandem Mobi 994", step: 0x12)
+        waitPastTheSettleInterval()
+        XCTAssertTrue(viewModel.isPromptingPincode)
+
+        viewModel.cancelPinPrompt()
+        viewModel.pumpHeard("mobi", name: "Tandem Mobi 994", step: nil)
+        waitPastTheSettleInterval()
+        XCTAssertFalse(viewModel.isPromptingPincode)
+
+        viewModel.pumpHeard("mobi", name: "Tandem Mobi 994", step: 0x12)
+        waitPastTheSettleInterval()
+        XCTAssertTrue(viewModel.isPromptingPincode)
+    }
+
     func testARefusedCodeTitleSaysSoAndAnyOtherFailureIsGeneric() {
         XCTAssertEqual(
             TandemKitScanViewModel.pairingFailureTitle(for: PumpCommError.pairingCodeRejected),

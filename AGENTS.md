@@ -266,6 +266,13 @@ edit instead of at the next sync.
   (`advertisedPairingStep`). A result whose name says `SIM` or `Simulator` (`TandemPumpScan.isSimulatorName`)
   is the unified pump simulator fronting faketandem over CoreBluetooth, which cannot advertise manufacturer
   data; it is taken as ready for the code, since its pairing state is set on the simulator.
+- The scan follows every pump it hears, and a pump that goes quiet keeps the step it last advertised.
+  It asks for the code only once one pump alone has advertised the code step (`0x12`) for
+  `codeStepSettleInterval` (2 s), whichever step the screen shows: following the first pump heard ignored
+  the one the user picked up while a pump emulator advertised nearby. A Mobi stays at `0x11` from being
+  lifted off the pad until it is double-pressed. A pump heard after the first raises Multiple Pumps Found
+  naming them all, unless it is already showing; the code prompt waits for it, since SwiftUI presents one
+  alert at a time.
 - Every error `pairPump` completes with has to reach `TandemKitScanViewModel.onPairFailure`, which ends
   the pairing step (alert, back to the double-tap step, scan restarts when the alert is dismissed). The
   step has no exit of its own.

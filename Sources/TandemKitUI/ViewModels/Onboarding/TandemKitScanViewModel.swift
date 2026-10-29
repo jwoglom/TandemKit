@@ -23,11 +23,24 @@ class TandemKitScanViewModel: ObservableObject {
     @Published var devicePinCode = ""
     @Published var isConnectedElsewhere = false
     @Published var connectedElsewhereName = ""
+    @Published var isMultiplePumpsFound = false
+    @Published private(set) var heardPumpNames: [String] = []
+
+    private struct HeardPump {
+        var name: String
+        var peripheral: CBPeripheral?
+        var step: UInt8?
+    }
 
     private let log = TandemLogger(category: "TandemKitScanViewModel")
     private var pumpManager: TandemPumpManager?
     private var nextStep: () -> Void
-    private var selectedPeripheral: CBPeripheral?
+    private var heardPumps: [String: HeardPump] = [:]
+    private var heardOrder: [String] = []
+    private var lockedPump: String?
+    private var pendingLock: (pump: String, check: DispatchWorkItem)?
+    var codeStepSettleInterval: TimeInterval = 2
+    private var multiplePumpsUnannounced = false
     private var connectedCheckTimer: Timer?
     private var connectedCheckSilencedUntil = Date.distantPast
     static let connectedAlertSilenceInterval: TimeInterval = 10
@@ -46,6 +59,7 @@ class TandemKitScanViewModel: ObservableObject {
 
     func stopScan() {
         pumpManager?.bluetooth.stopScan()
+        cancelPendingLock()
         stopCheckingForConnectedPump()
     }
 
@@ -64,7 +78,8 @@ class TandemKitScanViewModel: ObservableObject {
     }
 
     func checkForConnectedPump() {
-        guard currentPhase == .mobiOnPad, !isConnectedElsewhere, Date() >= connectedCheckSilencedUntil,
+        guard currentPhase == .mobiOnPad, !isConnectedElsewhere, !isMultiplePumpsFound,
+              Date() >= connectedCheckSilencedUntil,
               let name = pumpManager?.bluetooth.connectedPumpNames().first
         else {
             return
@@ -76,6 +91,7 @@ class TandemKitScanViewModel: ObservableObject {
     func connectedElsewhereDismissed() {
         isConnectedElsewhere = false
         connectedCheckSilencedUntil = Date().addingTimeInterval(Self.connectedAlertSilenceInterval)
+        presentNextAlert()
     }
 
     var connectedElsewhereMessage: String {
@@ -85,9 +101,40 @@ class TandemKitScanViewModel: ObservableObject {
         ), connectedElsewhereName, connectedElsewhereName)
     }
 
+    func multiplePumpsDismissed() {
+        isMultiplePumpsFound = false
+        presentNextAlert()
+    }
+
+    var multiplePumpsMessage: String {
+        String(format: String(
+            localized: "%@ are nearby. Only the pump you place on the charging pad and double-press will be paired.",
+            comment: "Pairing notice when more than one pump is advertising (1: the pumps' names)"
+        ), ListFormatter.localizedString(byJoining: heardPumpNames))
+    }
+
+    /// SwiftUI presents one alert at a time, and the code prompt is one of them.
+    private func presentNextAlert() {
+        guard !isMultiplePumpsFound, !isConnectedElsewhere, !isPromptingPincode, !isConnectionError else { return }
+        if multiplePumpsUnannounced {
+            multiplePumpsUnannounced = false
+            isMultiplePumpsFound = true
+        } else if lockedPump != nil, currentPhase != .pairing {
+            isPromptingPincode = true
+        }
+    }
+
+    /// Its last advert is from before the scan stopped, and the pump may have left its pairing state since.
+    private func releaseLockedPump() {
+        if let lockedPump {
+            heardPumps[lockedPump]?.step = nil
+        }
+        lockedPump = nil
+    }
+
     func cancelPinPrompt() {
         isPromptingPincode = false
-        selectedPeripheral = nil
+        releaseLockedPump()
         devicePinCode = ""
 
         // Restart scanning
@@ -114,7 +161,8 @@ class TandemKitScanViewModel: ObservableObject {
             return
         }
 
-        guard let peripheral = selectedPeripheral else {
+        guard let peripheral = lockedPump.flatMap({ heardPumps[$0]?.peripheral }) else {
+            releaseLockedPump()
             isConnectionError = true
             connectionErrorMessage = String(
                 localized: "No peripheral selected",
@@ -150,7 +198,7 @@ class TandemKitScanViewModel: ObservableObject {
             self.connectionErrorTitle = Self.pairingFailureTitle(for: error)
             self.connectionErrorMessage = Self.pairingFailureMessage(for: error)
             self.isConnectionError = true
-            self.selectedPeripheral = nil
+            self.releaseLockedPump()
             self.devicePinCode = ""
             self.currentPhase = .doubleTap
         }
@@ -195,43 +243,86 @@ extension TandemKitScanViewModel {
     }
 
     func deviceScanDidUpdate(_ device: TandemPumpScan) {
-        if selectedPeripheral == nil {
-            selectedPeripheral = device.peripheral
-            DispatchQueue.main.async {
-                self.connectingTo = device.name
+        let step = Self.advertisedPairingStep(name: device.name, advertisementData: device.advertisementData)
+        let name = device.advertisementData?[CBAdvertisementDataLocalNameKey] as? String ?? device.name
+        DispatchQueue.main.async {
+            self.pumpHeard(device.bleIdentifier, name: name, step: step, peripheral: device.peripheral)
+        }
+    }
+
+    /// Pairs only the pump that alone reaches the code step: the first pump a scan hears may be another
+    /// one nearby, and following it ignored the one the user had picked up.
+    func pumpHeard(_ identifier: String, name: String, step: UInt8?, peripheral: CBPeripheral? = nil) {
+        guard lockedPump == nil else { return }
+
+        if var pump = heardPumps[identifier] {
+            if !name.isEmpty { pump.name = name }
+            if let peripheral { pump.peripheral = peripheral }
+            // Some of a pump's packets carry no manufacturer data, and say nothing about the step.
+            if let step, step != pump.step {
+                log.info("\(pump.name) (\(identifier)) advertises pairing step \(Self.describe(step)), was \(Self.describe(pump.step))")
+                pump.step = step
             }
-        } else if let selectedPeripheral = selectedPeripheral, selectedPeripheral.identifier != device.peripheral.identifier {
-            // Ignore other device
-            // TODO: Show error if we detect multiple Mobi's
-            return
+            heardPumps[identifier] = pump
+        } else {
+            let pump = HeardPump(name: name.isEmpty ? "Tandem Mobi" : name, peripheral: peripheral, step: step)
+            log.info("Heard \(pump.name) (\(identifier)) advertising pairing step \(Self.describe(step))")
+            heardPumps[identifier] = pump
+            heardOrder.append(identifier)
+            if heardOrder.count > 1, !isMultiplePumpsFound {
+                multiplePumpsUnannounced = true
+            }
+        }
+        let names = heardOrder.compactMap { heardPumps[$0]?.name }
+        if names != heardPumpNames { heardPumpNames = names }
+
+        let ready = readyPumps
+        let onPad = heardOrder.filter { heardPumps[$0]?.step == 0x11 }
+        if !ready.isEmpty || !onPad.isEmpty {
+            let found = ListFormatter.localizedString(byJoining: (ready.isEmpty ? onPad : ready).compactMap { heardPumps[$0]?.name })
+            if connectingTo != found { connectingTo = found }
+            if currentPhase != .doubleTap { currentPhase = .doubleTap }
+        } else if currentPhase != .mobiOnPad {
+            currentPhase = .mobiOnPad
         }
 
-        guard let pairingState = Self.advertisedPairingStep(name: device.name, advertisementData: device.advertisementData)
-        else {
-            return
+        if ready.count == 1 {
+            if pendingLock?.pump != ready[0] { scheduleLock(onto: ready[0]) }
+        } else {
+            cancelPendingLock()
         }
+        presentNextAlert()
+    }
 
-        if pairingState == 0x10 {
-            DispatchQueue.main.async {
-                self.currentPhase = .mobiOnPad
-            }
-            return
-        }
+    private var readyPumps: [String] {
+        heardOrder.filter { heardPumps[$0]?.step == 0x12 }
+    }
 
-        if pairingState == 0x11 {
-            DispatchQueue.main.async {
-                self.currentPhase = .doubleTap
-            }
-            return
-        }
+    /// Adverts arrive one at a time, so the first pump to reach the code step always looks like the only
+    /// one; the wait gives every other pump in range several adverts (about five a second each) to say otherwise.
+    private func scheduleLock(onto identifier: String) {
+        cancelPendingLock()
+        let check = DispatchWorkItem { [weak self] in self?.lock(onto: identifier) }
+        pendingLock = (identifier, check)
+        DispatchQueue.main.asyncAfter(deadline: .now() + codeStepSettleInterval, execute: check)
+    }
 
-        if pairingState == 0x12 {
-            log.info("Enter pincode state!")
-            stopScan()
-            DispatchQueue.main.async {
-                self.isPromptingPincode = true
-            }
-            return
-        }
+    private func cancelPendingLock() {
+        pendingLock?.check.cancel()
+        pendingLock = nil
+    }
+
+    private func lock(onto identifier: String) {
+        pendingLock = nil
+        guard lockedPump == nil, readyPumps == [identifier], let pump = heardPumps[identifier] else { return }
+        log.info("\(pump.name) is ready for its pairing code")
+        lockedPump = identifier
+        connectingTo = pump.name
+        stopScan()
+        presentNextAlert()
+    }
+
+    private static func describe(_ step: UInt8?) -> String {
+        step.map { String(format: "0x%02X", $0) } ?? "none"
     }
 }
