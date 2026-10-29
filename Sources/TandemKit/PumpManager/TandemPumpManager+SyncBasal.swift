@@ -222,13 +222,10 @@ extension TandemPumpManager {
                     requests.append(activeProfile.modifySegmentMessage(segment: segment, changedFields: changedFields))
                     occupiedStartTimes[segment.segmentIndex] = write.startTime
                 } else {
-                    let firstSegment = currentSegments.first!
                     requests.append(activeProfile.createSegmentMessage(
                         profileStartTime: write.startTime,
                         profileBasalRate: write.basalRate,
-                        profileCarbRatio: firstSegment.profileCarbRatio,
-                        profileTargetBG: Int(firstSegment.profileTargetBG),
-                        profileISF: firstSegment.profileISF
+                        copyingSettingsOf: currentSegments.first!
                     ))
                     occupiedStartTimes[nextCreatedSegmentKey] = write.startTime
                     nextCreatedSegmentKey -= 1

@@ -363,7 +363,10 @@ edit instead of at the next sync.
   start time of the pump's segment 0; past the deletes, the pump would refuse it mid-write.
 - A segment modify flags in its status mask only the fields it changes (`START_TIME`,
   `BASAL_RATE`), never segment 0's start time, as Tandem's app does: a Mobi refused every
-  segment-0 modify flagging all five. Creates and deletes flag all five.
+  segment-0 modify flagging all five. Deletes flag all five. A create copies segment 0's carb
+  ratio, target BG and correction factor and flags only those segment 0 holds: a Mobi refused a
+  create flagging all five with the target BG and correction factor of 0 that a profile holding
+  neither reads back. Whether firmware takes a create flagging fewer than five is unconfirmed.
 - `syncBasalRateSchedule` reads the profile back and fails with `basalProfileSyncMismatch`
   unless `pendingSegmentWrites` finds nothing left to write. `fetchBasalStatus` compares the
   pump's rate against the schedule every sync, on the pump's clock via `pumpClockOffset`, using
