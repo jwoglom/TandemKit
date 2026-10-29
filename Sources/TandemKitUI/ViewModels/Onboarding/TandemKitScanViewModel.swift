@@ -260,13 +260,17 @@ extension TandemKitScanViewModel {
             if let peripheral { pump.peripheral = peripheral }
             // Some of a pump's packets carry no manufacturer data, and say nothing about the step.
             if let step, step != pump.step {
-                log.info("\(pump.name) (\(identifier)) advertises pairing step \(Self.describe(step)), was \(Self.describe(pump.step))")
+                log.info("\(pump.name) (\(identifier)) advertises pairing step 0x\(String(step, radix: 16))")
                 pump.step = step
             }
             heardPumps[identifier] = pump
         } else {
             let pump = HeardPump(name: name.isEmpty ? "Tandem Mobi" : name, peripheral: peripheral, step: step)
-            log.info("Heard \(pump.name) (\(identifier)) advertising pairing step \(Self.describe(step))")
+            if let step {
+                log.info("Heard \(pump.name) (\(identifier)) advertising pairing step 0x\(String(step, radix: 16))")
+            } else {
+                log.info("Heard \(pump.name) (\(identifier))")
+            }
             heardPumps[identifier] = pump
             heardOrder.append(identifier)
             if heardOrder.count > 1, !isMultiplePumpsFound {
@@ -320,9 +324,5 @@ extension TandemKitScanViewModel {
         connectingTo = pump.name
         stopScan()
         presentNextAlert()
-    }
-
-    private static func describe(_ step: UInt8?) -> String {
-        step.map { String(format: "0x%02X", $0) } ?? "none"
     }
 }
