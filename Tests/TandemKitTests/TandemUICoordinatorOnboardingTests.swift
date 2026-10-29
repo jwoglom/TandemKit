@@ -119,17 +119,16 @@ import XCTest
         XCTAssertTrue(coordinator.ownsPumpManager)
     }
 
-    func testALastBolusOverSixHoursAgoGoesStraightToTheSetupWrites() {
-        let coordinator = makeSetupCoordinator()
-        let host = OnboardingHost()
-        coordinator.pumpManagerOnboardingDelegate = host
-        coordinator.pumpManager.state.featureFlags[.historyBackfill] = true
-        coordinator.pumpManager.state.featureFlags[.historyDoseReporting] = true
+    func testPairingAsksAboutPumpHistoryWhateverThePumpReported() {
+        for reading in [bolusReading(hoursAgo: 7), SetupDeliveryReading(lastBolus: .none), SetupDeliveryReading()] {
+            let coordinator = makeSetupCoordinator()
+            coordinator.pumpManager.state.featureFlags[.historyBackfill] = true
+            coordinator.pumpManager.state.featureFlags[.historyDoseReporting] = true
 
-        coordinator.showStepAfterPairing(bolusReading(hoursAgo: 7))
+            coordinator.showStepAfterPairing(reading)
 
-        XCTAssertEqual(coordinator.screenStack, [.setupComplete])
-        XCTAssertTrue(host.calls.isEmpty, "the host gets the manager once the setup writes are done")
+            XCTAssertEqual(coordinator.screenStack, [.loadHistory], "\(reading)")
+        }
     }
 
     func testWithoutHistoryDoseReportingPairingGoesStraightToTheSetupWrites() {

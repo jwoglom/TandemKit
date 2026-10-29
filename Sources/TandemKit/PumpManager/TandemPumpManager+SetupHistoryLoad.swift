@@ -99,23 +99,8 @@ extension TandemPumpManager {
         state.featureFlags.historyBackfill && state.featureFlags.historyDoseReporting
     }
 
-    /// A pump whose last bolus is older than the window has nothing the load would add to the host's IOB.
-    public func offersHistoryLoad(after reading: SetupDeliveryReading) -> Bool {
-        guard canLoadHistoryForSetup else {
-            return false
-        }
-        switch reading.lastBolus {
-        case .unread:
-            return true
-        case .none:
-            return false
-        case let .delivered(at):
-            return now.timeIntervalSince(at) <= Self.setupHistoryLoadWindow
-        }
-    }
-
     /// Run once pairing is done and before setup writes anything, so it reads what the pump was doing
-    /// for its last user. The pump's clock is read first, for the last bolus's date on the phone's.
+    /// for its last user.
     public func readDeliveryForSetup(completion: @escaping (SetupDeliveryReading) -> Void) {
         bluetooth.ensureConnected { error in
             if let error {
@@ -158,7 +143,13 @@ extension TandemPumpManager {
         } else {
             pumpDate = response.timestamp == 0 ? nil : response.timestampDate
         }
-        return pumpDate.map { .delivered(at: hostDate(forPumpDate: $0)) } ?? .none
+        guard let pumpDate else {
+            return .none
+        }
+        guard let pumpNow = bluetooth.write(TimeSinceResetRequest())?.currentTimeDate else {
+            return .unread
+        }
+        return .delivered(at: now.addingTimeInterval(-pumpNow.timeIntervalSince(pumpDate)))
     }
 
     /// `progress` is called from 0 to 1 on an unspecified queue while the load runs, `completion` once.

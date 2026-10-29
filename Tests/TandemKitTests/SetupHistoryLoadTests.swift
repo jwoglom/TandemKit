@@ -345,6 +345,7 @@ import XCTest
     }
 
     private func stubPumpBeforeSetup(pumpClockAhead: TimeInterval, lastBolusSecondsAgo: UInt32?, basal: CurrentBasalStatusResponse) {
+        let pumpNow = UInt32(Int64(nowPumpTimeSec) + Int64(pumpClockAhead))
         bluetooth.stub(ApiVersionRequest.self, with: ApiVersionResponse(majorVersion: 3, minorVersion: 4))
         bluetooth.stub(PumpVersionBRequest.self, with: PumpVersionBResponse(
             softwareName: "t:slim X2",
@@ -358,7 +359,7 @@ import XCTest
             pcbRevisionNumberA: "A"
         ))
         bluetooth.stub(TimeSinceResetRequest.self, with: TimeSinceResetResponse(
-            currentTime: nowPumpTimeSec + UInt32(pumpClockAhead),
+            currentTime: pumpNow,
             pumpTimeSinceReset: 1000
         ))
         bluetooth.stub(ControlIQInfoV2Request.self, with: ControlIQInfoV2Response(
@@ -385,7 +386,7 @@ import XCTest
         bluetooth.stub(LastBolusStatusV2Request.self, with: LastBolusStatusV2Response(
             status: 0,
             bolusId: 77,
-            timestamp: lastBolusSecondsAgo.map { nowPumpTimeSec + UInt32(pumpClockAhead) - $0 } ?? 0,
+            timestamp: lastBolusSecondsAgo.map { pumpNow - $0 } ?? 0,
             deliveredVolume: 4000,
             bolusStatusId: LastBolusStatusAbstractResponseBolusStatus.complete.rawValue,
             bolusSourceId: 0,
@@ -450,18 +451,16 @@ import XCTest
         XCTAssertEqual(readDelivery(), SetupDeliveryReading())
     }
 
-    func testTheLoadIsOfferedUnlessTheLastBolusIsOverSixHoursAgo() {
-        let hours: (Double) -> SetupDeliveryReading = {
-            SetupDeliveryReading(lastBolus: .delivered(at: Date().addingTimeInterval(-$0 * 3600)))
+    func testTheLastBolusIsDatedByItsAgeOnThePumpsClockHoweverFarOffThatClockIs() {
+        stubPumpBeforeSetup(
+            pumpClockAhead: -31 * 3600,
+            lastBolusSecondsAgo: 40,
+            basal: CurrentBasalStatusResponse(profileBasalRate: 800, currentBasalRate: 800, basalModifiedBitmask: 0)
+        )
+
+        guard case let .delivered(at) = readDelivery().lastBolus else {
+            return XCTFail("no last bolus date")
         }
-
-        XCTAssertTrue(manager.offersHistoryLoad(after: hours(5.9)))
-        XCTAssertFalse(manager.offersHistoryLoad(after: hours(6.1)))
-        XCTAssertFalse(manager.offersHistoryLoad(after: SetupDeliveryReading(lastBolus: .none)))
-        XCTAssertTrue(manager.offersHistoryLoad(after: SetupDeliveryReading()), "a last bolus that could not be read")
-
-        manager.state.featureFlags[.historyDoseReporting] = false
-
-        XCTAssertFalse(manager.offersHistoryLoad(after: hours(1)))
+        XCTAssertEqual(Date().timeIntervalSince(at), 40, accuracy: 5)
     }
 }
