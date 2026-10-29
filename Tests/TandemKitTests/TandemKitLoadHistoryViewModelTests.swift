@@ -33,7 +33,7 @@ import XCTest
     }
 
     func testTheScreenOpensOnTheChoiceAndNamesTheApp() {
-        let viewModel = makeViewModel()
+        let viewModel = makeViewModel(SetupDeliveryReading(insulinOnBoard: 1))
 
         XCTAssertEqual(
             viewModel.introduction,
@@ -67,7 +67,17 @@ import XCTest
     }
 
     func testAReadingThePumpDidNotAnswerIsLeftOut() {
-        XCTAssertEqual(makeViewModel().readings, [])
+        XCTAssertEqual(makeViewModel(SetupDeliveryReading(insulinOnBoard: 1)).readings, ["Insulin on Board: 1.00 units"])
+    }
+
+    func testAPumpThatReportedNothingIsStillAskedAbout() {
+        let viewModel = makeViewModel(SetupDeliveryReading(lastBolus: .none))
+
+        XCTAssertEqual(viewModel.readings, [])
+        XCTAssertEqual(
+            viewModel.question,
+            "Would you like to load the pump's insulin delivery history into \(viewModel.appName) so it is included in your IOB?"
+        )
     }
 
     func testNotLoadingSaysTheAppWillNotCountThePumpsInsulinBeforeSetupGoesOn() throws {

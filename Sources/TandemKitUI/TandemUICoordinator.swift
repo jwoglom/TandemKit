@@ -404,7 +404,7 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
 
     func showStepAfterPairing(_ reading: SetupDeliveryReading) {
         setupDeliveryReading = reading
-        resetNavigationTo([pumpManager.offersHistoryLoad(after: reading) ? .loadHistory : .setupComplete])
+        resetNavigationTo([pumpManager.canLoadHistoryForSetup ? .loadHistory : .setupComplete])
     }
 
     /// Pairing, the history load and the onboarding writes are done: the pump holds a key for this

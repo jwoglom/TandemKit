@@ -294,11 +294,14 @@ edit instead of at the next sync.
   (`LastBolusStatus`), basal rate or suspension, and with them the serial the load keys its reports on
   and the clock it dates them by. With `historyBackfill` and `historyDoseReporting` on
   (`canLoadHistoryForSetup`), the Load Pump History step shows those readings and asks whether to
-  load, unless the last bolus is more than `setupHistoryLoadWindow` ago (`offersHistoryLoad`); one
-  that could not be read still asks. Do Not Load says the host will not count what the pump delivered
-  before, and goes on; nothing changes. Load runs after the setup sync, not at the step: Loop saves
-  no dose from a batch without a reconciliation boundary, which only a sync gives, and that sync's
-  first basal reading is what the load matches a suspension the pump is in against.
+  load, whatever they are, none included: a Mobi that had reset answered with no last bolus, and
+  another gave one 40 s old by a clock 31 h behind, which `hostDate` does not correct past
+  `pumpClockOffsetTrustLimit`. So the last bolus is dated by its age on the pump's clock, read again
+  just after it, which holds however far off that clock is. Do Not Load says the host will not count
+  what the pump delivered before, and goes on; nothing changes. Load runs after the setup sync, not
+  at the step: Loop saves no dose from a batch without a reconciliation boundary, which only a sync
+  gives, and that sync's first basal reading is what the load matches a suspension the pump is in
+  against.
 - Load (`loadHistoryForSetup`) moves both ledgers' `trackingSince` back `setupHistoryLoadWindow`
   (6 h), and `DeliveryTransitionLedger.historySince` to the same date, and
   `ReportedBasalLedger.reportHistory` clears `reconciledThrough`, which passes since pairing moved

@@ -56,7 +56,13 @@ final class TandemKitLoadHistoryViewModel: ObservableObject {
     }
 
     var question: String {
-        String(format: String(
+        guard !readings.isEmpty else {
+            return String(format: String(
+                localized: "Would you like to load the pump's insulin delivery history into %@ so it is included in your IOB?",
+                comment: "Setup question whether to load the pump's history, when it reported no delivery readings (1: app name)"
+            ), appName)
+        }
+        return String(format: String(
             localized: "Would you like to load this insulin delivery information into %@ so it is included in your IOB?",
             comment: "Setup question whether to load the pump's history (1: app name)"
         ), appName)
