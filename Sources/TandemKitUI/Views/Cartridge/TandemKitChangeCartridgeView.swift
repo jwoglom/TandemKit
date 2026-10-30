@@ -491,7 +491,7 @@ struct TandemKitChangeCartridgeView: View {
                             .multilineTextAlignment(.center)
 
                         Text(
-                            "The pump has a cartridge loaded from a cartridge change that was not finished. Fill the tubing to complete it.",
+                            "The pump is not allowing the cartridge to be changed right now because a prior cartridge change was recently completed. You must fill the tubing with this cartridge before returning to replace the cartridge.",
                             comment: "Description when the pump already has a cartridge loaded from an unfinished cartridge change"
                         )
                         .font(.subheadline)
