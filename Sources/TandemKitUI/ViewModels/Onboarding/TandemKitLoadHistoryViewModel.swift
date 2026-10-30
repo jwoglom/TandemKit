@@ -26,33 +26,47 @@ final class TandemKitLoadHistoryViewModel: ObservableObject {
         )
     }
 
-    /// One line per reading the pump answered.
-    var readings: [String] {
-        var lines: [String] = []
+    struct Reading: Hashable {
+        let label: String?
+        let value: String
+    }
+
+    /// One per reading the pump answered.
+    var readings: [Reading] {
+        var readings: [Reading] = []
         if let insulinOnBoard = reading.insulinOnBoard {
-            lines.append(String(format: String(
-                localized: "Insulin on Board: %@ units",
-                comment: "Setup line with the pump's insulin on board (1: units, to two decimals)"
-            ), String(format: "%.2f", insulinOnBoard)))
+            readings.append(Reading(
+                label: String(localized: "Insulin on Board:", comment: "Setup label for the pump's insulin on board"),
+                value: String(format: String(
+                    localized: "%@ units",
+                    comment: "Setup value of the pump's insulin on board (1: units, to two decimals)"
+                ), String(format: "%.2f", insulinOnBoard))
+            ))
         }
         if case let .delivered(at) = reading.lastBolus {
-            lines.append(String(format: String(
-                localized: "Last bolus delivery: %1$@ (%2$@)",
-                comment: "Setup line with the pump's last bolus (1: time of day, 2: how long ago)"
-            ), Self.timeFormatter.string(from: at), LastKnownBasalDelivery.elapsedDescription(now().timeIntervalSince(at))))
+            readings.append(Reading(
+                label: String(localized: "Last bolus delivery:", comment: "Setup label for the pump's last bolus"),
+                value: String(format: String(
+                    localized: "%1$@ (%2$@)",
+                    comment: "Setup value of the pump's last bolus (1: time of day, 2: how long ago)"
+                ), Self.timeFormatter.string(from: at), LastKnownBasalDelivery.elapsedDescription(now().timeIntervalSince(at)))
+            ))
         }
         if reading.isSuspended {
-            lines.append(String(
+            readings.append(Reading(label: nil, value: String(
                 localized: "Insulin delivery currently suspended",
                 comment: "Setup line when the paired pump has insulin delivery suspended"
-            ))
+            )))
         } else if let rate = reading.currentBasalRate {
-            lines.append(String(format: String(
-                localized: "Current basal rate: %@ u/hr",
-                comment: "Setup line with the pump's current basal rate (1: units per hour, to two decimals)"
-            ), String(format: "%.2f", rate)))
+            readings.append(Reading(
+                label: String(localized: "Current basal rate:", comment: "Setup label for the pump's current basal rate"),
+                value: String(format: String(
+                    localized: "%@ u/hr",
+                    comment: "Setup value of the pump's current basal rate (1: units per hour, to two decimals)"
+                ), String(format: "%.2f", rate))
+            ))
         }
-        return lines
+        return readings
     }
 
     var question: String {

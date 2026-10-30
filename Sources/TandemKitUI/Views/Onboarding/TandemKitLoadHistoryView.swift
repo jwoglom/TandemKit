@@ -21,11 +21,18 @@ struct TandemKitLoadHistoryView: View {
 
                     VStack(alignment: .leading, spacing: 10) {
                         Text(viewModel.introduction)
-                        VStack(alignment: .leading, spacing: 4) {
-                            ForEach(viewModel.readings, id: \.self) { line in
-                                Text(line)
+                        VStack(alignment: .leading, spacing: 12) {
+                            ForEach(viewModel.readings, id: \.self) { reading in
+                                VStack(alignment: .leading, spacing: 2) {
+                                    if let label = reading.label {
+                                        Text(label).bold()
+                                    }
+                                    Text(reading.value)
+                                }
+                                .fixedSize(horizontal: false, vertical: true)
                             }
                         }
+                        .padding(.vertical, 4)
                         Text(viewModel.question)
                     }
                 }

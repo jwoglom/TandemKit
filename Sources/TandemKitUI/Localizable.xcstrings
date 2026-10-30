@@ -4,6 +4,39 @@
     "" : {
 
     },
+    "%@ u/hr" : {
+      "comment" : "Setup value of the pump's current basal rate (1: units per hour, to two decimals)",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ u/hr"
+          }
+        }
+      }
+    },
+    "%@ units" : {
+      "comment" : "Setup value of the pump's insulin on board (1: units, to two decimals)",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ units"
+          }
+        }
+      }
+    },
+    "%1$@ (%2$@)" : {
+      "comment" : "Setup value of the pump's last bolus (1: time of day, 2: how long ago)",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ (%2$@)"
+          }
+        }
+      }
+    },
     "%@ will not count insulin this pump delivered before you connected it." : {
       "comment" : "Setup alert after the user chose not to load the pump's history (1: app name at the start of a sentence)",
       "localizations" : {
@@ -636,13 +669,13 @@
     "Checksum mismatch" : {
 
     },
-    "Current basal rate: %@ u/hr" : {
-      "comment" : "Setup line with the pump's current basal rate (1: units per hour, to two decimals)",
+    "Current basal rate:" : {
+      "comment" : "Setup label for the pump's current basal rate",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Current basal rate: %@ u/hr"
+            "value" : "Current basal rate:"
           }
         }
       }
@@ -1437,24 +1470,24 @@
         }
       }
     },
-    "Insulin on Board: %@ units" : {
-      "comment" : "Setup line with the pump's insulin on board (1: units, to two decimals)",
+    "Insulin on Board:" : {
+      "comment" : "Setup label for the pump's insulin on board",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Insulin on Board: %@ units"
+            "value" : "Insulin on Board:"
           }
         }
       }
     },
-    "Last bolus delivery: %1$@ (%2$@)" : {
-      "comment" : "Setup line with the pump's last bolus (1: time of day, 2: how long ago)",
+    "Last bolus delivery:" : {
+      "comment" : "Setup label for the pump's last bolus",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Last bolus delivery: %1$@ (%2$@)"
+            "value" : "Last bolus delivery:"
           }
         }
       }
