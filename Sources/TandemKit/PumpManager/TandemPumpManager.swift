@@ -11,7 +11,7 @@ import UIKit
 public class TandemPumpManager: PumpManager, Pluggable {
     public static var pluginIdentifier: String = "TandemPumpManager"
 
-    public var localizedTitle: String = "Tandem mobi"
+    public var localizedTitle: String = "Tandem Mobi"
     public static var managerIdentifier: String = "Tandem"
     public typealias RawStateValue = [String: Any]
 
