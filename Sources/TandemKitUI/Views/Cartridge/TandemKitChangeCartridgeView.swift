@@ -484,15 +484,30 @@ struct TandemKitChangeCartridgeView: View {
                     .foregroundColor(.green)
 
                 VStack(spacing: 8) {
-                    Text("Cartridge change complete!", comment: "Success message")
-                        .font(.title2)
-                        .fontWeight(.bold)
-                        .multilineTextAlignment(.center)
+                    if viewModel.foundCartridgeAlreadyLoaded {
+                        Text("Cartridge already loaded", comment: "Title when the pump already has a cartridge loaded from an unfinished cartridge change")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .multilineTextAlignment(.center)
 
-                    Text("You can now fill your tubing and cannula", comment: "Success description")
+                        Text(
+                            "The pump has a cartridge loaded from a cartridge change that was not finished. Fill the tubing to complete it.",
+                            comment: "Description when the pump already has a cartridge loaded from an unfinished cartridge change"
+                        )
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
+                    } else {
+                        Text("Cartridge change complete!", comment: "Success message")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .multilineTextAlignment(.center)
+
+                        Text("You can now fill your tubing and cannula", comment: "Success description")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
                 }
             }
             .frame(maxWidth: .infinity)

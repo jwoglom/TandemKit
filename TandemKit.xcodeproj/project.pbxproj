@@ -562,6 +562,7 @@
 		4375DB186DF1EFC5F83E8F7F /* PumpRefusalTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78D8425280D55E61AF8F301E /* PumpRefusalTests.swift */; };
 		437803CDFA04734541C507C6 /* FaketandemControlSocket.swift in Sources */ = {isa = PBXBuildFile; fileRef = F32E5D50AC5A40721788D910 /* FaketandemControlSocket.swift */; };
 		437805178F079B6330B18F93 /* LastBolusDeliveredVolumeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93F6B714858855CA9083EEDE /* LastBolusDeliveredVolumeTests.swift */; };
+		439CBFF9E9CD8270279249C1 /* LoadStatusResponseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 669823B045668E75EF94758E /* LoadStatusResponseTests.swift */; };
 		439D6B80FF42C58C738A061A /* BleDailyConnectionsHistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF368CE0B7F306BF3111D9EA /* BleDailyConnectionsHistoryLogTests.swift */; };
 		43E1F769E5ADF27220D9F079 /* FillTubingStateStreamResponseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82724DD1CC0AFC0C96710358 /* FillTubingStateStreamResponseTests.swift */; };
 		44E8B3913441E78372C68624 /* StartDexcomG6SensorSessionRequestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E739EE4649C36E197CD6A404 /* StartDexcomG6SensorSessionRequestTests.swift */; };
@@ -695,6 +696,7 @@
 		763B8E8065C7F01DD6BC273A /* SuspendPumpingRequestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5AB3C80009F251C1B23AC5E /* SuspendPumpingRequestTests.swift */; };
 		76BCC0DDD814BFB9049D9DE0 /* VersionsAHistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F87E6C9EE1E54E3383D3C32 /* VersionsAHistoryLogTests.swift */; };
 		7714F2F93A956182AC5B5402 /* AlertIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FD10415F817814B28EE7664 /* AlertIntegrationTests.swift */; };
+		77A4E8953D1DD75EAF0AA171 /* LoadStatusRequestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65EE9DAAA1E0E38776D99BE2 /* LoadStatusRequestTests.swift */; };
 		77E85FDF591A0F94A7408BFB /* ExitChangeCartridgeModeRequestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20A38CF8F5D56BC1BA34FBCC /* ExitChangeCartridgeModeRequestTests.swift */; };
 		7892A6300D7F3D6EFA5E6F17 /* LinuxWebSocket.swift in Sources */ = {isa = PBXBuildFile; fileRef = 954EEDEA0C9D99A4E1EE063E /* LinuxWebSocket.swift */; };
 		78B179CA0574FC1398BF83EA /* DeliveryChangeEventIdentityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1372B5021FA0DFE3CA1CF677 /* DeliveryChangeEventIdentityTests.swift */; };
@@ -1671,6 +1673,8 @@
 		652A78E202B22D33174A299A /* BasalHistoryConformanceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BasalHistoryConformanceTests.swift; sourceTree = "<group>"; };
 		6532417AB6422A32942EE85F /* Jpake3SessionKeyResponseTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Jpake3SessionKeyResponseTests.swift; sourceTree = "<group>"; };
 		6585C8FC6C57879C0217AD1B /* CgmBleCalibrationEvtG7HistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CgmBleCalibrationEvtG7HistoryLog.swift; sourceTree = "<group>"; };
+		65EE9DAAA1E0E38776D99BE2 /* LoadStatusRequestTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LoadStatusRequestTests.swift; sourceTree = "<group>"; };
+		669823B045668E75EF94758E /* LoadStatusResponseTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LoadStatusResponseTests.swift; sourceTree = "<group>"; };
 		677DC67227D04673334D9A0D /* DoseOracle.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DoseOracle.swift; sourceTree = "<group>"; };
 		67B9C65636CED76B228E895C /* CgmJoinSessionG7HistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmJoinSessionG7HistoryLog.swift; sourceTree = "<group>"; };
 		67E4AD92CC7C48CFA579084C /* TandemKitChangeCartridgeViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitChangeCartridgeViewModel.swift; sourceTree = "<group>"; };
@@ -3150,6 +3154,8 @@
 				5AE9D582B8B42F7BCC2BCA93 /* TimeSinceResetResponseTests.swift */,
 				F61B4870E9EC2ADB4C24EC36 /* ControlIQIOBRequestTests.swift */,
 				B9E15D7EA959775E150B9CFE /* ControlIQIOBResponseTests.swift */,
+				65EE9DAAA1E0E38776D99BE2 /* LoadStatusRequestTests.swift */,
+				669823B045668E75EF94758E /* LoadStatusResponseTests.swift */,
 			);
 			name = CurrentStatus;
 			path = CurrentStatus;
@@ -4928,6 +4934,8 @@
 				C45662DBDDE5442B076FBEF3 /* HostDeviceLogTests.swift in Sources */,
 				AA97E761BDB1088FF00BB382 /* TandemKitSetupCompleteViewModelTests.swift in Sources */,
 				87DE78752B8649DAFD01279C /* MultiDayTests.swift in Sources */,
+				77A4E8953D1DD75EAF0AA171 /* LoadStatusRequestTests.swift in Sources */,
+				439CBFF9E9CD8270279249C1 /* LoadStatusResponseTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
