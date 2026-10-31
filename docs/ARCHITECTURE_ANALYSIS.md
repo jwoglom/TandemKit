@@ -4,8 +4,7 @@ TandemKit is a LoopKit `PumpManager` for the Tandem t:slim X2 and Mobi, talking 
 Bluetooth LE. The protocol is ported from [pumpX2](https://github.com/jwoglom/pumpX2); where
 TandemKit deliberately departs from it, the code says so at the point of departure.
 
-File-level pointers are in [KEY_FILES_REFERENCE.md](KEY_FILES_REFERENCE.md). The faketandem
-integration harness is described in [integration-harness.md](integration-harness.md).
+The faketandem integration harness is described in [integration-harness.md](integration-harness.md).
 
 ## Build layout
 
