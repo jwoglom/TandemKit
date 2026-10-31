@@ -73,46 +73,12 @@ LoopWorkspace with TandemKit as its plugin, and compare both of LoopKit `DoseSto
 Behaviour that returns after being dropped with its code needs tests written against the current
 architecture, not restored from git history.
 
-### Commit stamp
-The `Stamp Git Commit` phase on the `TandemKit` framework target writes the short commit, with
-`-dirty` for a modified tree, into the built framework's Info.plist as `TandemKitGitCommit`, which
-`TandemPumpManager` logs at init and prints in its `debugDescription` (the host's issue report), so
-a field log or report can be tied to a build. It reads the git directory
-(a submodule's lives in the host's) and edits the built plist, neither of which the script sandbox
-allows, so that target sets `ENABLE_USER_SCRIPT_SANDBOXING = NO`. A phase runs only if the target
-lists it. SwiftPM builds have no Info.plist and log `unknown`.
-
-### Doc references
-`scripts/check_doc_references.py` fails when a markdown doc names a code identifier, a path or a
-`.swift` file the repository does not have, or links to a file or heading that is not there. The
-Linux workflow's `docs` job runs it, and its tests, on every change, documentation-only ones
-included. A name from another codebase goes in its `EXTERNAL`; a name a doc cites as gone goes in
-`REMOVED`, which fails once the code has it again. Both fail on an entry that is no longer needed.
-
-### Message serialization tests
-Serialization tests go in `Tests/TandemCoreTests/Messages/<Category>/<Type>Tests.swift`, and
-history records in `Tests/TandemCoreTests/HistoryLog/`. They use `MessageTester` /
-`HistoryLogMessageTester` with hex taken from pumpX2's tests or captured from a pump. Name the
-file after the type, so coverage can be found by filename.
-
-Manager tests go through `StubPumpBluetooth`, which returns constructed response objects and
-never encodes or decodes cargo, so they say nothing about the wire format. The integration tests
-do exercise it, against pumpX2's encoder via faketandem, but only for the flows they run.
-
-The Harmonize rule `DriverMessagesHaveSerializationTests` (below) works out from the code which
-messages the driver sends or decodes; its baseline lists those still without a serialization test,
-which come before the rest of the catalog. None of them has a usable vector in pumpX2's tests, so
-each needs a pump capture. Delete a type from the baseline when you add its test.
-
 ### Harmonize lint rules
 `HarmonizeRules/` is a separate SwiftPM package of
 [Harmonize](https://github.com/perrystreetsoftware/Harmonize) rules: XCTest cases that parse
 `Sources/` and `Tests/` (rooted by `.harmonize.yaml`) and assert on their structure. It lives
 outside `Tests/`, so it is not part of `TandemKitTests`. Run it with `swift test --package-path
 HarmonizeRules` (`--filter <RuleName>` for one rule); the Linux workflow's `harmonize` job runs it.
-A failing rule prints what it enforces, why, how to fix it and an example, at the offending line:
-fix the code, not the rule. Each rule's baseline lists the violations that predate it, and
-Harmonize fails on an entry that no longer violates, so remove it in the change that fixes it.
 Don't add to a baseline to get a new violation through.
 
 ### LoopKit and Linux
@@ -159,14 +125,8 @@ host queue, so its state stays behind its lock, as does the manager's reference 
 ### Responses and the shared link
 - The pump has one link to the phone, and iOS notifies every app subscribed to a characteristic,
   so the driver also receives the responses to another app's requests, as field logs show after a
-  connect (#507). `PendingWrite` takes only its own answer: on the request's characteristic, under
-  the request's txId (byte 1 of every notification and byte 3 of the first, as pumpX2 checks),
-  starting with the response's opcode, and then each next piece by txId and `remaining` countdown
-  (`PacketAssembler`). A refusal is an `ErrorResponse` under that txId, on `CURRENT_STATUS` or the
-  request's characteristic: faketandem sends it on the first, pumpX2 expects the second.
-- `PacketAssembler` checks the CRC and declared length of every message, as pumpX2's
-  `PacketArrayList` does. A corrupt message under the pending txId is dropped and the write waits
-  on; one that does not decode as the response type ends it as unanswered.
+  connect (#507).
+- `PacketAssembler` checks the CRC and declared length of every message.
 - History log, control stream and qualifying-event notifications are routed before the pending
   write. None answers a write, and at the 23-byte MTU the second notification of a signed stream
   message is HMAC, whose byte 2 can be any opcode. Both streams are reassembled, and a piece that
@@ -176,75 +136,6 @@ host queue, so its state stays behind its lock, as does the manager's reference 
   (`UnsolicitedNotificationLog`): as the late answer of a write that timed out under its txId in
   the last two minutes, otherwise as another app's, at info for the first of a burst and at debug
   for the rest.
-- Still open: another app's response under the pending write's txId and opcode is taken as the
-  answer. It answers the same request, so it reads the same pump state. Nothing tells the user
-  that another app talks to the pump, and nothing checks the HMAC of a signed response.
-
-### Handshake failures
-`TandemBluetoothManager` counts JPAKE handshakes the pump ended or left unanswered
-(`recordJpakeFailure`, from the setup task). At `jpakeFailureLimit` (3) in a row it stops the
-connects the driver starts itself: the backoff retry, the one after a disconnect and the one when
-Bluetooth powers on (`reconnectAutomatically`). A host command still tries, since only an attempt
-can tell that the pump has stopped refusing. A successful handshake clears the count, and so does
-Bluetooth powering back on, which is the one thing a person can do to ask for a fresh attempt. Until
-then `connectionIssue` is `.handshakeFailing`, shown at once on the status highlight, settings and
-troubleshooting screens. The count is not persisted, so a relaunch tries afresh. A first pairing is
-not counted: its attempts are the user's own, and a refused code is theirs to fix (see Pairing).
-
-Only a round the pump may have ended counts (`WriteFailure.countsAsJpakeFailure`, #565). The
-disconnect's reason reaches the setup task through `linkWentDown`, before any wait is cancelled. A
-link lost to `CBError.connectionTimeout` (the phone stopped hearing the pump, as in a weak-signal
-stretch) or to Bluetooth going off is not counted, and neither is a write that never went out. A
-far-end drop (`peripheralDisconnected`, the signature of a second host on the pump, #400), a
-disconnect the driver made itself (a connect out of time), an unanswered round on a live link, a
-refusal and an answered but invalid handshake all count. Once its link is gone a setup task stops at
-its next step: every operation after `linkWentDown` is refused, so it never writes to the peripheral
-the next connect reuses. Whether a Mobi refusing a stored key ever drops as `connectionTimeout` is
-unconfirmed (hardware test plan P4).
-
-### Reconnect
-- Every connect job that brings a session up queues `syncPumpData(onlyIfIdle: true)` through
-  `didReconnect` (#351), whoever started it: the reconnect retry, a history tick or report, a host
-  command. The pump's qualifying events are lost while the link is down, so what it did meanwhile
-  reaches the host only through a sync, and the host's poll is throttled for 4.5 minutes after the
-  last one. A job of the driver's own that reconnected first left the retry nothing to do, so
-  limiting this to the automatic connects missed it. A sync that reconnected is already in flight,
-  and the reconnect's joins it. Not before the host has adopted the manager (`canNotifyDelegate`),
-  whose first poll syncs, so not during onboarding; not for pairing's connect.
-- The connects the driver starts on its own (`reconnectAutomatically`: after a disconnect, on
-  Bluetooth powering on, the retry) run only for a manager a host has adopted (`canNotifyDelegate`);
-  a host command still connects. Until then the manager is a setup flow's, which connects as a
-  command when it needs to (#603). Adoption itself starts one (`pumpManagerWasAdopted`): on a
-  relaunch Bluetooth can report on before the host has set its delegate and queue.
-- A poll (`onlyIfIdle`) that finds a sync in flight queues nothing and is handed that sync's result
-  (`SyncResult`) when it completes, not the `lastSync` from before it: Trio loops as soon as its
-  poll completes, and the sync in flight may be the first to read the pump since an outage.
-
-### Qualifying events
-`QualifyingEvent.suggestedHandlers` / `groupSuggestedHandlers` are ported from pumpX2's
-suggested-handler table, including the version-dependent Control-IQ info / last-bolus / battery /
-IOB request selection. `QualifyingEventContext` carries the api version, Control-IQ support, and
-in-progress bolus id that pumpX2 reads out of its global `PumpStateSupplier`.
-`groupSuggestedHandlers` dedupes by request type *and* cargo (`ActiveAamBitsRequest` differs only
-by cargo) and drops requests whose `minApi` is newer than the pump's.
-
-`QualifyingEventFetch` (`Sources/TandemKit/PumpManager`) maps each *suggested-handler request*
-onto the `TandemPumpManager` status fetch that both issues it and applies the response, so the
-ported catalog stays the single source of truth instead of a second event table that could drift.
-`handleQualifyingEvents` runs the deduped set on the command queue and acknowledges afterwards. A
-request that maps to no fetch is not sent: nothing in the driver consumes CGM/EGV, home screen
-mirror, Basal-IQ, temp rate, localization, load status or bolus permission change reason today,
-so `bg`, `cgmChange`, `basalIQ`, `basalIQStatus`, `controlIQSleep`, `extendedBolusChange`,
-`pumpingStatus` and `bolusPermissionRevoked` currently fetch nothing.
-Control-IQ support in the context is whether the pump has answered a Control-IQ info read
-(`controlIQEnabled != nil`), so a pump with Control-IQ off is still asked for IOB under the
-Control-IQ opcode. Three deliberate additions to pumpX2's table: `pumpSuspend`/`pumpResume` refresh
-the basal status, since that is what emits the suspend/resume dose to LoopKit; `alarm`/`malfunction`
-refresh it, so a stop the pump makes on an occlusion, empty cartridge, auto-off or malfunction is
-seen at its alarm, not at the next sync, whether or not the pump also raises `pumpSuspend` (a Mobi
-raised it with the alarm for an occlusion; other stops are unconfirmed on hardware); and
-`profileChange`/`activeProfileSegmentChange` refresh it so the basal rate check runs on a profile
-edit instead of at the next sync.
 
 ### Pairing
 - Only `pairPump` starts a first pairing. `connectIfNeeded` refuses a pump with no derived secret: the
@@ -259,32 +150,6 @@ edit instead of at the next sync.
   (`advertisedPairingStep`). A result whose name says `SIM` or `Simulator` (`TandemPumpScan.isSimulatorName`)
   is the unified pump simulator fronting faketandem over CoreBluetooth, which cannot advertise manufacturer
   data; it is taken as ready for the code, since its pairing state is set on the simulator.
-- The scan follows every pump it hears, and a pump that goes quiet keeps the step it last advertised.
-  It asks for the code only once one pump alone has advertised the code step (`0x12`) for
-  `codeStepSettleInterval` (2 s), whichever step the screen shows: following the first pump heard ignored
-  the one the user picked up while a pump emulator advertised nearby. A Mobi stays at `0x11` from being
-  lifted off the pad until it is double-pressed. A pump heard after the first raises Multiple Pumps Found
-  naming them all, unless it is already showing; the code prompt waits for it, since SwiftUI presents one
-  alert at a time.
-- Every error `pairPump` completes with has to reach `TandemKitScanViewModel.onPairFailure`, which ends
-  the pairing step (alert, back to the double-tap step, scan restarts when the alert is dismissed). The
-  step has no exit of its own.
-- `pairPump`'s connect is a command job, bounded at `pairingTimeout` (120 s). Its setup writes bypass the
-  command queue, and a command that connected meanwhile took over its completion, so pairing never ended.
-  A command queued during pairing waits, then runs on the session pairing opened or is refused as unpaired.
-  One queued before it can connect a pump that already holds a key (a re-pair), and pairing then completes
-  on that session: a second connect to a connected peripheral is never answered. A lost link ends a reconnect's wait at once, but not pairing's, so the setup reports the round it lost:
-  only then does a link dropped at key confirmation reach `pairPump` as `pairingCodeRejected`.
-  `deactivate` ends a pairing connect still pending, since nothing else would.
-- Setup runs pairing, the Load Pump History step (below), then the setup-complete screen
-  (`TandemKitSetupCompleteViewModel`), which turns Control-IQ off, makes the onboarding writes,
-  syncs and runs the history load if the user chose it. Then it hands the manager to the host
-  (`handPumpManagerToHost`: created, then onboarded, the order the hosts adopt a manager in) and
-  offers Finish, so a setup left before Finish is in the host's settings, where it can be deleted. Until then the flow owns the manager (`ownsPumpManager`), and a
-  flow that goes away still owning it, dismissed or freed, runs `abandonSetup`, which deactivates the
-  transport. One left mid-connect paired on in the background, and its reconnects then held the pump's
-  one link against every attempt after it (#603). The coordinator's screens capture it weakly, or a
-  dismissed flow lived on with its manager.
 
 ### Setup history load
 - A new manager reports no history from before its ledgers' `trackingSince`, since it cannot tell
