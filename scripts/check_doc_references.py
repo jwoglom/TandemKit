@@ -35,17 +35,11 @@ EXTERNAL = {
     "Trio/Sources/APS/DeviceDataManager.swift": "Trio",
     "Trio/Sources/Modules/PumpConfig/PumpConfigDataFlow.swift": "Trio",
     "BolusPermissionHandler": "faketandem",
-    "OpenPTY": "goterm, under faketandem's goexpect",
 }
 
 # Cited by a doc as no longer in the code.
 REMOVED = {
-    "HistoryDeduplicator",
-    "HistoryReconciler",
-    "PumpChallengeRequestBuilder",
-    "TandemBLE",
     "dosingDecisionDelegate",
-    "maximumTempBasalRateExceeded",
     "pumpManagerRecommendsLoop",
 }
 

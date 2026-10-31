@@ -70,14 +70,8 @@ closed loop, and compare its stored pump history with `TrioDoseStoreOracle`
 LoopWorkspace with TandemKit as its plugin, and compare both of LoopKit `DoseStore`'s tables with
 `LoopDoseStoreOracle` ([docs/integration-harness.md](docs/integration-harness.md#loop-in-the-simulator)).
 
-Coverage that was dropped along with the code it tested (the `PumpComm` fault taxonomy and retry
-policy, `HistoryDeduplicator`/`HistoryReconciler`, `PumpChallengeRequestBuilder` and the V1
-16-character pairing path) is not represented anywhere now. If any of those behaviours come back,
-they need tests written against the current architecture, not restored from git history. Some have
-come back, with tests of their own: the packet layer `TandemBLE` held is `Packetize`,
-`PacketAssembler` and `BTResponseParser` in TandemCore, pumpX2's `PumpStateSupplier` is `QualifyingEventContext`,
-`HistoryToDoseMapper` and `HistoryTimestampReconciler` are back, and `BolusReportLedger`,
-`DeliveryTransitionLedger` and `BasalReconciler` match history against what the host was told.
+Behaviour that returns after being dropped with its code needs tests written against the current
+architecture, not restored from git history.
 
 ### Commit stamp
 The `Stamp Git Commit` phase on the `TandemKit` framework target writes the short commit, with
@@ -86,8 +80,7 @@ The `Stamp Git Commit` phase on the `TandemKit` framework target writes the shor
 a field log or report can be tied to a build. It reads the git directory
 (a submodule's lives in the host's) and edits the built plist, neither of which the script sandbox
 allows, so that target sets `ENABLE_USER_SCRIPT_SANDBOXING = NO`. A phase runs only if the target
-lists it: the first version of this one was never listed, and every log read `commit unknown`
-(#568). SwiftPM builds have no Info.plist and log `unknown`.
+lists it. SwiftPM builds have no Info.plist and log `unknown`.
 
 ### Doc references
 `scripts/check_doc_references.py` fails when a markdown doc names a code identifier, a path or a
@@ -907,8 +900,7 @@ edit instead of at the next sync.
 - Scenarios: conformance group I, `InsulinOnBoardConformanceTests`, against faketandem's model of
   both IOB figures; unit tests in `UnreportedInsulinOnBoardTests`.
 - There is **no app-side temp basal rate check**; the pump's own max basal limit is the
-  only ceiling. (`maximumTempBasalRateExceeded` was never wired up in any revision and has
-  been removed rather than left as a dead enum case.)
+  only ceiling.
 
 ### Unanswered bolus command
 - `write` gives nil whether `InitiateBolus` never left the phone, the pump refused it or its answer
@@ -997,8 +989,6 @@ integration scenarios.
 - **Delivery-uncertainty recovery.** `deliveryIsUncertain` is set only for an unconfirmed bolus,
   which the next read of the pump settles on its own; `deliveryUncertaintyRecoveryViewController`
   returns the general `TandemUICoordinator`, and there is no dedicated recovery screen.
-- **Response validation.** `PacketAssembler` checks the txId, packet countdown, declared length
-  and CRC of every received message, but nothing checks the HMAC of a signed response.
 - **Hardware validation.** [docs/hardware-test-plan.md](docs/hardware-test-plan.md) is the manual
   procedure for the t:slim X2 and the Mobi, but no run of it is recorded, so which pump firmware
   versions work is unknown.
