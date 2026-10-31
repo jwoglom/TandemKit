@@ -479,9 +479,15 @@ struct TandemKitChangeCartridgeView: View {
     private var doneStepContent: some View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(spacing: 20) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 60))
-                    .foregroundColor(.green)
+                if viewModel.foundCartridgeAlreadyLoaded {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 60))
+                        .foregroundColor(guidanceColors.warning)
+                } else {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 60))
+                        .foregroundColor(.green)
+                }
 
                 VStack(spacing: 8) {
                     if viewModel.foundCartridgeAlreadyLoaded {
