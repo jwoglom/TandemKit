@@ -444,6 +444,25 @@ import XCTest
         XCTAssertFalse(manager.state.hasSyncedBasalRateSchedule)
     }
 
+    func testSegmentsAddedToAProfileWithoutTargetOrCorrectionFactorFlagOnlyWhatItHolds() {
+        let profile = StubIDPPump([.init(startTime: 0, basalRate: 0)])
+        profile.settings = [.CARB_RATIO]
+        let bluetooth = makeStub(profile: profile)
+
+        let result = runSync(bluetooth: bluetooth, schedule: [(0, 1.0), (8, 1.2), (11, 1.0)])
+
+        guard case .success = result else {
+            return XCTFail("Expected success, got \(result)")
+        }
+        XCTAssertEqual(profile.segments, [
+            .init(startTime: 0, basalRate: 1000),
+            .init(startTime: 480, basalRate: 1200),
+            .init(startTime: 660, basalRate: 1000)
+        ])
+        let creates = bluetooth.sent(SetIDPSegmentRequest.self).filter { $0.operation == .createSegment }
+        XCTAssertEqual(creates.map(\.idpStatus), Array(repeating: [.START_TIME, .BASAL_RATE, .CARB_RATIO], count: 2))
+    }
+
     func testScheduleAtTheSegmentLimitIsWritten() {
         let profile = StubIDPPump([.init(startTime: 0, basalRate: 1000)])
         let bluetooth = makeStub(profile: profile)

@@ -4,6 +4,7 @@ import Foundation
 /// In-memory stand-in for the pump's insulin delivery profile: answers the IDP read walk and
 /// applies segment writes the way the pump does, rejecting one that would collide on a start time
 /// or flags the start time of segment 0, which is always midnight; a Mobi refused even an unchanged one.
+/// It also rejects a create flagging a target BG or correction factor of 0, as a Mobi did.
 final class StubIDPPump {
     struct Segment: Equatable, CustomStringConvertible {
         var startTime: Int
@@ -18,8 +19,9 @@ final class StubIDPPump {
         case create(startTime: Int, basalRate: Int)
         case delete(segment: Int)
 
-        /// Nil for a mask Tandem's app never sends: a modify flagging anything but start time and
-        /// basal rate, or a create or delete flagging fewer than all five fields.
+        /// Nil for a request the pump refuses: a modify flagging anything but start time and basal
+        /// rate, a create not flagging both or flagging a target BG or correction factor of 0, or a
+        /// delete flagging fewer than all five fields.
         init?(_ request: SetIDPSegmentRequest) {
             let fields = request.idpStatus
             let allFields = Set(IDPSegmentResponse.IDPSegmentStatus.allCases)
@@ -32,7 +34,10 @@ final class StubIDPPump {
                     basalRate: fields.contains(.BASAL_RATE) ? request.profileBasalRate : nil
                 )
             case .createSegment:
-                guard fields == allFields else { return nil }
+                guard fields.isSuperset(of: [.START_TIME, .BASAL_RATE]),
+                      !fields.contains(.TARGET_BG) || request.profileTargetBG != 0,
+                      !fields.contains(.CORRECTION_FACTOR) || request.profileISF != 0
+                else { return nil }
                 self = .create(startTime: request.profileStartTime, basalRate: request.profileBasalRate)
             case .deleteSegmentId:
                 guard fields == allFields else { return nil }
@@ -57,6 +62,9 @@ final class StubIDPPump {
 
     /// When false, writes are answered with status 0 but never applied.
     var appliesWrites = true
+
+    /// The settings every segment reads back with. A field it leaves out reads 0.
+    var settings: Set<IDPSegmentResponse.IDPSegmentStatus> = [.CARB_RATIO, .TARGET_BG, .CORRECTION_FACTOR]
 
     init(_ segments: [Segment], idpId: Int = 10) {
         self.segments = segments
@@ -128,10 +136,10 @@ final class StubIDPPump {
                 segmentIndex: request.segmentIndex,
                 profileStartTime: segment.startTime,
                 profileBasalRate: segment.basalRate,
-                profileCarbRatio: 10000,
-                profileTargetBG: 110,
-                profileISF: 50,
-                idpStatusId: 31
+                profileCarbRatio: self.settings.contains(.CARB_RATIO) ? 10000 : 0,
+                profileTargetBG: self.settings.contains(.TARGET_BG) ? 110 : 0,
+                profileISF: self.settings.contains(.CORRECTION_FACTOR) ? 50 : 0,
+                idpStatusId: self.settings.union([.BASAL_RATE]).reduce(0) { $0 | $1.rawValue }
             )
         }
 
