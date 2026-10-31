@@ -231,6 +231,30 @@ import XCTest
         XCTAssertFalse(TandemPumpScan.isSimulatorName("tslim X2 ***123"))
     }
 
+    func testThePairingCodeKeepsOnlyItsFirstSixDigits() {
+        let viewModel = TandemKitScanViewModel(nextStep: {})
+
+        viewModel.devicePinCode = "12 3-4a５5678"
+
+        XCTAssertEqual(viewModel.devicePinCode, "123456")
+        XCTAssertTrue(viewModel.isPinCodeComplete)
+    }
+
+    func testAPairingCodeShortOfSixDigitsIsNotSent() {
+        let viewModel = TandemKitScanViewModel(nextStep: {})
+        viewModel.isPromptingPincode = true
+        viewModel.devicePinCode = "12345"
+
+        viewModel.processPinPrompt()
+
+        XCTAssertTrue(viewModel.isPromptingPincode)
+        XCTAssertNotEqual(viewModel.currentPhase, .pairing)
+        XCTAssertNotNil(viewModel.pinCodePromptError)
+
+        viewModel.devicePinCode = "123456"
+        XCTAssertNil(viewModel.pinCodePromptError)
+    }
+
     /// The pairing step has no way out of its own: nothing but this ends it.
     func testAFailedPairingLeavesThePairingStepWithTheErrorShown() {
         let viewModel = TandemKitScanViewModel(nextStep: {})

@@ -271,8 +271,8 @@ edit instead of at the next sync.
   `codeStepSettleInterval` (2 s), whichever step the screen shows: following the first pump heard ignored
   the one the user picked up while a pump emulator advertised nearby. A Mobi stays at `0x11` from being
   lifted off the pad until it is double-pressed. A pump heard after the first raises Multiple Pumps Found
-  naming them all, unless it is already showing; the code prompt waits for it, since SwiftUI presents one
-  alert at a time.
+  naming them all, unless it is already showing; the code prompt waits for it, since SwiftUI presents
+  nothing over an alert. The prompt is a sheet whose one field takes six ASCII digits and nothing else.
 - Every error `pairPump` completes with has to reach `TandemKitScanViewModel.onPairFailure`, which ends
   the pairing step (alert, back to the double-tap step, scan restarts when the alert is dismissed). The
   step has no exit of its own.
