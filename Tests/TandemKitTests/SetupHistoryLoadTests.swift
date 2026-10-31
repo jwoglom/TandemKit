@@ -91,7 +91,8 @@ import XCTest
         ]
     }
 
-    private func stubPump(serving logs: [HistoryLog]) {
+    /// `isStreamed` picks what a `HistoryLogRequest` streams back; the rest the pump holds but never sends.
+    private func stubPump(serving logs: [HistoryLog], isStreamed: @escaping (HistoryLog) -> Bool = { _ in true }) {
         let bySequence = Dictionary(uniqueKeysWithValues: logs.map { ($0.sequenceNum, $0) })
         let sequences = logs.map(\.sequenceNum)
         bluetooth.stub(HistoryLogStatusRequest.self, with: HistoryLogStatusResponse(
@@ -104,7 +105,7 @@ import XCTest
             guard let self, let request = message as? HistoryLogRequest else { return }
             let top = request.startLog
             let bottom = top >= UInt32(max(request.numberOfLogs, 1)) ? top - UInt32(max(request.numberOfLogs, 1)) + 1 : 0
-            let streamed = stride(from: top, through: bottom, by: -1).compactMap { bySequence[$0] }
+            let streamed = stride(from: top, through: bottom, by: -1).compactMap { bySequence[$0] }.filter(isStreamed)
             guard !streamed.isEmpty else { return }
             self.manager.historyLogStream.send(HistoryLogStreamResponse(
                 numberOfHistoryLogs: streamed.count,
@@ -301,6 +302,44 @@ import XCTest
         defer { lock.unlock() }
         XCTAssertEqual(values.last, 1)
         XCTAssertTrue(values.allSatisfy { (0 ... 1).contains($0) })
+    }
+
+    func testTheProgressFollowsTheEntriesOfASliceStillStreamingIn() {
+        let logs = pumpBolus(bolusId: 74, units: 1.0, firstSequenceNum: 1, secondsAgo: 5 * 3600)
+            + pumpBolus(bolusId: 75, units: 1.0, firstSequenceNum: 4, secondsAgo: 3 * 3600)
+            + pumpBolus(bolusId: 76, units: 1.0, firstSequenceNum: 7, secondsAgo: 3600)
+        let oldest = logs.filter { $0.sequenceNum <= 3 }
+        stubPump(serving: logs, isStreamed: { $0.sequenceNum > 3 })
+
+        let movedMidSlice = expectation(description: "the progress moves before the slice has ended")
+        let lock = NSLock()
+        var mid: Double?
+        let loaded = expectation(description: "history load completes")
+        var result: Error?
+        manager.loadHistoryForSetup(
+            progress: { value in
+                lock.lock()
+                defer { lock.unlock() }
+                // The newest 2 of the window's 6 hours have arrived.
+                guard mid == nil, (0.2 ... 0.5).contains(value) else { return }
+                mid = value
+                movedMidSlice.fulfill()
+            },
+            completion: { outcome in
+                if case let .failure(error) = outcome { result = error }
+                loaded.fulfill()
+            }
+        )
+
+        wait(for: [movedMidSlice], timeout: 30.0)
+        manager.historyLogStream.send(HistoryLogStreamResponse(
+            numberOfHistoryLogs: oldest.count,
+            streamId: 7,
+            historyLogStreamBytes: oldest.map(\.cargo)
+        ))
+        wait(for: [loaded], timeout: 90.0)
+
+        XCTAssertNil(result)
     }
 
     func testAnEmptyLogIsLoadedAtOnce() {

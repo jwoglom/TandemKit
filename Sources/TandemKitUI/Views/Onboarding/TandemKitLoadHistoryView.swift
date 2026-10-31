@@ -54,6 +54,7 @@ struct TandemKitLoadHistoryView: View {
         .edgesIgnoringSafeArea(.bottom)
         .navigationBarHidden(false)
         .navigationBarBackButtonHidden(true)
+        .preventsSheetDismissal()
         .alert(
             String(localized: "Pump History Not Loaded", comment: "Title of the setup alert after the user chose not to load the pump's history"),
             isPresented: $viewModel.isShowingNotLoadedAlert,

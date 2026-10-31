@@ -1419,6 +1419,17 @@
         }
       }
     },
+    "Could not enable Control-IQ" : {
+      "comment" : "Title for failure to enable Control-IQ",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not enable Control-IQ"
+          }
+        }
+      }
+    },
     "Could not play sound" : {
       "comment" : "Title for failure to play pump sound",
       "localizations" : {
@@ -5026,6 +5037,17 @@
     },
     "The pump rejected the Control-IQ settings (status %@)." : {
 
+    },
+    "The pump rejected the Control-IQ change. Ensure that you have configured your Control-IQ settings for TDI and weight, and that the pump is connected with a CGM. Check \"View Notifications\" to see the pump's current status." : {
+      "comment" : "Message for failed to enable Control-IQ",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The pump rejected the Control-IQ change. Ensure that you have configured your Control-IQ settings for TDI and weight, and that the pump is connected with a CGM. Check \"View Notifications\" to see the pump's current status."
+          }
+        }
+      }
     },
     "The pump rejected the exercise mode change. Check \"View Notifications\" to see the pump's current status." : {
       "comment" : "Message for failed to toggle exercise mode",

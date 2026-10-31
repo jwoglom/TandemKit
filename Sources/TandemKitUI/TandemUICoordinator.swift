@@ -300,7 +300,10 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
             )
 
         case .controlIQSettings:
-            let viewModel = TandemKitControlIQSettingsViewModel(pumpManager: pumpManager)
+            let viewModel = TandemKitControlIQSettingsViewModel(
+                pumpManager: pumpManager,
+                openCgmSettings: { [weak self] in self?.navigateTo(.cgmSettings) }
+            )
             return hostingController(
                 rootView: TandemKitControlIQSettingsView(viewModel: viewModel),
                 title: String(localized: "Control-IQ Settings", comment: "Title for Control-IQ settings screen")

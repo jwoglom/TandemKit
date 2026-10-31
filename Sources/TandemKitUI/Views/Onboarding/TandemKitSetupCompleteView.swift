@@ -64,6 +64,7 @@ struct TandemKitSetupCompleteView: View {
         .edgesIgnoringSafeArea(.bottom)
         .navigationBarHidden(false)
         .navigationBarBackButtonHidden(true)
+        .preventsSheetDismissal(!viewModel.isFinished)
         .onAppear {
             viewModel.start()
         }

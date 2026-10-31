@@ -101,7 +101,19 @@ struct TandemKitSettingsView: View {
                     comment: "Message for failed to suspend insulin delivery"
                 )
             )
-        case .controlIQ:
+        case .enableControlIQ:
+            content = ErrorSheetContent(
+                title: String(
+                    localized: "Could not enable Control-IQ",
+                    comment: "Title for failure to enable Control-IQ"
+                ),
+                message: String(
+                    localized:
+                    "The pump rejected the Control-IQ change. Ensure that you have configured your Control-IQ settings for TDI and weight, and that the pump is connected with a CGM. Check \"View Notifications\" to see the pump's current status.",
+                    comment: "Message for failed to enable Control-IQ"
+                )
+            )
+        case .disableControlIQ:
             content = ErrorSheetContent(
                 title: String(
                     localized: "Could not change Control-IQ setting",
@@ -539,30 +551,7 @@ struct TandemKitSettingsView: View {
         .alert(item: $activeAlert) { alertType in
             switch alertType {
             case .switchToCIQ:
-                return Alert(
-                    title: Text(String(
-                        format: String(
-                            localized: "Disable %@ Algorithm",
-                            comment: "Title for alert to switch from DIY to Control-IQ"
-                        ),
-                        viewModel.algorithmName
-                    )),
-                    message: Text(String(
-                        format: String(
-                            localized: "This will DISABLE %@ in favor of the Control-IQ algorithm built-in to your pump.\n\n%@ will stop issuing temp basals and boluses. Are you sure?",
-                            comment: "Message for alert to switch from DIY to Control-IQ"
-                        ),
-                        viewModel.appName,
-                        viewModel.appName
-                    )),
-                    primaryButton: .default(Text(
-                        "Switch to Control-IQ",
-                        comment: "Button to confirm switching to Control-IQ algorithm"
-                    )) {
-                        viewModel.switchAlgorithmToControlIQ()
-                    },
-                    secondaryButton: .cancel()
-                )
+                return controlIQEnableAlert(.confirm)
             case .switchToDIY:
                 return Alert(
                     title: Text(String(
@@ -592,40 +581,9 @@ struct TandemKitSettingsView: View {
                     secondaryButton: .cancel()
                 )
             case .cgmRequiredForCIQ:
-                return Alert(
-                    title: Text(
-                        "Connect a CGM First",
-                        comment: "Title for alert blocking the switch to Control-IQ when no CGM is connected"
-                    ),
-                    message: Text(
-                        "Control-IQ needs a CGM connected to your pump to work. No active CGM sensor session was found on your pump, so switching to Control-IQ has been blocked.\n\nStart a CGM sensor from CGM Settings, then try switching again.",
-                        comment: "Message for alert blocking the switch to Control-IQ when no CGM is connected"
-                    ),
-                    primaryButton: .default(
-                        Text("CGM Settings", comment: "Button to open CGM settings from the no-CGM Control-IQ alert"),
-                        action: { viewModel.openCgmSettings() }
-                    ),
-                    secondaryButton: .cancel(Text("OK", comment: "Button to dismiss an alert"))
-                )
+                return controlIQEnableAlert(.cgmRequired)
             case .controlIQValuesRequired:
-                return Alert(
-                    title: Text(
-                        "Control-IQ Setup Needed",
-                        comment: "Title for alert blocking the switch to Control-IQ when weight/TDI are unset"
-                    ),
-                    message: Text(
-                        "Control-IQ uses your weight and total daily insulin to dose, and your pump does not have them yet.\n\nEnter them in Control-IQ Settings, then try switching again.",
-                        comment: "Message for alert blocking the switch to Control-IQ when weight/TDI are unset"
-                    ),
-                    primaryButton: .default(
-                        Text(
-                            "Control-IQ Settings",
-                            comment: "Button to open Control-IQ settings from the missing-values alert"
-                        ),
-                        action: { viewModel.openControlIQSettings() }
-                    ),
-                    secondaryButton: .cancel(Text("OK", comment: "Button to dismiss an alert"))
-                )
+                return controlIQEnableAlert(.valuesRequired)
             case .diyRestored:
                 return Alert(
                     title: Text(String(format: String(
@@ -744,6 +702,14 @@ struct TandemKitSettingsView: View {
             }
         }
         .navigationBarItems(trailing: doneButton)
+    }
+
+    private func controlIQEnableAlert(_ prompt: ControlIQEnablePrompt) -> Alert {
+        prompt.alert(
+            confirm: { viewModel.switchAlgorithmToControlIQ() },
+            openCgmSettings: { viewModel.openCgmSettings() },
+            openControlIQSettings: { viewModel.openControlIQSettings() }
+        )
     }
 
     private var doneButton: some View {
