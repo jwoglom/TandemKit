@@ -60,6 +60,14 @@ class TandemKitScanViewModel: ObservableObject {
         devicePinCode.count == Self.pairingCodeLength
     }
 
+    /// The advertised name carries the model, as in "Tandem Mobi 994".
+    var pinPromptHeading: String {
+        String(format: String(
+            localized: "Enter the PIN for %@:",
+            comment: "Heading above the pairing code boxes (1: the pump's name, such as Tandem Mobi 994)"
+        ), connectingTo ?? "Tandem Mobi")
+    }
+
     init(_ pumpManager: TandemPumpManager? = nil, nextStep: @escaping () -> Void) {
         self.pumpManager = pumpManager
         self.nextStep = nextStep

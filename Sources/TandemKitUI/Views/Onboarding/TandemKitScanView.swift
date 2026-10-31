@@ -227,12 +227,9 @@ private struct PairingCodePrompt: View {
     var body: some View {
         NavigationView {
             VStack(spacing: 20) {
-                Text(String(
-                    localized: "Enter the 6-digit number labeled 'PIN' on the side of the Tandem Mobi inside the cartridge area",
-                    comment: "Tandem pairing code prompt message"
-                ))
-                .font(.headline)
-                .multilineTextAlignment(.center)
+                Text(viewModel.pinPromptHeading)
+                    .font(.headline)
+                    .multilineTextAlignment(.center)
 
                 PairingCodeField(code: $viewModel.devicePinCode, length: TandemKitScanViewModel.pairingCodeLength)
 

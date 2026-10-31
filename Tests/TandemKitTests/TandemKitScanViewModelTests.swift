@@ -240,6 +240,15 @@ import XCTest
         XCTAssertTrue(viewModel.isPinCodeComplete)
     }
 
+    func testThePinPromptNamesThePumpItPairs() {
+        let viewModel = scanViewModel()
+        viewModel.pumpHeard("mobi", name: "Tandem Mobi 994", step: 0x12)
+        waitPastTheSettleInterval()
+
+        XCTAssertTrue(viewModel.isPromptingPincode)
+        XCTAssertEqual(viewModel.pinPromptHeading, "Enter the PIN for Tandem Mobi 994:")
+    }
+
     func testAPairingCodeShortOfSixDigitsIsNotSent() {
         let viewModel = TandemKitScanViewModel(nextStep: {})
         viewModel.isPromptingPincode = true
