@@ -55,41 +55,18 @@ scheme through `scripts/test-local.sh`, and kills the emulator on exit. Logs:
 | `xcodebuild.log` | The driver's `TandemLogger` output and the XCTest results. |
 | `TandemKitIntegrationTests.xcresult` | The result bundle; each test attaches the pump's request log (`xcrun xcresulttool export attachments --path … --output-path …`). |
 
-Environment variables the script reads: `FAKETANDEM_DIR`, `FAKETANDEM_JAR`, `FAKETANDEM_BIN`,
-`FAKETANDEM_ARGS` (extra emulator flags), `FAKETANDEM_HOST`, `LOG_DIR`, plus everything
-`scripts/test-local.sh` reads (`TRIO_PRODUCTS`, `DERIVED_DATA`, `SIMULATOR`, `DESTINATION`). The script
-sets `VIRTUAL_PUMP=1` for `test-local.sh`, which adds `-xcconfig VirtualPump.xcconfig`, and
-defaults `DERIVED_DATA` to `.derived-data-virtual-pump` so the flagged build does not
-invalidate the plain one.
+The script's header lists the environment variables it reads.
 
-In CI, the `integration` job in `.github/workflows/macos.yml` runs this script on the self-hosted
-macOS runners for every push, pull request and manual run, once the `unit` job has passed. It builds
-TandemKit with `VirtualPump.xcconfig` in the background while faketandem is built and the cliparser
-jar fetched, then hands the binary to the script as `FAKETANDEM_BIN`. faketandem comes from its
-default branch; `faketandem_ref` on a manual run picks another, and a pull request uses a faketandem
-branch of the same name when one exists, so a driver change is tested with the emulator change it
-needs. The job fails if any integration test skips, because a skip means the emulator's addresses
-never reached the test process.
-
-It runs only the classes its `MACOS_SUITES` names, since Linux runs every class (below), and the
-macOS runners are few: `PairingIntegrationTests`, whose fresh JPAKE pairing needs SwiftECC, and one
-pass through the plainest flows on the real LoopKit and Apple's Foundation. A class that tests
-something only Apple's frameworks show goes on that list. `all_integration_tests` on a manual run
-runs every class here too.
-
-`.github/workflows/linux.yml` runs it too, on GitHub-hosted Ubuntu, for every push to `main` and
-`dev`, pull request and manual run. Its `virtual-pump` job builds the suite and its `faketandem`
-job the emulator and jar, from the same faketandem ref the macOS job picks, side by side; the
-`integration` job then runs the suite in four shards at once, each its own `swift test` against its
-own faketandem, on that build restored from the Actions cache without rebuilding. Each test is
-mostly idle waits, so a shard costs only its job's setup, and they are sized to finish together:
-`integration_fault` takes the classes `FAULT_SUITES` names (`PumpSideConformanceTests`,
-`OutageConformanceTests`), `integration_commands` those `COMMAND_SUITES` names
-(`InterruptConformanceTests`, `IdempotencyConformanceTests`, `CancelConformanceTests`),
-`integration_history` those `HISTORY_SUITES` names (`BasalHistoryConformanceTests`,
-`HistoryBackfillIntegrationTests`, `TimeChangeConformanceTests`, `RepairConformanceTests`,
-`SetupHistoryLoadConformanceTests`), and `integration` the rest, by skipping the union of those three
-regexes, so a new class runs there unless it is added to one of them. Each shard fails if it skipped any test.
+CI runs it from `.github/workflows/macos.yml` (the `integration` job, only the classes
+`MACOS_SUITES` names: those that need Apple's frameworks, such as `PairingIntegrationTests`, whose
+fresh JPAKE pairing needs SwiftECC) and from `.github/workflows/linux.yml` (every class, in shards: a
+new class runs in the `integration` shard unless `FAULT_SUITES`, `COMMAND_SUITES` or
+`HISTORY_SUITES` names it). A class that tests something only Apple's frameworks show goes on the
+macOS list. Both fail if any integration test skips, because a skip means the emulator's addresses
+never reached the test process. faketandem comes from its default branch; `faketandem_ref` on a
+manual run picks another, and a pull request uses a faketandem branch of the same name when one
+exists. What CI skips (documentation-only changes, superseded commits, a tree that already passed)
+is in each workflow's `plan` job (`scripts/ci/plan.sh`), its `concurrency` and `cancel-on-close.yml`.
 
 ### How the tests find the emulator
 
@@ -148,6 +125,13 @@ it simply reports skips.
   the end), pump-initiated actions (bolus, temp basal, suspend/resume, history, qualifying
   events), the request log, faults, the link's ATT MTU (`transport()` / `setATTMTU(_:)`),
   and the legacy settings table.
+- `FaketandemControlSocket` is the websocket surface for what only exists as websocket
+  commands: pairing code, long-term key, pump-side disconnect, and the pairing status with
+  the key bytes. One socket is shared for the whole test process; the emulator accepts
+  several, but one is all the tests need.
+- `IntegrationWait` polls a condition while pumping the run loop; `ResultBox` carries a
+  completion result to a polling wait. Neither blocks the main thread outright, because
+  parts of the driver complete on the main queue.
 
 ### Pump time is local time
 
@@ -221,13 +205,6 @@ own wire fields, named exactly as pumpX2 and TandemKit name them and nothing els
 `GET /api/state` also carries `alarms_history`: every alarm that has been raised *and*
 cleared, with both ends of the interval. `alerts` only ever reports what stands now, so
 without it an alarm that came and went leaves nothing a timeline can close.
-- `FaketandemControlSocket` is the websocket surface for what only exists as websocket
-  commands: pairing code, long-term key, pump-side disconnect, and the pairing status with
-  the key bytes. One socket is shared for the whole test process; the emulator accepts
-  several, but one is all the tests need.
-- `IntegrationWait` polls a condition while pumping the run loop; `ResultBox` carries a
-  completion result to a polling wait. Neither blocks the main thread outright, because
-  parts of the driver complete on the main queue.
 
 ### Assertions have two sides
 
@@ -240,24 +217,8 @@ inbound messages since the last reset; each test attaches the whole log to its r
 
 ## The tests
 
-| File | Covers |
-| --- | --- |
-| `ScanIntegrationTests` | Scan discovers the virtual pump with the identifier and name from `hello`; the manufacturer byte tracks `PairStep1/2/DiscoverableOnly`; a `NotDiscoverable` pump is not advertised. |
-| `PairingIntegrationTests` | Fresh JPAKE pairing through every round; wrong code refused; seeded long-term key authenticates through rounds 3/4 only. |
-| `SyncIntegrationTests` | `syncPumpData` reports a status update, one reservoir reading, the reconciliation boundary as an empty non-replacing batch; a second sync is quiet and advances the boundary. |
-| `BolusIntegrationTests` | `enactBolus(1.0)`: BolusPermission then InitiateBolus on Control, the mutable dose event, the pump's bolus record (source id 8), then finalization from `LastBolusStatus` with the same `raw`/`syncIdentifier`. |
-| `ReconnectIntegrationTests` | A pump-side drop is followed by a quick reconnect (round 3 first, key unchanged) and the new session serves a sync; a reconnect after an outage syncs and reports to the host on its own, whether the retry or a command brought the link back; a driver rebuilt from persisted `rawValue` reaches the pump on its first command. Three radio drops in a row during the handshake leave the driver reconnecting on its own; three far-end drops at round 3 stop it, with `.handshakeFailing`. |
-| `DisconnectedDeliveryIntegrationTests` | With the pump out of range after a sync, `lastKnownBasalDelivery` and the pump disconnected detail say what the pump was last seen delivering: a temp basal the app set, before its end and after it, the profile rate, or a suspend. |
-| `CartridgeProcedureIntegrationTests` | The emulator's `workflow_mode` refuses `EnterChangeCartridgeMode` while fill-tubing (or change mode) is open, and the exit that would back out; `recoverAndReenterChangeCartridgeMode` unwinds it (fill-tubing exit, change-cartridge exit, enter) and re-enters. The refusal rule is inferred from a field report, not confirmed on firmware. |
-| `Conformance/` | The dose-reporting conformance groups A–D and F–L (`docs/conformance-test-plan.md`): interrupts, cancels, idempotency, pump-side failures, outages, time changes, basal read back from the pump's history, the pump's IOB against the boluses reported, extended boluses, the pump manager deleted and the same pump set up again with its history loaded, and a first connection to a pump with history, loaded at setup or not, A–D, F and G each ending in a diff of the host's stored doses against `PumpTimeline`. |
-| `BasalScheduleSyncIntegrationTests` | `syncBasalRateSchedule` from a pump with no profile (host schedule of 0, 1, 2, 16 and 17 entries) and from a two-segment profile (1, 2 and 3 entries): the profile the pump ends up holding, `CreateIDPRequest` only when it had none, and nothing written for an empty or 17-entry schedule. `enactTempBasal` is refused, with no `SetTempRateRequest` reaching the pump, until a sync first succeeds, including after setup refuses a 17-entry schedule (#443); on a pump holding a different profile the refusal starts an update that writes the schedule, and the next temp basal goes out. |
-| `DeliveryLimitIntegrationTests` | `syncDeliveryLimits` writes both limits and the pump reads them back on its `globalPumpSettings` event; a bolus above the synced max never reaches the pump; one above the pump's own max is refused there and reported nowhere; a temp basal is refused while an app bolus runs, past its estimated end too while the pump still delivers it and after a relaunch mid-bolus, and goes out once the pump says it finished (#347); a second bolus is refused, with nothing sent to the pump, while one the app started is being initiated or delivering, past its estimated end too while the pump still delivers it, and goes out once that one is cancelled or, after a relaunch, once the pump says it finished (#504); Control-IQ turned on at the pump blocks automatic boluses and temp basals but not a manual bolus; a refused max-bolus write after an accepted max-basal write fails the sync and leaves the driver on the pump's max bolus. |
-| `HistoryBackfillIntegrationTests` | History backfill over logs thousands of records long, measured from the pump's request log: with the flag off no `HistoryLog*` request is ever sent; a pump first seen with two days of history has none of it read or reported; after a relaunch the walk re-reads the seven-hour lookback in 255-record slices across more than one tick, and stops within a slice of it; a bolus during the walk waits for the slice in flight at most; a record lost from a stream is asked for again in the same fetch; a relaunch reports no history bolus twice; an erased log is read from its new start. |
-| `OnboardingIntegrationTests` | `applyOnboardingSettings` on a freshly paired pump with no profile and a clock an hour fast: limits, basal profile, sounds and clock reach the pump in that order and the pump holds them afterwards. A refused profile or max-basal write fails setup, and with no profile written a temp basal is refused (#443); a refused clock write does not fail setup and leaves the time-sync warning showing. Sounds chosen before pairing survive a pump-globals read triggered before they are written. |
-| `Conformance/BasalScheduleChangeTests` | The pump's rate against the app's schedule: a profile off the schedule is written over after the first reading that sees it; a rate off a profile that already matches leaves the update open until it outlasts `basalProfileUpdateTimeout` and fails, refusing temp basals with `failedUpdatePumpProfile`, then ends once the pump runs the schedule again; never while suspended. Under Control-IQ the pump's profile, rather than the rate it runs, is checked and written over. A zero-rate profile is written over by the next sync. A schedule change that alters the rate in force stops a running temp basal after the profile write and restarts the scheduled basal at the new rate, and Loop ends the temp basal at the stop (Trio marked for #329). A `profileChange` event runs the check without a sync. |
-| `MTUIntegrationTests` | The same pair/sync/bolus traffic at both framings: at ATT MTU 247 every response that fits arrives in one notification and the flow still runs; at the default 23 the same responses are cut into 18-byte chunks and the driver reassembles them. |
-| `UnadoptedManagerIntegrationTests` | A paired manager no host has adopted, a setup flow's, does not reconnect on its own after the pump drops the link, and a manager the host adopts with the same key then gets the pump (#603). |
-| `AnotherClientIntegrationTests` | Another app on the phone sharing the pump's link (#507). `SecondClientProxy` relays the driver's link to the emulator and delivers what that app's requests would also bring the driver, just ahead of the pump's answer to a request the driver is waiting on: another app's `InsulinStatusResponse` is not taken as the driver's reservoir reading; a connect burst of that app's responses, one finding the pump suspended, leaves the sync without a suspend; a fill-tubing stream message whose second notification carries the awaited opcode at byte 2 is not taken as `EnterFillTubingModeResponse`. |
+Each test class's header comment says what it covers. The dose-reporting scenarios are indexed in
+[conformance-test-plan.md](conformance-test-plan.md).
 
 ### Pairing method
 
@@ -364,14 +325,6 @@ paired: every other scenario pairs a manager Trio holds from launch, as when re-
 cartridge and fill cannula wizards wait for state-stream notifications faketandem does not send, so
 their scenario sends what they report once done, around a suspend.
 
-Journeys covered, each checked against the oracle: an app bolus, an automatic one (stored as an
-SMB), one cancelled part-way, one running across a relaunch of Trio, one through a dropped link, and
-one programmed on the pump (with `historyDoseReporting`); a temp basal and its cancel, one replaced
-by another, one above Trio's `maxBasal` (dropped), and one across a relaunch, after which Trio's
-limits reach the pump; an app suspend that stops a temp and its resume, and a suspend and resume
-on the pump; a basal profile edit while a temp runs; a cartridge and site change; pairing on the
-pump's code with Trio's settings applied; and Trio's closed loop.
-
 `TrioPumpDeletionTests` delete the pump manager, once while it is connected and once after the pump
 refused the code, and pair a new one on the pump's code: the pump's link goes down and stays down,
 no command reaches the deleted manager, and the new one pairs from the first JPAKE round, so Trio and
@@ -426,19 +379,15 @@ real thing as well as the driver against the oracle.
   side of a second store that piece twice, under each start; the repeat is not compared. No piece may
   overlap a basal dose the driver reported.
 
-Journeys covered, each checked against the oracle: an app bolus, an automatic one, one cancelled
-part-way, one running across a relaunch of Loop, one through a dropped link, and one programmed on the
-pump; a temp basal and its cancel, one replaced by another, one above Loop's maximum basal rate (Loop
-counts what the pump ran, where Trio drops it), and one across a relaunch; an app suspend that stops a
-temp and its resume, and a suspend and resume on the pump; a basal profile edit while a temp runs; a
-cartridge and site change; pairing on the pump's code with Loop's settings applied; and Loop's own
-closed loop under each dosing strategy, on its CGM simulator (`MockCGMManager`, restored from
-`Documents/CGMManagerState.plist`, held at 250 mg/dL with a reading a minute): a temp basal with
-temp-basal-only dosing, and an automatic bolus with automatic-bolus dosing. Loop does not sync its
-delivery limits to the pump at launch, as Trio does. A scenario that resumes waits a second after the
-suspend, as its Trio twin does, for Loop's own reason: the driver dates a resume at least a second
-after its suspend, ahead of Loop's clock inside that second, and `DoseStore` caches no finished dose
-that ends ahead of its clock, so a suspend resumed sooner stays open in `CachedInsulinDeliveryObject`
+The scenarios are the ones `TrioIntegrationTests` run, plus Loop's own closed loop under each dosing
+strategy, on its CGM simulator (`MockCGMManager`, restored from `Documents/CGMManagerState.plist`,
+held at 250 mg/dL with a reading a minute): a temp basal with temp-basal-only dosing, and an
+automatic bolus with automatic-bolus dosing. Where Loop differs: it counts what the pump ran for a
+temp above its maximum basal rate, where Trio drops it, and it does not sync its delivery limits to
+the pump at launch, as Trio does. A scenario that resumes waits a second after the suspend, as its
+Trio twin does, for Loop's own reason: the driver dates a resume at least a second after its
+suspend, ahead of Loop's clock inside that second, and `DoseStore` caches no finished dose that
+ends ahead of its clock, so a suspend resumed sooner stays open in `CachedInsulinDeliveryObject`
 until the next batch that is not empty. The other waits in Trio's scenarios are for its own
 same-second ordering, which Loop does not have.
 
@@ -450,39 +399,9 @@ a relaunch. Loop removes that file when it lets a pump manager go, which the tes
 Trio, with `loop-sample.txt` for a failed test. The `loop` job in `.github/workflows/macos.yml` runs it
 on the self-hosted runners.
 
-The first `loop` job confirmed what was written from Loop's and LoopKit's source alone: Loop
-restoring the seeded pump manager, CGM and settings; the app group suite and the `cfprefsd` restart;
-ad hoc signing with no team giving Loop its app group; and the oracle's fill matching `DoseStore`'s.
-It found the oracle keeping a basal with no duration, the driver's scheduled-basal marker before a
-suspend, where `DoseStore` makes no `CachedInsulinDeliveryObject` (`HKQuantitySample(dose:)` is nil,
-so `addDoseEntries` skips it), and the suspend scenarios missing the second's wait above.
+## Trio behaviour the scenarios step around
 
-## What the harness found
-
-Two driver bugs, fixed in the same change that added the harness and covered by unit
-tests in `TandemKitTests` (`VirtualCoreBluetoothTests`, `BTResponseParserTests`):
-
-- Continuation packets of a multi-packet response were dropped. `TandemPeripheralManager`
-  only handed a notification to the pending write when byte 2 matched the expected opcode;
-  continuation packets carry cargo there and can arrive before the writing thread has
-  re-armed for them. Responses are now reassembled on the notification path.
-- `BTResponseParser` rejected 3-byte packets, which is exactly what the last packet of a
-  message whose length is 1 mod 18 looks like (`Jpake4KeyConfirmationResponse`).
-
-Both were latent on real hardware because a Mobi negotiates a large MTU and most
-responses fit one notification; faketandem fragments every response into 20-byte
-notifications, as pumpX2's cliparser does and as a 23-byte-MTU pump would.
-
-Running Trio itself found a third, fixed with a regression test in `PairingIntegrationTests`:
-
-- Pairing connected outside the command queue. A command job that ran meanwhile, such as the
-  delivery limits sync Trio sends when it sets up the pump manager, connected again and took over
-  pairing's completion, so pairing never finished. Pairing's connect is now a command job, bounded
-  at 120 s, and a job queued behind it finds the session up. `connectIfNeeded` has since come to
-  refuse an unpaired pump, so the race needs a pairing over a derived secret the driver already
-  holds, as the control channel's seeded-key pairing is.
-
-And three things in Trio that the scenarios step around:
+Three things in Trio that the scenarios step around:
 
 - Trio's scheme builds it with ThreadSanitizer, which reports a race in Trio at launch:
   `DeviceDataManager` writes `rawPumpManager` in `pumpManager.didSet` on the main thread, after
@@ -521,17 +440,6 @@ that as a pump at the code-entry step (`advertisedPairingStep`). Nor can it end 
 simulator withdraws its services, so the driver sees its next request fail rather than the
 `peripheralDisconnected` a pump gives, and the handshake-failure count is not exercised that way.
 
-## When CI does not run
-
-Runner minutes, the macOS ones above all, are spent only on work that can still tell something new:
-
-- **Merged or closed pull request.** `cancel-on-close.yml` cancels whatever is queued or running for the pull request's head. The merge's own push run on `dev` is a different concurrency group and carries on, as the check of the merged state.
-- **Superseded commit.** Both workflows cancel an earlier run of the same pull request or of `dev` when a newer one starts (`concurrency`).
-- **Documentation only.** A change whose files are all `docs/**`, `*.md` or `LICENSE*` skips both workflows.
-- **Tree already passed.** Each workflow's `plan` job (`scripts/ci/plan.sh`) skips the run when this workflow already passed on the same tree and the same faketandem and Trio revisions: a `dev` push of a merge whose pull request was tested on the current `dev`, or a `dev` merge into a branch that changed nothing. The pass is the `ci-passed-<workflow>-<hash>` artifact the `passed` job uploads when every job succeeded; it lasts 14 days.
-
-A manual `workflow_dispatch` and a re-run always run, and a plan step that cannot decide runs everything. A skipped run shows its reason in the `plan` job's summary.
-
 ## Known emulator gaps
 
 - **A bolus permission is granted while a bolus runs** (the `TODO` in faketandem's
@@ -553,97 +461,6 @@ segment boundaries, only with `basal_cycle_enabled` (faketandem README "Basal cy
 group H (`BasalHistoryConformanceTests`) turns it on and `FaketandemHarness.reset()` turns it off;
 every other scenario runs with basal delivered continuously and no BasalDelivery records, and stages
 the rate in force with `basal_rate`.
-
-Everything else the harness found has been fixed in faketandem. What was fixed, because the
-shape of it explains what the harness is for:
-
-- **A driver-commanded temp-rate stop wrote no `TempRateCompleted` record.** The handler
-  applied a basal state with the temp rate cleared and recorded only activations, and a
-  suspend set a flag, so a temp rate a driver stopped — or replaced, or suspended away —
-  stayed open forever in a timeline built from the history log and no cancel-or-replace
-  scenario could close its diff. Every path that ends delivery now goes through one writer
-  (`pkg/state/delivery.go`), which records the ending exactly once at the true end instant.
-- **Wire timestamps were pump-epoch seconds counted from UTC.** A real pump counts from its
-  own local clock, so every timestamp the driver decoded landed one UTC offset away from
-  the pump's own record — four hours in EDT — which is invisible until something compares a
-  dose's second. The pump's zone is a first-class setting now, and separate from the skew.
-- **History records were assembled at each call site**, so the same event reached a driver
-  with different field names depending on which path produced it, and the simulator's
-  `BolusCompleted` carried no end reason at all — a completed bolus was indistinguishable
-  from a canceled one. One writer per type settles it.
-- **A canceled bolus was reported with end reason 2**, which is `STOPPED_MALFUNCTION`: every
-  cancel looked to a driver like a pump malfunction. It is 0, `STOPPED_USER_TERMINATED`.
-
-- **Fresh JPAKE pairing could not run on macOS.** faketandem spawned pumpX2's
-  `jpake-server` through `goexpect`, whose `goterm` `OpenPTY` issues the Linux-only
-  `TIOCSPTLCK` ioctl; macOS answered `ENOTTY` and `Jpake1aRequest` went unanswered. It is
-  driven over plain pipes now, and `testFreshJpakePairingAuthenticatesBothSides` runs all
-  five rounds.
-- **`InsulinStatusResponse.currentInsulinAmount` was scaled ×100.** The field is whole
-  units on a real pump, so the driver reported a 137 U cartridge as 13699 U.
-  `SyncIntegrationTests` asserts 137 directly.
-- **The websocket handler kept one shared client** and cleared it on any close, so an older
-  socket closing silenced a newer one. Concurrent clients are supported; the harness still
-  keeps one socket per process (`FaketandemControlSocket.shared`) because one is enough.
-- **The pump's IOB was one number that added delivered basal and decayed on a fixed four
-  hours**, answered with `iobType` 0 under Control-IQ too. A pump with Control-IQ off counts
-  bolus insulin alone over the active profile's insulin duration, and under Control-IQ shows a
-  figure that adds basal above and below the profile (`iobType` 1). faketandem keeps both now
-  (faketandem README "Insulin on board"), so group I reads the pump's own IOB instead of
-  setting it before each read, and I7 passes outright.
-- **`PUT /api/state {"pairing_code": …}` did not reach the pumpX2 bridge.** Every pairing
-  code change goes through one update path now; the harness still uses the websocket
-  `setPairingCode`, which returns the resulting pairing status in the same round trip.
-- **Every response was fragmented into 20-byte notifications.** The ATT MTU is settable
-  (`-virtual-mtu`, `GET`/`PUT /api/transport`, and announced as `att_mtu` in `hello`), so
-  the unfragmented framing a real Mobi produces is exercised too — `MTUIntegrationTests`,
-  and `FaketandemHarness.reset()` puts the MTU back to the 23-byte default before each test.
-- **The insulin delivery profile was a fixed table entry.** `ProfileStatusResponse` put id 0
-  in slot 0 while the settings and segment reads answered as id 1, so the driver's profile
-  read asked for id 0 forever, and `SetIDPSegmentRequest` and `CreateIDPRequest` were
-  answered OK without being applied. Profiles are pump state now (`idp_profiles` in
-  `/api/state`), written by those requests under the pump's rules: at most 16 segments, no
-  shared start time, segment 0 fixed at midnight.
-- **A write to the active profile left the rate in force alone**, so a driver that changed the
-  schedule saw the old rate and reported a mismatch. The write sets `basal_rate` to the new
-  segment in force and rescales a running temp rate, as the pump does; with the basal cycle on it
-  also follows later segment boundaries.
-- **The pump's clock followed the time zone database.** It moved at every DST transition, and
-  `ChangeTimeDateRequest` was answered OK without changing anything. A pump holds a date and
-  time someone set; the emulator now does too, and setting it writes `TimeChanged`/`DateChange`.
-- **An armed `error_response` was applied after the handler had run**, so the emulator
-  answered `ErrorResponse` to `InitiateBolusRequest` and started the bolus anyway (plan D3). It
-  refuses the request now, as a pump that answers `ErrorResponse` does.
-- **The delivery limits were a fixed table entry, in the wrong unit.** `SetMaxBolusLimitRequest`
-  and `SetMaxBasalLimitRequest` never changed what the pump reported, and the default max bolus
-  read as 2.5 U. They are pump state in milliunits now, and a bolus above the max is refused
-  (with status 1; the status a real pump uses is unconfirmed).
-- **An occlusion raised an alert but no `AlarmStatusResponse` bit**, so a driver reading the alarm
-  status, as one reads a pump's, never saw it (D2, B7). It stands as `OCCLUSION_ALARM` until the
-  alarm is cleared.
-- **`DismissNotificationRequest` was answered OK without changing anything**, so an alarm the
-  driver acknowledged stood at its next read. A dismissed alarm leaves `AlarmStatusResponse`, with
-  an `AlarmCleared` record for each standing alarm it closes, and a dismissed alert leaves
-  `AlertStatusResponse` (`AlertIntegrationTests`). Reminders and CGM alerts are still only logged.
-- **A `HistoryLogRequest` for 128 or more records streamed one.** `numberOfLogs` is one
-  unsigned byte that cliparser prints signed, so a full 255-record slice arrived as -1 and was
-  served as a single record; a walk took a chunk timeout per record.
-- **`SetPumpSoundsRequest` was answered OK without changing anything**, so a pump-globals read
-  after setup showed the emulator's defaults. The sounds it flags are written into
-  `PumpGlobalsResponse` now; `FaketandemHarness.reset()` restores the globals the emulator
-  launched with.
-- **An `error_response` fault named the replaced response's opcode as `requestCodeId`**, where
-  a real pump names the refused request, so the driver could not match it to its pending write
-  and D3 waited out the response timeout. It names the request now (jwoglom/faketandem#35).
-- **There was no basal cycle.** faketandem delivered basal continuously and wrote no `BasalDelivery`
-  (279), `DailyBasal`, `ControlIQPcmChangeHistoryLog` or `SetTempRateResponse` records, ran no
-  Control-IQ basal, ended a temp at every suspend, and `ChangeControlIQSettingsRequest` did not
-  switch Control-IQ, so group H appended the pump's records itself and H9, H6's segment change and
-  skew compensation were unit tests only. With `basal_cycle_enabled` the emulator writes a
-  BasalDelivery record every five minutes at the rate and source in force, with the pump's resume
-  rules, Control-IQ at a scripted rate (`controliq_algorithm_rate`, `cgm_available`) and an alarm
-  suspend that keeps the temp (`keep_temp`); `TempRateCompleted.timeLeft` is in milliseconds, as a
-  pump writes it.
 
 Not gaps, but worth knowing when reading timings: `FaketandemHarness.makeDriver` shortens the
 driver's response timeout to 2 s and its connect timeout to 15 s (`VirtualPump.responseTimeout`,
