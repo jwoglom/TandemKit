@@ -1733,6 +1733,18 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
+    func fetchLoadStatus(completion: @escaping (LoadStatusResponse?) -> Void) {
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect for load status: \(error.localizedDescription)")
+                completion(nil)
+                return
+            }
+
+            completion(self.bluetooth.write(LoadStatusRequest()))
+        }
+    }
+
     func exitChangeCartridgeMode(completion: @escaping (ExitChangeCartridgeModeResponse?) -> Void) {
         logger.info("Exiting cartridge change mode")
 

@@ -950,6 +950,13 @@ edit instead of at the next sync.
   `recoverAndReenterChangeCartridgeMode` runs `CartridgeModeRecovery`: exit fill tubing, exit change
   cartridge, enter change cartridge, and no refusal stops it. It is offered once, not again after a
   refused retry. The refusal rule is inferred from a field report and not confirmed on firmware.
+- A refused enter, the recovery's included, first reads `LoadStatus` (`fetchLoadStatus`). A loading
+  procedure still in `changeCartridge`, as a wizard closed mid-change leaves it, resumes the wizard at
+  the cartridge swap with nothing sent; one in `loadCartridge` ends it at the tubing fill
+  (`foundCartridgeAlreadyLoaded`), with no cartridge change recorded. Backing out is wrong there: a
+  Mobi took the recovery's `ExitChangeCartridgeMode` as the new cartridge being in, streamed
+  detection, and refused change mode and both exits from then on. Any other state, or no answer,
+  offers the recovery as before.
 
 ### Marker events
 Events with no dose, each in a `replacePendingEvents: false` batch under a `raw` of its kind and date.

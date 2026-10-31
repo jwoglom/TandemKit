@@ -53,6 +53,9 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
     /// Set when the pump refused to enter change mode with delivery suspended and no notification
     /// to blame, which is what a cartridge procedure left open looks like. The view consumes it.
     @Published var stuckModeRecoveryOffered = false
+    /// Set when a refused enter found a cartridge detected and its tubing not yet filled, so the
+    /// wizard finishes at the fill instead of backing the pump out.
+    @Published var foundCartridgeAlreadyLoaded = false
 
     @Published var changeCartridgeState: EnterChangeCartridgeModeStateStreamResponse.ChangeCartridgeState?
     @Published var detectingProgress: Int = 0
@@ -209,19 +212,53 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
             return
         }
 
-        loadingEnterMode = false
         if response.status == 0 {
+            loadingEnterMode = false
             failedEnterMode = false
             currentStep = currentStep.nextStep() ?? .done
             startMonitoringChangeState(requestSentAt: sentAt)
         } else {
-            // The pump answered and refused, so its state is known and a retry is safe.
-            failedEnterMode = true
-            isProcessing = false
-            if mayOfferRecovery {
-                offerStuckModeRecoveryIfNothingElseExplainsTheRefusal()
+            resumeOpenProcedureOrFail(mayOfferRecovery: mayOfferRecovery)
+        }
+    }
+
+    /// A refusal is what an unfinished procedure looks like, so the pump's load status says where to
+    /// pick it up. Backing out is the wrong move in change mode: the pump takes an exit from it as the
+    /// new cartridge being in and starts detecting one, after which it refuses change mode again.
+    private func resumeOpenProcedureOrFail(mayOfferRecovery: Bool) {
+        pumpManager?.fetchLoadStatus { status in
+            DispatchQueue.main.async {
+                self.loadingEnterMode = false
+                switch status.flatMap({ $0.isLoadingActive ? $0.loadState : nil }) {
+                case .changeCartridge:
+                    self.resumeInChangeMode()
+                case .loadCartridge:
+                    self.failedEnterMode = false
+                    self.isProcessing = false
+                    self.foundCartridgeAlreadyLoaded = true
+                    self.currentStep = .done
+                default:
+                    // The pump answered and refused, so its state is known and a retry is safe.
+                    self.failedEnterMode = true
+                    self.isProcessing = false
+                    if mayOfferRecovery {
+                        self.offerStuckModeRecoveryIfNothingElseExplainsTheRefusal()
+                    }
+                }
             }
         }
+    }
+
+    /// The pump retracted when it entered change mode, so the cartridge can come out now.
+    private func resumeInChangeMode() {
+        readyToChangeWorkItem?.cancel()
+        readyToChangeWorkItem = nil
+        streamCancellables.removeAll()
+        readyToChangeResolved = true
+
+        failedEnterMode = false
+        changeCartridgeState = .readyToChange
+        currentStep = .physicalChange
     }
 
     /// Reads the pump afresh rather than trusting the screen: the notification list is only polled

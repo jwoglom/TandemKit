@@ -61,6 +61,7 @@ insulin, stops delivery or changes basal, and some steps deliberately cause erro
 | K2 | As K1, before syncing the time, with a schedule whose rate changes on the hour. In the 10 minutes after the pump's clock passes the hour, set a temp basal from the host at the pump's new rate. | The host still counts the old rate, so the driver sends the pump an explicit 100% temp. Record whether the pump accepts it. If the pump refuses, the host's command fails. | conformance D5 and H6 |
 | W1 | Run TandemKit's cartridge, tubing and cannula wizards. | The host records a cartridge change, a tubing prime and a site change. | `CartridgeProcedureIntegrationTests`, `TrioCartridgeTests`, conformance D14 |
 | W2 | Start filling tubing in the wizard, then force-quit the host app partway through. Reopen it and start a cartridge change. | Record whether the pump refuses to enter change-cartridge mode. If it refuses, TandemKit asks for the pump to be removed and offers to back it out. After that, the change can be completed. | `CartridgeProcedureIntegrationTests` |
+| W3 | Start a cartridge change in the wizard and remove the cartridge. Force-quit the host app, reopen it and start a cartridge change again. Then repeat, cancelling the wizard after the pump is ready instead of force-quitting. | After the force-quit the pump refuses change mode and TandemKit goes straight to the cartridge swap. After the cancel, record what `LoadStatus` reads: if `loadCartridge`, TandemKit offers to fill the tubing. | `TandemKitChangeCartridgeViewModelTests` |
 
 ## Conditional configurations
 
@@ -98,6 +99,8 @@ the run's notes, and correct AGENTS.md if a pump says otherwise.
   pump's settings.
 - **W2.** Which open cartridge procedures make the pump refuse change-cartridge mode
   (`CartridgeModeRecovery`).
+- **W3.** What `LoadStatus` reads in each step of the cartridge, tubing and cannula procedures, and
+  on the t:slim X2 at all; the states the wizard acts on come from pumpX2's tests.
 - **C1.** What the host does when every automatic dose is refused under Control-IQ.
 
 ## Runs

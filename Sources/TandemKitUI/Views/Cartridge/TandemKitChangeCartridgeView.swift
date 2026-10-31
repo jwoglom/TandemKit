@@ -479,20 +479,41 @@ struct TandemKitChangeCartridgeView: View {
     private var doneStepContent: some View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(spacing: 20) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 60))
-                    .foregroundColor(.green)
+                if viewModel.foundCartridgeAlreadyLoaded {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 60))
+                        .foregroundColor(guidanceColors.warning)
+                } else {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 60))
+                        .foregroundColor(.green)
+                }
 
                 VStack(spacing: 8) {
-                    Text("Cartridge change complete!", comment: "Success message")
-                        .font(.title2)
-                        .fontWeight(.bold)
-                        .multilineTextAlignment(.center)
+                    if viewModel.foundCartridgeAlreadyLoaded {
+                        Text("Cartridge already loaded", comment: "Title when the pump already has a cartridge loaded from an unfinished cartridge change")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .multilineTextAlignment(.center)
 
-                    Text("You can now fill your tubing and cannula", comment: "Success description")
+                        Text(
+                            "The pump is not allowing the cartridge to be changed right now because a prior cartridge change was recently completed. You must fill the tubing with this cartridge before returning to replace the cartridge.",
+                            comment: "Description when the pump already has a cartridge loaded from an unfinished cartridge change"
+                        )
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
+                    } else {
+                        Text("Cartridge change complete!", comment: "Success message")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .multilineTextAlignment(.center)
+
+                        Text("You can now fill your tubing and cannula", comment: "Success description")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
                 }
             }
             .frame(maxWidth: .infinity)
