@@ -221,6 +221,7 @@ struct TandemKitScanView: View {
 }
 
 private struct PairingCodePrompt: View {
+    @Environment(\.guidanceColors) private var guidanceColors
     @ObservedObject var viewModel: TandemKitScanViewModel
 
     var body: some View {
@@ -238,7 +239,7 @@ private struct PairingCodePrompt: View {
                 if let message = viewModel.pinCodePromptError, !message.isEmpty {
                     Text(message)
                         .font(.footnote)
-                        .foregroundColor(.red)
+                        .foregroundColor(guidanceColors.critical)
                         .multilineTextAlignment(.center)
                 }
 
