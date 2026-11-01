@@ -1,4 +1,4 @@
-import HealthKit
+import LoopAlgorithm
 import LoopKit
 @testable import TandemKit
 import XCTest
@@ -160,11 +160,8 @@ import XCTest
         bluetooth.stub(SetMaxBolusLimitRequest.self, with: SetMaxBolusLimitResponse(status: 0))
 
         let limits = DeliveryLimits(
-            maximumBasalRate: HKQuantity(
-                unit: HKUnit.internationalUnit().unitDivided(by: .hour()),
-                doubleValue: 4.2
-            ),
-            maximumBolus: HKQuantity(unit: .internationalUnit(), doubleValue: 9.5)
+            maximumBasalRate: LoopQuantity(unit: .internationalUnitsPerHour, doubleValue: 4.2),
+            maximumBolus: LoopQuantity(unit: .internationalUnit, doubleValue: 9.5)
         )
 
         let result = syncLimits(limits)
@@ -181,11 +178,8 @@ import XCTest
 
     func testSyncDeliveryLimitsRejectsOutOfRangeLimitBeforeSendingAnything() {
         let limits = DeliveryLimits(
-            maximumBasalRate: HKQuantity(
-                unit: HKUnit.internationalUnit().unitDivided(by: .hour()),
-                doubleValue: 4.2
-            ),
-            maximumBolus: HKQuantity(unit: .internationalUnit(), doubleValue: 30)
+            maximumBasalRate: LoopQuantity(unit: .internationalUnitsPerHour, doubleValue: 4.2),
+            maximumBolus: LoopQuantity(unit: .internationalUnit, doubleValue: 30)
         )
 
         guard case .failure = syncLimits(limits) else {
@@ -202,11 +196,8 @@ import XCTest
         bluetooth.stub(SetMaxBolusLimitRequest.self, with: SetMaxBolusLimitResponse(status: 1))
 
         let limits = DeliveryLimits(
-            maximumBasalRate: HKQuantity(
-                unit: HKUnit.internationalUnit().unitDivided(by: .hour()),
-                doubleValue: 4.2
-            ),
-            maximumBolus: HKQuantity(unit: .internationalUnit(), doubleValue: 9.5)
+            maximumBasalRate: LoopQuantity(unit: .internationalUnitsPerHour, doubleValue: 4.2),
+            maximumBolus: LoopQuantity(unit: .internationalUnit, doubleValue: 9.5)
         )
 
         let result = syncLimits(limits)
