@@ -10,7 +10,7 @@ import XCTest
 /// Two views of the same traffic: the per-kind arrays (`pumpEvents`, `statusUpdates`, ...) the unit
 /// tests read, and `journal`, an ordered record of every call with its position, wall time and the
 /// injected clock's time, which the conformance tests replay into a `DoseOracle` with `feed(_:)`.
-final class MockPumpManagerDelegate: PumpManagerDelegate {
+nonisolated final class MockPumpManagerDelegate: PumpManagerDelegate {
     struct StatusUpdate {
         let newStatus: PumpManagerStatus
         let oldStatus: PumpManagerStatus
@@ -247,6 +247,15 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
         }
     }
 
+    /// The driver hands alerts to the main actor from a `Task`, so they arrive after the delegate
+    /// queue drains. Spins the main run loop until `condition` holds or `timeout` passes.
+    func waitForAlerts(timeout: TimeInterval = 2, until condition: () -> Bool) {
+        let deadline = Date().addingTimeInterval(timeout)
+        while !condition(), Date() < deadline {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.01))
+        }
+    }
+
     // MARK: - Alert routing
 
     private final class WeakResponder {
@@ -269,28 +278,29 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
         guard let responder = synchronized({ _alertResponders[identifier.managerIdentifier]?.responder }) else {
             return false
         }
-        responder.acknowledgeAlert(alertIdentifier: identifier.alertIdentifier, completion: completion)
+        Task {
+            do {
+                try await responder.acknowledgeAlert(alertIdentifier: identifier.alertIdentifier)
+                completion(nil)
+            } catch {
+                completion(error)
+            }
+        }
         return true
     }
 
     // MARK: - PersistedAlertStore
 
-    func doesIssuedAlertExist(identifier _: Alert.Identifier, completion: @escaping (Swift.Result<Bool, Error>) -> Void) {
-        completion(.success(false))
+    func doesIssuedAlertExist(identifier _: Alert.Identifier) async throws -> Bool {
+        false
     }
 
-    func lookupAllUnretracted(
-        managerIdentifier _: String,
-        completion: @escaping (Swift.Result<[PersistedAlert], Error>) -> Void
-    ) {
-        completion(.success([]))
+    func lookupAllUnretracted(managerIdentifier _: String) async throws -> [PersistedAlert] {
+        []
     }
 
-    func lookupAllUnacknowledgedUnretracted(
-        managerIdentifier _: String,
-        completion: @escaping (Swift.Result<[PersistedAlert], Error>) -> Void
-    ) {
-        completion(.success([]))
+    func lookupAllUnacknowledgedUnretracted(managerIdentifier _: String) async throws -> [PersistedAlert] {
+        []
     }
 
     func recordRetractedAlert(_: Alert, at _: Date) {}

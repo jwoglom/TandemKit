@@ -73,6 +73,7 @@ import XCTest
         skewPumpClock(minutes: 0)
         manager.reconcilePumpClockSkewAlert()
         delegateQueue.sync {}
+        delegate.waitForAlerts { delegate.issuedAlerts.count == 3 && delegate.retractedAlerts.count == 3 }
 
         XCTAssertEqual(delegate.issuedAlerts.count, 3, "\(delegate.issuedAlerts)")
         XCTAssertEqual(delegate.retractedAlerts.count, 3, "\(delegate.retractedAlerts)")
@@ -94,10 +95,12 @@ import XCTest
         }
         stubAlarms([])
         fetchNotifications()
+        delegate.waitForAlerts { !delegate.issuedAlerts.isEmpty }
         let alert = try XCTUnwrap(delegate.issuedAlerts.first)
 
         var result: Error??
         XCTAssertTrue(delegate.acknowledgeAlert(alert.identifier) { result = $0 }, "the host found no responder for \(alert.identifier)")
+        delegate.waitForAlerts { result != nil && !delegate.retractedAlerts.isEmpty }
         delegateQueue.sync {}
 
         let dismissals = bluetooth.sent(DismissNotificationRequest.self)
@@ -113,15 +116,17 @@ import XCTest
         stubAlerts([Self.lowInsulin])
         stubAlarms([])
         fetchNotifications()
+        delegate.waitForAlerts { !delegate.issuedAlerts.isEmpty }
         return try XCTUnwrap(delegate.issuedAlerts.first)
     }
 
     private func acknowledge(_ alert: Alert) -> Error? {
-        var result: Error?
+        var result: Error??
         XCTAssertTrue(delegate.acknowledgeAlert(alert.identifier) { result = $0 }, "the host found no responder for \(alert.identifier)")
+        delegate.waitForAlerts { result != nil }
         delegateQueue.sync {}
         delegateQueue.sync {}
-        return result
+        return result ?? nil
     }
 
     func testARefusedDismissalIssuesTheAlertAgainWhileThePumpStillRaisesIt() throws {
@@ -130,6 +135,7 @@ import XCTest
         bluetooth.stub(DismissNotificationRequest.self, with: DismissNotificationResponse(status: 1))
 
         XCTAssertNotNil(acknowledge(alert))
+        delegate.waitForAlerts { delegate.issuedAlerts.count == 2 }
 
         XCTAssertEqual(delegate.issuedAlerts.map(\.identifier), [alert.identifier, alert.identifier])
         XCTAssertEqual(manager.state.issuedAlertIdentifiers, [alert.identifier.alertIdentifier])
@@ -141,6 +147,7 @@ import XCTest
         bluetooth.connectError = PumpCommError.pumpNotConnected
 
         XCTAssertNotNil(acknowledge(alert))
+        delegate.waitForAlerts { delegate.issuedAlerts.count == 2 }
 
         XCTAssertEqual(delegate.issuedAlerts.map(\.identifier), [alert.identifier, alert.identifier])
         XCTAssertFalse(bluetooth.didSend(DismissNotificationRequest.self))
@@ -155,6 +162,7 @@ import XCTest
         }
 
         XCTAssertNil(acknowledge(alert))
+        delegate.waitForAlerts { !delegate.retractedAlerts.isEmpty }
 
         XCTAssertEqual(delegate.issuedAlerts.map(\.identifier), [alert.identifier])
         XCTAssertEqual(delegate.retractedAlerts, [alert.identifier])

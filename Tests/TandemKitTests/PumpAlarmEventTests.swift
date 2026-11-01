@@ -125,6 +125,7 @@ import XCTest
         stubAlarms([])
 
         XCTAssertEqual(fetchNotifications(), [])
+        delegate.waitForAlerts { !delegate.issuedAlerts.isEmpty }
         XCTAssertEqual(delegate.issuedAlerts.map(\.identifier.alertIdentifier), ["alert.lowInsulin.0"])
     }
 
