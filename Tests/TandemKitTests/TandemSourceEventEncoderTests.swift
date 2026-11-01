@@ -5,8 +5,7 @@ import XCTest
 /// off the pump little-endian and sent to the cloud with the header and each 4-byte payload word
 /// byte-reversed; if the transform drifts, these stop matching and the cloud would silently reject
 /// or misread uploads. The vectors here are synthetic — the structure is what matters, and the
-/// transform was verified byte-for-byte against a real captured Mobi upload during development
-/// (see `mobi/docs/cloud-upload.md`).
+/// transform was verified byte-for-byte against a real captured Mobi upload during development.
 final class TandemSourceEventEncoderTests: XCTestCase {
     private func hex(_ s: String) -> Data { Data(hexadecimalString: s)! }
 

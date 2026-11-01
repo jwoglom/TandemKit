@@ -3,8 +3,8 @@ import Foundation
     import UIKit
 #endif
 
-/// Constants for talking to Tandem Source, recovered from the Mobi app and the live capture
-/// (`mobi/docs/cloud-upload.md`). The driver presents itself as the Mobi app because the cloud is
+/// Constants for talking to Tandem Source, recovered from the Mobi app and a live capture.
+/// The driver presents itself as the Mobi app because the cloud is
 /// Tandem's own and only accepts uploads from its known client — this is relaying the user's own
 /// pump data to the user's own account, as the pump's app would.
 enum TandemSourceConfig {
@@ -42,8 +42,8 @@ enum TandemSourceConfig {
     static let scopes = "openid offline_access tandem.devices.assign"
 
     /// The `TDCToken` HMAC: `base64(HMAC-SHA1(key, body))`. Key and `HmacSHA1` come from the app's
-    /// native `libkeygen.so`; the key is used as raw UTF-8 bytes. Verified byte-for-byte against the
-    /// capture. See `mobi/docs/cloud-upload.md`.
+    /// native `libkeygen.so`; the key is used as raw UTF-8 bytes. Verified byte-for-byte against a
+    /// capture.
     static let tdcTokenKey = Data("1hvigLmZyCUBMQxn37SO7Iwn9EoTB1rBUBQg1CFyxcU=".utf8)
 
     static let appVersion = "3.6.2"

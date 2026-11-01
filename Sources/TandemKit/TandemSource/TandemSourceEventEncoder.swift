@@ -13,7 +13,7 @@ import Foundation
 ///
 /// Verified byte-for-byte against a captured Mobi upload during development: a bolus record and a
 /// Dexcom G7 reading both encoded to the exact bytes Tandem received. See
-/// `TandemSourceEventEncoderTests` and `mobi/docs/cloud-upload.md`.
+/// `TandemSourceEventEncoderTests`.
 enum TandemSourceEventEncoder {
     /// Reverse each of these byte groups in the 26-byte record: typeId (2), timestamp (4), sequence
     /// number (4), then the four payload words (4 each). Little-endian in, big-endian out.

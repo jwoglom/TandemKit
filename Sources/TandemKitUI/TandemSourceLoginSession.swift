@@ -12,7 +12,7 @@ import Foundation
 /// authorization `code` back to `mobi://auth`. The app exchanges the code itself with its verifier —
 /// and, because the code is PKCE/redirect-bound to the SPA's web callback, the **token exchange**
 /// must send that web callback as `redirect_uri`, not `mobi://auth`. All of this is reproduced from
-/// a captured real login (see `mobi/docs/cloud-upload.md`).
+/// a captured real login.
 @MainActor
 final class TandemSourceLoginSession: NSObject, ASWebAuthenticationPresentationContextProviding {
     struct Config {
