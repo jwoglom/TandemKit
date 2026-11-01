@@ -92,7 +92,11 @@ import XCTest
     }
 
     /// `isStreamed` picks what a `HistoryLogRequest` streams back; the rest the pump holds but never sends.
-    private func stubPump(serving logs: [HistoryLog], isStreamed: @escaping (HistoryLog) -> Bool = { _ in true }) {
+    private func stubPump(
+        serving logs: [HistoryLog],
+        isStreamed: @escaping (HistoryLog) -> Bool = { _ in true },
+        didStream: @escaping () -> Void = {}
+    ) {
         let bySequence = Dictionary(uniqueKeysWithValues: logs.map { ($0.sequenceNum, $0) })
         let sequences = logs.map(\.sequenceNum)
         bluetooth.stub(HistoryLogStatusRequest.self, with: HistoryLogStatusResponse(
@@ -112,6 +116,7 @@ import XCTest
                 streamId: 7,
                 historyLogStreamBytes: streamed.map(\.cargo)
             ))
+            didStream()
         }
     }
 
@@ -309,29 +314,22 @@ import XCTest
             + pumpBolus(bolusId: 75, units: 1.0, firstSequenceNum: 4, secondsAgo: 3 * 3600)
             + pumpBolus(bolusId: 76, units: 1.0, firstSequenceNum: 7, secondsAgo: 3600)
         let oldest = logs.filter { $0.sequenceNum <= 3 }
-        stubPump(serving: logs, isStreamed: { $0.sequenceNum > 3 })
+        let newestStreamed = expectation(description: "the pump streams the newest entries of the slice")
+        newestStreamed.assertForOverFulfill = false
+        stubPump(serving: logs, isStreamed: { $0.sequenceNum > 3 }, didStream: { newestStreamed.fulfill() })
 
-        let movedMidSlice = expectation(description: "the progress moves before the slice has ended")
-        let lock = NSLock()
-        var mid: Double?
         let loaded = expectation(description: "history load completes")
         var result: Error?
-        manager.loadHistoryForSetup(
-            progress: { value in
-                lock.lock()
-                defer { lock.unlock() }
-                // The newest 2 of the window's 6 hours have arrived.
-                guard mid == nil, (0.2 ... 0.5).contains(value) else { return }
-                mid = value
-                movedMidSlice.fulfill()
-            },
-            completion: { outcome in
-                if case let .failure(error) = outcome { result = error }
-                loaded.fulfill()
-            }
-        )
+        manager.loadHistoryForSetup(progress: { _ in }, completion: { outcome in
+            if case let .failure(error) = outcome { result = error }
+            loaded.fulfill()
+        })
 
-        wait(for: [movedMidSlice], timeout: 30.0)
+        wait(for: [newestStreamed], timeout: 30.0)
+        let since = manager.now.addingTimeInterval(-TandemPumpManager.setupHistoryLoadWindow)
+        // 2 h and a minute of the window's 6 h have arrived.
+        XCTAssertEqual(manager.setupHistoryLoadProgress(since: since), (2 * 3600 + 60) / (6 * 3600), accuracy: 0.01)
+
         manager.historyLogStream.send(HistoryLogStreamResponse(
             numberOfHistoryLogs: oldest.count,
             streamId: 7,
