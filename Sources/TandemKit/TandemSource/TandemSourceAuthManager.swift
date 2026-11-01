@@ -66,6 +66,7 @@ final class TandemSourceAuthManager: TandemSourceTokenProvider {
             "code": code,
             "code_verifier": codeVerifier,
             "redirect_uri": redirectURI,
+            "country_hint": TandemSourceConfig.countryHint,
         ])
         guard let refresh = response.refresh_token else {
             throw TandemSourceError.decoding("authorization_code grant returned no refresh_token")

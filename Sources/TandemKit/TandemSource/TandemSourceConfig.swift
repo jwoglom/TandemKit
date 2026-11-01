@@ -26,13 +26,20 @@ enum TandemSourceConfig {
     /// way the app's are.
     static let clientId = "0oa65ks2f7rpiHqfa4h7"
 
-    /// Registered redirect; a custom scheme the app owns (`CFBundleURLSchemes`/Android manifest).
-    /// Not seen in the capture (the app was already logged in), so it is overridable and is the one
-    /// value to confirm on a first interactive login.
-    static let redirectURI = "mobi://callback"
+    /// Login is brokered through the Tandem Source SSO web app, which owns the https web callback
+    /// registered on the OIDC client. The custom scheme `mobi://auth` is only how that SSO app hands
+    /// the code back to the native client (see `TandemSourceLoginSession`). The authorization code is
+    /// PKCE/redirect-bound to the web callback, so the token exchange must present it as
+    /// `redirect_uri`. All confirmed from a captured real login.
+    static let ssoAuthorizeURL = URL(string: "https://sso.tandemdiabetes.com/")!
+    static let loginReturnURI = "mobi://auth"
     static let callbackURLScheme = "mobi"
+    static let tokenRedirectURI = "https://sso.tandemdiabetes.com/client/authorize/callback"
 
-    static let scopes = "openid profile email offline_access phone address tandem.devices.assign"
+    /// The country hint the app sends on authorize and on the authorization-code token exchange.
+    static let countryHint = "US"
+
+    static let scopes = "openid offline_access tandem.devices.assign"
 
     /// The `TDCToken` HMAC: `base64(HMAC-SHA1(key, body))`. Key and `HmacSHA1` come from the app's
     /// native `libkeygen.so`; the key is used as raw UTF-8 bytes. Verified byte-for-byte against the

@@ -2,20 +2,30 @@ import AuthenticationServices
 import CryptoKit
 import Foundation
 
-/// Runs the Tandem Source interactive login: an OIDC authorization-code + PKCE flow in an
-/// `ASWebAuthenticationSession`, reusing the Mobi app's client id and custom-scheme redirect. On
-/// success it hands the code and PKCE verifier to the pump manager to exchange for tokens.
+/// Runs the Tandem Source interactive login: the OIDC authorization-code + PKCE flow the Mobi app
+/// uses, in an `ASWebAuthenticationSession`.
 ///
-/// The redirect URI is the one auth value not confirmed from the capture; if a first login fails
-/// with a redirect error, that is the value to adjust (`TandemSourceLoginConfig`).
+/// The flow is brokered. The app does **not** call the OIDC authorize endpoint directly; it opens
+/// the Tandem Source SSO web app (`https://sso.tandemdiabetes.com/`) with its own PKCE challenge and
+/// a custom-scheme return (`mobi://auth`). That SPA runs the real OIDC against `tdcservices` using
+/// its own registered https web callback, forwarding the app's challenge unchanged, then hands the
+/// authorization `code` back to `mobi://auth`. The app exchanges the code itself with its verifier —
+/// and, because the code is PKCE/redirect-bound to the SPA's web callback, the **token exchange**
+/// must send that web callback as `redirect_uri`, not `mobi://auth`. All of this is reproduced from
+/// a captured real login (see `mobi/docs/cloud-upload.md`).
 @MainActor
 final class TandemSourceLoginSession: NSObject, ASWebAuthenticationPresentationContextProviding {
     struct Config {
-        var authorizeURL = URL(string: "https://tdcservices.tandemdiabetes.com/accounts/api/connect/authorize")!
+        /// Leg 1 target: the SSO web app, not the OIDC authorize endpoint.
+        var authorizeURL = URL(string: "https://sso.tandemdiabetes.com/")!
         var clientId = "0oa65ks2f7rpiHqfa4h7"
-        var redirectURI = "mobi://callback"
+        /// What the SSO app redirects back to with the code; the scheme we listen for.
+        var returnURI = "mobi://auth"
         var callbackScheme = "mobi"
-        var scope = "openid profile email offline_access phone address tandem.devices.assign"
+        /// What the token exchange must present as `redirect_uri` — the code is bound to it.
+        var tokenRedirectURI = "https://sso.tandemdiabetes.com/client/authorize/callback"
+        var scope = "openid offline_access tandem.devices.assign"
+        var countryHint = "US"
     }
 
     enum LoginError: Error {
@@ -33,22 +43,26 @@ final class TandemSourceLoginSession: NSObject, ASWebAuthenticationPresentationC
         self.anchor = anchor
     }
 
-    /// Presents the login and returns the authorization code plus the PKCE verifier used, which the
-    /// caller exchanges via `TandemPumpManager.completeTandemSourceSignIn`.
+    /// Presents the login and returns the authorization code, the PKCE verifier used, and the
+    /// `redirect_uri` the caller must send to the token endpoint (the SSO web callback).
     func authorize() async throws -> (code: String, codeVerifier: String, redirectURI: String) {
         let verifier = Self.randomCodeVerifier()
         let challenge = Self.codeChallenge(for: verifier)
-        let state = Self.randomCodeVerifier()
+        let state = UUID().uuidString
+        let nonce = UUID().uuidString
 
         var components = URLComponents(url: config.authorizeURL, resolvingAgainstBaseURL: false)!
+        // Matches the captured leg-1 request: no response_type (the SSO app adds it when it calls
+        // the OIDC endpoint), redirect back to the custom scheme, narrow scope, country hint.
         components.queryItems = [
             URLQueryItem(name: "client_id", value: config.clientId),
-            URLQueryItem(name: "redirect_uri", value: config.redirectURI),
-            URLQueryItem(name: "response_type", value: "code"),
+            URLQueryItem(name: "redirect_uri", value: config.returnURI),
             URLQueryItem(name: "scope", value: config.scope),
             URLQueryItem(name: "code_challenge", value: challenge),
             URLQueryItem(name: "code_challenge_method", value: "S256"),
             URLQueryItem(name: "state", value: state),
+            URLQueryItem(name: "nonce", value: nonce),
+            URLQueryItem(name: "country_hint", value: config.countryHint),
         ]
 
         let callback: URL = try await withCheckedThrowingContinuation { continuation in
@@ -74,7 +88,7 @@ final class TandemSourceLoginSession: NSObject, ASWebAuthenticationPresentationC
         else {
             throw LoginError.noCode
         }
-        return (code, verifier, config.redirectURI)
+        return (code, verifier, config.tokenRedirectURI)
     }
 
     func presentationAnchor(for _: ASWebAuthenticationSession) -> ASPresentationAnchor { anchor }
