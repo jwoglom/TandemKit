@@ -45,7 +45,6 @@ final class TandemSourceUploaderTests: XCTestCase {
     private func deps(
         api: TandemSourceAPI,
         store: HistoryLogStore,
-        resendFrom: UInt32? = nil,
         onFill: @escaping (UInt32, [ClosedRange<UInt32>]) -> UInt32? = { _, _ in nil }
     ) -> TandemSourceUploader.Dependencies {
         TandemSourceUploader.Dependencies(
@@ -54,7 +53,6 @@ final class TandemSourceUploaderTests: XCTestCase {
             deviceInfo: { TandemSourceDeviceInfo(serialNum: self.serial, modelNum: 1004000, partNum: 1, armSwVer: 1, mspSwVer: 0, pcbaSN: 1, configABits: 0, configBBits: 0, pumpRev: "0", pcbaRev: "0", pumpAPIVersion: "3.11", dexcomG6: false, basalIQ: false, controlIQ: true) },
             deviceAssignmentId: { "assignment-uuid" },
             fillGaps: { serial, ranges in onFill(serial, ranges) },
-            resendFrom: { resendFrom },
             now: { Date(timeIntervalSince1970: 1_793_464_000) },
             pumpClock: { Date(timeIntervalSince1970: 1_793_464_000) }
         )
@@ -178,29 +176,6 @@ final class TandemSourceUploaderTests: XCTestCase {
         XCTAssertNil(result.waitingForSequenceNum)
     }
 
-    func testResendSendsRecordsTheServerAlreadyPassed() async throws {
-        let api = StubAPI(maxPumpEventIndex: 105)
-        let uploader = TandemSourceUploader(deps: deps(api: api, store: store(seqs: [101, 102, 103, 104, 105]), resendFrom: 102))
-
-        let result = try await uploader.uploadPending(serial: serial)
-
-        let uploaded = await uploadedSeqs(api)
-        XCTAssertEqual(uploaded, [102, 103, 104, 105])
-        XCTAssertEqual(result.serverMaxEventIndex, 105)
-        XCTAssertNil(result.resendFrom)
-    }
-
-    func testAResendStoppedByAGapResumesFromIt() async throws {
-        let api = StubAPI(maxPumpEventIndex: 105)
-        let uploader = TandemSourceUploader(deps: deps(api: api, store: store(seqs: [101, 102, 104, 105]), resendFrom: 101))
-
-        let result = try await uploader.uploadPending(serial: serial)
-
-        let uploaded = await uploadedSeqs(api)
-        XCTAssertEqual(uploaded, [101, 102])
-        XCTAssertEqual(result.serverMaxEventIndex, 105)
-        XCTAssertEqual(result.resendFrom, 103)
-    }
 
     func testTheOldestGapIsReadFirstWithinTheCap() {
         XCTAssertEqual(TandemSourceUploader.capped([20 ... 29, 1 ... 5], to: 8), [1 ... 5, 20 ... 22])
@@ -236,5 +211,15 @@ final class TandemSourceUploaderTests: XCTestCase {
 
         XCTAssertEqual(steps, 1)
         XCTAssertEqual(result.waitingForSequenceNum, 102)
+    }
+
+    func testRecordsAtOrBelowTheServerIndexAreNeverSent() async throws {
+        let api = StubAPI(maxPumpEventIndex: 103)
+        let uploader = TandemSourceUploader(deps: deps(api: api, store: store(seqs: [101, 102, 103, 104])))
+
+        _ = try await uploader.uploadPending(serial: serial)
+
+        let uploaded = await uploadedSeqs(api)
+        XCTAssertEqual(uploaded, [104])
     }
 }

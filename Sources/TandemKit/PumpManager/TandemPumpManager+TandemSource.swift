@@ -24,20 +24,10 @@ extension TandemPumpManager {
             deviceAssignmentId: state.tandemSourceDeviceAssignmentId,
             store: historyLogStore,
             fillGaps: { [weak self] _, ranges in await self?.readHistoryForTandemSource(ranges) },
-            resendFrom: state.tandemSourceResendFrom,
             pumpClock: { [weak self] in self?.state.currentPumpTime ?? Date() }
         )
     }
 
-    /// Sends the last `records` records again, from the pump where the session store lacks them.
-    /// Repairs what the server's index moved past before uploads stopped at gaps.
-    public func resendTandemSourceHistory(records: UInt32) {
-        guard let index = state.lastTandemSourceEventIndex else { return }
-        state.tandemSourceResendFrom = index > records ? index - records + 1 : 1
-        logger.info("Tandem Source: re-sending the last \(records) records")
-        notifyDelegateStateUpdated()
-        uploadToTandemSourceIfDue(force: true)
-    }
 
     /// Reads `ranges` from the pump into the session store, oldest first. Returns the oldest entry
     /// the pump holds, or nil if a read didn't finish.
@@ -95,7 +85,6 @@ extension TandemPumpManager {
             logger.info("Tandem Source: uploaded \(uploaded.uploadedCount) events, server at \(uploaded.serverMaxEventIndex)")
             state.lastTandemSourceUpload = now
             state.lastTandemSourceEventIndex = uploaded.serverMaxEventIndex
-            state.tandemSourceResendFrom = uploaded.resendFrom
             // Persist an id resolved automatically from the account so later uploads skip the lookup
             // and the settings screen can show it.
             if state.tandemSourceDeviceAssignmentId != uploaded.deviceAssignmentId {

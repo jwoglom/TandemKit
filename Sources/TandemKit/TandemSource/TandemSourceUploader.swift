@@ -4,8 +4,8 @@ import Foundation
 ///
 /// `getlasteventuploaded` gives the last pump event index the cloud holds, and the records after it
 /// are sent ascending, in batches, as the Mobi app sends them. The pump's own sequence numbers are
-/// the cloud's index, so overlapping re-sends are harmless and a switch back to the Mobi app stays
-/// continuous. Only an unbroken run is sent: the server's index is a high-water mark, so a record
+/// the cloud's index, so a switch back to the Mobi app stays continuous. Nothing at or below the
+/// server's index is sent: Tandem stores a record sent again as a second copy, double-counting it. Only an unbroken run is sent: the server's index is a high-water mark, so a record
 /// sent past a gap moves it beyond the missing ones, and no later run would send them.
 actor TandemSourceUploader {
     struct Result: Equatable {
@@ -16,8 +16,6 @@ actor TandemSourceUploader {
         var deviceAssignmentId: String
         /// The first record this run stopped at because the pump read failed; nil when caught up.
         var waitingForSequenceNum: UInt32? = nil
-        /// Where a re-send left off, for the next run; nil once it has reached the server's index.
-        var resendFrom: UInt32? = nil
     }
 
     enum UploadError: Error, Equatable {
@@ -34,8 +32,6 @@ actor TandemSourceUploader {
         /// still holds, or nil when the read didn't complete (the pump unreachable, or another
         /// reader holding its history stream).
         var fillGaps: (_ serial: UInt32, _ ranges: [ClosedRange<UInt32>]) async -> UInt32?
-        /// Set to send again from an index the server has already passed.
-        var resendFrom: () -> UInt32? = { nil }
         var now: () -> Date = { Date() }
         var pumpClock: () -> Date
     }
@@ -61,8 +57,7 @@ actor TandemSourceUploader {
         let last = try await deps.api.getLastEventUploaded(serial: serial, deviceAssignmentId: assignmentId)
         let serverIndex = last.maxPumpEventIndex
         tandemSourceLogger.debug("Tandem Source server at \(serverIndex), processing status \(last.processingStatus)")
-        let resendFrom = deps.resendFrom().flatMap { $0 <= serverIndex ? $0 : nil }
-        let start = resendFrom ?? serverIndex + 1
+        let start = serverIndex + 1
         guard let newest = try deps.store.newest(pumpSerial: serial), newest.sequenceNum >= start else {
             return Result(uploadedCount: 0, serverMaxEventIndex: serverIndex, deviceAssignmentId: assignmentId)
         }
@@ -98,13 +93,12 @@ actor TandemSourceUploader {
             try await upload(slice, device: device, assignmentId: assignmentId)
             uploaded += slice.count
         }
-        let reached = pending.last?.sequenceNum ?? (start == 0 ? 0 : start - 1)
+        let reached = pending.last?.sequenceNum ?? serverIndex
         return Result(
             uploadedCount: uploaded,
             serverMaxEventIndex: max(serverIndex, reached),
             deviceAssignmentId: assignmentId,
-            waitingForSequenceNum: missing.first?.lowerBound,
-            resendFrom: resendFrom != nil && reached < serverIndex ? reached + 1 : nil
+            waitingForSequenceNum: missing.first?.lowerBound
         )
     }
 

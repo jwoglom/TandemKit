@@ -148,7 +148,6 @@ final class TandemPumpManagerStateEqualityTests: XCTestCase {
             ("lastTandemSourceEventIndex", { $0.lastTandemSourceEventIndex = nil }),
             ("lastTandemSourceError", { $0.lastTandemSourceError = nil }),
             ("lastTandemSourceSettingsHash", { $0.lastTandemSourceSettingsHash = nil }),
-            ("tandemSourceResendFrom", { $0.tandemSourceResendFrom = nil }),
             ("lastTandemSourceSettingsUpload", { $0.lastTandemSourceSettingsUpload = nil }),
             ("pumpMainFeaturesBitmask", { $0.pumpMainFeaturesBitmask = nil })
         ]
@@ -301,7 +300,6 @@ final class TandemPumpManagerStateEqualityTests: XCTestCase {
         state.lastTandemSourceEventIndex = 4321
         state.lastTandemSourceError = "http(status: 500)"
         state.lastTandemSourceSettingsHash = "abc"
-        state.tandemSourceResendFrom = 4000
         state.lastTandemSourceSettingsUpload = t0
         state.pumpMainFeaturesBitmask = 1030
         return state

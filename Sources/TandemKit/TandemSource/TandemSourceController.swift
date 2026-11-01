@@ -13,7 +13,6 @@ final class TandemSourceController {
         var deviceAssignmentId: String?
         var store: HistoryLogStore
         var fillGaps: (_ serial: UInt32, _ ranges: [ClosedRange<UInt32>]) async -> UInt32?
-        var resendFrom: UInt32?
         var pumpClock: () -> Date
     }
 
@@ -128,7 +127,6 @@ final class TandemSourceController {
             deviceInfo: { inputs.deviceInfo },
             deviceAssignmentId: { assignmentId },
             fillGaps: inputs.fillGaps,
-            resendFrom: { inputs.resendFrom },
             now: { Date() },
             pumpClock: inputs.pumpClock
         ))
