@@ -814,7 +814,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
             "* lastCannulaFillAmount: \(debugValue(lastCannulaFillAmount.map { "\($0) U" }))",
             "* lastPumpSerial: \(debugValue(lastPumpSerial))",
             "* tandemSourceUploadEnabled: \(tandemSourceUploadEnabled)",
-            "* tandemSourceDeviceAssignmentId: \(debugValue(tandemSourceDeviceAssignmentId))",
+            // An account identifier, so the issue report says only whether one is set.
+            "* tandemSourceDeviceAssignmentId: \(tandemSourceDeviceAssignmentId == nil ? "nil" : "set")",
             "* lastTandemSourceUpload: \(debugValue(lastTandemSourceUpload))",
             "* lastTandemSourceEventIndex: \(debugValue(lastTandemSourceEventIndex))",
             "* lastTandemSourceError: \(debugValue(lastTandemSourceError))"

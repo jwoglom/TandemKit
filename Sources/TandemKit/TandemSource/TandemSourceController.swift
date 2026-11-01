@@ -42,15 +42,20 @@ final class TandemSourceController {
     func trigger(now: Date, force: Bool, inputs: Inputs, completion: @escaping (Result<TandemSourceUploader.Result, Error>) -> Void) {
         // The assignment id is resolved from the account inside the upload task when not already
         // configured, so being signed in is the only precondition here.
-        guard auth.isAuthenticated else { return }
+        guard auth.isAuthenticated else {
+            tandemSourceLogger.debug("Tandem Source upload skipped: not signed in")
+            return
+        }
 
         lock.lock()
         if inFlight {
             lock.unlock()
+            tandemSourceLogger.debug("Tandem Source upload skipped: one is already running")
             return
         }
         if !force, let last = lastAttemptAt, now.timeIntervalSince(last) < minInterval {
             lock.unlock()
+            tandemSourceLogger.debug("Tandem Source upload skipped: last attempt \(Int(now.timeIntervalSince(last))) s ago")
             return
         }
         inFlight = true
@@ -61,11 +66,11 @@ final class TandemSourceController {
             let result: Result<TandemSourceUploader.Result, Error>
             do {
                 let client = TandemSourceHTTPClient(baseURL: baseURL, tokenProvider: auth)
-                // Use the configured id if present, otherwise resolve it from the account once.
                 let assignmentId: String
                 if let configured = inputs.deviceAssignmentId {
                     assignmentId = configured
                 } else if let resolved = try await client.fetchDeviceAssignmentId(serial: inputs.serial) {
+                    tandemSourceLogger.info("Resolved this pump's Tandem Source device assignment from the account")
                     assignmentId = resolved
                 } else {
                     throw TandemSourceUploader.UploadError.notConfigured

@@ -60,16 +60,36 @@ actor TandemSourceUploader {
         let missing = try deps.store.missingRanges(pumpSerial: serial, in: range)
         if !missing.isEmpty {
             await deps.fillGaps(serial, missing)
+            let unfilled = try deps.store.missingRanges(pumpSerial: serial, in: range)
+            if !unfilled.isEmpty {
+                // The server's index moves past them with this upload, so no later run sends them.
+                tandemSourceLogger.warning("Tandem Source: \(Self.count(unfilled)) of \(Self.count([range])) records past server index \(last.maxPumpEventIndex) aren't in the session store and won't be uploaded")
+            }
         }
 
         let pending = try deps.store.logs(pumpSerial: serial, in: range)
         var uploaded = 0
         for batch in stride(from: 0, to: pending.count, by: Self.batchSize) {
             let slice = Array(pending[batch ..< min(batch + Self.batchSize, pending.count)])
+            tandemSourceLogger.debug("Tandem Source batch \(batch / Self.batchSize + 1): \(slice.count) records, \(Self.typeSummary(slice))")
             try await upload(slice, device: device, assignmentId: assignmentId)
             uploaded += slice.count
         }
         return Result(uploadedCount: uploaded, serverMaxEventIndex: newest.sequenceNum, deviceAssignmentId: assignmentId)
+    }
+
+    private static func count(_ ranges: [ClosedRange<UInt32>]) -> Int {
+        ranges.reduce(0) { $0 + $1.count }
+    }
+
+    /// Record type names and counts, e.g. `BasalDelivery×3, CgmDataG7×2`.
+    static func typeSummary(_ logs: [StoredHistoryLog]) -> String {
+        var counts: [String: Int] = [:]
+        for log in logs {
+            let name = String(describing: type(of: HistoryLogParser.parse(log.cargo)))
+            counts[name.hasSuffix("HistoryLog") ? String(name.dropLast("HistoryLog".count)) : name, default: 0] += 1
+        }
+        return counts.sorted { $0.key < $1.key }.map { "\($0.key)×\($0.value)" }.joined(separator: ", ")
     }
 
     private func upload(_ logs: [StoredHistoryLog], device: TandemSourceDeviceInfo, assignmentId: String) async throws {

@@ -7,6 +7,21 @@ enum TandemSourceError: Error, Equatable {
     case decoding(String)
 }
 
+/// What goes into the persisted log, the host's issue report and `lastTandemSourceError`: an HTTP
+/// error's body is left out, since a server message can echo back what the request carried.
+extension TandemSourceError: CustomStringConvertible {
+    var description: String {
+        switch self {
+        case .notAuthenticated: return "notAuthenticated"
+        case let .http(status, _): return "http(status: \(status))"
+        case let .transport(reason): return "transport(\(reason))"
+        case let .decoding(reason): return "decoding(\(reason))"
+        }
+    }
+}
+
+let tandemSourceLogger = TandemLogger(category: "TandemSource")
+
 /// Supplies a Tandem Source bearer token, refreshing it when asked. The uploader never sees the
 /// refresh token; it only ever asks for an access token.
 protocol TandemSourceTokenProvider: AnyObject {
@@ -42,7 +57,7 @@ final class TandemSourceHTTPClient: TandemSourceAPI {
             URLQueryItem(name: "sn", value: String(serial)),
             URLQueryItem(name: "deviceAssignmentId", value: deviceAssignmentId),
         ]
-        let data = try await send(url: components.url!, method: "GET", body: nil)
+        let data = try await send(url: components.url!, method: "GET", body: nil, endpoint: "getlasteventuploaded")
         do {
             return try JSONDecoder().decode(LastEventUploadedResponse.self, from: data)
         } catch {
@@ -51,7 +66,7 @@ final class TandemSourceHTTPClient: TandemSourceAPI {
     }
 
     func upload(bodyJSON: Data) async throws {
-        _ = try await send(url: baseURL.appendingPathComponent(TandemSourceConfig.uploadPath), method: "POST", body: bodyJSON)
+        _ = try await send(url: baseURL.appendingPathComponent(TandemSourceConfig.uploadPath), method: "POST", body: bodyJSON, endpoint: "upload")
     }
 
     /// Resolves the `deviceAssignmentId` for `serial` from the signed-in account, so the user never
@@ -66,7 +81,7 @@ final class TandemSourceHTTPClient: TandemSourceAPI {
         let url = baseURL
             .appendingPathComponent(TandemSourceConfig.pumpersPath)
             .appendingPathComponent(pumperId)
-        let data = try await send(url: url, method: "GET", body: nil)
+        let data = try await send(url: url, method: "GET", body: nil, endpoint: "pumper")
         let pumper: PumperResponse
         do {
             pumper = try JSONDecoder().decode(PumperResponse.self, from: data)
@@ -76,6 +91,9 @@ final class TandemSourceHTTPClient: TandemSourceAPI {
         let wanted = String(serial)
         let device = pumper.devices.first { $0.serialNumber == wanted && $0.releasedAt == nil }
             ?? pumper.devices.first { $0.serialNumber == wanted }
+        if device == nil {
+            tandemSourceLogger.warning("No device on the Tandem Source account matches this pump's serial (\(pumper.devices.count) devices on the account)")
+        }
         return device?.assignmentId
     }
 
@@ -95,15 +113,18 @@ final class TandemSourceHTTPClient: TandemSourceAPI {
         return pumperId
     }
 
-    private func send(url: URL, method: String, body: Data?) async throws -> Data {
+    /// `endpoint` names the call in logs in place of the URL, whose path or query carries the
+    /// account's pumper id, the serial or the device assignment id.
+    private func send(url: URL, method: String, body: Data?, endpoint: String) async throws -> Data {
         do {
-            return try await attempt(url: url, method: method, body: body, forceRefresh: false)
+            return try await attempt(url: url, method: method, body: body, endpoint: endpoint, forceRefresh: false)
         } catch let TandemSourceError.http(status, _) where status == 401 {
-            return try await attempt(url: url, method: method, body: body, forceRefresh: true)
+            tandemSourceLogger.warning("Tandem Source \(endpoint) rejected the access token (401); refreshing it and retrying once")
+            return try await attempt(url: url, method: method, body: body, endpoint: endpoint, forceRefresh: true)
         }
     }
 
-    private func attempt(url: URL, method: String, body: Data?, forceRefresh: Bool) async throws -> Data {
+    private func attempt(url: URL, method: String, body: Data?, endpoint: String, forceRefresh: Bool) async throws -> Data {
         let token = try await tokenProvider.accessToken(forceRefresh: forceRefresh)
         var request = URLRequest(url: url)
         request.httpMethod = method
@@ -121,14 +142,18 @@ final class TandemSourceHTTPClient: TandemSourceAPI {
         do {
             (data, response) = try await session.data(for: request)
         } catch {
+            tandemSourceLogger.debug("Tandem Source \(endpoint) transport error: \(error.localizedDescription)")
             throw TandemSourceError.transport(error.localizedDescription)
         }
         guard let http = response as? HTTPURLResponse else {
             throw TandemSourceError.transport("non-HTTP response")
         }
+        let bodyPrefix = String(data: data.prefix(512), encoding: .utf8) ?? ""
         guard (200 ..< 300).contains(http.statusCode) else {
-            throw TandemSourceError.http(status: http.statusCode, body: String(data: data.prefix(512), encoding: .utf8) ?? "")
+            tandemSourceLogger.debug("Tandem Source \(endpoint) answered \(http.statusCode): \(bodyPrefix)")
+            throw TandemSourceError.http(status: http.statusCode, body: bodyPrefix)
         }
+        tandemSourceLogger.debug("Tandem Source \(endpoint) answered \(http.statusCode), \(data.count) bytes")
         return data
     }
 }

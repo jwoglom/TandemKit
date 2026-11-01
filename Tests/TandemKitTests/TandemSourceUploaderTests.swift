@@ -92,4 +92,22 @@ final class TandemSourceUploaderTests: XCTestCase {
 
         XCTAssertEqual(filled, [102 ... 104])
     }
+
+    func testRecordOfUnparsedTypeRelaysUnchanged() async throws {
+        var cargo = Data((0 ..< UInt8(HistoryLog.length)).map { $0 &* 7 })
+        cargo.replaceSubrange(0 ..< 2, with: [0xFE, 0x0F]) // a type id the parser has no class for
+        cargo.replaceSubrange(6 ..< 10, with: Bytes.toUint32(101))
+        let log = HistoryLogParser.parse(cargo)
+        XCTAssertTrue(log is UnknownHistoryLog)
+        let store = InMemoryHistoryLogStore()
+        try store.insert([log], pumpSerial: serial)
+        let api = StubAPI(maxPumpEventIndex: 100)
+
+        let result = try await TandemSourceUploader(deps: deps(api: api, store: store)).uploadPending(serial: serial)
+
+        XCTAssertEqual(result.uploadedCount, 1)
+        let uploaded = await api.uploadedBatches
+        let event = try XCTUnwrap(uploaded.first?.first)
+        XCTAssertEqual(TandemSourceEventEncoder.uploadableBytes(from: try XCTUnwrap(Data(base64Encoded: event))), cargo)
+    }
 }

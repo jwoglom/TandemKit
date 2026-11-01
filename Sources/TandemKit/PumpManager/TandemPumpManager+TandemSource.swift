@@ -31,6 +31,7 @@ extension TandemPumpManager {
     /// Exchanges an authorization code (from the UI's PKCE login) for tokens and turns the relay on.
     public func completeTandemSourceSignIn(code: String, codeVerifier: String, redirectURI: String) async throws {
         try await tandemSource.auth.exchangeAuthorizationCode(code, codeVerifier: codeVerifier, redirectURI: redirectURI)
+        logger.info("Signed in to Tandem Source; upload enabled")
         state.tandemSourceUploadEnabled = true
         state.lastTandemSourceError = nil
         notifyDelegateStateUpdated()
@@ -39,11 +40,13 @@ extension TandemPumpManager {
 
     public func signOutTandemSource() {
         tandemSource.auth.signOut()
+        logger.info("Signed out of Tandem Source; upload disabled")
         state.tandemSourceUploadEnabled = false
         notifyDelegateStateUpdated()
     }
 
     public func setTandemSourceUploadEnabled(_ enabled: Bool) {
+        logger.info("Tandem Source upload \(enabled ? "enabled" : "disabled")")
         state.tandemSourceUploadEnabled = enabled
         notifyDelegateStateUpdated()
         if enabled { uploadToTandemSourceIfDue(force: true) }

@@ -48,7 +48,11 @@ final class TandemSourceAuthManager: TandemSourceTokenProvider {
     }
 
     private func store(refreshToken: String?) {
-        try? keychain.replaceGenericPassword(refreshToken, forService: keychainService)
+        do {
+            try keychain.replaceGenericPassword(refreshToken, forService: keychainService)
+        } catch {
+            tandemSourceLogger.error("Couldn't write the Tandem Source refresh token to the keychain: \(error)")
+        }
     }
 
     func signOut() {
@@ -81,11 +85,18 @@ final class TandemSourceAuthManager: TandemSourceTokenProvider {
         guard let refresh = storedRefreshToken else {
             throw TandemSourceError.notAuthenticated
         }
-        let response = try await postToken([
-            "grant_type": "refresh_token",
-            "client_id": TandemSourceConfig.clientId,
-            "refresh_token": refresh,
-        ])
+        let response: TokenResponse
+        do {
+            response = try await postToken([
+                "grant_type": "refresh_token",
+                "client_id": TandemSourceConfig.clientId,
+                "refresh_token": refresh,
+            ])
+        } catch {
+            tandemSourceLogger.error("Tandem Source access token refresh failed: \(error)")
+            throw error
+        }
+        tandemSourceLogger.debug("Refreshed the Tandem Source access token, expires in \(response.expires_in ?? 3600) s")
         // The server rotates the refresh token on each use; keep the newest so the next refresh works.
         apply(response, refreshToken: response.refresh_token ?? refresh)
         return response.access_token

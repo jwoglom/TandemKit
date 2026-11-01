@@ -134,4 +134,8 @@ final class TandemSourceClientTests: XCTestCase {
             XCTAssertEqual(provider.forceRefreshCount, 0)
         }
     }
+
+    func testHTTPErrorDescriptionOmitsResponseBody() {
+        XCTAssertEqual(String(describing: TandemSourceError.http(status: 400, body: "echoed request")), "http(status: 400)")
+    }
 }

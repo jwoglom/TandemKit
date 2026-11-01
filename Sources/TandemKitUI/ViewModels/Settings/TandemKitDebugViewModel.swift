@@ -3,6 +3,8 @@ import SwiftUI
 import UIKit
 
 final class TandemKitDebugViewModel: ObservableObject {
+    private let log = TandemLogger(category: "TandemKitDebugViewModel")
+
     struct ParameterField: Identifiable {
         enum FieldType {
             case integer
@@ -169,6 +171,7 @@ final class TandemKitDebugViewModel: ObservableObject {
         } catch TandemSourceLoginSession.LoginError.cancelled {
             // User dismissed the sheet; nothing to report.
         } catch {
+            log.error("Tandem Source sign-in failed: \(error)")
             tandemSourceLoginError = String(describing: error)
         }
         refreshTandemSource()
