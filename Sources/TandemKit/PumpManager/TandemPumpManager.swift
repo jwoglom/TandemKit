@@ -162,6 +162,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
     /// `syncPumpData` rather than `telemetryScheduler`, which the bolus path cancels wholesale.
     lazy var historyBackfillCoordinator = HistoryBackfillCoordinator(pumpManager: self)
 
+    /// Relays stored pump history to Tandem Source so the user's clinic sees Loop's delivery the way
+    /// it would see the pump's own app. Owns the OIDC session and throttling; see
+    /// `TandemPumpManager+TandemSource.swift`.
+    let tandemSource = TandemSourceController()
+
     // Set on the command queue, read on the telemetry queue and the host's.
     private let bolusProgressReportLock = NSLock()
     private var _bolusProgressReport: TandemDoseProgressReporter?

@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import UIKit
 
 final class TandemKitDebugViewModel: ObservableObject {
     struct ParameterField: Identifiable {
@@ -61,6 +62,14 @@ final class TandemKitDebugViewModel: ObservableObject {
 
     @Published var useSilentMode: Bool = false
 
+    // MARK: Tandem Source relay
+    @Published var tandemSourceEnabled: Bool = false
+    @Published var tandemSourceAssignmentId: String = ""
+    @Published private(set) var tandemSourceSignedIn: Bool = false
+    @Published private(set) var tandemSourceStatus: [String] = []
+    @Published var tandemSourceBusy: Bool = false
+    @Published var tandemSourceLoginError: String?
+
     private let pumpManager: TandemPumpManager?
     private var lastRequestMessage: Message?
     let openHistoryLogViewer: (() -> Void)?
@@ -86,12 +95,92 @@ final class TandemKitDebugViewModel: ObservableObject {
         self.openFeatureFlags = openFeatureFlags
         self.rerunInitialSetup = rerunInitialSetup
         useSilentMode = pumpManager?.state.useSilentTones ?? false
+        refreshTandemSource()
     }
 
     func setSilentMode(_ enabled: Bool) {
         pumpManager?.configureSilentMode(enabled)
         useSilentMode = enabled
     }
+
+    // MARK: Tandem Source relay
+
+    func refreshTandemSource() {
+        guard let pumpManager else { return }
+        let state = pumpManager.state
+        tandemSourceEnabled = state.tandemSourceUploadEnabled
+        tandemSourceAssignmentId = state.tandemSourceDeviceAssignmentId ?? ""
+        tandemSourceSignedIn = pumpManager.tandemSourceIsAuthenticated
+
+        var lines: [String] = []
+        lines.append(tandemSourceSignedIn ? "Signed in" : "Not signed in")
+        if let last = state.lastTandemSourceUpload {
+            lines.append("Last upload: \(Self.tandemSourceDateFormatter.string(from: last))")
+        }
+        if let index = state.lastTandemSourceEventIndex {
+            lines.append("Server event index: \(index)")
+        }
+        if let error = state.lastTandemSourceError {
+            lines.append("Last error: \(error)")
+        }
+        tandemSourceStatus = lines
+    }
+
+    func setTandemSourceEnabled(_ enabled: Bool) {
+        pumpManager?.setTandemSourceUploadEnabled(enabled)
+        refreshTandemSource()
+    }
+
+    func saveTandemSourceAssignmentId() {
+        pumpManager?.setTandemSourceDeviceAssignmentId(tandemSourceAssignmentId)
+        refreshTandemSource()
+    }
+
+    func uploadTandemSourceNow() {
+        pumpManager?.uploadToTandemSourceIfDue(force: true)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in self?.refreshTandemSource() }
+    }
+
+    func signOutTandemSource() {
+        pumpManager?.signOutTandemSource()
+        refreshTandemSource()
+    }
+
+    @MainActor
+    func signInToTandemSource() async {
+        guard let pumpManager else { return }
+        guard let anchor = Self.keyWindow() else {
+            tandemSourceLoginError = String(localized: "No window available to present sign-in.", comment: "Tandem Source: no presentation anchor")
+            return
+        }
+        tandemSourceBusy = true
+        tandemSourceLoginError = nil
+        defer { tandemSourceBusy = false }
+        do {
+            let (code, verifier, redirect) = try await TandemSourceLoginSession(anchor: anchor).authorize()
+            try await pumpManager.completeTandemSourceSignIn(code: code, codeVerifier: verifier, redirectURI: redirect)
+        } catch TandemSourceLoginSession.LoginError.cancelled {
+            // User dismissed the sheet; nothing to report.
+        } catch {
+            tandemSourceLoginError = String(describing: error)
+        }
+        refreshTandemSource()
+    }
+
+    @MainActor
+    private static func keyWindow() -> UIWindow? {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap { $0.windows }
+            .first { $0.isKeyWindow }
+    }
+
+    private static let tandemSourceDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .short
+        f.timeStyle = .short
+        return f
+    }()
 
     var pumpStateDebugDescription: String {
         pumpManager?.state.pumpState.debugDescription ?? "No PumpState available"

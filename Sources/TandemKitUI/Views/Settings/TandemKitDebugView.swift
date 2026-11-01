@@ -122,6 +122,68 @@ struct TandemKitDebugView: View {
                 .disabled(viewModel.openFeatureFlags == nil)
             }
 
+            Section {
+                ForEach(viewModel.tandemSourceStatus, id: \.self) { line in
+                    Text(line).font(.footnote).foregroundColor(.secondary)
+                }
+
+                Toggle(isOn: Binding(
+                    get: { viewModel.tandemSourceEnabled },
+                    set: { viewModel.setTandemSourceEnabled($0) }
+                )) {
+                    Text("Upload Loop data to Tandem Source", comment: "Tandem Source: enable the relay toggle")
+                }
+                .disabled(!viewModel.tandemSourceSignedIn)
+
+                HStack {
+                    TextField(
+                        String(localized: "Device Assignment ID", comment: "Tandem Source: assignment id field placeholder"),
+                        text: $viewModel.tandemSourceAssignmentId
+                    )
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+                    Button(String(localized: "Save", comment: "Tandem Source: save assignment id")) {
+                        viewModel.saveTandemSourceAssignmentId()
+                    }
+                }
+
+                if viewModel.tandemSourceSignedIn {
+                    Button(String(localized: "Upload now", comment: "Tandem Source: force an upload")) {
+                        viewModel.uploadTandemSourceNow()
+                    }
+                    Button(role: .destructive) {
+                        viewModel.signOutTandemSource()
+                    } label: {
+                        Text("Sign out", comment: "Tandem Source: sign out")
+                    }
+                } else {
+                    Button {
+                        Task { await viewModel.signInToTandemSource() }
+                    } label: {
+                        HStack {
+                            Text("Sign in to Tandem Source", comment: "Tandem Source: sign in")
+                            if viewModel.tandemSourceBusy {
+                                Spacer()
+                                ProgressView()
+                            }
+                        }
+                    }
+                    .disabled(viewModel.tandemSourceBusy)
+                }
+
+                if let error = viewModel.tandemSourceLoginError {
+                    Text(error).font(.footnote).foregroundColor(.red)
+                }
+            } header: {
+                Text("Tandem Source", comment: "Tandem Source: section header")
+            } footer: {
+                Text(
+                    "Relays pump history to Tandem Source so your clinic sees Loop's delivery as it would the pump's own app. Loop's automatic adjustments appear as temp rates and boluses, not as Control-IQ.",
+                    comment: "Tandem Source: section footer"
+                )
+            }
+            .onAppear { viewModel.refreshTandemSource() }
+
             Section(header: Text("Silent Tones")) {
                 Toggle(isOn: Binding(
                     get: { viewModel.useSilentMode },

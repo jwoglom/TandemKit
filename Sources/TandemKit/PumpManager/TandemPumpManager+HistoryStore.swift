@@ -29,6 +29,7 @@ extension TandemPumpManager {
         }
 
         pruneHistoryLogStoreIfNeeded(now: now)
+        uploadToTandemSourceIfDue()
     }
 
     /// Applies the retention policy at most once per `historyLogPruneInterval`. Piggybacked on

@@ -194,6 +194,21 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
     /// is reported as a replacement.
     public var lastPumpSerial: UInt32?
 
+    // MARK: Tandem Source upload
+
+    /// Whether the driver relays pump history to Tandem Source. Off until the user signs in and
+    /// enables it; the refresh token lives in the keychain, never here.
+    public var tandemSourceUploadEnabled: Bool = false
+    /// The account↔pump assignment id Tandem Source keys uploads by (from the account, as the Mobi
+    /// app's `GetPumper` returns). Required for an upload; entered/confirmed in settings.
+    public var tandemSourceDeviceAssignmentId: String?
+    /// When the last successful upload finished, and the pump event index the server then held —
+    /// both shown in settings so the user can see the relay is current.
+    public var lastTandemSourceUpload: Date?
+    public var lastTandemSourceEventIndex: UInt32?
+    /// Human-readable summary of the last upload failure, for the settings screen; nil after success.
+    public var lastTandemSourceError: String?
+
     public static func == (lhs: TandemPumpManagerState, rhs: TandemPumpManagerState) -> Bool {
         // Not one && chain: that takes the type checker ten times as long, most of a second.
         guard lhs.onboarded == rhs.onboarded,
@@ -268,7 +283,12 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
               lhs.lastSiteChangeDate == rhs.lastSiteChangeDate,
               lhs.lastCartridgeChangeDate == rhs.lastCartridgeChangeDate,
               lhs.lastCannulaFillAmount == rhs.lastCannulaFillAmount,
-              lhs.lastPumpSerial == rhs.lastPumpSerial
+              lhs.lastPumpSerial == rhs.lastPumpSerial,
+              lhs.tandemSourceUploadEnabled == rhs.tandemSourceUploadEnabled,
+              lhs.tandemSourceDeviceAssignmentId == rhs.tandemSourceDeviceAssignmentId,
+              lhs.lastTandemSourceUpload == rhs.lastTandemSourceUpload,
+              lhs.lastTandemSourceEventIndex == rhs.lastTandemSourceEventIndex,
+              lhs.lastTandemSourceError == rhs.lastTandemSourceError
         else {
             return false
         }
@@ -515,6 +535,11 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         lastCartridgeChangeDate = rawValue["lastCartridgeChangeDate"] as? Date
         lastCannulaFillAmount = rawValue["lastCannulaFillAmount"] as? Double
         lastPumpSerial = rawValue["lastPumpSerial"] as? UInt32 ?? pumpState.pumpSerial
+        tandemSourceUploadEnabled = rawValue["tandemSourceUploadEnabled"] as? Bool ?? false
+        tandemSourceDeviceAssignmentId = rawValue["tandemSourceDeviceAssignmentId"] as? String
+        lastTandemSourceUpload = rawValue["lastTandemSourceUpload"] as? Date
+        lastTandemSourceEventIndex = rawValue["lastTandemSourceEventIndex"] as? UInt32
+        lastTandemSourceError = rawValue["lastTandemSourceError"] as? String
 
         if let rawInsulinType = rawValue["insulinType"] as? InsulinType.RawValue {
             insulinType = InsulinType(rawValue: rawInsulinType)
@@ -577,6 +602,11 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         raw["lastCartridgeChangeDate"] = lastCartridgeChangeDate
         raw["lastCannulaFillAmount"] = lastCannulaFillAmount
         raw["lastPumpSerial"] = lastPumpSerial
+        raw["tandemSourceUploadEnabled"] = tandemSourceUploadEnabled
+        raw["tandemSourceDeviceAssignmentId"] = tandemSourceDeviceAssignmentId
+        raw["lastTandemSourceUpload"] = lastTandemSourceUpload
+        raw["lastTandemSourceEventIndex"] = lastTandemSourceEventIndex
+        raw["lastTandemSourceError"] = lastTandemSourceError
         raw["insulinType"] = insulinType?.rawValue
         raw["useSilentTones"] = useSilentTones
         raw["basalRateSchedule"] = TandemPumpManagerState.encodeBasalSchedule(basalRateSchedule)
@@ -782,7 +812,12 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
             "* lastSiteChangeDate: \(debugValue(lastSiteChangeDate))",
             "* lastCartridgeChangeDate: \(debugValue(lastCartridgeChangeDate))",
             "* lastCannulaFillAmount: \(debugValue(lastCannulaFillAmount.map { "\($0) U" }))",
-            "* lastPumpSerial: \(debugValue(lastPumpSerial))"
+            "* lastPumpSerial: \(debugValue(lastPumpSerial))",
+            "* tandemSourceUploadEnabled: \(tandemSourceUploadEnabled)",
+            "* tandemSourceDeviceAssignmentId: \(debugValue(tandemSourceDeviceAssignmentId))",
+            "* lastTandemSourceUpload: \(debugValue(lastTandemSourceUpload))",
+            "* lastTandemSourceEventIndex: \(debugValue(lastTandemSourceEventIndex))",
+            "* lastTandemSourceError: \(debugValue(lastTandemSourceError))"
         ]
         return lines.joined(separator: "\n")
     }

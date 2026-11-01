@@ -141,6 +141,13 @@ extension TandemPumpManager {
         state.pumpState.pcbSerialNumber = pumpVersionResponse.pcbSerialNumberA
         state.pumpState.pumpModel = PumpModel(rawValue: pumpVersionResponse.modelNumber)
 
+        // PumpVersionB omits armSwVer/partNum/pcbaRev/pumpRev; the "A" read carries them, and a
+        // Tandem Source upload reports them. Optional: a failure here only leaves those fields at
+        // their defaults in an upload, never blocking the sync.
+        if let pumpVersionA = bluetooth.write(PumpVersionRequest()) {
+            state.pumpState.pumpVersionACargo = pumpVersionA.cargo
+        }
+
 //        BleSoftwareInfoRequest
         // PumpVersionBRequest
         // ApiVersionRequest

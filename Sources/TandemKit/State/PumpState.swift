@@ -16,6 +16,11 @@ public struct PumpState: RawRepresentable, Equatable, CustomDebugStringConvertib
     public var pcbSerialNumber: UInt32?
     public var softwareName: String?
     public var pumpModel: PumpModel?
+    /// Raw cargo of the last `PumpVersionResponse` (the "A" version read). Kept whole so the fields
+    /// only it carries — `armSwVer`, `partNum`, `pcbaRev`, `pumpRev` — can be re-read for a Tandem
+    /// Source upload without another pump round trip. `PumpVersionB` (what the rest of the driver
+    /// uses) does not report them.
+    public var pumpVersionACargo: Data?
 
     // other fields are technically not required by other parts of the driver
     public var valid: Bool {
@@ -65,6 +70,7 @@ public struct PumpState: RawRepresentable, Equatable, CustomDebugStringConvertib
         controlBitsB = rawValue["controlBitsB"] as? UInt32
         softwareName = rawValue["softwareName"] as? String
         pcbSerialNumber = rawValue["pcbSerialNumber"] as? UInt32
+        pumpVersionACargo = rawValue["pumpVersionACargo"] as? Data
         if let pumpModelRaw = rawValue["pumpModel"] as? PumpModel.RawValue {
             pumpModel = PumpModel(rawValue: pumpModelRaw)
         }
@@ -82,6 +88,7 @@ public struct PumpState: RawRepresentable, Equatable, CustomDebugStringConvertib
         rawValue["controlBitsA"] = controlBitsA
         rawValue["controlBitsB"] = controlBitsB
         rawValue["pcbSerialNumber"] = pcbSerialNumber
+        rawValue["pumpVersionACargo"] = pumpVersionACargo
         if let timeSinceReset = timeSinceReset {
             rawValue["timeSinceReset"] = timeSinceReset
         }
