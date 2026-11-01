@@ -454,7 +454,9 @@ host queue, so its state stays behind its lock.
   fails.
 - A temp set on the pump, or one whose answer was lost with the link, is found by the next sync
   (`observeReplacedTempBasal`): history ends the held temp at its `TempRateCompleted` and adopts the
-  pump's from its `TempRateActivated`. At detection the new one's duration only history gives
+  pump's from its `TempRateActivated`. A start dated ahead of the phone was stamped before the
+  pump's clock went back, as at a DST change: the temp is taken for the held one unless its percent
+  differs, and is then dated at detection. The new one's duration only history gives
   (`TempRateResponse.duration`'s unit is unknown), so it is reported finished: at the last reading
   that saw it when above the schedule, at detection when below. A temp the driver never sees reaches
   the host after the fact, through basal reconciliation.

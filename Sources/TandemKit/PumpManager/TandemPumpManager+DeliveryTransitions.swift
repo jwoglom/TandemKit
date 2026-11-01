@@ -113,10 +113,16 @@ extension TandemPumpManager {
             return
         }
         guard temp.active else { return }
-        let start = hostDate(forPumpDate: temp.startTime)
+        let pumpStart = hostDate(forPumpDate: temp.startTime)
+        // Stamped before the pump's clock went back (a DST change), so it says nothing of when it started.
+        let startIsAhead = pumpStart > now.addingTimeInterval(Self.transitionMatchTolerance)
+        if startIsAhead {
+            logger.warning("The pump dates the temp basal it runs at \(pumpStart), ahead of the phone; its clock went back since")
+        }
+        let start = startIsAhead ? now : pumpStart
         let otherPercent = held.tempPercent.map { $0 != temp.percentage } ?? false
         // A held temp cut at a segment change starts there, after the pump's record of its start.
-        guard otherPercent || start > held.startDate.addingTimeInterval(Self.transitionMatchTolerance) else {
+        guard otherPercent || !startIsAhead && start > held.startDate.addingTimeInterval(Self.transitionMatchTolerance) else {
             return
         }
 
@@ -377,7 +383,9 @@ extension TandemPumpManager {
             dose = adopted.dose
             end = adopted.end
         } else {
-            let start = max(replacement.start, priorEnd ?? replacement.start)
+            // Never after detection, or the dose would end before it starts: a pending change saved by a
+            // build that took a start ahead of the phone still carries it.
+            let start = min(max(replacement.start, priorEnd ?? replacement.start), pending.detectedAt)
             dose = replacingDose(replacement, detectedAt: pending.detectedAt, start: start, duration: now.timeIntervalSince(start), automatic: false)
             let lastSeen = max(pending.detectedAt, state.deliveryTransitions.lastConfirmedObservation ?? pending.detectedAt)
             end = dose.value > getScheduledBasalRate(at: dose.startDate) ? lastSeen : pending.detectedAt
