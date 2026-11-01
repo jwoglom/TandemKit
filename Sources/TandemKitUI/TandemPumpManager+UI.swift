@@ -74,7 +74,7 @@ extension TandemPumpManager: PumpManagerUI {
         )
     }
 
-    public var pumpStatusHighlight: DeviceStatusHighlight? {
+    public var pumpStatusHighlight: PumpStatusHighlight? {
         buildPumpStatusHighlight()
     }
 
@@ -107,7 +107,7 @@ extension TandemPumpManager {
         }
     }
 
-    private func buildPumpStatusHighlight() -> DeviceStatusHighlight? {
+    private func buildPumpStatusHighlight() -> PumpStatusHighlight? {
         // Ahead of the therapy highlights below: those are all read from a pump we have stopped
         // hearing from, and reconnecting is the prerequisite for acting on any of them.
         if let issue = sustainedConnectionIssue {

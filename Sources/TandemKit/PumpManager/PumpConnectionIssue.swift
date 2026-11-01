@@ -56,6 +56,15 @@ public extension TandemPumpManager {
         return nil
     }
 
+    var inSignalLoss: Bool {
+        sustainedConnectionIssue != nil
+    }
+
+    /// The driver has no state in which the pump cannot deliver at all.
+    var isInoperable: Bool {
+        false
+    }
+
     /// `connectionIssue` narrowed to what is worth the host app's home screen. Radio problems
     /// qualify immediately — they will not clear on their own, and neither will a handshake the pump
     /// keeps ending, since the driver has stopped retrying it. A dropped link waits until it has

@@ -321,8 +321,8 @@ final class LoopDoseStoreOracle: DoseOracle {
             case .basal, .tempBasal:
                 if lastSuspend == nil, let last = lastBasal {
                     let endDate = min(last.endDate, dose.startDate)
-                    if endDate > last.startDate {
-                        reconciled.append(last.trimmed(from: nil, to: endDate, syncIdentifier: last.syncIdentifier))
+                    if endDate > last.startDate, let trimmed = last.trimmed(from: nil, to: endDate, syncIdentifier: last.syncIdentifier) {
+                        reconciled.append(trimmed)
                     }
                 } else if let suspend = lastSuspend, dose.type == .tempBasal {
                     reconciled.append(Self.closing(suspend, at: dose.startDate))

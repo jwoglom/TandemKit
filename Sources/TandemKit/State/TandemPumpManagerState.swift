@@ -866,6 +866,8 @@ private extension TandemPumpManagerState {
             raw["date"] = date.timeIntervalSinceReferenceDate
         case .resuming:
             raw["case"] = "resuming"
+        case .pumpInoperable:
+            raw["case"] = "pumpInoperable"
         }
 
         return raw
@@ -899,6 +901,8 @@ private extension TandemPumpManagerState {
             }
         case "resuming":
             return .resuming
+        case "pumpInoperable":
+            return .pumpInoperable
         default:
             return nil
         }
