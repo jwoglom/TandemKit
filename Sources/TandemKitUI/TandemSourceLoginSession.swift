@@ -17,15 +17,15 @@ import Foundation
 final class TandemSourceLoginSession: NSObject, ASWebAuthenticationPresentationContextProviding {
     struct Config {
         /// Leg 1 target: the SSO web app, not the OIDC authorize endpoint.
-        var authorizeURL = URL(string: "https://sso.tandemdiabetes.com/")!
-        var clientId = "0oa65ks2f7rpiHqfa4h7"
+        var authorizeURL = TandemSourceConfig.ssoAuthorizeURL
+        var clientId = TandemSourceConfig.clientId
         /// What the SSO app redirects back to with the code; the scheme we listen for.
-        var returnURI = "mobi://auth"
-        var callbackScheme = "mobi"
+        var returnURI = TandemSourceConfig.loginReturnURI
+        var callbackScheme = TandemSourceConfig.callbackURLScheme
         /// What the token exchange must present as `redirect_uri` — the code is bound to it.
-        var tokenRedirectURI = "https://sso.tandemdiabetes.com/client/authorize/callback"
-        var scope = "openid offline_access tandem.devices.assign"
-        var countryHint = "US"
+        var tokenRedirectURI = TandemSourceConfig.tokenRedirectURI
+        var scope = TandemSourceConfig.scopes
+        var countryHint = TandemSourceConfig.countryHint
     }
 
     enum LoginError: Error {
@@ -59,7 +59,7 @@ final class TandemSourceLoginSession: NSObject, ASWebAuthenticationPresentationC
             URLQueryItem(name: "redirect_uri", value: config.returnURI),
             URLQueryItem(name: "scope", value: config.scope),
             URLQueryItem(name: "code_challenge", value: challenge),
-            URLQueryItem(name: "code_challenge_method", value: "S256"),
+            URLQueryItem(name: "code_challenge_method", value: TandemSourceConfig.codeChallengeMethod),
             URLQueryItem(name: "state", value: state),
             URLQueryItem(name: "nonce", value: nonce),
             URLQueryItem(name: "country_hint", value: config.countryHint),

@@ -418,7 +418,7 @@ import XCTest
             Set(bluetooth.sentMessages.map { String(describing: type(of: $0)) }),
             [
                 "ApiVersionRequest", "PumpVersionBRequest", "TimeSinceResetRequest", "ControlIQInfoV2Request",
-                "ControlIQIOBRequest", "LastBolusStatusV2Request", "CurrentBasalStatusRequest"
+                "ControlIQIOBRequest", "LastBolusStatusV2Request", "CurrentBasalStatusRequest", "PumpVersionRequest"
             ],
             "reads alone"
         )

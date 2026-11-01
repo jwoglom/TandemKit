@@ -128,6 +128,7 @@ public struct PumpState: RawRepresentable, Equatable, CustomDebugStringConvertib
             "* pumpSerial: \(debugValue(pumpSerial))",
             "* modelNumber: \(debugValue(modelNumber))",
             "* pcbSerialNumber: \(debugValue(pcbSerialNumber))",
+            "* pumpVersionACargo: \(pumpVersionACargo.map { "\($0.count) bytes" } ?? "nil")",
             "* softwareName: \(debugValue(softwareName))",
             "* controlBitsA: \(debugValue(controlBitsA))",
             "* controlBitsB: \(debugValue(controlBitsB))",

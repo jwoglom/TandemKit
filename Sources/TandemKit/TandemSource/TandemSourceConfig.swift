@@ -44,6 +44,7 @@ enum TandemSourceConfig {
     static let countryHint = "US"
 
     static let scopes = "openid offline_access tandem.devices.assign"
+    static let codeChallengeMethod = "S256"
 
     /// The `TDCToken` HMAC: `base64(HMAC-SHA1(key, body))`. Key and `HmacSHA1` come from the app's
     /// native `libkeygen.so`; the key is used as raw UTF-8 bytes. Verified byte-for-byte against a
