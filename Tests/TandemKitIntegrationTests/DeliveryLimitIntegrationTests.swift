@@ -271,12 +271,12 @@ final class DeliveryLimitIntegrationTests: ConformanceTestCase {
         let batchesBefore = allPumpEventBatches.count
 
         let manual = ResultBox<PumpManagerError?>()
-        driver.manager.enactBolus(units: 1, activationType: .manualNoRecommendation) { manual.set($0) }
+        driver.manager.enactBolus(decisionId: nil, units: 1, activationType: .manualNoRecommendation) { manual.set($0) }
         try IntegrationWait.until("the pump to be asked to permit the manual bolus", timeout: 30) {
             try requestsSince(mark).contains("BolusPermissionRequest")
         }
         let automatic = ResultBox<PumpManagerError?>()
-        driver.manager.enactBolus(units: 0.5, activationType: .automatic) { automatic.set($0) }
+        driver.manager.enactBolus(decisionId: nil, units: 0.5, activationType: .automatic) { automatic.set($0) }
 
         XCTAssertNil(try manual.wait("manual enactBolus completion", timeout: commandTimeout))
         let error = try automatic.wait("automatic enactBolus completion", timeout: commandTimeout)

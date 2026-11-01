@@ -270,7 +270,7 @@ import XCTest
             automatic: false,
             isFinalized: false
         ))
-        let inFlight = DoseEntry(type: .bolus, startDate: date, value: 1.0, unit: .units, isMutable: true)
+        let inFlight = DoseEntry(type: .bolus, startDate: date, value: 1.0, unit: .units, decisionId: nil, isMutable: true)
         manager.emitPumpEvents(
             [NewPumpEvent(date: date, dose: inFlight, raw: raw, title: "Bolus", type: .bolus)],
             replacePendingEvents: false
@@ -402,7 +402,7 @@ import XCTest
         manager.state.bolusReportLedger.record(entry)
         let finalized = NewPumpEvent(
             date: entry.eventDate,
-            dose: DoseEntry(type: .bolus, startDate: entry.eventDate, value: 1.0, unit: .units, deliveredUnits: 1.0),
+            dose: DoseEntry(type: .bolus, startDate: entry.eventDate, value: 1.0, unit: .units, decisionId: nil, deliveredUnits: 1.0),
             raw: entry.raw,
             title: "Bolus"
         )

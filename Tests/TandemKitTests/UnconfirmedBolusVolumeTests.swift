@@ -66,7 +66,7 @@ import XCTest
         ))
 
         let enacted = expectation(description: "enactBolus")
-        manager.enactBolus(units: units, activationType: .manualNoRecommendation) { error in
+        manager.enactBolus(decisionId: nil, units: units, activationType: .manualNoRecommendation) { error in
             XCTAssertNil(error)
             enacted.fulfill()
         }

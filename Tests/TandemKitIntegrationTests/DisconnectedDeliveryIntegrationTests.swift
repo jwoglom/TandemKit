@@ -58,7 +58,7 @@ final class DisconnectedDeliveryIntegrationTests: FaketandemIntegrationTestCase 
         let driver = try stageDriver()
         let clock = try XCTUnwrap(driver.clock as? ManualClock)
         let box = ResultBox<PumpManagerError?>()
-        driver.manager.enactTempBasal(unitsPerHour: 0.5, for: .minutes(30)) { box.set($0) }
+        driver.manager.enactTempBasal(decisionId: nil, unitsPerHour: 0.5, for: .minutes(30)) { box.set($0) }
         XCTAssertNil(try box.wait("enactTempBasal completion", timeout: 60))
         driver.drainDelegate()
         let end = driver.manager.state.basalDose.estimatedEndDate

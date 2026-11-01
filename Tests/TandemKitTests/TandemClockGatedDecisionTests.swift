@@ -321,7 +321,7 @@ import XCTest
         ))
 
         let enacted = expectation(description: "enactBolus")
-        manager.enactBolus(units: units, activationType: .manualNoRecommendation) { error in
+        manager.enactBolus(decisionId: nil, units: units, activationType: .manualNoRecommendation) { error in
             XCTAssertNil(error)
             enacted.fulfill()
         }
@@ -765,7 +765,7 @@ import XCTest
         advance()
 
         let done = expectation(description: "enactTempBasal")
-        manager.enactTempBasal(unitsPerHour: 0.5, for: .minutes(30)) { error in
+        manager.enactTempBasal(decisionId: nil, unitsPerHour: 0.5, for: .minutes(30)) { error in
             XCTAssertNil(error)
             done.fulfill()
         }
@@ -790,7 +790,7 @@ import XCTest
         advance()
 
         let done = expectation(description: "enactTempBasal cancel")
-        manager.enactTempBasal(unitsPerHour: 0, for: 0) { _ in done.fulfill() }
+        manager.enactTempBasal(decisionId: nil, unitsPerHour: 0, for: 0) { _ in done.fulfill() }
         wait(for: [done], timeout: 10.0)
         settle()
 
