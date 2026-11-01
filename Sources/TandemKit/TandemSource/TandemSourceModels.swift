@@ -127,3 +127,16 @@ struct LastEventUploadedResponse: Decodable {
     let maxPumpEventIndex: UInt32
     let processingStatus: Int
 }
+
+/// `GET /pumpers/api/pumpers/{pumperId}` response — only the fields used to resolve a pump's
+/// `deviceAssignmentId`. The pumper carries the account's devices; each assigned device has an
+/// `assignmentId`, and `releasedAt` is non-nil once a device has been unassigned.
+struct PumperResponse: Decodable {
+    let devices: [PumperDevice]
+
+    struct PumperDevice: Decodable {
+        let serialNumber: String
+        let assignmentId: String
+        let releasedAt: String?
+    }
+}

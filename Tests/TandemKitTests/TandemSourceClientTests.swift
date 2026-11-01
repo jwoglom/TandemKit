@@ -23,8 +23,12 @@ final class TandemSourceClientTests: XCTestCase {
     private final class StubTokenProvider: TandemSourceTokenProvider {
         var isAuthenticated = true
         private(set) var forceRefreshCount = 0
+        /// When set, returned as-is (used by the pumper tests, which need a real JWT). Otherwise the
+        /// stale/fresh pair the retry test relies on.
+        var token: String?
         func accessToken(forceRefresh: Bool) async throws -> String {
             if forceRefresh { forceRefreshCount += 1 }
+            if let token { return token }
             return forceRefresh ? "fresh-token" : "stale-token"
         }
     }
@@ -61,6 +65,59 @@ final class TandemSourceClientTests: XCTestCase {
         let result = try await client.getLastEventUploaded(serial: 1234567, deviceAssignmentId: "uuid")
 
         XCTAssertEqual(result.maxPumpEventIndex, 2726123)
+    }
+
+    func testPumperIdDecodedFromJWTClaim() {
+        let token = Self.makeJWT(claims: ["tandem_pumper_id": "pumper-123", "sub": "x"])
+        XCTAssertEqual(TandemSourceHTTPClient.pumperId(fromJWT: token), "pumper-123")
+        XCTAssertNil(TandemSourceHTTPClient.pumperId(fromJWT: "not-a-jwt"))
+    }
+
+    func testFetchDeviceAssignmentIdMatchesSerialAndPrefersUnreleased() async throws {
+        let provider = StubTokenProvider()
+        provider.token = Self.makeJWT(claims: ["tandem_pumper_id": "pumper-123"])
+        let client = makeClient(provider)
+        StubURLProtocol.responder = { _ in
+            (200, Data(#"""
+            {"devices":[
+              {"serialNumber":"999","assignmentId":"other-device","releasedAt":null},
+              {"serialNumber":"1234567","assignmentId":"released-one","releasedAt":"2020-01-01T00:00:00Z"},
+              {"serialNumber":"1234567","assignmentId":"active-one","releasedAt":null}
+            ]}
+            """#.utf8))
+        }
+
+        let id = try await client.fetchDeviceAssignmentId(serial: 1234567)
+
+        XCTAssertEqual(id, "active-one")
+        // The pumper id from the token is the last path component.
+        XCTAssertEqual(StubURLProtocol.seenRequests.last?.url?.path, "/pumpers/api/pumpers/pumper-123")
+    }
+
+    func testFetchDeviceAssignmentIdReturnsNilWhenNoMatchingSerial() async throws {
+        let provider = StubTokenProvider()
+        provider.token = Self.makeJWT(claims: ["tandem_pumper_id": "pumper-123"])
+        let client = makeClient(provider)
+        StubURLProtocol.responder = { _ in
+            (200, Data(#"{"devices":[{"serialNumber":"999","assignmentId":"other","releasedAt":null}]}"#.utf8))
+        }
+
+        let id = try await client.fetchDeviceAssignmentId(serial: 1234567)
+
+        XCTAssertNil(id)
+    }
+
+    /// A minimal unsigned JWT (`header.payload.sig`) with a base64url payload — enough for the
+    /// claim reader, which does not verify the signature.
+    private static func makeJWT(claims: [String: String]) -> String {
+        func b64url(_ data: Data) -> String {
+            data.base64EncodedString()
+                .replacingOccurrences(of: "+", with: "-")
+                .replacingOccurrences(of: "/", with: "_")
+                .replacingOccurrences(of: "=", with: "")
+        }
+        let payload = try! JSONSerialization.data(withJSONObject: claims)
+        return "\(b64url(Data(#"{"alg":"none"}"#.utf8))).\(b64url(payload)).sig"
     }
 
     func testNon401ErrorDoesNotRetry() async {

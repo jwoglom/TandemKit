@@ -54,6 +54,47 @@ final class TandemSourceHTTPClient: TandemSourceAPI {
         _ = try await send(url: baseURL.appendingPathComponent(TandemSourceConfig.uploadPath), method: "POST", body: bodyJSON)
     }
 
+    /// Resolves the `deviceAssignmentId` for `serial` from the signed-in account, so the user never
+    /// has to find and paste a UUID. Reads the `tandem_pumper_id` claim out of the access token,
+    /// fetches that pumper, and returns the assignment id of the matching still-assigned device
+    /// (preferring one whose `releasedAt` is nil). Returns nil if the account has no such device.
+    func fetchDeviceAssignmentId(serial: UInt32) async throws -> String? {
+        let token = try await tokenProvider.accessToken(forceRefresh: false)
+        guard let pumperId = Self.pumperId(fromJWT: token) else {
+            throw TandemSourceError.decoding("access token has no tandem_pumper_id claim")
+        }
+        let url = baseURL
+            .appendingPathComponent(TandemSourceConfig.pumpersPath)
+            .appendingPathComponent(pumperId)
+        let data = try await send(url: url, method: "GET", body: nil)
+        let pumper: PumperResponse
+        do {
+            pumper = try JSONDecoder().decode(PumperResponse.self, from: data)
+        } catch {
+            throw TandemSourceError.decoding("pumper: \(error)")
+        }
+        let wanted = String(serial)
+        let device = pumper.devices.first { $0.serialNumber == wanted && $0.releasedAt == nil }
+            ?? pumper.devices.first { $0.serialNumber == wanted }
+        return device?.assignmentId
+    }
+
+    /// The `tandem_pumper_id` claim from a JWT, decoded without verifying the signature — the server
+    /// issued the token; this only reads our own account id back out of it.
+    static func pumperId(fromJWT token: String) -> String? {
+        let parts = token.split(separator: ".")
+        guard parts.count >= 2 else { return nil }
+        var b64 = String(parts[1])
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        while b64.count % 4 != 0 { b64 += "=" }
+        guard let data = Data(base64Encoded: b64),
+              let claims = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let pumperId = claims["tandem_pumper_id"] as? String
+        else { return nil }
+        return pumperId
+    }
+
     private func send(url: URL, method: String, body: Data?) async throws -> Data {
         do {
             return try await attempt(url: url, method: method, body: body, forceRefresh: false)

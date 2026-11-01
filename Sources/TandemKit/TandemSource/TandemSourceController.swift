@@ -40,7 +40,9 @@ final class TandemSourceController {
     /// only when an upload actually ran. Skips silently when disabled, not signed in, not
     /// configured, already running, or within `minInterval` of the last attempt (unless `force`).
     func trigger(now: Date, force: Bool, inputs: Inputs, completion: @escaping (Result<TandemSourceUploader.Result, Error>) -> Void) {
-        guard auth.isAuthenticated, inputs.deviceAssignmentId != nil else { return }
+        // The assignment id is resolved from the account inside the upload task when not already
+        // configured, so being signed in is the only precondition here.
+        guard auth.isAuthenticated else { return }
 
         lock.lock()
         if inFlight {
@@ -55,10 +57,20 @@ final class TandemSourceController {
         lastAttemptAt = now
         lock.unlock()
 
-        let uploader = makeUploader(inputs)
         Task {
             let result: Result<TandemSourceUploader.Result, Error>
             do {
+                let client = TandemSourceHTTPClient(baseURL: baseURL, tokenProvider: auth)
+                // Use the configured id if present, otherwise resolve it from the account once.
+                let assignmentId: String
+                if let configured = inputs.deviceAssignmentId {
+                    assignmentId = configured
+                } else if let resolved = try await client.fetchDeviceAssignmentId(serial: inputs.serial) {
+                    assignmentId = resolved
+                } else {
+                    throw TandemSourceUploader.UploadError.notConfigured
+                }
+                let uploader = makeUploader(inputs, api: client, assignmentId: assignmentId)
                 result = .success(try await uploader.uploadPending(serial: inputs.serial))
             } catch {
                 result = .failure(error)
@@ -70,13 +82,12 @@ final class TandemSourceController {
         }
     }
 
-    private func makeUploader(_ inputs: Inputs) -> TandemSourceUploader {
-        let client = TandemSourceHTTPClient(baseURL: baseURL, tokenProvider: auth)
-        return TandemSourceUploader(deps: TandemSourceUploader.Dependencies(
-            api: client,
+    private func makeUploader(_ inputs: Inputs, api: TandemSourceAPI, assignmentId: String) -> TandemSourceUploader {
+        TandemSourceUploader(deps: TandemSourceUploader.Dependencies(
+            api: api,
             store: inputs.store,
             deviceInfo: { inputs.deviceInfo },
-            deviceAssignmentId: { inputs.deviceAssignmentId },
+            deviceAssignmentId: { assignmentId },
             fillGaps: inputs.fillGaps,
             now: { Date() },
             pumpClock: inputs.pumpClock

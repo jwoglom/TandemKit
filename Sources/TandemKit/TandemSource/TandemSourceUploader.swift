@@ -15,6 +15,9 @@ actor TandemSourceUploader {
     struct Result: Equatable {
         var uploadedCount: Int
         var serverMaxEventIndex: UInt32
+        /// The assignment id actually used (resolved automatically when not already configured), so
+        /// the caller can persist it.
+        var deviceAssignmentId: String
     }
 
     enum UploadError: Error, Equatable {
@@ -50,7 +53,7 @@ actor TandemSourceUploader {
 
         let last = try await deps.api.getLastEventUploaded(serial: serial, deviceAssignmentId: assignmentId)
         guard let newest = try deps.store.newest(pumpSerial: serial), newest.sequenceNum > last.maxPumpEventIndex else {
-            return Result(uploadedCount: 0, serverMaxEventIndex: last.maxPumpEventIndex)
+            return Result(uploadedCount: 0, serverMaxEventIndex: last.maxPumpEventIndex, deviceAssignmentId: assignmentId)
         }
 
         let range = (last.maxPumpEventIndex + 1) ... newest.sequenceNum
@@ -66,7 +69,7 @@ actor TandemSourceUploader {
             try await upload(slice, device: device, assignmentId: assignmentId)
             uploaded += slice.count
         }
-        return Result(uploadedCount: uploaded, serverMaxEventIndex: newest.sequenceNum)
+        return Result(uploadedCount: uploaded, serverMaxEventIndex: newest.sequenceNum, deviceAssignmentId: assignmentId)
     }
 
     private func upload(_ logs: [StoredHistoryLog], device: TandemSourceDeviceInfo, assignmentId: String) async throws {

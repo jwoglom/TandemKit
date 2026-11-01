@@ -49,18 +49,17 @@ extension TandemPumpManager {
         if enabled { uploadToTandemSourceIfDue(force: true) }
     }
 
-    public func setTandemSourceDeviceAssignmentId(_ id: String?) {
-        let trimmed = id?.trimmingCharacters(in: .whitespacesAndNewlines)
-        state.tandemSourceDeviceAssignmentId = (trimmed?.isEmpty ?? true) ? nil : trimmed
-        notifyDelegateStateUpdated()
-    }
-
     private func handleTandemSourceResult(_ result: Result<TandemSourceUploader.Result, Error>) {
         switch result {
         case let .success(uploaded):
             logger.info("Tandem Source: uploaded \(uploaded.uploadedCount) events, server at \(uploaded.serverMaxEventIndex)")
             state.lastTandemSourceUpload = now
             state.lastTandemSourceEventIndex = uploaded.serverMaxEventIndex
+            // Persist an id resolved automatically from the account so later uploads skip the lookup
+            // and the settings screen can show it.
+            if state.tandemSourceDeviceAssignmentId != uploaded.deviceAssignmentId {
+                state.tandemSourceDeviceAssignmentId = uploaded.deviceAssignmentId
+            }
             state.lastTandemSourceError = nil
         case let .failure(error):
             logger.error("Tandem Source upload failed: \(error)")

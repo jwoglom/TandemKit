@@ -136,16 +136,21 @@ struct TandemKitDebugView: View {
                 .disabled(!viewModel.tandemSourceSignedIn)
 
                 HStack {
-                    TextField(
-                        String(localized: "Device Assignment ID", comment: "Tandem Source: assignment id field placeholder"),
-                        text: $viewModel.tandemSourceAssignmentId
-                    )
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-                    Button(String(localized: "Save", comment: "Tandem Source: save assignment id")) {
-                        viewModel.saveTandemSourceAssignmentId()
-                    }
+                    Text("Device Assignment ID", comment: "Tandem Source: assignment id label")
+                    Spacer()
+                    Text(viewModel.tandemSourceAssignmentId.isEmpty
+                        ? String(localized: "Resolving…", comment: "Tandem Source: assignment id not yet resolved")
+                        : viewModel.tandemSourceAssignmentId)
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.trailing)
+                        .textSelection(.enabled)
                 }
+                Text(
+                    "Resolved automatically from your account; no need to enter anything.",
+                    comment: "Tandem Source: assignment id help"
+                )
+                .font(.footnote).foregroundColor(.secondary)
 
                 if viewModel.tandemSourceSignedIn {
                     Button(String(localized: "Upload now", comment: "Tandem Source: force an upload")) {

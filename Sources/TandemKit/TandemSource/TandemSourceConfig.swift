@@ -14,6 +14,10 @@ enum TandemSourceConfig {
 
     static let getLastEventUploadedPath = "/cloud/upload/getlasteventuploaded"
     static let uploadPath = "/cloud/upload/upload"
+    /// `GET …/pumpers/api/pumpers/{pumperId}` returns the account and its assigned devices, each with
+    /// its `assignmentId` (the `deviceAssignmentId` uploads need). Used to resolve that id so the
+    /// user doesn't have to enter it.
+    static let pumpersPath = "/pumpers/api/pumpers"
 
     /// OIDC (`iss: …/accounts/api`). `authorizationEndpoint`/`tokenEndpoint` are confirmed from the
     /// capture; discovery at `openIDConfigurationPath` can override them per environment.

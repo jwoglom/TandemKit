@@ -64,7 +64,8 @@ final class TandemKitDebugViewModel: ObservableObject {
 
     // MARK: Tandem Source relay
     @Published var tandemSourceEnabled: Bool = false
-    @Published var tandemSourceAssignmentId: String = ""
+    /// Resolved automatically from the account; shown read-only, never entered by the user.
+    @Published private(set) var tandemSourceAssignmentId: String = ""
     @Published private(set) var tandemSourceSignedIn: Bool = false
     @Published private(set) var tandemSourceStatus: [String] = []
     @Published var tandemSourceBusy: Bool = false
@@ -128,11 +129,6 @@ final class TandemKitDebugViewModel: ObservableObject {
 
     func setTandemSourceEnabled(_ enabled: Bool) {
         pumpManager?.setTandemSourceUploadEnabled(enabled)
-        refreshTandemSource()
-    }
-
-    func saveTandemSourceAssignmentId() {
-        pumpManager?.setTandemSourceDeviceAssignmentId(tandemSourceAssignmentId)
         refreshTandemSource()
     }
 
