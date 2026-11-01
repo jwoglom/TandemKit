@@ -36,6 +36,31 @@ final class TrioTempBasalTests: TrioTestCase {
         XCTAssertEqual(temps.map(\.isMutable), [false, false])
     }
 
+    /// The pump's clock an hour ahead, as a phone that fell back for DST leaves a pump nobody set,
+    /// then set back by Sync Time while a temp basal runs: Trio's Apple Health upload crashed on a
+    /// temp reported ending before it started (TimeChangeConformanceTests G5).
+    func testATempBasalRunningAsThePumpsClockIsSetBackIsStoredInOrder() throws {
+        try pairTrio()
+        try syncBasalSchedule()
+        try harness.client.setPumpTimeOnThePump(deltaSeconds: .hours(1))
+        try control.send(.init(command: .sync))
+        try control.send(.init(command: .tempBasal, unitsPerHour: 1.5, duration: .minutes(30)))
+        let first = try trioStored("the first temp basal", until: Self.hasRunningTempBasal)
+        try waitForASecondToPass(since: XCTUnwrap(first.flatMap(\.pumpEvents).last { $0.dose?.type == .tempBasal }?.date))
+
+        try control.send(.init(command: .syncPumpTime))
+        try control.send(.init(command: .tempBasal, unitsPerHour: 0.5, duration: .minutes(30)))
+        try control.send(.init(command: .tempBasal, unitsPerHour: 0, duration: 0))
+
+        try trioStored("both temp basals finished") { events in
+            Set(events.filter { $0.dose?.type == .tempBasal && $0.dose?.isMutable == false }.compactMap(\.dose?.unitsPerHour)) == [1.5, 0.5]
+        }
+        let temps = try assertTrioStoredWhatTheOracleExpects().stored.filter(\.isTempBasal)
+        XCTAssertEqual(temps.map(\.tempBasalRate), [1.5, 0.5])
+        XCTAssertTrue(temps.allSatisfy { ($0.tempBasalDurationMinutes ?? 0) >= 0 }, "\(temps)")
+        XCTAssertNotNil(try control.send(.init(command: .status)).status, "Trio still answers")
+    }
+
     func testATempBasalAboveMaxBasalIsDroppedByTrioAsTheOracleExpects() throws {
         try pairTrio()
         try syncBasalSchedule(unitsPerHour: 1.0)
