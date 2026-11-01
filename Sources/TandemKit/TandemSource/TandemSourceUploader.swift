@@ -14,7 +14,7 @@ actor TandemSourceUploader {
         /// The assignment id actually used (resolved automatically when not already configured), so
         /// the caller can persist it.
         var deviceAssignmentId: String
-        /// The first record this run stopped at because it couldn't be read; nil when caught up.
+        /// The first record this run stopped at because the pump read failed; nil when caught up.
         var waitingForSequenceNum: UInt32? = nil
         /// Where a re-send left off, for the next run; nil once it has reached the server's index.
         var resendFrom: UInt32? = nil
@@ -43,8 +43,10 @@ actor TandemSourceUploader {
     /// Records per upload body. The capture sent 1–36; 50 keeps bodies small while cutting round
     /// trips on a large backfill.
     static let batchSize = 50
-    /// The most records one run reads from the pump; at 255 per request, about ten requests.
-    static let maxFillPerRun = 2500
+    /// Records read from the pump per step; at 255 per request, about ten requests.
+    static let fillStep = 2500
+    /// Steps per run, so a re-send of a day or two finishes in one run.
+    static let maxFillStepsPerRun = 8
 
     private let deps: Dependencies
 
@@ -67,24 +69,26 @@ actor TandemSourceUploader {
 
         let range = start ... newest.sequenceNum
         var missing = try deps.store.missingRanges(pumpSerial: serial, in: range)
-        if !missing.isEmpty {
-            if let pumpFirst = await deps.fillGaps(serial, Self.capped(missing, to: Self.maxFillPerRun)) {
-                missing = try deps.store.missingRanges(pumpSerial: serial, in: range)
-                let gone = missing.filter { $0.lowerBound < pumpFirst }
-                if !gone.isEmpty {
-                    let count = gone.reduce(0) { $0 + Int(min($1.upperBound, pumpFirst - 1) - $1.lowerBound) + 1 }
-                    tandemSourceLogger.warning("Tandem Source: skipping \(count) records the pump no longer holds")
-                    missing = missing.compactMap { $0.upperBound < pumpFirst ? nil : max($0.lowerBound, pumpFirst) ... $0.upperBound }
-                }
-            } else {
-                missing = try deps.store.missingRanges(pumpSerial: serial, in: range)
+        var pumpFirst: UInt32?
+        for _ in 0 ..< Self.maxFillStepsPerRun where !missing.isEmpty {
+            let before = Self.count(missing)
+            guard let first = await deps.fillGaps(serial, Self.capped(missing, to: Self.fillStep)) else { break }
+            pumpFirst = first
+            missing = Self.trimmed(try deps.store.missingRanges(pumpSerial: serial, in: range), below: first)
+            // A read that finished without shrinking the gap would return the same records next step.
+            if Self.count(missing) >= before { break }
+        }
+        if let pumpFirst {
+            let gone = try deps.store.missingRanges(pumpSerial: serial, in: range).filter { $0.lowerBound < pumpFirst }
+            if !gone.isEmpty {
+                tandemSourceLogger.warning("Tandem Source: skipping \(Self.count(Self.below(gone, pumpFirst))) records the pump no longer holds")
             }
         }
 
         let through = missing.first.map { $0.lowerBound - 1 } ?? newest.sequenceNum
         let pending = through >= start ? try deps.store.logs(pumpSerial: serial, in: start ... through) : []
         if let gap = missing.first {
-            tandemSourceLogger.warning("Tandem Source: waiting for records \(gap.lowerBound)-\(gap.upperBound) from the pump; uploading \(pending.count) before them")
+            tandemSourceLogger.warning("Tandem Source: couldn't read records \(gap.lowerBound)-\(gap.upperBound) from the pump; uploading \(pending.count) before them")
         }
 
         var uploaded = 0
@@ -102,6 +106,19 @@ actor TandemSourceUploader {
             waitingForSequenceNum: missing.first?.lowerBound,
             resendFrom: resendFrom != nil && reached < serverIndex ? reached + 1 : nil
         )
+    }
+
+    static func count(_ ranges: [ClosedRange<UInt32>]) -> Int {
+        ranges.reduce(0) { $0 + $1.count }
+    }
+
+    /// The part of `ranges` at or past `first`; the pump holds nothing older.
+    static func trimmed(_ ranges: [ClosedRange<UInt32>], below first: UInt32) -> [ClosedRange<UInt32>] {
+        ranges.compactMap { $0.upperBound < first ? nil : max($0.lowerBound, first) ... $0.upperBound }
+    }
+
+    static func below(_ ranges: [ClosedRange<UInt32>], _ first: UInt32) -> [ClosedRange<UInt32>] {
+        ranges.compactMap { $0.lowerBound >= first ? nil : $0.lowerBound ... min($0.upperBound, first - 1) }
     }
 
     /// The lowest ranges first, trimmed to `limit` records: the upload goes ascending, so the oldest

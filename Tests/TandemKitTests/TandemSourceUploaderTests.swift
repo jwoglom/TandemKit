@@ -205,4 +205,36 @@ final class TandemSourceUploaderTests: XCTestCase {
     func testTheOldestGapIsReadFirstWithinTheCap() {
         XCTAssertEqual(TandemSourceUploader.capped([20 ... 29, 1 ... 5], to: 8), [1 ... 5, 20 ... 22])
     }
+
+    func testAGapLargerThanOneReadStepIsReadInOneRun() async throws {
+        let api = StubAPI(maxPumpEventIndex: 100)
+        let newest = UInt32(100 + TandemSourceUploader.fillStep * 2 + 10)
+        let store = store(seqs: [101, newest])
+        var steps = 0
+        let uploader = TandemSourceUploader(deps: deps(api: api, store: store, onFill: { _, ranges in
+            steps += 1
+            try! store.insert(ranges.flatMap { Array($0) }.map(self.record))
+            return 1
+        }))
+
+        let result = try await uploader.uploadPending(serial: serial)
+
+        XCTAssertEqual(steps, 3)
+        XCTAssertEqual(result.uploadedCount, Int(newest) - 100)
+        XCTAssertNil(result.waitingForSequenceNum)
+    }
+
+    func testAReadThatReturnsNothingStopsInsteadOfRetrying() async throws {
+        let api = StubAPI(maxPumpEventIndex: 100)
+        var steps = 0
+        let uploader = TandemSourceUploader(deps: deps(api: api, store: store(seqs: [101, 105]), onFill: { _, _ in
+            steps += 1
+            return 1
+        }))
+
+        let result = try await uploader.uploadPending(serial: serial)
+
+        XCTAssertEqual(steps, 1)
+        XCTAssertEqual(result.waitingForSequenceNum, 102)
+    }
 }

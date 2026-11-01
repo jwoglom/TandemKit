@@ -101,7 +101,7 @@ extension TandemPumpManager {
             if state.tandemSourceDeviceAssignmentId != uploaded.deviceAssignmentId {
                 state.tandemSourceDeviceAssignmentId = uploaded.deviceAssignmentId
             }
-            state.lastTandemSourceError = uploaded.waitingForSequenceNum.map { "Waiting for pump history from record \($0)" }
+            state.lastTandemSourceError = uploaded.waitingForSequenceNum.map { "Couldn't read pump history from record \($0); will retry" }
         case let .failure(error):
             logger.error("Tandem Source upload failed: \(error)")
             state.lastTandemSourceError = String(describing: error)
