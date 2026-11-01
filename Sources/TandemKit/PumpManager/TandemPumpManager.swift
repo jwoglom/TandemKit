@@ -781,6 +781,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     public func enactBolus(
+        decisionId: UUID?,
         units: Double,
         activationType: BolusActivationType,
         completion: @escaping (_ error: PumpManagerError?) -> Void
@@ -1077,6 +1078,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     public func enactTempBasal(
+        decisionId: UUID?,
         unitsPerHour: Double,
         for duration: TimeInterval,
         completion: @escaping (_ error: PumpManagerError?) -> Void

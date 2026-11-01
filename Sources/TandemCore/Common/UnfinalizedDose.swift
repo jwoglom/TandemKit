@@ -242,6 +242,7 @@ public class UnfinalizedDose: Equatable {
                 endDate: endDate,
                 value: value,
                 unit: .units,
+                decisionId: nil,
                 deliveredUnits: isMutable ? nil : deliveredUnits,
                 insulinType: insulinType,
                 automatic: automatic,
@@ -254,6 +255,7 @@ public class UnfinalizedDose: Equatable {
                 startDate: startDate,
                 value: roundBasalRate(value),
                 unit: .unitsPerHour,
+                decisionId: nil,
                 insulinType: insulinType
             )
 
@@ -271,6 +273,7 @@ public class UnfinalizedDose: Equatable {
                 endDate: actualEndDate,
                 value: value,
                 unit: .unitsPerHour,
+                decisionId: nil,
                 deliveredUnits: isMutable ? nil : TandemPumpCapabilities.roundToReportingResolution(value * (duration / .hours(1))),
                 insulinType: insulinType,
                 automatic: automatic,

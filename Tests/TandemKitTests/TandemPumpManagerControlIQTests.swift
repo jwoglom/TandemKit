@@ -284,13 +284,13 @@ import XCTest
 
         let bolused = expectation(description: "enactBolus")
         var bolusError: PumpManagerError?
-        manager.enactBolus(units: 1.0, activationType: .automatic) {
+        manager.enactBolus(decisionId: nil, units: 1.0, activationType: .automatic) {
             bolusError = $0
             bolused.fulfill()
         }
         let tempSet = expectation(description: "enactTempBasal")
         var tempError: PumpManagerError?
-        manager.enactTempBasal(unitsPerHour: 1.0, for: .minutes(30)) {
+        manager.enactTempBasal(decisionId: nil, unitsPerHour: 1.0, for: .minutes(30)) {
             tempError = $0
             tempSet.fulfill()
         }

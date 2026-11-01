@@ -15,6 +15,7 @@ final class DoseOracleTests: XCTestCase {
             endDate: end ?? start.addingTimeInterval(30),
             value: units,
             unit: .units,
+            decisionId: nil,
             deliveredUnits: mutable ? nil : delivered,
             insulinType: .novolog,
             automatic: false,
@@ -32,6 +33,7 @@ final class DoseOracleTests: XCTestCase {
             endDate: actualEnd,
             value: rate,
             unit: .unitsPerHour,
+            decisionId: nil,
             deliveredUnits: mutable ? nil : rate * actualEnd.timeIntervalSince(start) / .hours(1),
             insulinType: .novolog,
             automatic: true,
@@ -348,7 +350,7 @@ final class DoseOracleTests: XCTestCase {
 
     private func scheduledBasal(rate: Double, at date: Date) -> NewPumpEvent {
         NewPumpEvent.basal(
-            dose: DoseEntry(type: .basal, startDate: date, endDate: date, value: rate, unit: .unitsPerHour, insulinType: .novolog),
+            dose: DoseEntry(type: .basal, startDate: date, endDate: date, value: rate, unit: .unitsPerHour, decisionId: nil, insulinType: .novolog),
             date: date
         )
     }
@@ -528,6 +530,7 @@ final class DoseOracleTests: XCTestCase {
             endDate: t0.addingTimeInterval(.minutes(30)),
             value: 2,
             unit: .unitsPerHour,
+            decisionId: nil,
             deliveredUnits: 5,
             insulinType: .novolog
         )
