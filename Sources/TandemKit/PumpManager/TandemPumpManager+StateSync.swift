@@ -1068,16 +1068,17 @@ extension TandemPumpManager {
                     acknowledgeActionButtonLabel: String(localized: "OK", comment: "Acknowledges the pump time alert")
                 )
                 self.logger.warning("Pump clock is \(minutes) min off the phone's; issuing an alert")
-                delegate.issueAlert(LoopKit.Alert(
+                let alert = LoopKit.Alert(
                     identifier: identifier,
                     foregroundContent: content,
                     backgroundContent: content,
                     trigger: .immediate,
                     interruptionLevel: .timeSensitive
-                ))
+                )
+                Task { await delegate.issueAlert(alert) }
             } else {
                 self.logger.info("Pump clock agrees with the phone's again; retracting the alert")
-                delegate.retractAlert(identifier: identifier)
+                Task { await delegate.retractAlert(identifier: identifier) }
             }
             self.state.pumpClockSkewAlertIssued = skewed
             self.notifyDelegateStateUpdated()
