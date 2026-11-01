@@ -2,7 +2,7 @@ import Combine
 import CoreBluetooth
 import Dispatch
 import Foundation
-import HealthKit
+import LoopAlgorithm
 import LoopKit
 #if canImport(UIKit)
 import UIKit
@@ -1640,15 +1640,14 @@ public class TandemPumpManager: PumpManager, Pluggable {
         let completion = watchdogged(timeoutResult: .failure(PumpCommError.pumpNotConnected), completion)
         logger.info("syncDeliveryLimits...")
 
-        let hkUnit = HKUnit.internationalUnit().unitDivided(by: .hour())
         let basalRequest: SetMaxBasalLimitRequest?
         let bolusRequest: SetMaxBolusLimitRequest?
         do {
             basalRequest = try limits.maximumBasalRate.map {
-                try SetMaxBasalLimitRequest(maxHourlyBasalMilliunits: Int(($0.doubleValue(for: hkUnit) * 1000.0).rounded()))
+                try SetMaxBasalLimitRequest(maxHourlyBasalMilliunits: Int(($0.doubleValue(for: .internationalUnitsPerHour) * 1000.0).rounded()))
             }
             bolusRequest = try limits.maximumBolus.map {
-                try SetMaxBolusLimitRequest(maxBolusMilliunits: Int(($0.doubleValue(for: HKUnit.internationalUnit()) * 1000.0).rounded()))
+                try SetMaxBolusLimitRequest(maxBolusMilliunits: Int(($0.doubleValue(for: .internationalUnit) * 1000.0).rounded()))
             }
         } catch {
             logger.error("Delivery limits rejected before sending: \(error.localizedDescription)")
@@ -1691,8 +1690,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 }
             }
 
-            self.state.settings.maxTempBasalRate = limits.maximumBasalRate?.doubleValue(for: hkUnit)
-            self.state.settings.maxBolus = limits.maximumBolus?.doubleValue(for: HKUnit.internationalUnit())
+            self.state.settings.maxTempBasalRate = limits.maximumBasalRate?.doubleValue(for: .internationalUnitsPerHour)
+            self.state.settings.maxBolus = limits.maximumBolus?.doubleValue(for: .internationalUnit)
             self.notifyDelegateStateUpdated()
 
             completion(.success(limits))

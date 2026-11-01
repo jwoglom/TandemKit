@@ -1,5 +1,5 @@
 import Foundation
-import HealthKit
+import LoopAlgorithm
 import LoopKit
 
 /// No clock or sounds field: neither failed write blocks setup. `showPumpTimeSyncWarning` flags a
@@ -123,10 +123,9 @@ private extension TandemPumpManager {
             return
         }
 
-        let unitsPerHour = HKUnit.internationalUnit().unitDivided(by: .hour())
         let limits = DeliveryLimits(
-            maximumBasalRate: maxBasalRate.map { HKQuantity(unit: unitsPerHour, doubleValue: $0) },
-            maximumBolus: maxBolus.map { HKQuantity(unit: .internationalUnit(), doubleValue: $0) }
+            maximumBasalRate: maxBasalRate.map { LoopQuantity(unit: .internationalUnitsPerHour, doubleValue: $0) },
+            maximumBolus: maxBolus.map { LoopQuantity(unit: .internationalUnit, doubleValue: $0) }
         )
 
         syncDeliveryLimits(limits: limits) { completion($0.failure) }

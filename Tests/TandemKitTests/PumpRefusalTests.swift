@@ -1,4 +1,4 @@
-import HealthKit
+import LoopAlgorithm
 import LoopKit
 @testable import TandemKit
 import XCTest
@@ -290,8 +290,8 @@ import XCTest
 
     private func syncLimits(_ manager: TandemPumpManager) -> Error? {
         let limits = DeliveryLimits(
-            maximumBasalRate: HKQuantity(unit: HKUnit.internationalUnit().unitDivided(by: .hour()), doubleValue: 4.2),
-            maximumBolus: HKQuantity(unit: .internationalUnit(), doubleValue: 9.5)
+            maximumBasalRate: LoopQuantity(unit: .internationalUnitsPerHour, doubleValue: 4.2),
+            maximumBolus: LoopQuantity(unit: .internationalUnit, doubleValue: 9.5)
         )
         let finished = expectation(description: "syncDeliveryLimits")
         var error: Error?
