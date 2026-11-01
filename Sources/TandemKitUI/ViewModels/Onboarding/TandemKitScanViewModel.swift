@@ -20,7 +20,17 @@ class TandemKitScanViewModel: ObservableObject {
         comment: "Connection error message"
     )
     @Published var connectionErrorMessage: String?
-    @Published var devicePinCode = ""
+    @Published var devicePinCode = "" {
+        didSet {
+            let digits = String(devicePinCode.filter { $0.isASCII && $0.isNumber }.prefix(Self.pairingCodeLength))
+            if digits != devicePinCode {
+                devicePinCode = digits
+            }
+            if devicePinCode != oldValue {
+                pinCodePromptError = nil
+            }
+        }
+    }
     @Published var isConnectedElsewhere = false
     @Published var connectedElsewhereName = ""
     @Published var isMultiplePumpsFound = false
@@ -44,6 +54,19 @@ class TandemKitScanViewModel: ObservableObject {
     private var connectedCheckTimer: Timer?
     private var connectedCheckSilencedUntil = Date.distantPast
     static let connectedAlertSilenceInterval: TimeInterval = 10
+    static let pairingCodeLength = 6
+
+    var isPinCodeComplete: Bool {
+        devicePinCode.count == Self.pairingCodeLength
+    }
+
+    /// The advertised name carries the model, as in "Tandem Mobi 994".
+    var pinPromptHeading: String {
+        String(format: String(
+            localized: "Enter the PIN for %@:",
+            comment: "Heading above the pairing code boxes (1: the pump's name, such as Tandem Mobi 994)"
+        ), connectingTo ?? "Tandem Mobi")
+    }
 
     init(_ pumpManager: TandemPumpManager? = nil, nextStep: @escaping () -> Void) {
         self.pumpManager = pumpManager
@@ -113,7 +136,7 @@ class TandemKitScanViewModel: ObservableObject {
         ), ListFormatter.localizedString(byJoining: heardPumpNames))
     }
 
-    /// SwiftUI presents one alert at a time, and the code prompt is one of them.
+    /// SwiftUI presents one alert at a time, and none over the code prompt's sheet.
     private func presentNextAlert() {
         guard !isMultiplePumpsFound, !isConnectedElsewhere, !isPromptingPincode, !isConnectionError else { return }
         if multiplePumpsUnannounced {
@@ -136,16 +159,17 @@ class TandemKitScanViewModel: ObservableObject {
         isPromptingPincode = false
         releaseLockedPump()
         devicePinCode = ""
+        pinCodePromptError = nil
 
         // Restart scanning
         _ = pumpManager?.bluetooth.startScan(deviceScanDidUpdate)
     }
 
     func processPinPrompt() {
-        guard !devicePinCode.isEmpty else {
+        guard isPinCodeComplete else {
             pinCodePromptError = String(
-                localized: "Please enter a pairing code",
-                comment: "Error when the pairing code field is empty"
+                localized: "Enter all 6 digits of the pairing code",
+                comment: "Error when the pairing code has fewer than six digits"
             )
             return
         }
@@ -205,7 +229,7 @@ class TandemKitScanViewModel: ObservableObject {
     }
 
     /// Scanning waits for the alert to be dismissed: the pump may already be showing its pairing
-    /// state, and the code prompt is itself an alert.
+    /// state, and the code prompt can't be presented over the alert.
     func connectionErrorDismissed() {
         startScan()
     }

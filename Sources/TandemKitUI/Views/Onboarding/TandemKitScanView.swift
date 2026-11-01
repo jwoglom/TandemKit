@@ -91,41 +91,8 @@ struct TandemKitScanView: View {
             },
             message: { detail in Text(detail.wrappedValue ?? "") }
         )
-        .alert(
-            String(localized: "Enter Pairing code", comment: "Enter Pairing code instruction"),
-            isPresented: $viewModel.isPromptingPincode
-        ) {
-            Button(String(localized: "Cancel", comment: "Cancel button title"), role: .cancel) {
-                viewModel.cancelPinPrompt()
-            }
-            Button(String(localized: "Pair", comment: "Pair button")) {
-                viewModel.processPinPrompt()
-            }
-
-            TextField(String(localized: "PIN", comment: "Tandem pairing code prompt"), text: $viewModel.devicePinCode)
-                .keyboardType(.numberPad)
-                .onChange(of: viewModel.devicePinCode) { newValue in
-                    let filtered = newValue.filter { $0.isNumber }
-                    if filtered != newValue {
-                        viewModel.devicePinCode = filtered
-                    }
-                }
-        } message: {
-            if let message = $viewModel.pinCodePromptError.wrappedValue, !message.isEmpty {
-                Text(message)
-            } else {
-                VStack {
-                    Text(String(
-                        localized: "Enter the 6-digit number labeled 'PIN' on the side of the Tandem Mobi inside the cartridge area",
-                        comment: "Tandem pairing code prompt message"
-                    ))
-                    Text(String(
-                        localized:
-                        "The pairing code is located on the inside of the cartridge area labeled as 'PIN' and consists of six numbers.",
-                        comment: "Tandem instructions for finding pairing code"
-                    )).font(.caption)
-                }
-            }
+        .sheet(isPresented: $viewModel.isPromptingPincode) {
+            PairingCodePrompt(viewModel: viewModel)
         }
         .sheet(isPresented: $isHelpSheetPresented, onDismiss: {}, content: {
             VStack(alignment: .leading, spacing: 10) {
@@ -250,5 +217,109 @@ struct TandemKitScanView: View {
             Text("This can take up to 60 seconds to complete.", comment: "Pump authenticating wait message")
                 .foregroundStyle(.secondary)
         }
+    }
+}
+
+private struct PairingCodePrompt: View {
+    @Environment(\.guidanceColors) private var guidanceColors
+    @ObservedObject var viewModel: TandemKitScanViewModel
+
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 20) {
+                Text(viewModel.pinPromptHeading)
+                    .font(.headline)
+                    .multilineTextAlignment(.center)
+
+                PairingCodeField(code: $viewModel.devicePinCode, length: TandemKitScanViewModel.pairingCodeLength)
+
+                if let message = viewModel.pinCodePromptError, !message.isEmpty {
+                    Text(message)
+                        .font(.footnote)
+                        .foregroundColor(guidanceColors.critical)
+                        .multilineTextAlignment(.center)
+                }
+
+                Text(String(
+                    localized:
+                    "The pairing code is located on the inside of the cartridge area labeled as 'PIN' and consists of six numbers.",
+                    comment: "Tandem instructions for finding pairing code"
+                ))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
+                Spacer()
+
+                ContinueButton(
+                    text: Text("Pair", comment: "Pair button"),
+                    disabled: .constant(!viewModel.isPinCodeComplete)
+                ) {
+                    viewModel.processPinPrompt()
+                }
+            }
+            .padding()
+            .navigationTitle(String(localized: "Enter Pairing code", comment: "Enter Pairing code instruction"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(String(localized: "Cancel", comment: "Cancel button title")) {
+                        viewModel.cancelPinPrompt()
+                    }
+                }
+            }
+        }
+        .navigationViewStyle(.stack)
+        .interactiveDismissDisabled()
+    }
+}
+
+/// The invisible field under the boxes takes the typing, pasting and VoiceOver.
+struct PairingCodeField: View {
+    @Binding var code: String
+    let length: Int
+
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        ZStack {
+            TextField("", text: $code)
+                .keyboardType(.numberPad)
+                .foregroundColor(.clear)
+                .tint(.clear)
+                .focused($isFocused)
+                .accessibilityLabel(Text("PIN", comment: "Tandem pairing code prompt"))
+
+            HStack(spacing: 8) {
+                ForEach(0 ..< length, id: \.self) { index in
+                    digitBox(at: index)
+                }
+            }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
+        .frame(maxWidth: 360)
+        .contentShape(Rectangle())
+        .onTapGesture { isFocused = true }
+        .onAppear {
+            // Focus set while the sheet is still animating in is dropped.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { isFocused = true }
+        }
+    }
+
+    private func digitBox(at index: Int) -> some View {
+        let digits = Array(code)
+        let isCurrent = isFocused && (index == digits.count || (digits.count == length && index == length - 1))
+        return Text(verbatim: index < digits.count ? String(digits[index]) : "")
+            .font(.title.weight(.semibold).monospacedDigit())
+            .frame(maxWidth: .infinity, minHeight: 56)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color(UIColor.secondarySystemBackground))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(isCurrent ? Color.accentColor : Color(UIColor.systemGray4), lineWidth: isCurrent ? 2 : 1)
+            )
     }
 }

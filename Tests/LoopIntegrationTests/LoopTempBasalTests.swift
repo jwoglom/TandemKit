@@ -35,6 +35,28 @@ final class LoopTempBasalTests: LoopTestCase {
         XCTAssertEqual(temps.map(\.isMutable), [false, false])
     }
 
+    /// `TrioTempBasalTests`' twin: the pump's clock an hour ahead, set back by Sync Time while a
+    /// temp basal runs.
+    func testATempBasalRunningAsThePumpsClockIsSetBackIsStoredInOrder() throws {
+        try pairLoop()
+        try syncBasalSchedule()
+        try harness.client.setPumpTimeOnThePump(deltaSeconds: .hours(1))
+        try control.send(.init(command: .sync))
+        try control.send(.init(command: .tempBasal, unitsPerHour: 1.5, duration: .minutes(30)))
+        try loopStored("the first temp basal", until: Self.hasRunningTempBasal)
+
+        try control.send(.init(command: .syncPumpTime))
+        try control.send(.init(command: .tempBasal, unitsPerHour: 0.5, duration: .minutes(30)))
+        try control.send(.init(command: .tempBasal, unitsPerHour: 0, duration: 0))
+
+        try loopStored("both temp basals finished") { events in
+            Set(events.filter { $0.dose?.type == .tempBasal && $0.dose?.isMutable == false }.compactMap(\.dose?.unitsPerHour)) == [1.5, 0.5]
+        }
+        let temps = try liveTempBasals(assertLoopStoredWhatTheOracleExpects().doses)
+        XCTAssertEqual(temps.map(\.programmedTempBasalRate), [1.5, 0.5])
+        XCTAssertTrue(temps.allSatisfy { $0.endDate >= $0.startDate }, "\(temps)")
+    }
+
     /// Trio drops a reported temp basal above its max basal; Loop counts what the pump ran.
     func testATempBasalAboveLoopsMaxBasalIsStoredAsThePumpRanIt() throws {
         try pairLoop()

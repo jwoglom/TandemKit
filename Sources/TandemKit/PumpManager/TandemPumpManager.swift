@@ -2780,6 +2780,7 @@ extension TandemPumpManager {
             let reported = Set(events.map(\.raw))
             events += inProgressBolusEvents().filter { !reported.contains($0.raw) }
         }
+        events = withDatesTheHostCanStore(events)
 
         for event in events {
             guard let dose = event.dose, dose.type == .bolus, !dose.isMutable else {
@@ -2961,6 +2962,12 @@ extension TandemPumpManager {
         hostBasalSchedule.rate(at: date ?? now)
     }
 
+    /// The host's schedule as the pump runs it, at the phone instant `date`: on the pump's clock,
+    /// which is the pump's profile whenever non-zero temps are allowed.
+    func pumpScheduledBasalRate(at date: Date? = nil) -> Double {
+        pumpBasalSchedule.rate(at: date ?? now)
+    }
+
     /// A `.basal` marker's rate: a `reading`'s profile rate, else the host's schedule on the pump's
     /// clock. Skewed, the host's own, which the clock skew temp runs.
     func scheduledBasalRateInForce(at date: Date? = nil, reading: CurrentBasalStatusResponse? = nil) -> Double {
@@ -2971,11 +2978,15 @@ extension TandemPumpManager {
         if let reading, reading.basalType != .suspend {
             return reading.profileBasalRate
         }
-        return getScheduledBasalRate(at: date.addingTimeInterval(state.pumpClockOffset))
+        return pumpScheduledBasalRate(at: date)
     }
 
     var hostBasalSchedule: HostBasalSchedule {
         HostBasalSchedule(state.basalRateSchedule)
+    }
+
+    var pumpBasalSchedule: HostBasalSchedule {
+        .pumpClock(state.basalRateSchedule, pumpWallClockShift: state.pumpWallClockShift)
     }
 
     /// The pump rescales a temp at each segment change, and neither host revises a temp basal once
@@ -3031,27 +3042,21 @@ extension TandemPumpManager {
     /// the host's schedule on the pump's clock, which is the pump's profile whenever temp basals are
     /// allowed at all.
     func pumpSegmentChanges(after start: Date, through end: Date) -> [(date: Date, rate: Double)] {
-        let items = state.basalRateSchedule.items.sorted { $0.startTime < $1.startTime }
-        guard items.count > 1, end > start else { return [] }
+        guard state.basalRateSchedule.items.count > 1, end > start,
+              TandemPumpManagerState.trustsPumpClockOffset(state.pumpClockOffset)
+        else {
+            return []
+        }
 
-        let offset = state.pumpClockOffset
-        guard TandemPumpManagerState.trustsPumpClockOffset(offset) else { return [] }
-
-        let pumpStart = start.addingTimeInterval(offset)
-        let startOfDay = Calendar.current.startOfDay(for: pumpStart)
-        var rate = getScheduledBasalRate(at: pumpStart)
+        let schedule = pumpBasalSchedule
+        var rate = schedule.rate(at: start)
         var changes: [(date: Date, rate: Double)] = []
-
-        for day in 0 ... Int(end.timeIntervalSince(start) / .days(1)) + 1 {
-            for item in items {
-                let pumpDate = startOfDay.addingTimeInterval(.days(Double(day)) + item.startTime)
-                let date = pumpDate.addingTimeInterval(-offset)
-                guard date > start else { continue }
-                guard date <= end else { return changes }
-                if Int((item.value * 1000).rounded()) != Int((rate * 1000).rounded()) {
-                    changes.append((date, item.value))
-                    rate = item.value
-                }
+        // `changes(in:)` leaves out its end, which this includes.
+        for date in schedule.changes(in: DateInterval(start: start, end: end.addingTimeInterval(1))) where date <= end {
+            let next = schedule.rate(at: date.addingTimeInterval(1))
+            if Int((next * 1000).rounded()) != Int((rate * 1000).rounded()) {
+                changes.append((date, next))
+                rate = next
             }
         }
         return changes

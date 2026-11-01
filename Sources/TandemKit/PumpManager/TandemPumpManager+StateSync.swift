@@ -11,11 +11,23 @@ extension TandemPumpManager {
         let timeSinceReset = response.pumpTimeSinceReset
         let currentPumpTime = response.currentTimeDate
         let checkedAt = now
+        // The same pump, not reset since: another's clock, or a reset one's, says nothing of a step.
+        let previousShift = state.currentPumpTime != nil && state.pumpState.timeSinceReset.map { timeSinceReset >= $0 } == true
+            ? state.pumpWallClockShift
+            : nil
 
         state.pumpState.timeSinceReset = timeSinceReset
         state.currentPumpTime = currentPumpTime
         state.lastPumpTimeCheckDate = checkedAt
         state.pumpTimeCheckUTCOffset = TimeZone.current.secondsFromGMT()
+
+        if let previousShift {
+            let step = state.pumpWallClockShift - previousShift
+            if abs(step) >= TandemPumpManagerState.pumpClockStepThreshold {
+                logger.warning("The pump's clock moved \(Int(step.rounded())) s since it was last read; it was set")
+                state.lastPumpClockStep = PumpClockStep(foundAt: checkedAt, by: step)
+            }
+        }
 
         notifyDelegateStateUpdated()
         reconcilePumpClockSkewAlert()
@@ -982,16 +994,13 @@ extension TandemPumpManager {
             return nil
         }
 
-        // Look the schedule up at the pump's time of day. The offset, not `currentPumpTime`, which
-        // is a snapshot from the last clock read.
-        let pumpNow = now.addingTimeInterval(state.pumpClockOffset)
-        let expected = getScheduledBasalRate(at: pumpNow)
+        let expected = pumpScheduledBasalRate(at: now)
 
         // The offset trails the pump's clock by up to a second plus the read's latency, and the read
         // a segment change triggers lands in that gap. A real mismatch lasts the whole segment.
         let tolerance = Self.basalRateCheckTolerance
-        let nearbyRates = [pumpNow.addingTimeInterval(-tolerance), pumpNow, pumpNow.addingTimeInterval(tolerance)]
-            .map { getScheduledBasalRate(at: $0) }
+        let nearbyRates = [now.addingTimeInterval(-tolerance), now, now.addingTimeInterval(tolerance)]
+            .map { pumpScheduledBasalRate(at: $0) }
 
         // Compare whole milliunits, as the pump stores them, so float noise isn't a mismatch.
         let pumpMilliunits = Int((pumpRate * 1000).rounded())

@@ -93,6 +93,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
     public var lastPumpTimeCheckDate: Date?
     /// The phone's UTC offset in seconds when `currentPumpTime` was decoded.
     public var pumpTimeCheckUTCOffset: Int?
+    /// The last time a clock read found the pump's clock set since the read before it.
+    public var lastPumpClockStep: PumpClockStep?
 
     // Pump global settings
     /// In memory only, not saved with the state, so a relaunch re-reads the pump's settings at its first sync.
@@ -227,6 +229,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
               lhs.currentPumpTime == rhs.currentPumpTime,
               lhs.lastPumpTimeCheckDate == rhs.lastPumpTimeCheckDate,
               lhs.pumpTimeCheckUTCOffset == rhs.pumpTimeCheckUTCOffset,
+              lhs.lastPumpClockStep == rhs.lastPumpClockStep,
               lhs.lastSettingsCheckedAt == rhs.lastSettingsCheckedAt,
               lhs.quickBolusAnnun == rhs.quickBolusAnnun,
               lhs.reminderAnnun == rhs.reminderAnnun,
@@ -321,6 +324,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         currentPumpTime = rawValue["currentPumpTime"] as? Date
         lastPumpTimeCheckDate = rawValue["lastPumpTimeCheckDate"] as? Date
         pumpTimeCheckUTCOffset = rawValue["pumpTimeCheckUTCOffset"] as? Int
+        lastPumpClockStep = (rawValue["lastPumpClockStep"] as? PumpClockStep.RawValue).flatMap(PumpClockStep.init(rawValue:))
 
         if let pumpStateRaw = rawValue["pumpState"] as? PumpState.RawValue {
             pumpState = PumpState(rawValue: pumpStateRaw)
@@ -531,6 +535,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         raw["currentPumpTime"] = currentPumpTime
         raw["lastPumpTimeCheckDate"] = lastPumpTimeCheckDate
         raw["pumpTimeCheckUTCOffset"] = pumpTimeCheckUTCOffset
+        raw["lastPumpClockStep"] = lastPumpClockStep?.rawValue
         raw["quickBolusAnnun"] = quickBolusAnnun?.rawValue
         raw["reminderAnnun"] = reminderAnnun?.rawValue
         raw["alertAnnun"] = alertAnnun?.rawValue
@@ -639,6 +644,12 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         return currentPumpTime.timeIntervalSince(lastPumpTimeCheckDate) + TimeInterval(zoneChange)
     }
 
+    /// Seconds from a phone instant's Unix time to the pump's wall clock read as UTC. The pump's
+    /// clock observes no DST, so this moves only when the pump's clock is set.
+    public var pumpWallClockShift: TimeInterval {
+        pumpClockOffset + TimeInterval(TimeZone.current.secondsFromGMT())
+    }
+
     /// Past this the settings screen shows its time-change notice; nothing else acts on it.
     public static let pumpClockSmallSkewThreshold: TimeInterval = .minutes(1)
 
@@ -648,6 +659,9 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
 
     /// Past this the clocks differ by more than any time zone or DST change can explain.
     public static let pumpClockOffsetTrustLimit: TimeInterval = .hours(24)
+
+    /// A move of the pump's clock smaller than this between two reads is the reads' own noise.
+    public static let pumpClockStepThreshold: TimeInterval = .minutes(1)
 
     public static func trustsPumpClockOffset(_ offset: TimeInterval) -> Bool {
         abs(offset) <= pumpClockOffsetTrustLimit
@@ -729,6 +743,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
             "* currentPumpTime: \(debugValue(currentPumpTime))",
             "* lastPumpTimeCheckDate: \(debugValue(lastPumpTimeCheckDate))",
             "* pumpTimeCheckUTCOffset: \(debugValue(pumpTimeCheckUTCOffset.map { "\($0) s" }))",
+            "* lastPumpClockStep: \(debugValue(lastPumpClockStep.map { "\($0.by) s, found \($0.foundAt)" }))",
             "* lastSettingsCheckedAt: \(debugValue(lastSettingsCheckedAt))",
             "* quickBolusAnnun: \(debugValue(quickBolusAnnun))",
             "* reminderAnnun: \(debugValue(reminderAnnun))",
@@ -1111,5 +1126,30 @@ extension DeliveryTransitionLedger {
             "* interruptedTemp: \(debugValue(interruptedTemp?.debugDescription))"
         ]
         return fields
+    }
+}
+
+/// The pump's clock set by `by` seconds (negative when set back), as found by the clock read at
+/// `foundAt`. A status reading stamps what it reports on the clock in force when it began.
+public struct PumpClockStep: Equatable, RawRepresentable {
+    public typealias RawValue = [String: Any]
+
+    public let foundAt: Date
+    public let by: TimeInterval
+
+    public init(foundAt: Date, by: TimeInterval) {
+        self.foundAt = foundAt
+        self.by = by
+    }
+
+    public init?(rawValue: RawValue) {
+        guard let foundAt = rawValue["foundAt"] as? Date, let by = rawValue["by"] as? TimeInterval else {
+            return nil
+        }
+        self.init(foundAt: foundAt, by: by)
+    }
+
+    public var rawValue: RawValue {
+        ["foundAt": foundAt, "by": by]
     }
 }

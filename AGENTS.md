@@ -1,5 +1,5 @@
 ## Reference material
-- See [docs/ARCHITECTURE_ANALYSIS.md](docs/ARCHITECTURE_ANALYSIS.md) and [docs/KEY_FILES_REFERENCE.md](docs/KEY_FILES_REFERENCE.md) for deeper implementation notes and file-level pointers.
+- See [docs/ARCHITECTURE_ANALYSIS.md](docs/ARCHITECTURE_ANALYSIS.md) for deeper implementation notes.
 - [docs/integration-harness.md](docs/integration-harness.md): the `TandemKitIntegrationTests` target, which runs the real driver against the faketandem emulator (`scripts/integration-test.sh`), and the emulator gaps it currently works around.
 - [docs/hardware-test-plan.md](docs/hardware-test-plan.md): the manual procedure on a real pump, including the quick bolus and Control-IQ configurations, and the firmware behaviour only a pump can confirm.
 
@@ -33,100 +33,29 @@ rot into lies.
 ## Tests and builds
 
 ### Test target membership
-Every `.swift` file under `Tests/` must be a member of the `TandemKitTests` target, and
-`scripts/check_xcodeproj_source_membership.rb` discovers `Tests/*` directories rather than
-taking a registered list, so a test cannot be silently left out of CI. There is no exclusion
-list — a test that stops compiling is fixed or deleted. `--fix` adds newly created files;
-CI runs `--check` in every workflow.
-
-`TandemPumpManager` takes its BLE layer through the `PumpBluetoothConnection` protocol
-(`init(state:bluetooth:)`), so command sequences can be driven from tests via
-`StubPumpBluetooth` without CoreBluetooth. Production still goes through `init(state:)`, which
-constructs the real `TandemBluetoothManager`.
+Every `.swift` file under `Tests/` must be a member of the `TandemKitTests` target.
+`scripts/check_xcodeproj_source_membership.rb --fix` adds new files and CI runs `--check`. There is
+no exclusion list: a test that stops compiling is fixed or deleted.
 
 ### Virtual pump build
-`TANDEMKIT_VIRTUAL_PUMP` (a Swift compilation condition, DEBUG only; `xcodebuild -xcconfig
-VirtualPump.xcconfig` sets it) compiles `Sources/TandemKit/PumpManager/VirtualPump/`, whose
-`CBCentralManager`/`CBPeripheral`/`CBService`/`CBCharacteristic` shadow CoreBluetooth's throughout
-the module and talk to faketandem over a socket at `VirtualPump.endpoint`
-(`TANDEMKIT_VIRTUAL_PUMP=host:port` in the app's environment). Without the flag that directory
-compiles to nothing and the driver runs on real CoreBluetooth, unchanged. On Linux:
-`swift test --build-path .build-virtual -Xswiftc -DTANDEMKIT_VIRTUAL_PUMP`. Test files import both, so
-`Tests/TandemKitTests/VirtualCoreBluetoothNames.swift` pins the names; `VirtualCoreBluetoothTests`
-exists only in a flagged build, which the `integration` job in `.github/workflows/macos.yml` and
-the `virtual-pump` job in `.github/workflows/linux.yml` both run. Each names the flagged-only test
+On Linux: `swift test --build-path .build-virtual -Xswiftc -DTANDEMKIT_VIRTUAL_PUMP`. Test files
+import both CoreBluetooth and the types that shadow it, so
+`Tests/TandemKitTests/VirtualCoreBluetoothNames.swift` pins the names. `VirtualCoreBluetoothTests`
+exists only in a flagged build, which the `integration` job in `.github/workflows/macos.yml` and the
+`virtual-pump` job in `.github/workflows/linux.yml` both run. Each names the flagged-only test
 classes it runs, so a new one goes on both lists.
 
-The same build carries `VirtualPumpControl`: with `TANDEMKIT_VIRTUAL_PUMP_CONTROL=<port>` in the
-host app's environment, the driver listens on 127.0.0.1 for a test to make the calls the host and
-the driver's own screens make (pair, onboarding settings, sync, bolus and cancel, basal schedule,
-temp basal, suspend, resume, cartridge and site changes, feature flags, deleting the pump manager),
-and logs every batch it hands the host's delegate with the host's completion. `TrioIntegrationTests`
-(macOS only; `scripts/trio-test.sh`, the `trio` job) use it to run Trio itself in the simulator, a
-new install per test from `scripts/app-launcher.py`, through each dosing journey and Trio's own
-closed loop, and compare its stored pump history with `TrioDoseStoreOracle`
-([docs/integration-harness.md](docs/integration-harness.md#trio-in-the-simulator)).
-`LoopIntegrationTests` (`scripts/loop-test.sh`, the `loop` job) do the same with Loop, built from
-LoopWorkspace with TandemKit as its plugin, and compare both of LoopKit `DoseStore`'s tables with
-`LoopDoseStoreOracle` ([docs/integration-harness.md](docs/integration-harness.md#loop-in-the-simulator)).
-
-Coverage that was dropped along with the code it tested (the `PumpComm` fault taxonomy and retry
-policy, `HistoryDeduplicator`/`HistoryReconciler`, `PumpChallengeRequestBuilder` and the V1
-16-character pairing path) is not represented anywhere now. If any of those behaviours come back,
-they need tests written against the current architecture, not restored from git history. Some have
-come back, with tests of their own: the packet layer `TandemBLE` held is `Packetize`,
-`PacketAssembler` and `BTResponseParser` in TandemCore, pumpX2's `PumpStateSupplier` is `QualifyingEventContext`,
-`HistoryToDoseMapper` and `HistoryTimestampReconciler` are back, and `BolusReportLedger`,
-`DeliveryTransitionLedger` and `BasalReconciler` match history against what the host was told.
-
-### Commit stamp
-The `Stamp Git Commit` phase on the `TandemKit` framework target writes the short commit, with
-`-dirty` for a modified tree, into the built framework's Info.plist as `TandemKitGitCommit`, which
-`TandemPumpManager` logs at init and prints in its `debugDescription` (the host's issue report), so
-a field log or report can be tied to a build. It reads the git directory
-(a submodule's lives in the host's) and edits the built plist, neither of which the script sandbox
-allows, so that target sets `ENABLE_USER_SCRIPT_SANDBOXING = NO`. A phase runs only if the target
-lists it: the first version of this one was never listed, and every log read `commit unknown`
-(#568). SwiftPM builds have no Info.plist and log `unknown`.
-
-### Doc references
-`scripts/check_doc_references.py` fails when a markdown doc names a code identifier, a path or a
-`.swift` file the repository does not have, or links to a file or heading that is not there. The
-Linux workflow's `docs` job runs it, and its tests, on every change, documentation-only ones
-included. A name from another codebase goes in its `EXTERNAL`; a name a doc cites as gone goes in
-`REMOVED`, which fails once the code has it again. Both fail on an entry that is no longer needed.
-
-### Message serialization tests
-Serialization tests go in `Tests/TandemCoreTests/Messages/<Category>/<Type>Tests.swift`, and
-history records in `Tests/TandemCoreTests/HistoryLog/`. They use `MessageTester` /
-`HistoryLogMessageTester` with hex taken from pumpX2's tests or captured from a pump. Name the
-file after the type, so coverage can be found by filename.
-
-Manager tests go through `StubPumpBluetooth`, which returns constructed response objects and
-never encodes or decodes cargo, so they say nothing about the wire format. The integration tests
-do exercise it, against pumpX2's encoder via faketandem, but only for the flows they run.
-
-The Harmonize rule `DriverMessagesHaveSerializationTests` (below) works out from the code which
-messages the driver sends or decodes; its baseline lists those still without a serialization test,
-which come before the rest of the catalog. None of them has a usable vector in pumpX2's tests, so
-each needs a pump capture. Delete a type from the baseline when you add its test.
+Behaviour that returns after being dropped with its code needs tests written against the current
+architecture, not restored from git history.
 
 ### Harmonize lint rules
-`HarmonizeRules/` is a separate SwiftPM package of
-[Harmonize](https://github.com/perrystreetsoftware/Harmonize) rules: XCTest cases that parse
-`Sources/` and `Tests/` (rooted by `.harmonize.yaml`) and assert on their structure. It lives
-outside `Tests/`, so it is not part of `TandemKitTests`. Run it with `swift test --package-path
-HarmonizeRules` (`--filter <RuleName>` for one rule); the Linux workflow's `harmonize` job runs it.
-A failing rule prints what it enforces, why, how to fix it and an example, at the offending line:
-fix the code, not the rule. Each rule's baseline lists the violations that predate it, and
-Harmonize fails on an entry that no longer violates, so remove it in the change that fixes it.
-Don't add to a baseline to get a new violation through.
+Run `swift test --package-path HarmonizeRules` (`--filter` with a rule's name for one rule); the
+Linux workflow's `harmonize` job runs it. Don't add to a rule's baseline to get a new violation through.
 
 ### LoopKit and Linux
-- Apple-platform builds resolve `LoopKit`/`LoopKitUI` from the surrounding Xcode workspace, which must build them — Trio's workspace does, via its `loopandlearn/LoopKit` submodule. SwiftPM cannot build these targets at all; see the comment atop `Package.swift`.
-- Linux builds compile against the fakes in `LinuxShims/`, which can drift from the real LoopKit;
-  read `LinuxShims/README.md` before adding to one. SwiftECC does not build on Linux, so fresh
-  JPAKE pairing (and its tests) run only on Apple platforms.
+Linux builds compile against the fakes in `LinuxShims/`, which can drift from the real LoopKit; read
+`LinuxShims/README.md` before adding to one. Fresh JPAKE pairing (and its tests) run only on Apple
+platforms.
 
 ## Driver behaviour
 Rules that are easy to break without noticing. The overall design is in
@@ -142,286 +71,125 @@ on the Doubles. A discrepancy that rounding explains never fails a command.
 `delegateQueue.async`. Loop opens them with `dispatchPrecondition(condition: .onQueue(queue))`, so
 a direct call from a driver queue crashes it, as a backfill tick reading
 `startDateToFilterNewPumpEvents` from the command queue did. `pumpDelegate.call` is a
-`queue.sync`, which deadlocks a caller already on the delegate queue. Nothing goes out until the
-host has set both the delegate and its queue (`canNotifyDelegate`): `pumpDelegate.queue` reads
-`.main` until then, and Trio sets the delegate first. `deliverStateMissedByTheDelegate` replays
-what was held once the second one lands, with the status but not `pumpManagerDidUpdateState`: Loop
-and Trio save `rawValue` on the main thread right after attaching, and a second save from their
-delegate queue races it (Trio's launch hung in a Thread Sanitizer report of it).
-`MockPumpManagerDelegate` fails the test on any call that carries the manager and arrives off its
-`delegateQueue`; a test attaches one queue for the manager's life, as hosts do.
+`queue.sync`, which deadlocks a caller already on the delegate queue.
+
+Nothing goes out until the host has set both the delegate and its queue (`canNotifyDelegate`):
+`pumpDelegate.queue` reads `.main` until then, and Trio sets the delegate first.
+`deliverStateMissedByTheDelegate` replays what was held once the second one lands, with the status
+but not `pumpManagerDidUpdateState`: Loop and Trio save `rawValue` on the main thread right after
+attaching, and a second save from their delegate queue races it (Trio's launch hung in a Thread
+Sanitizer report of it).
 
 Both hosts save the whole `rawValue` on every `pumpManagerDidUpdateState`, so a reading the host
 doesn't use waits for the next state change instead of notifying: `fetchInsulinOnBoard` answers
 every `iobChange`, about once a minute (#567). Status pushes are not skipped when the status is
 unchanged: Trio dates its pump battery and pump status from each one, and its Nightscout upload
-leaves out a battery reading older than 30 minutes. TandemKitUI's settings, troubleshooting and HUD
-views re-read `connectionIssue` and the reservoir on each, and the first two `lastKnownBasalDelivery`.
+leaves out a battery reading older than 30 minutes.
 
 Bolus progress observers are called on the queue the host passed
 `createBolusProgressReporter(reportingOn:)`, which Trio relies on to serialize its own reporter
 state. `TandemDoseProgressReporter` is shared by the command queue, the telemetry queue and every
-host queue, so its state stays behind its lock, as does the manager's reference to it.
+host queue, so its state stays behind its lock.
 
 ### Responses and the shared link
 - The pump has one link to the phone, and iOS notifies every app subscribed to a characteristic,
   so the driver also receives the responses to another app's requests, as field logs show after a
-  connect (#507). `PendingWrite` takes only its own answer: on the request's characteristic, under
-  the request's txId (byte 1 of every notification and byte 3 of the first, as pumpX2 checks),
-  starting with the response's opcode, and then each next piece by txId and `remaining` countdown
-  (`PacketAssembler`). A refusal is an `ErrorResponse` under that txId, on `CURRENT_STATUS` or the
-  request's characteristic: faketandem sends it on the first, pumpX2 expects the second.
-- `PacketAssembler` checks the CRC and declared length of every message, as pumpX2's
-  `PacketArrayList` does. A corrupt message under the pending txId is dropped and the write waits
-  on; one that does not decode as the response type ends it as unanswered.
+  connect (#507).
 - History log, control stream and qualifying-event notifications are routed before the pending
-  write. None answers a write, and at the 23-byte MTU the second notification of a signed stream
-  message is HMAC, whose byte 2 can be any opcode. Both streams are reassembled, and a piece that
-  starts a message drops one that lost a piece. Control-stream messages that share an opcode are
+  write: none answers a write, and at the 23-byte MTU the second notification of a signed stream
+  message is HMAC, whose byte 2 can be any opcode. Control-stream messages that share an opcode are
   told apart by declared length (`ControlStreamMessages.responseType`).
-- Anything else on a request characteristic is reassembled and logged once
-  (`UnsolicitedNotificationLog`): as the late answer of a write that timed out under its txId in
-  the last two minutes, otherwise as another app's, at info for the first of a burst and at debug
-  for the rest.
-- Still open: another app's response under the pending write's txId and opcode is taken as the
-  answer. It answers the same request, so it reads the same pump state. Nothing tells the user
-  that another app talks to the pump, and nothing checks the HMAC of a signed response.
-
-### Handshake failures
-`TandemBluetoothManager` counts JPAKE handshakes the pump ended or left unanswered
-(`recordJpakeFailure`, from the setup task). At `jpakeFailureLimit` (3) in a row it stops the
-connects the driver starts itself: the backoff retry, the one after a disconnect and the one when
-Bluetooth powers on (`reconnectAutomatically`). A host command still tries, since only an attempt
-can tell that the pump has stopped refusing. A successful handshake clears the count, and so does
-Bluetooth powering back on, which is the one thing a person can do to ask for a fresh attempt. Until
-then `connectionIssue` is `.handshakeFailing`, shown at once on the status highlight, settings and
-troubleshooting screens. The count is not persisted, so a relaunch tries afresh. A first pairing is
-not counted: its attempts are the user's own, and a refused code is theirs to fix (see Pairing).
-
-Only a round the pump may have ended counts (`WriteFailure.countsAsJpakeFailure`, #565). The
-disconnect's reason reaches the setup task through `linkWentDown`, before any wait is cancelled. A
-link lost to `CBError.connectionTimeout` (the phone stopped hearing the pump, as in a weak-signal
-stretch) or to Bluetooth going off is not counted, and neither is a write that never went out. A
-far-end drop (`peripheralDisconnected`, the signature of a second host on the pump, #400), a
-disconnect the driver made itself (a connect out of time), an unanswered round on a live link, a
-refusal and an answered but invalid handshake all count. Once its link is gone a setup task stops at
-its next step: every operation after `linkWentDown` is refused, so it never writes to the peripheral
-the next connect reuses. Whether a Mobi refusing a stored key ever drops as `connectionTimeout` is
-unconfirmed (hardware test plan P4).
-
-### Reconnect
-- Every connect job that brings a session up queues `syncPumpData(onlyIfIdle: true)` through
-  `didReconnect` (#351), whoever started it: the reconnect retry, a history tick or report, a host
-  command. The pump's qualifying events are lost while the link is down, so what it did meanwhile
-  reaches the host only through a sync, and the host's poll is throttled for 4.5 minutes after the
-  last one. A job of the driver's own that reconnected first left the retry nothing to do, so
-  limiting this to the automatic connects missed it. A sync that reconnected is already in flight,
-  and the reconnect's joins it. Not before the host has adopted the manager (`canNotifyDelegate`),
-  whose first poll syncs, so not during onboarding; not for pairing's connect.
-- The connects the driver starts on its own (`reconnectAutomatically`: after a disconnect, on
-  Bluetooth powering on, the retry) run only for a manager a host has adopted (`canNotifyDelegate`);
-  a host command still connects. Until then the manager is a setup flow's, which connects as a
-  command when it needs to (#603). Adoption itself starts one (`pumpManagerWasAdopted`): on a
-  relaunch Bluetooth can report on before the host has set its delegate and queue.
-- A poll (`onlyIfIdle`) that finds a sync in flight queues nothing and is handed that sync's result
-  (`SyncResult`) when it completes, not the `lastSync` from before it: Trio loops as soon as its
-  poll completes, and the sync in flight may be the first to read the pump since an outage.
-
-### Qualifying events
-`QualifyingEvent.suggestedHandlers` / `groupSuggestedHandlers` are ported from pumpX2's
-suggested-handler table, including the version-dependent Control-IQ info / last-bolus / battery /
-IOB request selection. `QualifyingEventContext` carries the api version, Control-IQ support, and
-in-progress bolus id that pumpX2 reads out of its global `PumpStateSupplier`.
-`groupSuggestedHandlers` dedupes by request type *and* cargo (`ActiveAamBitsRequest` differs only
-by cargo) and drops requests whose `minApi` is newer than the pump's.
-
-`QualifyingEventFetch` (`Sources/TandemKit/PumpManager`) maps each *suggested-handler request*
-onto the `TandemPumpManager` status fetch that both issues it and applies the response, so the
-ported catalog stays the single source of truth instead of a second event table that could drift.
-`handleQualifyingEvents` runs the deduped set on the command queue and acknowledges afterwards. A
-request that maps to no fetch is not sent: nothing in the driver consumes CGM/EGV, home screen
-mirror, Basal-IQ, temp rate, localization, load status or bolus permission change reason today,
-so `bg`, `cgmChange`, `basalIQ`, `basalIQStatus`, `controlIQSleep`, `extendedBolusChange`,
-`pumpingStatus` and `bolusPermissionRevoked` currently fetch nothing.
-Control-IQ support in the context is whether the pump has answered a Control-IQ info read
-(`controlIQEnabled != nil`), so a pump with Control-IQ off is still asked for IOB under the
-Control-IQ opcode. Three deliberate additions to pumpX2's table: `pumpSuspend`/`pumpResume` refresh
-the basal status, since that is what emits the suspend/resume dose to LoopKit; `alarm`/`malfunction`
-refresh it, so a stop the pump makes on an occlusion, empty cartridge, auto-off or malfunction is
-seen at its alarm, not at the next sync, whether or not the pump also raises `pumpSuspend` (a Mobi
-raised it with the alarm for an occlusion; other stops are unconfirmed on hardware); and
-`profileChange`/`activeProfileSegmentChange` refresh it so the basal rate check runs on a profile
-edit instead of at the next sync.
 
 ### Pairing
 - Only `pairPump` starts a first pairing. `connectIfNeeded` refuses a pump with no derived secret: the
   auto-reconnect after the pump dropped the link would otherwise replay the last code entered, silently,
-  at a pump that had just refused it (#399). `pairPump` forgets a code whose attempt failed, unless a
-  newer attempt has replaced it.
+  at a pump that had just refused it (#399).
 - The pump checks the code only at key confirmation. On a first pairing, `Jpake4KeyConfirmationRequest`
   unanswered (a Mobi drops the link) or answered with a digest that does not match fails the connect with
   `PumpCommError.pairingCodeRejected`; any other failed round is `noResponse`. The link drop is the
   signature in field logs, and a glitch at that exact round reads the same.
-- The scan reads the pairing step from the last byte of the pump's manufacturer data
-  (`advertisedPairingStep`). A result whose name says `SIM` or `Simulator` (`TandemPumpScan.isSimulatorName`)
-  is the unified pump simulator fronting faketandem over CoreBluetooth, which cannot advertise manufacturer
-  data; it is taken as ready for the code, since its pairing state is set on the simulator.
-- The scan follows every pump it hears, and a pump that goes quiet keeps the step it last advertised.
-  It asks for the code only once one pump alone has advertised the code step (`0x12`) for
-  `codeStepSettleInterval` (2 s), whichever step the screen shows: following the first pump heard ignored
-  the one the user picked up while a pump emulator advertised nearby. A Mobi stays at `0x11` from being
-  lifted off the pad until it is double-pressed. A pump heard after the first raises Multiple Pumps Found
-  naming them all, unless it is already showing; the code prompt waits for it, since SwiftUI presents one
-  alert at a time.
-- Every error `pairPump` completes with has to reach `TandemKitScanViewModel.onPairFailure`, which ends
-  the pairing step (alert, back to the double-tap step, scan restarts when the alert is dismissed). The
-  step has no exit of its own.
-- `pairPump`'s connect is a command job, bounded at `pairingTimeout` (120 s). Its setup writes bypass the
-  command queue, and a command that connected meanwhile took over its completion, so pairing never ended.
-  A command queued during pairing waits, then runs on the session pairing opened or is refused as unpaired.
-  One queued before it can connect a pump that already holds a key (a re-pair), and pairing then completes
-  on that session: a second connect to a connected peripheral is never answered. A lost link ends a reconnect's wait at once, but not pairing's, so the setup reports the round it lost:
-  only then does a link dropped at key confirmation reach `pairPump` as `pairingCodeRejected`.
-  `deactivate` ends a pairing connect still pending, since nothing else would.
-- Setup runs pairing, the Load Pump History step (below), then the setup-complete screen
-  (`TandemKitSetupCompleteViewModel`), which turns Control-IQ off, makes the onboarding writes,
-  syncs and runs the history load if the user chose it. Then it hands the manager to the host
-  (`handPumpManagerToHost`: created, then onboarded, the order the hosts adopt a manager in) and
-  offers Finish, so a setup left before Finish is in the host's settings, where it can be deleted. Until then the flow owns the manager (`ownsPumpManager`), and a
-  flow that goes away still owning it, dismissed or freed, runs `abandonSetup`, which deactivates the
-  transport. One left mid-connect paired on in the background, and its reconnects then held the pump's
-  one link against every attempt after it (#603). The coordinator's screens capture it weakly, or a
-  dismissed flow lived on with its manager.
 
 ### Setup history load
 - A new manager reports no history from before its ledgers' `trackingSince`, since it cannot tell
   another host's app boluses from the pump's own, so a pump moved between Loop, Trio and Tandem's app
-  arrived with the insulin it had just given missing from IOB (#607). After pairing,
-  `readDeliveryForSetup` reads the pump before setup writes to it: its IOB, last bolus
-  (`LastBolusStatus`), basal rate or suspension, and with them the serial the load keys its reports on
-  and the clock it dates them by. With `historyBackfill` and `historyDoseReporting` on
-  (`canLoadHistoryForSetup`), the Load Pump History step shows those readings and asks whether to
-  load, whatever they are, none included: a Mobi that had reset answered with no last bolus, and
-  another gave one 40 s old by a clock 31 h behind, which `hostDate` does not correct past
-  `pumpClockOffsetTrustLimit`. So the last bolus is dated by its age on the pump's clock, read again
-  just after it, which holds however far off that clock is. Do Not Load says the host will not count
-  what the pump delivered before, and goes on; nothing changes. Load runs after the setup sync, not
-  at the step: Loop saves no dose from a batch without a reconciliation boundary, which only a sync
-  gives, and that sync's first basal reading is what the load matches a suspension the pump is in
-  against.
-- Load (`loadHistoryForSetup`) moves both ledgers' `trackingSince` back `setupHistoryLoadWindow`
-  (6 h), and `DeliveryTransitionLedger.historySince` to the same date, and
-  `ReportedBasalLedger.reportHistory` clears `reconciledThrough`, which passes since pairing moved
-  past the chunks they skipped. Then it runs backfill ticks until one reads the deep walk's
-  target and the pump's newest record as of a status read under `setupHistoryLoadMaximumLag` (1 min)
-  old, and its report pass ran. Not the newest record's own age: an idle pump writes one only every 5
-  minutes. Boluses, extended parts, the pump's suspends and resumes and, with `basalHistoryReporting`,
-  basal corrections go out through the usual passes, held until the host attaches. Basal
-  reconciliation skips the pump's suspended time, so only the reported suspend keeps the host from
-  counting its schedule over it. `setupHistoryLoadFailureLimit`
-  (3) ticks in a row that read nothing fail the load, and the step offers only Try Again.
-- A load that completes gives a `SetupHistoryLoadSummary`, which the Delivery Records Processed alert
-  shows before the host gets the manager: the pump's records in the window of the types the reporting
-  passes read for boluses (`pumpBolusRecordTypes`) and for basal (`pumpBasalRecordTypes`), then the
-  bolus and basal doses the load reported, by `raw`: what it added to the held events since its first
-  attempt started. A dose the host already holds under that `raw` (the same pump in the same app) is
-  counted though the host keeps only one row.
+  arrived with the insulin it had just given missing from IOB (#607). Setup therefore offers to load
+  the pump's history.
+- The Load Pump History step shows the pump's readings whatever they are, none included: a Mobi that
+  had reset answered with no last bolus, and another gave one 40 s old by a clock 31 h behind, which
+  `hostDate` does not correct past `pumpClockOffsetTrustLimit`. So the last bolus is dated by its age
+  on the pump's clock, read again just after it, which holds however far off that clock is.
+- The load runs after the setup sync, not at the step: Loop saves no dose from a batch without a
+  reconciliation boundary, which only a sync gives, and that sync's first basal reading is what the
+  load matches a suspension the pump is in against.
+- The load is done once a backfill tick has read the pump's newest record as of a status read under
+  `setupHistoryLoadMaximumLag` old, not the newest record's own age: an idle pump writes one only
+  every 5 minutes. Basal reconciliation skips the pump's suspended time, so only the reported suspend
+  keeps the host from counting its schedule over it.
 - History the host already holds (the same pump back in the same app) arrives under the `raw` it was
-  told it under, and both hosts keep the row they hold: an app bolus is keyed on its `bolusId`, a
-  suspend or resume on its `PumpingSuspended`/`PumpingResumed` record, a temp basal on its
-  `tempRateId` and a part of one on `tempRatePart`, by every pump manager alike. The load reports the
-  temps an app set over Bluetooth before pairing (`appTempBasalsBeforePairing`: a `SetTempRateResponse`
-  record has the id) under those identities, one still running finished at its programmed end as a
-  deleted manager left it, so reconciliation compares their cycles with them and not the schedule; and
-  as there, Loop leaves that one out of IOB from a boundary past its end until its next save. A
-  temp set on the pump is corrected cycle by cycle under its BasalDelivery records, as by any manager.
-  A suspension the pump is already in when a manager first reads it, as at a re-pair of a stopped
-  pump, is reported at detection, before the load could date it, but under its `PumpingSuspended`
-  record when the session's store holds it. Scenarios: conformance groups K (set up again) and L (a
-  first connection, loaded or not).
+  told it under, and both hosts keep the row they hold, so every manager keys a dose on the pump's
+  own identity: an app bolus on its `bolusId`, a suspend or resume on its
+  `PumpingSuspended`/`PumpingResumed` record, a temp basal on its `tempRateId` and a part of one on
+  `tempRatePart`. The load reports the temps an app set over Bluetooth before pairing under those
+  identities, one still running finished at its programmed end as a deleted manager left it. A
+  suspension the pump is already in when a manager first reads it is reported at detection, before
+  the load could date it, but under its `PumpingSuspended` record when the session's store holds it.
 - Still reported twice: what a build without these identities reported, a suspend or resume reported
   at detection because history could not be read in time, a bolus or temp whose id was not past the
   last minted, and a temp set on the pump that a manager adopted under its `tempRateId`, whose cycles
   the next manager's load corrects.
 
 ### Onboarding and the basal schedule
-- `applyOnboardingSettings` writes the host's `PumpManagerSetupSettings` to a freshly paired
-  pump: delivery limits, basal schedule, pump clock. Loop and Trio never sync these during
-  onboarding, so without it the pump kept its own profile while the driver reported the app's
-  (issue #206). Setup stops on a failed basal or limits write; a failed clock write does not.
-- The onboarding sound screen runs before pairing, so `applyOnboardingSettings` also writes its
-  choices, the `*Annun` values it stored: one `SetPumpSoundsRequest` flagging the sounds that are
-  set. `pumpSoundsAwaitingWrite` stops a qualifying event's pump-globals read from replacing them
-  before then. It clears once the write is tried, so a failed one is logged, doesn't stop setup and
-  isn't retried, and the next read shows what the pump holds.
-- Then, with `quickBolusButtonSupport` off, it reads the pump globals and turns the quick bolus
-  button off, which otherwise stayed live until the first sync (#353 P20-1). A failed read or a
-  refused write is logged, doesn't stop setup, and is left to the first sync.
-- Before `applyOnboardingSettings`, whatever the feature flags, `TandemKitSetupCompleteViewModel` asks
-  `controlIQNeedsTurningOffForSetup` whether the pump runs Control-IQ, which refuses the host's
-  automatic doses and whose basal reaches the host only with `basalHistoryReporting`. If it does,
-  an alert says Control-IQ will be turned off, and its OK runs `turnOffControlIQForSetup`: one
-  `ChangeControlIQSettingsRequest`, no sync (a sync would read the pump's profile before the
-  host's is written) and no hand-back, since the host has not dosed with this pump yet. A refused
-  or unanswered write is read back, and a pump that reads Control-IQ off goes on with setup;
-  otherwise the alert offers only Try Again, so setup does not finish with Control-IQ on. An
-  unanswered read asks nothing, and the first sync only reads Control-IQ.
-- `syncBasalRateSchedule` fails with `BasalScheduleSyncError.tooManyEntries`, before connecting,
-  when the schedule has more entries than `maximumBasalScheduleEntryCount` (16). Trio's editor
-  doesn't enforce the limit, and a schedule migrated from another pump can exceed it (#443).
-  It fails the same way with `firstEntryNotAtMidnight` when the first entry is not at 00:00, the
-  start time of the pump's segment 0; past the deletes, the pump would refuse it mid-write.
+- Loop and Trio never sync the host's delivery limits, basal schedule or clock during onboarding, so
+  `applyOnboardingSettings` writes them to a freshly paired pump; without it the pump kept its own
+  profile while the driver reported the app's (#206).
+- With `quickBolusButtonSupport` off, onboarding also turns the quick bolus button off, which
+  otherwise stayed live until the first sync (#353 P20-1).
+- A pump that runs Control-IQ refuses the host's automatic doses, and its basal reaches the host only
+  with `basalHistoryReporting`, so setup turns it off (`turnOffControlIQForSetup`) and must not finish
+  with it on. That write is followed by no sync (a sync would read the pump's profile before the
+  host's is written) and no hand-back (the host has not dosed with this pump yet).
+- `syncBasalRateSchedule` refuses, before connecting, a schedule with more than
+  `maximumBasalScheduleEntryCount` entries, because Trio's editor doesn't enforce the limit and a
+  schedule migrated from another pump can exceed it (#443), and one whose first entry is not at 00:00,
+  the start time of the pump's segment 0: past the deletes, the pump would refuse it mid-write.
 - A segment modify flags in its status mask only the fields it changes (`START_TIME`,
   `BASAL_RATE`), never segment 0's start time, as Tandem's app does: a Mobi refused every
   segment-0 modify flagging all five. Deletes flag all five. A create copies segment 0's carb
   ratio, target BG and correction factor and flags only those segment 0 holds: a Mobi refused a
   create flagging all five with the target BG and correction factor of 0 that a profile holding
   neither reads back. Whether firmware takes a create flagging fewer than five is unconfirmed.
-- `syncBasalRateSchedule` reads the profile back and fails with `basalProfileSyncMismatch`
-  unless `pendingSegmentWrites` finds nothing left to write. `fetchBasalStatus` compares the
-  pump's rate against the schedule every sync, on the pump's clock via `pumpClockOffset`, using
-  `profileBasalRate` during a temp basal and under Control-IQ, and skipping suspend and an
-  all-zero schedule, the placeholder for one the host never gave. The schedule's rate up to
-  `basalRateCheckTolerance` (1 min) either side matches: the offset trails the pump's clock by up to
-  a second plus the read's latency, and the read a segment change triggers lands in that gap (#566).
+- The schedule's rate up to `basalRateCheckTolerance` either side of a segment change matches the
+  pump's: the pump-clock offset trails the pump's clock by up to a second plus the read's latency,
+  and the read a segment change triggers lands in that gap (#566). An all-zero schedule is the
+  placeholder for one the host never gave, so the check skips it.
 - The driver writes the host's schedule over a pump profile that differs, under Control-IQ too,
   since hosts take the pump to hold what they last saved (Trio keeps a profile only once the sync
-  takes). A rate read off the schedule, or a profile `adoptMatchingPumpProfile` finds different,
-  stamps `basalRateMismatchDetectedAt` (persisted) and starts `updatePumpBasalProfile`, a command
-  job queued behind the one that saw it: "Syncing Basal Profiles" in the status highlight and
-  settings, with no LoopKit alert. The update ends, clearing the stamp, only when the profile
-  reads back matching and the rate in force agrees; any successful `syncBasalRateSchedule` or
-  adoption ends it too. Until then every reading retries it, at most once per
-  `basalProfileUpdateRetryInterval`. A mismatch read `basalProfileUpdateTimeout` (5 min) after
-  the stamp sets `basalProfileUpdateFailed`, clears `hasSyncedBasalRateSchedule` and refuses
-  temp basals with `failedUpdatePumpProfile` (see Therapy command validation). An all-zero
-  schedule, or one `syncBasalRateSchedule` would refuse, is never written, so it fails this way.
-- A schedule change that alters the rate in force (the pump's profile before the write against
-  the schedule after) stops a running non-zero temp basal, since the pump rescales it, and
-  restarts the scheduled basal dose at the new rate. A zero temp keeps running.
+  takes). A failed update clears `hasSyncedBasalRateSchedule`, which refuses temp basals (see
+  Therapy command validation). An all-zero schedule, or one `syncBasalRateSchedule` would refuse, is
+  never written, so it fails this way.
+- A schedule change that alters the rate in force stops a running non-zero temp basal, since the
+  pump rescales it, and restarts the scheduled basal dose at the new rate. A zero temp keeps running.
 
 ### Reconciliation boundary
-- `lastReconciliation` moves at a dose change the driver reports, and at the end of a sync whose
-  `CurrentBolusStatus` and `CurrentBasalStatus` reads the pump answered (#449). A bolus the sync
-  defers to, which the host already counts, stands in for its read. Loop takes delivery up to the
-  boundary as accounted for, and no other answer, a reservoir level included, says anything about
-  delivery. So an unreconciled sync hands the host the boundary it had and arms no poll throttle.
+- Loop takes delivery up to `lastReconciliation` as accounted for, and no other answer, a reservoir
+  level included, says anything about delivery. So it moves only at a dose change the driver reports
+  and at the end of a sync whose `CurrentBolusStatus` and `CurrentBasalStatus` reads the pump
+  answered (#449); an unreconciled sync hands the host the boundary it had and arms no poll
+  throttle. A bolus the sync defers to, which the host already counts, stands in for its read.
 - A reservoir reading reaches the host only once `lastReconciliation` covers it, after the batch
-  that carries the boundary (`flushPendingReservoirReading`): past its boundary, Loop's `DoseStore`
-  counts whole-unit reservoir drops in place of pump events, which made IOB alternate. A reading
-  between syncs (a `.remainingInsulin` event, the cartridge screen) waits for the next sync, whose
-  own read supersedes it. After a sync whose delivery reads went unanswered the host has nothing
-  newer than its boundary, so Loop's 15-minute pump data check stops it dosing instead of counting
-  reservoir drops. `reconciliationBoundary`'s hold for a pump bolus (#353) is behind the reading on
-  purpose, and the gate is the driver's own boundary. Trio doses on neither.
+  that carries the boundary: past its boundary, Loop's `DoseStore` counts whole-unit reservoir drops
+  in place of pump events, which made IOB alternate. After a sync whose delivery reads went
+  unanswered the host has nothing newer than its boundary, so Loop's 15-minute pump data check stops
+  it dosing instead of counting reservoir drops. `reconciliationBoundary`'s hold for a pump bolus
+  (#353) is behind the reading on purpose, and the gate is the driver's own boundary. Trio doses on
+  neither.
 
 ### LoopKit alerts
 - Loop and Trio register the manager as alert responder and sound vendor under its
   `pluginIdentifier` and route an acknowledgement, or a sound lookup, by the alert's
   `managerIdentifier`. Every alert is issued and retracted under `TandemPumpManager.alertIdentifier`;
   one under `managerIdentifier` (`"Tandem"`, which is the HUD provider's) was acknowledged on the
-  phone alone and stayed on the pump (#592). `MockPumpManagerDelegate` fails a test that issues one
-  under any other, and the Harmonize rule `AlertsCarryThePluginIdentifier` any code that builds one.
+  phone alone and stayed on the pump (#592).
 - Both hosts record an acknowledgement whether or not it reached the pump, and Trio only logs a
   failure. So a failed `acknowledgeAlert` forgets the alert as issued
   (`issueAgainAfterFailedAcknowledgement`), and the reconciler issues it again from the last read
@@ -429,304 +197,187 @@ edit instead of at the next sync.
   dismiss, stays acknowledged.
 
 ### Pump event batches
+- Nothing reaches the host that ends before it starts or starts more than a minute ahead of the
+  phone (`HostDoseDates`): Trio's Apple Health upload threw on such a temp basal at every launch
+  until its row was deleted. Each one it catches is a misdated dose upstream and logs an error.
 - A `replacePendingEvents: true` batch makes both hosts delete every mutable dose it leaves out,
-  and Loop never revives a deleted one. `emitPumpEvents` appends the boluses the host holds as
-  mutable, `bolusDose`, `pendingBolusFinalization` and the extended parts history holds
-  (`heldExtendedPartEvents`), to each one (#330). The temp basal is still each call site's job, via
-  `getActivePumpEvents`.
+  and Loop never revives a deleted one, so `emitPumpEvents` appends the boluses the host holds as
+  mutable (`bolusDose`, `pendingBolusFinalization`, `heldExtendedPartEvents`) to each one (#330).
+  The temp basal is each call site's job, via `getActivePumpEvents`.
 - Loop's `DoseStore` keeps a stored `PumpEvent` row over a non-replacing report with the same
   `raw`, so finalizing a dose the host holds as mutable takes a replacing batch (#452).
 - A bolus the pump confirms delivered nothing is finalized at 0 U, not withdrawn as LoopKit's guide
   has it (#455). Loop stores no dose for a 0 U bolus, so its mutable copy stays deleted, the guide's
   end state, and Trio keeps a 0 U row. Withdrawn, it would stay in Loop at its programmed amount
   whenever the batch held nothing else, since an empty batch purges nothing there.
-- A temp basal keeps one `raw` from its first report to its last, however it ends (#344):
-  `NewPumpEvent.tempBasal(dose:of:)` takes it from the `UnfinalizedDose`, not the entry. A temp the
-  app set or history adopted carries `eventRaw` (persisted), `HistoryLogSyncIdentifier.tempRate`
-  of the pump's `tempRateId`, minted when it starts if the serial is known. Without one,
-  `tempBasalRaw` keys it on its programmed amount and start, as builds before `eventRaw` did while
-  it ran. An id not past `lastTempRateEventRaw` mints nothing: the pump's 16-bit counter may
-  restart, and a host still holding a row under the id's earlier use would swallow the new temp.
-  The part after a segment cut is a dose of its own under `HistoryLogSyncIdentifier.tempRatePart`: the
-  temp's `tempRateId` and how many cuts precede it, which a later manager counts alike from history.
-  Without an `eventRaw` to count from, and after a restatement, it is keyed the second way.
+- A temp basal keeps one `raw` from its first report to its last, however it ends (#344). A temp the
+  app set or history adopted carries `eventRaw` (persisted), `HistoryLogSyncIdentifier.tempRate` of
+  the pump's `tempRateId`. An id not past `lastTempRateEventRaw` mints nothing: the pump's 16-bit
+  counter may restart, and a host still holding a row under the id's earlier use would swallow the
+  new temp. The part after a segment cut is a dose of its own under
+  `HistoryLogSyncIdentifier.tempRatePart`, which a later manager counts alike from history.
 - A suspend or resume read from history is keyed on its record (`HistoryLogSyncIdentifier.logSequence`).
   A `.basal` marker, and a suspend or resume reported at detection with no record to key it on, is
-  reported once, keyed on its type and its date to the millisecond (#352): of two rows under one `raw`, both hosts keep the first, and two of one type
-  can fall in one second. `getActivePumpEvents(endDate:)` closes a temp basal that ran out with a
-  marker at its end only when `endDate`, where each caller reports its own change, is a second or
-  more later; in that second the caller's change says the same, and Trio would order the two rows
-  arbitrarily.
-- A history pass sends all its non-bolus reports (suspends, resumes, temp basal ends, basal
-  corrections) as one batch, ascending (`HistoryReportBatch`, `emitHistoryReports`). It replaces
-  only when it ends or re-states the temp basal the host holds as mutable, and then carries
-  `getActivePumpEvents()`. Nothing may be reported to start after a mutable temp basal's start while
-  the host holds it open, and no report starts in the same second as a row the host holds: Trio
-  orders two rows at one timestamp arbitrarily and leaves one zero-length, so an override starts a
-  second later.
-- A sync that moves the boundary ends with `reportPendingDoses`: every dose the host holds as
-  mutable, the temp basal from `getActivePumpEvents()` and the boluses `emitPumpEvents` appends,
-  re-sent as one replacing batch, so a running dose is refreshed until it finalizes (#330, #450).
-  Loop keeps its row over a non-replacing re-send, so it has to replace. The batch is the boundary
-  alone, empty and non-replacing, with nothing mutable (an empty replacing batch purges every
-  mutable row in Trio).
-- While a delivery change waits for history, `basalDose` is a placeholder and the host still holds
-  the dose the change ended, so `getActivePumpEvents()` gives `pending.prior`, as last reported and
-  uncut, mutable (#556). A bolus that finishes or is cancelled meanwhile, and the sync's re-send,
-  carry it: leaving it out deletes it for good in Loop, and the change keeps its history dating.
-  `getActivePumpEvents(endDate:)` ends the temp at the caller's own change, so its callers settle
-  the pending change first, as the app commands do.
+  keyed on its type and its date to the millisecond (#352): of two rows under one `raw`, both hosts
+  keep the first, and two of one type can fall in one second. `getActivePumpEvents(endDate:)` closes
+  a temp basal that ran out with a marker at its end only when `endDate` is a second or more later;
+  in that second the caller's change says the same, and Trio would order the two rows arbitrarily.
+- Nothing may be reported to start after a mutable temp basal's start while the host holds it open,
+  and no report starts in the same second as a row the host holds: Trio orders two rows at one
+  timestamp arbitrarily and leaves one zero-length, so an override starts a second later. A history
+  pass replaces only when it ends or re-states the temp basal the host holds as mutable.
+- A sync that moves the boundary re-sends every dose the host holds as mutable as one replacing
+  batch (`reportPendingDoses`), so a running dose is refreshed until it finalizes (#330, #450). Loop
+  keeps its row over a non-replacing re-send, so it has to replace. With nothing mutable the batch is
+  the boundary alone, empty and non-replacing: an empty replacing batch purges every mutable row in
+  Trio.
+- While a delivery change waits for history, the host still holds the dose the change ended, so
+  `getActivePumpEvents()` gives it as last reported, uncut and mutable (#556): leaving it out of a
+  replacing batch deletes it for good in Loop. `getActivePumpEvents(endDate:)` ends the temp at the
+  caller's own change, so its callers settle the pending change first.
 
 ### Deleting the pump manager
-- `prepareForDeactivation` tears the transport down, then sends one replacing batch before
-  `pumpManagerWillDeactivate` (`finalizeHeldDosesForDeactivation`, #350). Left mutable, the host's
-  next replacing batch, from whichever pump manager comes next, deletes what it holds. A Tandem
-  pump keeps delivering after the app forgets it, so nothing is stopped and no `.suspend` is due.
-  A pending delivery change is reported at detection first. `lastReconciliation` moves to the deletion.
-  The batch also carries a "Pump Removed" `.replaceComponent(.pump)` if the manager ever read a pump
-  (`lastPumpSerial`); with nothing held, that marker goes alone, non-replacing, since an empty
+- `prepareForDeactivation` sends one replacing batch that finalizes every held dose before
+  `pumpManagerWillDeactivate` (#350): left mutable, the host's next replacing batch, from whichever
+  pump manager comes next, deletes what it holds. A Tandem pump keeps delivering after the app
+  forgets it, so nothing is stopped and no `.suspend` is due. A pending delivery change is reported
+  at detection first. The batch also carries a "Pump Removed" `.replaceComponent(.pump)` if the
+  manager ever read a pump; with nothing held, that marker goes alone, non-replacing, since an empty
   replacing batch purges Trio's mutable rows.
 - A running temp basal is finalized at the deletion, a second after its start at least, and what
   remains of it to its scheduled end is a finalized dose of its own, keyed on its amount and start.
-  Loop stores a finalized dose only once it has ended, and a
-  mutable copy it soft-deletes before then can never be replaced, so one finalized whole would
-  leave Loop's IOB once a boundary passed its end. Loop counts the remainder from its `PumpEvent`
-  row until it can store it, at its first save behind a later boundary, which only the next pump
-  manager gives it.
+  Loop stores a finalized dose only once it has ended, and a mutable copy it soft-deletes before
+  then can never be replaced, so one finalized whole would leave Loop's IOB once a boundary passed
+  its end. Loop counts the remainder from its `PumpEvent` row until it can store it, at its first
+  save behind a later boundary, which only the next pump manager gives it.
 - A remainder the pump rescales at a segment change is still one dose, at the highest rate the pump
   runs it at, so both hosts count at least what it delivers, and under the identity of the temp's
   next part (`tempRatePart`), which a later manager's load reports for the part after the change.
   Cut there, the part after the change started ahead of Trio's clock, Trio stored it at its own, in
   the remainder's second, and its IOB counted only one of the two (conformance K3).
-- A held bolus is finalized with its `BolusCompleted` record if backfill has read one; otherwise a
-  running bolus at its programmed amount, ended no later than the deletion so Loop stores it at
-  once, and one with an unconfirmed volume at the fallback it was held with. A held extended part,
-  which the pump runs on to its programmed end, is cut at the deletion as a temp basal is: the share
-  of its programmed amount up to then under its own `raw`, and the rest a finalized dose of its own
-  to its programmed end under a new `raw`.
+- A held bolus is finalized with its `BolusCompleted` record if backfill has read one, otherwise at
+  its programmed amount, ended no later than the deletion so Loop stores it at once. A held extended
+  part, which the pump runs on to its programmed end, is cut at the deletion as a temp basal is: the
+  share of its programmed amount up to then under its own `raw`, and the rest a finalized dose of its
+  own to its programmed end under a new `raw`.
 - Still open: Loop leaves the remainder out of IOB from a boundary past its end that came with no
   save (the next pump manager's empty batch) until that manager's next non-empty batch. Across a
   segment change the remainder over-counts wherever the pump runs it below its highest rate; across two
   or more, a later manager's load reports the parts past the first again, which both hosts count too.
-- The integration harness's `shutDownDriver()` is the app going away (a relaunch), which tells the
-  host nothing; `deactivateDriver()` is the deletion. Scenarios: conformance D7, J5 and group K; unit tests
-  in `DeactivationDoseReportingTests` and `ExtendedBolusReportingTests`.
 
 ### History backfill and dose reporting
-- History streaming runs through `HistoryLogFetcher`, and `HistoryBackfillCoordinator` keeps
-  the session store caught up from every `syncPumpData` pass: an incremental read from the
-  persisted watermark (`TandemPumpManagerState.historyBackfill`), cross-tick gap healing via
-  `HistoryLogStore.missingRanges`, and a sliced walk backward to the deep-fetch boundary.
-  `HistoryBackfillPlanner` holds that decision as pure arithmetic. A `.bolusChange` qualifying
-  event kicks a tick as well; one requested while a tick runs (the pump sends `.bolusChange`
-  at both activation and completion) runs straight after it instead of being dropped.
-- Three history feature flags, on by default (`historyBackfill`, `historyDoseReporting`,
-  `basalHistoryReporting`); only `controlIQSupport` is off. The flags screen reveals itself when any flag is off its
-  default, so a user who turned the backfill off can still find it. `historyBackfill` runs the
-  whole thing: while off, `runTick` returns immediately and the pump's history log is never read.
-  `historyDoseReporting` decides whether boluses found in that history reach the app's insulin
-  history, and `basalHistoryReporting` whether basal corrections do; both are `&&`-ed with
-  `historyBackfill`, since there is nothing to report from a log never read. None is a dry run — a
-  watermark written for entries that were never read would mark them read and suppress them once
-  the flag goes on, so `reconciledThrough` only moves while basal reporting is on.
-- The walk is sliced at one `HistoryLogRequest` (255 entries) so dosing interleaves with it,
-  but is not paced one slice per sync: a tick keeps stepping until it reaches
-  `deepFetchTarget`, bounded by `maxDeepSlicesPerTick`.
-- Two distinct floors. `HistoryBackfillState.firstSeenFloor` is set at first sight, never
-  moves, and alone bounds how deep the walk reads. `HistoryBackfillPlanner.emitFloor` bounds
-  reporting: the latest of `firstSeenFloor`, `BolusReportLedger.trackingSince` and 24 hours
-  ago. The host's `startDateToFilterNewPumpEvents` is in neither (#345): Trio returns
-  `lastEventDate - 15min` and drops nothing itself, so it would bound the walk minutes into
-  the past and drop a pump-UI bolus found one sync late.
-- Reporting (`TandemPumpManager+HistoryDoseReporting.swift`) runs as a command job after every
-  tick. Boluses need `historyDoseReporting` as well; their batches go out ascending through
-  `emitPumpEvents`, and replace only when they finalize a bolus already reported.
-  App-commanded temp basals stay with the live path.
-- Suspends, resumes and temp basal ends the pump made on its own
-  (`TandemPumpManager+DeliveryTransitions.swift`, #333, #331). Neither host revises one once
-  told: Trio keeps a row per (timestamp, type) and Loop never counts a non-bolus dose older than
-  its last finished basal (#354). So the first report carries the pump's date, and reaches the
+- The pump sends `.bolusChange` at both activation and completion, and each kicks a history tick;
+  one requested while a tick runs runs straight after it instead of being dropped.
+- While `historyBackfill` is off the pump's history log is never read, and the other two history
+  flags are `&&`-ed with it. None is a dry run: a watermark written for entries that were never read
+  would mark them read and suppress them once the flag goes on, so `reconciledThrough` only moves
+  while basal reporting is on.
+- The host's `startDateToFilterNewPumpEvents` bounds neither the walk nor reporting (#345): Trio
+  returns `lastEventDate - 15min` and drops nothing itself, so it would bound the walk minutes into
+  the past and drop a pump-UI bolus found one sync late. `HistoryBackfillState.firstSeenFloor` alone
+  bounds how deep the walk reads; `HistoryBackfillPlanner.emitFloor` bounds reporting.
+- Suspends, resumes and temp basal ends the pump made on its own (#333, #331). Neither host revises
+  one once told: Trio keeps a row per (timestamp, type) and Loop never counts a non-bolus dose older
+  than its last finished basal (#354). So the first report carries the pump's date, and reaches the
   host before anything the app commands after it.
-  - Every `CurrentBasalStatus` reading goes through `observeDeliveryState` (sync, qualifying
-    events, `enactTempBasal`'s own read, `fetchSuspendStatus`, `resumeDelivery`). With
-    `historyBackfill` on, a change the app did not command is left as a `PendingTransition` in
-    `DeliveryTransitionLedger`, with a placeholder in `basalDose` for status, until a history
-    pass dates it from `PumpingSuspended`/`PumpingResumed`/`TempRateCompleted`. The first tick
-    that starts after the change dates it if it read the log to its end and reaches back to
-    the last reading before the change, and otherwise reports it at detection. An app suspend or
-    resume is left the same way once the pump has answered (`leaveCommandedTransitionForHistory`),
-    and the command completes once it is reported, under its record. The record is to the pump's
-    second, so a pending change is dated no earlier than the last reading before it, a command's
-    send, and no later than its detection (`dateOfChange`), as is the `TempRateCompleted` of a temp
-    it ends: an event the host was told of just before must not come after it, Loop ignores a
-    suspend older than its last finished basal, and drops a temp basal of no length.
-  - A sync, or a wizard's `fetchSuspendStatus`, that leaves a change pending completes once it
-    is reported, or after `transitionHistoryWait` (30 s) at detection; `ensureCurrentPumpData`
-    is not throttled while one is pending, so the host doses on a sync that has reported it.
-    `resumeDelivery` reads the pump first and waits the same way:
-    the resume ends the temp basal the host holds, so a stop the driver missed must be reported
-    before it, or Loop ignores it. A failed read still resumes. Before an app command that changes
-    basal emits (temp basal, cancel, suspend, resume, enabling Control-IQ over a temp) a pending
-    change is reported at detection first. A second change before history dates the first reports
-    the first at detection.
+  - A change the app did not command stays pending until a history pass dates it from
+    `PumpingSuspended`/`PumpingResumed`/`TempRateCompleted`, and is otherwise reported at detection.
+    The record is to the pump's second, so a pending change is dated no earlier than the last reading
+    before it and a command's send, and no later than its detection (`dateOfChange`): an event the
+    host was told of just before must not come after it, Loop ignores a suspend older than its last
+    finished basal, and drops a temp basal of no length.
+  - A sync that leaves a change pending completes once it is reported, or after
+    `transitionHistoryWait` at detection, and is not throttled meanwhile, so the host doses on a sync
+    that has reported it. `resumeDelivery` reads the pump first and waits the same way: the resume
+    ends the temp basal the host holds, so a stop the driver missed must be reported before it, or
+    Loop ignores it. Before an app command that changes basal emits, a pending change is reported at
+    detection first, and so is the first of two changes that history has not yet dated.
   - At detection each end is dated the way that counts more insulin: a stop at detection, a
     resume at the last reading that saw the pump suspended, a temp basal below the schedule
     ended at that reading and one above it at detection, against the host's schedule on the
-    phone's clock. A pump-side resume is always a `.resume`, never a `.basal` marker. With the
-    flag off everything is reported this way. A temp basal whose `TempRateCompleted` has
-    `timeLeft` 0, within a minute of its programmed end, ends exactly then: it ran its whole
-    programmed duration.
+    phone's clock.
   - An occlusion stop leaves the running temp basal set: the pump writes no `TempRateCompleted` for
     it, keeps its programmed end, and runs it again from a resume before then (seen on a Mobi; other
     stops and the t:slim X2 unconfirmed). The host is told it ended at the stop, so the part a stop
     ended is kept as `interruptedTemp` (persisted), and the first reading of a temp at its rate after
     the resume reports the rest, mutable, from a second after the resume to the programmed end under
-    a `raw` of its own. A `TempRateCompleted` at the stop, scheduled basal or another temp rate after the
-    resume, or an app temp basal, cancel or suspend forgets it.
-  - The history pass also reports suspend/resume pairs that fell inside an outage, which no
-    reading can see. The ledger records every suspend and resume the driver reports with the
-    span its pump record can fall in, so a record is matched rather than reported twice. It
-    tracks one pump from the last record of the first history status it sees (`trackedAfter`),
-    so nothing written before the driver watched the pump is reported, except from setup's history
-    load on (`historySince`); a new serial or an erased log starts it again, and a new serial ends
-    `historySince`. Records older than 24 hours or dated ahead of the phone are
-    ignored.
+    a `raw` of its own.
   - Never sent: a suspend whose resume has not been read while the pump delivers (Trio takes a
     trailing suspend as lasting until now), a resume with no suspend before it in the host's
     view (Trio takes the pump as suspended since its history began), a suspend and resume in
     one second (Trio's IOB throws), and a second suspend in a row (Loop keeps only the later).
     Only the same-second pair is marked handled; the others are reconsidered next pass, since
-    the other half may be in a gap the next tick fills. The host's view falls back to the dose
-    it holds when the ledger has no entry (a suspend from before the ledger, or pruned).
+    the other half may be in a gap the next tick fills.
   - Loop still stores but does not count a gap-contained pair it hears about after a later
     finished basal (#354). Trio counts it either way.
-  - Scenarios: conformance group F, `OutageConformanceTests`; unit tests in
-    `DeliveryTransitionReportingTests`.
-- With the serial known, the live path keys an app bolus on its `bolusId` from `InitiateBolus`
-  (`bolusEventRaw`; an id not past `lastBolusEventRaw` mints nothing, as for a temp), as history
-  does. Without it the two identify one bolus differently (#344), so `BolusReportLedger`
-  (persisted) records each app bolus's `bolusId`, live `raw` and event date at `InitiateBolus`,
-  and `emitPumpEvents` marks it finalized when an immutable report with that `raw` goes out. It
-  keeps entries 12 h past the 24 h reporting horizon, since history dates an app bolus at
-  activation on the pump's clock, which can be later than its entry. A history bolus the ledger:
-  - has finalized — is skipped;
-  - holds as an unfinalized app bolus — is finalized under the live `raw`/date once the live
-    path is no longer tracking it (relaunch mid-bolus, unknown delivered volume), releasing
-    `pendingBolusFinalization`/`bolusDose`;
-  - doesn't hold — is a pump-UI, Control-IQ or lost-acknowledgement bolus, reported under
-    `HistoryLogSyncIdentifier.bolus`, dated at activation, with `automatic` from the bolus
-    source and `wasProgrammedByPumpUI` set. It is reported once, finalized, when its
-    `BolusCompleted` is read, and not while it runs (#452): a mutable report would have to ride
-    every replacing batch until then. Its insulin is missing from IOB for that long, roughly the
-    delivery time, since the pump's `.bolusChange` at completion kicks a tick.
-  `trackingSince` is stamped on the first decode by a build that has the ledger; nothing older
-  is reported, because it cannot be told apart from an app bolus reported live without an
-  entry.
+- With the serial known, the live path keys an app bolus on its `bolusId` from `InitiateBolus`, as
+  history does. Without it the two identify one bolus differently (#344), so `BolusReportLedger`
+  records each app bolus's `bolusId`, live `raw` and event date at `InitiateBolus`. It keeps entries
+  12 h past the 24 h reporting horizon, since history dates an app bolus at activation on the pump's
+  clock, which can be later than its entry. `trackingSince` is stamped on the first decode by a build
+  that has the ledger; nothing older is reported, because it cannot be told apart from an app bolus
+  reported live without an entry.
+- A pump-UI, Control-IQ or lost-acknowledgement bolus is reported once, finalized, when its
+  `BolusCompleted` is read, and not while it runs (#452): a mutable report would have to ride every
+  replacing batch until then. Its insulin is missing from IOB for roughly the delivery time, since
+  the pump's `.bolusChange` at completion kicks a tick.
 - An extended bolus programmed off the app (on the pump's screen or in Tandem's app; TandemKit and
   Control-IQ never give one) is reported as two doses with one `bolusId` (#424).
-  - The up-front part runs from BolusActivated to BolusCompleted, whose amount covers this part
-    only. It is reported like any pump bolus. A 100% extended bolus has no up-front part.
-  - The extended part runs from BolexActivated to BolexCompleted. It is a dose of its own under
-    `HistoryLogSyncIdentifier.extendedBolus`, with its own ledger entry
-    (`BolusReportLedger.Part.extended`), so neither part reads as the other already reported.
-  - Unlike a pump bolus, the extended part is reported as soon as history reads its
-    BolexActivated, because it can run for hours. It goes out mutable, at BolexActivated's
-    `bolexSize`, from BolexActivated's time over its programmed duration: BolusDelivery's
-    `extendedDurationRequested`, or BolusRequestedMsg2's `duration` on t:slim X2 firmware that
-    writes no BolusDelivery records (both minutes). With neither it counts all at its start. Loop
-    spreads it over that span; Trio counts it all at its start.
+  - The extended part is reported as soon as history reads its BolexActivated, mutable, because it
+    can run for hours: at `bolexSize` over its programmed duration, BolusDelivery's
+    `extendedDurationRequested` or BolusRequestedMsg2's `duration` on t:slim X2 firmware that writes
+    no BolusDelivery records (both minutes). With neither it counts all at its start. Loop spreads it
+    over that span; Trio counts it all at its start.
   - Every replacing batch carries it, under its first report's date, until its BolexCompleted is
-    read. That finalizes it in a replacing batch, at BolexCompleted's `insulinDelivered` and time,
-    a stop part-way included.
+    read, which finalizes it at `insulinDelivered` and its time, a stop part-way included.
   - A BolexCompleted whose BolexActivated is not in the store is not reported: BolexCompleted has
     no start time.
-  - A held part whose BolexCompleted is still unread `extendedPartFinalizationWindow` (1 h) after
-    its programmed end is finalized at its programmed amount, which is what the host counted, in the
-    next replacing batch. History may never show its end (another pump, the flags turned off), and
-    the ledger would otherwise drop it while still mutable.
+  - A held part whose BolexCompleted is still unread `extendedPartFinalizationWindow` after its
+    programmed end is finalized at its programmed amount, which is what the host counted. History may
+    never show its end (another pump, the flags turned off), and the ledger would otherwise drop it
+    while still mutable.
   - A BolexActivated in the same second as its up-front part's start is moved a second later,
-    because Trio matches a new row on its timestamp. Reporting either part releases a
-    `reconciliationBoundary` hold on the bolus.
-  - Scenarios: conformance D13, D13b, D13c and group J (`ExtendedBolusConformanceTests`); unit
-    tests in `ExtendedBolusReportingTests` and `HistoryToDoseMapperTests`.
-- A bolus the app did not start that the live bolus status sees running is recorded, with
-  `historyDoseReporting` on, as `BolusReportLedger.unreported` (#353). Until the batch that
-  reports it from history, the `lastReconciliation` the host is given (`reconciliationBoundary`)
-  stops at its start, or at the boundary already given if that is later. Loop takes delivery up to
-  the boundary as accounted for, and past it falls back to reservoir doses, which count the bolus.
-  Not for a bolus before the emit floor, which history never reports; dropped past the reporting
-  horizon. `state.lastReconciliation`, `lastSync` and the sync throttle are unaffected.
-- With `historyDoseReporting` on, while the pump may bolus on its own (Control-IQ on or handing
-  back, or the quick bolus button not read as off: `awaitsHistoryBoluses`), `syncPumpData` waits
-  for its history pass (`afterHistoryIsReported`), so the host doses after a pump bolus that
-  finished out of contact is reported. A failed tick releases it at once.
-- Basal reconciliation (`TandemPumpManager+BasalReconciliation.swift`) runs after the transitions
-  pass on every history pass while `historyBackfill` is on. It compares what the pump delivered
-  (`PumpBasalTimeline`, P) with what the host counts (`ReportedBasalLedger`, H): every non-bolus
-  row `emitPumpEvents` sends, folded as Trio's IOB folds them (the latest row at or before an
-  instant wins, a temp basal until its end, a suspend until its resume, otherwise the host's
-  schedule). `trackingSince` is stamped on the first decode; rows are kept 36 hours.
+    because Trio matches a new row on its timestamp.
+- A bolus the app did not start that the live bolus status sees running holds
+  `reconciliationBoundary` at its start (or at the boundary already given, if later) until history
+  reports it (#353). Loop takes delivery up to the boundary as accounted for, and past it falls
+  back to reservoir doses, which count the bolus.
+- While the pump may bolus on its own (Control-IQ on or handing back, or the quick bolus button not
+  read as off: `awaitsHistoryBoluses`), `syncPumpData` waits for its history pass, so the host
+  doses after a pump bolus that finished out of contact is reported.
+- Basal reconciliation compares what the pump delivered (`PumpBasalTimeline`, P) with what the host
+  counts (`ReportedBasalLedger`, H): every non-bolus row `emitPumpEvents` sends, folded as Trio's IOB
+  folds them (the latest row at or before an instant wins, a temp basal until its end, a suspend
+  until its resume, otherwise the host's schedule).
   - A chunk differs when H at its BasalDelivery record is more than 10 mU/h off its `commandedRate`
-    (plus 1% of the profile for a temp chunk, which runs a whole percent), H either side of a change
-    the host was commanded to make within `transitionMatchTolerance` of the BasalDelivery record
-    doesn't match either, and no correction carries its BasalDelivery record. A correction's own
-    edges don't count as changes: they are the pump's cycles, and H before one is the previous
-    chunk's, so a run of cycles at one rate would otherwise get only its first corrected. A matching
-    chunk never differs, whatever H does later inside it: the host counts a change from its command,
-    the pump from its next cycle, and that residual is only logged, once each day is over: net, the
-    host's insulin less the pump's, and gross, since a temp's early start and early end cancel.
+    (plus 1% of the profile for a temp chunk, which runs a whole percent). A matching chunk never
+    differs, whatever H does later inside it: the host counts a change from its command, the pump
+    from its next cycle, and that residual is only logged. A correction's own edges don't count as
+    changes: they are the pump's cycles, and H before one is the previous chunk's, so a run of
+    cycles at one rate would otherwise get only its first corrected.
   - H for a chunk that differs is the row in force from the last change the host was commanded within
-    `transitionMatchTolerance` after its BasalDelivery record, and the action starts there; with none,
-    the row at the record. A stop that reached the pump just before a record and the next temp just
-    after left the pump on its profile for the cycle, while the row the stop ended held a second of
-    it: built against that row, the correction was empty and the chunk was passed for good (#564).
-  - Skipped: suspended time (the pump's or the host's), chunks before the latest of
-    `firstSeenFloor`, 24 hours ago and `trackingSince`, chunks still running, and temp chunks within
-    `segmentChangeWindow` before a segment change, which the driver reports at the request on
-    purpose.
-  - Each difference is logged once a session, with the action it calls for, and each record that
-    fails the cross-check once a session, from past `reconciledThrough` and the floor. Only with
-    `basalHistoryReporting`, and only for a trusted chunk, is anything reported:
+    `transitionMatchTolerance` after its BasalDelivery record; with none, the row at the record. A
+    stop that reached the pump just before a record and the next temp just after left the pump on its
+    profile for the cycle, while the row the stop ended held a second of it: built against that row,
+    the correction was empty and the chunk was passed for good (#564).
+  - Temp chunks within `segmentChangeWindow` before a segment change are skipped, which the driver
+    reports at the request on purpose.
+  - Only with `basalHistoryReporting`, and only for a trusted chunk, is anything reported:
     - H from the host's schedule: a correction, an immutable `.tempBasal` at the pump's rate over
-      the chunk (cut at the host's next row inside it), with `deliveredUnits` to 0.001 U, under
-      `HistoryLogSyncIdentifier.logSequence` of the BasalDelivery record, so at most one per
-      BasalDelivery record. `automatic` for Control-IQ chunks and temps with a `SetTempRateResponse`
-      (309) record; `wasProgrammedByPumpUI` for Control-IQ chunks and temps without one.
-    - H from the temp basal the driver holds: ended at its `TempRateCompleted` through
-      `closeTransition`, or, if the pump runs it at another rate, re-stated as at a segment
-      change: finished at the old rate, a mutable continuation at the pump's. When the BasalDelivery
-      record that ends the chunk runs it at its own rate again, the pump's rate is a finished part up
-      to that record and the continuation resumes the temp's rate there, so the host never projects
-      the pump's rate past the chunk.
+      the chunk, under `HistoryLogSyncIdentifier.logSequence` of the BasalDelivery record, so at
+      most one per BasalDelivery record.
+    - H from the temp basal the driver holds: ended at its `TempRateCompleted`, or, if the pump runs
+      it at another rate, re-stated as at a segment change: finished at the old rate, a mutable
+      continuation at the pump's, so the host never projects the pump's rate past the chunk.
     - H from a finalized temp basal: the pump's chunks reported in its place, from the
       difference through its end, the first a second after its start. Neither host revises a
       finalized row, but Trio's IOB cuts one at the next row and does not resume it; Loop counts no
-      basal older than its last finished one and ignores them. Every chunk through its end has to
-      be read and trusted first.
+      basal older than its last finished one and ignores them.
     - H from a suspend: nothing.
-  - A chunk waits, with everything after it, behind an open chunk, a store gap for
-    `basalGapPatience` (2) passes (then the gap is skipped, with a warning), a pending delivery
-    change, or a temp basal the host still holds open before it. `reconciledThrough` (persisted,
-    reset on a new serial or an erased log) is the last BasalDelivery record a pass is done with.
-  - Control-IQ hand-back: when `useControlIQ` goes off (`configureControlIQMode`,
-    `fetchControlIQStatus`) `controlIQEndedAt` is persisted. While it is set, with reporting on,
-    `isAwaitingHistory` holds: `ensureCurrentPumpData` does not throttle and `syncPumpData` waits
-    for a history pass (`afterHistoryIsReported`, `transitionHistoryWait`), as for a pending
-    delivery change. A pass that started after it, read to the pump's end and left nothing open
-    before it clears it. A pass that sees Control-IQ in the BasalDelivery records while
-    `useControlIQ` is off, or PCM 1 while it is on, reads the Control-IQ status.
-  - Each pass records what it compared and did in `ReconciliationLog` (in memory, lock-guarded on the
-    manager): the pass's counts and what held it back, every difference with its outcome, the records
-    that fail their cross-check, the open residual days and the IOB monitor's finding. The
-    Reconciliation screen under Debug Options shows it with the ledgers' open items; nothing reads it
-    to dose. Unit tests in `ReconciliationLogTests` and `TandemKitReconciliationViewModelTests`.
-  - Scenarios: unit tests in `BasalReconciliationReportingTests`; conformance group H.
-- Every date a history pass takes from a record goes through `HistoryRecordDates.phoneDate(of:)`:
-  past the pump's own clock changes (`HistoryTimestampReconciler`), then the pump clock offset
-  (`hostDate(forPumpDate:)`), so boluses, transitions and the emit floor compare on the phone's
-  clock. Build one per pass from the records it reads. Pump dates decode with the phone's current
-  UTC offset, so `pumpClockOffset` moves by any change in it since the clock was read
-  (`pumpTimeCheckUTCOffset`): a phone zone change between syncs does not misdate history (#482).
+- Every date a history pass takes from a record goes through `HistoryRecordDates.phoneDate(of:)`.
+  Pump dates decode with the phone's current UTC offset, so `pumpClockOffset` moves by any change in
+  it since the clock was read (`pumpTimeCheckUTCOffset`): a phone zone change between syncs does not
+  misdate history (#482).
 - Still open: a boundary that trails the live reads to the last history pass (#353). Loop's
   `DoseStore` stores nothing while the boundary is at or behind the end of the newest finalized
   basal it holds, and leaves out of IOB a dose that ended before the boundary and was not stored, so
@@ -735,58 +386,38 @@ edit instead of at the next sync.
   reconciliation, after the fact; the live path still ignores it.
 
 ### Therapy command validation
-- The pump delivers basal in 5-minute cycles: at each it writes a `BasalDelivery` (279) record and
+- The pump delivers basal in 5-minute cycles: at each it writes a `BasalDelivery` record and
   delivers 300 s at its `commandedRate`. A change of rate (a temp's start or end, a profile segment,
   Control-IQ) takes effect at the next BasalDelivery record, 0–5 minutes after the command, and a
   temp set and replaced between two BasalDelivery records is never delivered. A late or missing
   BasalDelivery record, or a resume inside the suspend's own cycle, delivers nothing until the next.
-  `PumpBasalTimeline` reads this back: one chunk per BasalDelivery record, used once closed, and
-  trusted only if it, the chunks either side, and its `DailyBasal` stretch agree with the pump's
-  other records. Whether a temp or a suspend is in force is unknown where the replay starts and past
-  a store gap, until a record says: the session's store starts mid-temp after a relaunch, and a lost
-  `TempRateActivated` or `PumpingResumed` failed every record after it, so their real differences
-  went uncorrected (#563). Meanwhile a BasalDelivery record consistent with itself passes: source 0
-  at 0, 1 at its `profileBasalRate`, 2 at its own `tempRate`.
-- `enactBolus` rejects non-positive amounts and anything above `state.settings.maxBolus`
-  (seeded from `PumpManagerSetupSettings` at setup, then whatever the host app last synced).
-  The pump enforces the same ceiling in firmware, because `syncDeliveryLimits` pushes it down
-  via `SetMaxBolusLimitRequest`.
-- A command the pump answers with a non-zero status fails as `.deviceState` carrying
-  `PumpCommError.errorResponse` (`PumpRefusal`), naming the command and the status; an unanswered
-  write is `noResponse`, and nothing reports `invalidPacket`. The pump gives no reason, so the
-  message adds only what the driver can read off the command: a temp whose percent of the pump's
-  rate works out under its 0.1 U/hr minimum or over the synced max basal limit, whether the temp it
-  replaced was already stopped, a bolus's nack reason. A refused bolus cancel says the bolus may
-  still be delivering.
-- `enactBolus` refuses automatic boluses while Control-IQ is active. `enactTempBasal` refuses
-  while Control-IQ is active, and with `bolusIsRunning` while a bolus is running, by the same test
-  as `enactBolus` below (`bolusIsStillRunning`), not the progress reporter's elapsed-time
-  estimate: a pump slower than the estimate is still delivering when it runs out, and no reporter
-  survives a relaunch (#347).
+  Whether a temp or a suspend is in force is unknown where `PumpBasalTimeline`'s replay starts and
+  past a store gap, until a record says: the session's store starts mid-temp after a relaunch, and a
+  lost `TempRateActivated` or `PumpingResumed` failed every record after it, so their real
+  differences went uncorrected (#563).
+- `enactTempBasal` decides whether a bolus is running by `bolusIsStillRunning`, not the progress
+  reporter's elapsed-time estimate: a pump slower than the estimate is still delivering when it runs
+  out, and no reporter survives a relaunch (#347).
 - `enactBolus` refuses with `bolusIsRunning` while a bolus it started has not been seen to end
   (`isBolusInFlight`), and checks again inside its command job: a host's SMB enacted while a manual
   bolus was being initiated queued behind it and ran right after its `InitiateBolus`, and only the
   pump's permission nack stopped it (#504). Past the bolus's estimated end and its 30 s grace
   (`shouldDeferBolusSync`) it reads `CurrentBolusStatus` first, so a bolus that finished out of
   contact does not block the next; no answer still refuses.
-  `cancelBolus` resets `bolusState` with `bolusDose`, or the next bolus is refused.
-- A zero temp basal is always allowed, whatever the profile, sync or update state below, since 0%
-  of any profile is 0. Control-IQ, a running bolus and a duration the pump refuses still refuse it.
-- `enactTempBasal` refuses a temp outside 15 minutes to 72 hours (`supportedTempBasalMinutes`)
-  before connecting: the pump refuses one too, but only after the running temp is stopped. It sends
-  whole minutes and reports the temp for the minutes sent.
+- A zero temp basal is always allowed, whatever the profile, sync or update state, since 0% of any
+  profile is 0. Control-IQ, a running bolus and a duration the pump refuses still refuse it.
+- `enactTempBasal` refuses a temp outside 15 minutes to 72 hours before connecting: the pump
+  refuses one too, but only after the running temp is stopped. It sends whole minutes and reports
+  the temp for the minutes sent.
 - `enactTempBasal` refuses every other temp but a cancel until the first successful
   `syncBasalRateSchedule` sets `hasSyncedBasalRateSchedule`: a temp rate is a percent of the
-  pump's profile, which until then may not be the app's (#443). `deleteSavedPumpState` clears it.
-  State saved before the flag existed reads false, and Loop and Trio only sync the schedule
-  when the user saves it, so while it is false `enactTempBasal` reads the pump's profile
-  (`adoptMatchingPumpProfile`) and sets the flag if it already matches the host's schedule. If
-  it differs, that temp is refused and the queued update writes the schedule for the next one.
-- A failed profile update clears `hasSyncedBasalRateSchedule` on every reading that still
-  differs, a retry's included, and `adoptMatchingPumpProfile` skips while it stands: a matching
-  profile does not explain a live rate that differs. Temp basals resume once a retry or a host
-  sync reads the profile back matching. A non-zero temp already running when the update fails
-  is stopped.
+  pump's profile, which until then may not be the app's (#443). State saved before the flag existed
+  reads false, and Loop and Trio only sync the schedule when the user saves it, so while it is false
+  `enactTempBasal` reads the pump's profile (`adoptMatchingPumpProfile`) and sets the flag if it
+  already matches the host's schedule.
+- A failed profile update clears `hasSyncedBasalRateSchedule` on every reading that still differs,
+  and `adoptMatchingPumpProfile` skips while it stands: a matching profile does not explain a live
+  rate that differs. A non-zero temp already running when the update fails is stopped.
 - `enactTempBasal` refuses a non-zero temp with `pumpProfileBasalRateIsZero` when the pump's
   `CurrentBasalStatus` reads a profile rate of 0 U/hr, before stopping a running temp basal; a
   Mobi ran a 0 U/hr profile for a day while the host was told its temp rates ran (#335, #343).
@@ -794,25 +425,26 @@ edit instead of at the next sync.
   refused 17% of 0.58 U/hr), so `tempBasalPercentAndRate` sends the lowest percent it accepts
   instead, nearer the request than 0%.
 - The percent is worked out against the pump's own rate in force, `profileBasalRate` from that
-  same read, and the temp is reported at that percent of it. Within `segmentChangeWindow`
-  (5 min) of the pump's next segment change it is worked out against the larger of the two
-  rates and reported at the request: delivery never exceeds the request on either side, and the
-  host can only over-count, until the change. Segment changes come from the host's schedule on
-  the pump's clock (`pumpSegmentChanges`), which is the pump's profile whenever non-zero temps
-  are allowed.
+  same read, and the temp is reported at that percent of it. Within `segmentChangeWindow` of the
+  pump's next segment change it is worked out against the larger of the two rates and reported at
+  the request: delivery never exceeds the request on either side, and the host can only over-count,
+  until the change. Segment changes come from the host's schedule on the pump's clock
+  (`pumpSegmentChanges`), which is the pump's profile whenever non-zero temps are allowed.
+- The host's schedule is read by the phone's wall clock (`getScheduledBasalRate`), the pump's by
+  its own, which observes no DST (`pumpScheduledBasalRate`, on `pumpWallClockShift`), and neither by
+  the time since midnight, which runs an hour off the wall clock from a DST change to the next
+  midnight. On a fall-back day that took a pump's 0.5 U/hr at 05:00 for its 06:00 segment's 0.7,
+  refused temp basals for the hour, and cut a running temp at a segment change an hour early.
 - A finalized temp basal's `deliveredUnits` is its rate times its run time, rounded to the pump's
   0.001 U (`TandemPumpCapabilities.roundToReportingResolution`). It is computed: the pump reports no
   volume for a temp.
-- A `.basal` marker carries the rate the pump runs with no temp (`scheduledBasalRateInForce`): the
-  `profileBasalRate` of a reading taken then, else the host's schedule on the pump's clock; while
-  skewed, the host's own, which the clock skew temp runs. Neither host counts a marker's rate (both
-  keep it zero-length), so it reaches only their records and the settings screen.
+- Neither host counts a `.basal` marker's rate (both keep it zero-length), so it reaches only their
+  records and the settings screen.
 - The pump rescales a running temp at each segment change, so `splitAtSegmentChanges` cuts its
   record there: finished at the change, and a new mutable part at `tempPercent` of the new rate.
-  The first basal read after a change reports the cut; every path that finishes a temp
-  (`getActivePumpEvents`, `reportTransition`) cuts it first, since neither host revises a temp
-  basal once told it finished. Hosts sync before they dose, so no dosing decision sees the
-  uncut record; while disconnected it stays uncut until the next reading.
+  Every path that finishes a temp cuts it first, since neither host revises a temp basal once told
+  it finished. Hosts sync before they dose, so no dosing decision sees the uncut record; while
+  disconnected it stays uncut until the next reading.
 - After `SetTempRate`, `enactTempBasal` reads `CurrentBasalStatus` back and needs a temp within
   one 0.01 U/hr step of the percent of the pump's own rate (its rounding is unknown; 10% of
   0.15 U/hr is reported as 0). Otherwise it fails with `tempBasalRateMismatch` but keeps the temp
@@ -825,90 +457,63 @@ edit instead of at the next sync.
   settled before the stop (a request above its max basal limit becomes the limit), and a set it
   refuses anyway puts the stopped temp back for what remained of it (`restoreStoppedTempBasal`).
 - A `SetTempRate` whose answer is lost may still have reached the pump, after the stop of the temp
-  it replaces did (#340). `enactTempBasal` then reads `CurrentBasalStatus` and `TempRateRequest`
-  and, if the pump runs a temp at that percent, reports it (`adoptUnansweredTempBasal`), ending
-  the one it replaced; the command still fails. Otherwise the reading goes to
-  `observeDeliveryState`.
-- When those reads fail too (the link dropped with the answer), or a temp is set on the pump, the
-  next sync sees it: with `historyBackfill` on, a `fetchBasalStatus` reading of a temp while the
-  driver holds one also reads `TempRateRequest` (`observeReplacedTempBasal`). A temp at another
-  percent, or one the pump started more than `transitionMatchTolerance` after the held dose's start
-  (a held temp cut at a segment change starts at the cut, after the pump's record), is a
-  `PendingTransition` with a `replacement`; `basalDose` keeps the held temp, and nothing cuts it at
-  a segment change meanwhile. History ends the held temp at its `TempRateCompleted` and adopts the
-  pump's from its `TempRateActivated` (start, duration, `tempRateId`; `automatic` if a
-  SetTempRateResponse record has its id), at its percent of the pump's rate, mutable until its
-  completion. If that activation is the held temp's own, nothing replaced it and the pending change
-  is dropped. At detection the held temp ends at the pump's record of the new one's start, and the
-  new one, whose duration only history gives (`TempRateResponse.duration`'s unit is unknown), is
-  reported finished: at the last reading that saw it when above the schedule, at detection when
-  below. The `.basal` marker after it is left out when a command reports in that same second. A temp
-  the driver never sees reaches the host after the fact, through basal reconciliation.
-- `suspendDelivery` stops a running temp, then sends `SuspendPumping`; `write` gives nil for a lost
-  answer and a refusal alike (#340). Unless the suspend is confirmed it reads `CurrentBasalStatus`.
-  Suspended after a nil, where the driver held no suspend, is the app's suspend, as an answered one
-  is; any other reading goes to `observeDeliveryState`, which ends a temp the stop ended. The
-  command succeeds whenever the pump reads suspended, so a cartridge wizard can go on.
-- `ResumePumping` is read back the same way. Delivering after a nil, where the driver held a
-  suspend, is the app's resume, which at detection is dated at the send, the earliest the pump could
-  have resumed. A resume where the host holds no suspend is never reported at detection. The
-  command succeeds whenever the pump reads delivering, so no alarm is acknowledged for a resume that
-  went through. One the pump refuses while it raises `RESUME_PUMP_ALARM` or `RESUME_PUMP_ALARM2`
-  acknowledges those and is retried once (`ResumeWithAlarmAcknowledgement`), from the host's resume
-  and the settings screen's alike: the host shows only its own error, and the alarms ask for the
-  resume being made (#170). Any other alarm is left for the user to dismiss.
-- A pump clock more than `pumpClockSmallSkewThreshold` (1 min) off the phone's
-  (`showPumpTimeSyncWarning`) shows the settings screen's "Time Change Detected" notice and the
-  time-sync badge, and nothing else.
-- A pump clock more than `pumpClockSkewThreshold` (5 min) off the phone's (`isPumpClockSkewed`)
-  raises a LoopKit alert, retracted once the clock agrees (`pumpClockSkewAlertIssued`, persisted),
-  and a status highlight; the settings screen syncs the clock. While skewed, wherever the host
-  counts its own scheduled rate the pump runs a temp at the percent of its own rate that delivers
-  it (`maintainPumpClockSkewCompensation`, every basal read and after a cancel). The host is not
+  it replaces did (#340), so `enactTempBasal` reads `CurrentBasalStatus` and `TempRateRequest` and,
+  if the pump runs a temp at that percent, reports it (`adoptUnansweredTempBasal`); the command still
+  fails.
+- A temp set on the pump, or one whose answer was lost with the link, is found by the next sync
+  (`observeReplacedTempBasal`): history ends the held temp at its `TempRateCompleted` and adopts the
+  pump's from its `TempRateActivated`. The pump stamps the start on the clock in force when the temp
+  began, which a set since (as at a DST change) has moved. So a clock read that finds the pump's
+  clock moved since the one before records the step (`lastPumpClockStep`, persisted; a phone zone
+  change is none), a start stamped while the held temp ran is also read on the clock before it, and
+  one still ahead of the phone is taken for the held temp unless its percent differs, then dated at
+  detection. A `timeChange` batch reads the clock before the basal status
+  (`QualifyingEventFetch.timeSinceReset`). The new one's duration only history gives
+  (`TempRateResponse.duration`'s unit is unknown), so it is reported finished: at the last reading
+  that saw it when above the schedule, at detection when below. A temp the driver never sees reaches
+  the host after the fact, through basal reconciliation.
+- `write` gives nil for a lost answer and a refusal alike (#340), so after `SuspendPumping` and
+  `ResumePumping` the driver reads `CurrentBasalStatus` back unless the answer confirmed it. The
+  command succeeds whenever the pump reads suspended, so a cartridge wizard can go on, or delivering,
+  so no alarm is acknowledged for a resume that went through. A resume whose answer was lost is dated
+  at the send, the earliest the pump could have resumed; a resume where the host holds no suspend is
+  never reported at detection.
+- A resume the pump refuses while it raises `RESUME_PUMP_ALARM` or `RESUME_PUMP_ALARM2` acknowledges
+  those and is retried once (`ResumeWithAlarmAcknowledgement`), from the host's resume and the
+  settings screen's alike: the host shows only its own error, and the alarms ask for the resume being
+  made (#170). Any other alarm is left for the user to dismiss.
+- A pump clock more than `pumpClockSkewThreshold` off the phone's raises a LoopKit alert and a status
+  highlight. While skewed, wherever the host counts its own scheduled rate the pump runs a temp at
+  the percent of its own rate that delivers it (`maintainPumpClockSkewCompensation`). The host is not
   told of it: what it counts is what runs. A temp the driver did not set is left alone. A request
   equal to the pump's own rate goes out as an explicit 100% temp, reported at that rate; whether
   firmware accepts 100% is unconfirmed, and a refusal fails the command.
-  `syncPumpData` reads the pump's clock before its basal status for this.
-- A pump clock more than `pumpClockOffsetTrustLimit` (24 h) off the phone's
-  (`isPumpClockUntrusted`) is more than a time zone or DST change explains, so nothing that adds
-  insulin acts on it. `enactBolus` and `enactTempBasal` fail with `pumpClockUntrusted`, except a zero
-  temp and a cancel, which only reduce delivery. `maintainPumpClockSkewCompensation` starts nothing
-  and stops the temp it has running, `verifyDeliveredBasalRate` skips its profile check, which
-  looks the schedule up on that clock, and `pumpSegmentChanges` finds none. It follows the latest
-  read, so it clears at the first sync that reads the clock inside the limit, as after the settings
-  screen sets it. One read came 2^32 ms short right after a pump reset (#503), so a single bad read
-  refuses dosing until the next sync, up to a loop cycle. `hostDate(forPumpDate:)` leaves a date
-  alone under such an offset.
+- A pump clock more than `pumpClockOffsetTrustLimit` (24 h) off the phone's is more than a time zone
+  or DST change explains, so nothing that adds insulin acts on it: `enactBolus` and `enactTempBasal`
+  fail with `pumpClockUntrusted`, except a zero temp and a cancel, which only reduce delivery. It
+  follows the latest read, so it clears at the first sync that reads the clock inside the limit. One
+  read came 2^32 ms short right after a pump reset (#503), so a single bad read refuses dosing until
+  the next sync, up to a loop cycle.
 - The driver sets the pump's clock only from the settings screen and at setup (`writePumpTime`),
-  never on its own. It reads the clock first and reports how far it moved through
-  `didAdjustPumpClockBy`, negative for a pump that ran ahead (MinimedKit passes the drift, the
-  other sign). Setup sets it before the host adopts the manager, so the report waits for the
-  delegate and its queue.
+  never on its own. It reports how far it moved through `didAdjustPumpClockBy`, negative for a pump
+  that ran ahead (MinimedKit passes the drift, the other sign). Setup sets it before the host adopts
+  the manager, so the report waits for the delegate and its queue.
 - There is **no IOB ceiling**. The pump's IOB is read (`fetchInsulinOnBoard`) on every sync and on
   the qualifying events pumpX2 reads it for, into `state.latestInsulinOnBoard`, but nothing doses
   on it. Only `ControlIQIOBRequest` is sent, and only once the pump has answered a Control-IQ
   info read: a pump with Control-IQ answers that opcode whether it is on or off, and a wrong
-  opcode waits out the 30 s response timeout. `NonControlIQIOBRequest` is never sent.
+  opcode waits out the 30 s response timeout.
 - The pump's IOB is held against what the host was told (`UnreportedInsulinOnBoardMonitor`), one
   way only, since the host's IOB is out of the driver's sight and runs on another insulin model
   and duration. With Control-IQ off (`iobType` Mudaliar) the pump counts bolus insulin alone, and
   what is left of a bolus never exceeds the bolus. So a reading more than 0.05 U above every bolus
   `BolusReportLedger` reported within the pump's insulin duration, for 30 minutes, logs a warning:
-  a pump-UI or extended bolus the host never heard of, or one whose report was lost. The ledger's
-  `units` is what the host counts (programmed while mutable, delivered once finalized); the check
-  skips while the ledger is younger than the window or an entry in it has no amount. Under
-  Control-IQ the pump also counts basal above and below the profile, so nothing is compared.
-- The window is the active profile's insulin duration (`PumpInsulinDuration`, persisted), read by
-  `fetchInsulinDuration` (`ProfileStatusRequest`, then `IDPSettingsRequest` for slot 0) in the
-  daily settings read, on any sync while it is unknown, and on the qualifying events that suggest
-  `ProfileStatusRequest` (`profileChange`, `activeProfileSegmentChange`, `pumpResume`). Nothing is
-  compared until it is known. Whether the pump moves boluses already given to a shortened duration
-  is unknown, so the longer one stays the window until that long after the change.
-- Scenarios: conformance group I, `InsulinOnBoardConformanceTests`, against faketandem's model of
-  both IOB figures; unit tests in `UnreportedInsulinOnBoardTests`.
+  a pump-UI or extended bolus the host never heard of, or one whose report was lost. Under
+  Control-IQ the pump also counts basal above and below the profile, so nothing is compared. Whether
+  the pump moves boluses already given to a shortened insulin duration is unknown, so the longer one
+  stays the window until that long after the change.
 - There is **no app-side temp basal rate check**; the pump's own max basal limit is the
-  only ceiling. (`maximumTempBasalRateExceeded` was never wired up in any revision and has
-  been removed rather than left as a dead enum case.)
+  only ceiling.
 
 ### Unanswered bolus command
 - `write` gives nil whether `InitiateBolus` never left the phone, the pump refused it or its answer
@@ -918,18 +523,13 @@ edit instead of at the next sync.
   counter (`bolusId(_:precedes:)`) means it never started: the permission is released and the enact
   fails as `noResponse`, with nothing reported.
 - Otherwise the enact fails with `.uncertainDelivery`, and the bolus is registered as an
-  acknowledged one is (ledger entry, `bolusDose`, a mutable event at the programmed amount, dated
-  when `InitiateBolus` was sent) but with `isUnconfirmed` (persisted) set and no progress reporter.
+  acknowledged one is but with `isUnconfirmed` (persisted) set and no progress reporter.
   `deliveryIsUncertain` reads it, and the status highlight says so, since Trio does not act on the
   flag. The permission is kept: a release could reach a bolus the pump is running.
-- Every bolus status read settles it (`confirmUnansweredBolus`): `shouldDeferBolusSync` never
-  defers for it, `ensureCurrentPumpData` is not throttled while it stands, and the next
-  `enactBolus` reads the pump before refusing with `bolusIsRunning`.
-  Running, or in `LastBolusStatus`: tracked as any app bolus. Never started: the permission is
-  released and the bolus finalized at 0 U, as a zero-delivery cancel is (#455). A later bolus in
-  `LastBolusStatus`: only history can tell, so it is held in `pendingBolusFinalization` at its
-  programmed amount. No answer: it stays unconfirmed. History that reads its `BolusCompleted`
-  finalizes it under the live `raw`, through its ledger entry.
+- Every bolus status read settles it (`confirmUnansweredBolus`): never started is finalized at 0 U,
+  as a zero-delivery cancel is (#455); a later bolus in `LastBolusStatus` means only history can
+  tell, so it is held in `pendingBolusFinalization` at its programmed amount; no answer leaves it
+  unconfirmed.
 
 ### Unconfirmed bolus volume
 - A bolus whose `LastBolusStatus` can't be read is held mutable in `pendingBolusFinalization` and
@@ -945,40 +545,32 @@ edit instead of at the next sync.
 ### Cartridge change
 - The pump refuses `EnterChangeCartridgeMode` while another cartridge procedure is open, and a
   fill-tubing left open also refuses `ExitChangeCartridgeMode`; the only reason it gives is a nonzero
-  status. When the wizard's enter is refused with delivery suspended and no pump notification to
-  blame, `stuckModeRecoveryOffered` makes the view ask the user to remove the pump. On OK,
-  `recoverAndReenterChangeCartridgeMode` runs `CartridgeModeRecovery`: exit fill tubing, exit change
-  cartridge, enter change cartridge, and no refusal stops it. It is offered once, not again after a
-  refused retry. The refusal rule is inferred from a field report and not confirmed on firmware.
-- A refused enter, the recovery's included, first reads `LoadStatus` (`fetchLoadStatus`). A loading
-  procedure still in `changeCartridge`, as a wizard closed mid-change leaves it, resumes the wizard at
-  the cartridge swap with nothing sent; one in `loadCartridge` ends it at the tubing fill
-  (`foundCartridgeAlreadyLoaded`), with no cartridge change recorded. Backing out is wrong there: a
-  Mobi took the recovery's `ExitChangeCartridgeMode` as the new cartridge being in, streamed
-  detection, and refused change mode and both exits from then on. Any other state, or no answer,
-  offers the recovery as before.
+  status. `CartridgeModeRecovery` backs out (exit fill tubing, exit change cartridge, enter change
+  cartridge, no refusal stops it) and is offered once, when the wizard's enter is refused with
+  delivery suspended and no pump notification to blame. The refusal rule is inferred from a field
+  report and not confirmed on firmware.
+- A refused enter, the recovery's included, first reads `LoadStatus`. A loading procedure still in
+  `changeCartridge`, as a wizard closed mid-change leaves it, resumes the wizard at the cartridge
+  swap with nothing sent; one in `loadCartridge` ends it at the tubing fill, with no cartridge
+  change recorded. Backing out is wrong there: a Mobi took the recovery's `ExitChangeCartridgeMode`
+  as the new cartridge being in, streamed detection, and refused change mode and both exits from
+  then on.
 
 ### Marker events
 Events with no dose, each in a `replacePendingEvents: false` batch under a `raw` of its kind and date.
-- The wizards report a change once the pump has done its part: `recordCartridgeChange` a `.rewind`,
-  `recordTubingFill` a `.prime` when insulin flowed before fill tubing mode was left, and
-  `recordSiteChange(primeAmount:)` a `.prime` with its `.replaceComponent(.infusionSet)`. Loop
-  derives no doses from reservoir drops within an insulin duration of a `.prime`, so meanwhile a pump
-  bolus held behind `reconciliationBoundary` (#353) is missing from Loop's IOB until history reports
-  it, as it always is from Trio's. A fill done on the pump's screen is not reported (conformance D8).
-- `reportPumpAlarms`, at every `fetchNotifications`, reports each alarm and malfunction once as an
-  `.alarm` with its `pumpAlarmType`, dated at the read since the alarm status gives no time, and an
-  `.alarmClear` once a read that answered its category no longer finds it. `TandemAlertReconciler`
-  diffs them against `reportedPumpAlarmIdentifiers` (persisted), as it does the LoopKit alerts.
-  Alerts, reminders and CGM alerts are not faults and are not reported. Trio stores an alarm as
+- Loop derives no doses from reservoir drops within an insulin duration of a `.prime`, so after a
+  fill a pump bolus held behind `reconciliationBoundary` (#353) is missing from Loop's IOB until
+  history reports it, as it always is from Trio's. A fill done on the pump's screen is not reported
+  (conformance D8).
+- Alarms and malfunctions are reported once as `.alarm`, dated at the read since the alarm status
+  gives no time, and cleared as `.alarmClear` once a read that answered its category no longer finds
+  them. Alerts, reminders and CGM alerts are not faults and are not reported. Trio stores an alarm as
   `PumpAlarm`, its title the note, and nothing for a clear.
 - A pump change is a `.replaceComponent(.pump)`, which Trio stores as a site change, so it shows in
-  both hosts' event history. The first pump a manager reads (no `lastPumpSerial`) is "Pump Added",
-  at the reading after pairing, held until the host adopts the manager. One whose serial differs from
-  `lastPumpSerial` (persisted, and kept through `deleteSavedPumpState`) is "Pump Replaced", and also
-  goes through `pumpManagerPumpWasReplaced`, which both hosts ignore. Deleting the manager reports
-  "Pump Removed" (below). The serial is read with the daily settings, which `deleteSavedPumpState`
-  makes due, so the sync after a re-pair reads the next pump's.
+  both hosts' event history. A serial that differs from `lastPumpSerial` (persisted, and kept through
+  `deleteSavedPumpState`) also goes through `pumpManagerPumpWasReplaced`, which both hosts ignore.
+  The serial is read with the daily settings, which `deleteSavedPumpState` makes due, so the sync
+  after a re-pair reads the next pump's.
 
 ## Open work
 Beyond the missing tests and the history items above. The `loopkit-conformance` issues track
@@ -997,8 +589,6 @@ integration scenarios.
 - **Delivery-uncertainty recovery.** `deliveryIsUncertain` is set only for an unconfirmed bolus,
   which the next read of the pump settles on its own; `deliveryUncertaintyRecoveryViewController`
   returns the general `TandemUICoordinator`, and there is no dedicated recovery screen.
-- **Response validation.** `PacketAssembler` checks the txId, packet countdown, declared length
-  and CRC of every received message, but nothing checks the HMAC of a signed response.
 - **Hardware validation.** [docs/hardware-test-plan.md](docs/hardware-test-plan.md) is the manual
   procedure for the t:slim X2 and the Mobi, but no run of it is recorded, so which pump firmware
   versions work is unknown.

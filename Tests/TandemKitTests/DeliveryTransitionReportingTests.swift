@@ -514,6 +514,75 @@ import XCTest
         XCTAssertNil(manager.state.deliveryTransitions.pending)
     }
 
+    func testATempThePumpDatesAheadOfThePhoneAfterItsClockWentBackIsTheHeldOne() {
+        runningTempBasal(0, percent: 0)
+        advance(to: minutes(7))
+        observeTemp(percent: 0, from: minutes(60))
+
+        XCTAssertNil(manager.state.deliveryTransitions.pending)
+    }
+
+    func testATempBegunMoreThanAnHourBeforeThePumpsClockWentBackIsTheHeldOne() {
+        runningTempBasal(0.5, percent: 50)
+        advance(to: minutes(70))
+        // Found by the clock read, which DaylightSavingTimeTests covers.
+        manager.state.lastPumpClockStep = PumpClockStep(foundAt: minutes(69), by: -.hours(1))
+        observeTemp(percent: 50, from: minutes(60))
+
+        XCTAssertNil(manager.state.deliveryTransitions.pending)
+    }
+
+    func testAReplacementStampedBeforeThePumpsClockWentBackIsDatedOnTheClockBefore() {
+        runningTempBasal(1.5, percent: 150)
+        advance(to: minutes(25))
+        manager.state.lastPumpClockStep = PumpClockStep(foundAt: minutes(21), by: -.hours(1))
+        observeTemp(percent: 0, from: minutes(65))
+
+        XCTAssertEqual(manager.state.deliveryTransitions.pending?.replacement?.start, minutes(5))
+    }
+
+    func testAClockSetBeforeTheHeldTempBeganLeavesItsStampAlone() {
+        manager.state.lastPumpClockStep = PumpClockStep(foundAt: start.addingTimeInterval(-60), by: -.hours(1))
+        runningTempBasal(1.5, percent: 150)
+        advance(to: minutes(25))
+        observeTemp(percent: 150, from: minutes(10))
+
+        XCTAssertEqual(manager.state.deliveryTransitions.pending?.replacement?.start, minutes(10))
+    }
+
+    func testAReplacementThePumpDatesAheadOfThePhoneIsDatedAtDetection() throws {
+        runningTempBasal(1.5, percent: 150)
+        advance(to: minutes(12))
+        observeTemp(percent: 0, from: minutes(65))
+        XCTAssertEqual(manager.state.deliveryTransitions.pending?.replacement?.start, minutes(12))
+
+        manager.historyTickFailed(startedAt: minutes(12))
+        delegateQueue.sync {}
+
+        let temps = events(.tempBasal).compactMap(\.dose)
+        XCTAssertEqual(temps.map(\.startDate), [start, minutes(12)])
+        XCTAssertTrue(temps.allSatisfy { $0.endDate >= $0.startDate }, "\(temps)")
+    }
+
+    func testAPendingReplacementSavedDatedAheadOfThePhoneNeverEndsBeforeItStarts() {
+        runningTempBasal(0, percent: 0)
+        advance(to: minutes(7))
+        manager.state.deliveryTransitions.pending = DeliveryTransitionLedger.PendingTransition(
+            prior: manager.state.basalDose,
+            observed: .tempBasal,
+            detectedAt: minutes(7),
+            lastConfirmed: minutes(5),
+            replacement: DeliveryTransitionLedger.PendingTransition.ReplacingTemp(start: minutes(60), percent: 0, rate: 0)
+        )
+
+        manager.historyTickFailed(startedAt: minutes(7))
+        delegateQueue.sync {}
+
+        let temps = events(.tempBasal).compactMap(\.dose)
+        XCTAssertEqual(temps.count, 2)
+        XCTAssertTrue(temps.allSatisfy { $0.endDate >= $0.startDate }, "\(temps)")
+    }
+
     func testAReplacementHistoryShowsToBeTheHeldTempIsDropped() {
         runningTempBasal(1.5, tempRateId: 7, percent: 150)
         advance(to: minutes(12))

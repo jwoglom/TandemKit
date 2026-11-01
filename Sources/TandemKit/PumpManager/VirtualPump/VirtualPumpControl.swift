@@ -130,6 +130,8 @@ enum VirtualPumpControl {
             case sync
             /// `syncBasalRateSchedule(items:)` with `basalSchedule`, as saving the basal profile does.
             case syncBasalSchedule
+            /// `syncPumpTime`, as the settings screen's Sync Time does: the pump's clock to the phone's.
+            case syncPumpTime
             /// `enactTempBasal(decisionId:unitsPerHour:for:)`; a `duration` of 0 cancels, as hosts cancel.
             case tempBasal
             case suspend
@@ -338,6 +340,8 @@ enum VirtualPumpControl {
                     response.lastSync = try sync(manager)
                 case .syncBasalSchedule:
                     try syncBasalSchedule(manager, items: request.basalSchedule)
+                case .syncPumpTime:
+                    try syncPumpTime(manager)
                 case .tempBasal:
                     try tempBasal(manager, unitsPerHour: request.unitsPerHour, duration: request.duration)
                 case .suspend:
@@ -453,6 +457,12 @@ enum VirtualPumpControl {
             let synced = Completion<Date?>()
             manager.syncPumpData { synced.finish($0) }
             return try synced.wait("syncPumpData", timeout: 240)
+        }
+
+        private static func syncPumpTime(_ manager: TandemPumpManager) throws {
+            let synced = Completion<Result<Void, PumpManagerError>>()
+            manager.syncPumpTime { synced.finish($0) }
+            try synced.wait("syncPumpTime", timeout: 240).get()
         }
 
         private static func syncBasalSchedule(_ manager: TandemPumpManager, items: [RepeatingScheduleValue<Double>]?) throws {
