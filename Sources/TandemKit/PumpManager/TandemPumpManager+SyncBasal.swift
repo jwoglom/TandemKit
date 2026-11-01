@@ -71,6 +71,7 @@ public extension TandemPumpManager {
             let result = self.writeBasalRateSchedule(sortedItems)
             if case .success = result {
                 self.markBasalProfileValidated()
+                self.refreshTandemSourceSettingsIfDue(force: true)
             }
             completion(result)
         }

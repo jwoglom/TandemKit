@@ -78,6 +78,21 @@ actor TandemSourceUploader {
         return Result(uploadedCount: uploaded, serverMaxEventIndex: newest.sequenceNum, deviceAssignmentId: assignmentId)
     }
 
+    /// Sends the pump's settings JSON as the app does: an upload with `settings` and no events.
+    func uploadSettings(_ settingsJSON: Data) async throws -> String {
+        guard let assignmentId = deps.deviceAssignmentId() else { throw UploadError.notConfigured }
+        guard let device = deps.deviceInfo() else { throw UploadError.noDeviceInfo }
+        let body = TandemSourceUploadBody(
+            device: device,
+            deviceAssignmentId: assignmentId,
+            settings: settingsJSON.base64EncodedString(),
+            now: deps.now(),
+            pumpClock: deps.pumpClock()
+        )
+        try await deps.api.upload(bodyJSON: JSONEncoder().encode(body))
+        return assignmentId
+    }
+
     private static func count(_ ranges: [ClosedRange<UInt32>]) -> Int {
         ranges.reduce(0) { $0 + $1.count }
     }

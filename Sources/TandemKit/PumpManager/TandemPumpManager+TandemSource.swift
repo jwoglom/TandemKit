@@ -7,23 +7,27 @@ extension TandemPumpManager {
     /// controller throttles and de-duplicates. `force` bypasses the interval for the settings
     /// "Upload now" button.
     public func uploadToTandemSourceIfDue(force: Bool = false) {
-        guard state.tandemSourceUploadEnabled, let serial = historyLogStoreSerial else { return }
+        guard state.tandemSourceUploadEnabled, let inputs = tandemSourceInputs() else { return }
+        tandemSource.trigger(now: now, force: force, inputs: inputs) { [weak self] result in
+            self?.handleTandemSourceResult(result)
+        }
+        if force {
+            refreshTandemSourceSettingsIfDue(force: true)
+        }
+    }
 
-        let inputs = TandemSourceController.Inputs(
+    func tandemSourceInputs() -> TandemSourceController.Inputs? {
+        guard let serial = historyLogStoreSerial else { return nil }
+        return TandemSourceController.Inputs(
             serial: serial.rawValue,
             deviceInfo: tandemSourceDeviceInfo(),
             deviceAssignmentId: state.tandemSourceDeviceAssignmentId,
             store: historyLogStore,
-            // Best-effort: the backfill coordinator already fills the store from the pump on its own
-            // schedule, and uploads resume from the server's index, so a still-missing range is
-            // simply picked up on a later run rather than fetched inline off this path.
+            // The backfill coordinator fills the store from the pump on its own schedule; a range it
+            // hasn't reached when the upload runs is skipped (the uploader logs how many).
             fillGaps: { _, _ in },
             pumpClock: { [weak self] in self?.state.currentPumpTime ?? Date() }
         )
-
-        tandemSource.trigger(now: now, force: force, inputs: inputs) { [weak self] result in
-            self?.handleTandemSourceResult(result)
-        }
     }
 
     public var tandemSourceIsAuthenticated: Bool { tandemSource.isAuthenticated }
@@ -42,6 +46,8 @@ extension TandemPumpManager {
         tandemSource.auth.signOut()
         logger.info("Signed out of Tandem Source; upload disabled")
         state.tandemSourceUploadEnabled = false
+        // Another account signed in next has none of this pump's settings.
+        state.lastTandemSourceSettingsHash = nil
         notifyDelegateStateUpdated()
     }
 
@@ -79,6 +85,7 @@ extension TandemPumpManager {
         guard let serial = pump.pumpSerial else { return nil }
 
         let versionA = pump.pumpVersionACargo.map { PumpVersionResponse(cargo: $0) }
+        let features = state.pumpMainFeaturesBitmask.map { PumpFeaturesV1Response.PumpFeatureType.fromBitmask(UInt64($0)) }
         return TandemSourceDeviceInfo(
             serialNum: serial,
             modelNum: versionA?.modelNum ?? pump.modelNumber ?? 1_004_000,
@@ -91,10 +98,10 @@ extension TandemPumpManager {
             pumpRev: versionA?.pumpRev ?? "0",
             pcbaRev: versionA?.pcbaRev ?? "0",
             pumpAPIVersion: pump.apiVersion.map { "\($0.major).\($0.minor)" } ?? "3.11",
-            // Report what actually ran: Loop keeps Control-IQ off and drives delivery itself, so
-            // these mirror the pump's real mode rather than claiming Control-IQ.
-            controlIQ: state.controlIQEnabled ?? state.useControlIQ,
-            basalIQ: false
+            dexcomG6: features?.contains(.DEXCOM_G6_SUPPORTED) ?? false,
+            basalIQ: features?.contains(.BASAL_IQ_SUPPORTED) ?? false,
+            // Until the features read lands, a pump that has answered a Control-IQ read supports it.
+            controlIQ: features?.contains(.CONTROL_IQ_SUPPORTED) ?? (state.controlIQEnabled != nil)
         )
     }
 }

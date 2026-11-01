@@ -37,7 +37,7 @@ final class TandemSourceUploaderTests: XCTestCase {
         TandemSourceUploader.Dependencies(
             api: api,
             store: store,
-            deviceInfo: { TandemSourceDeviceInfo(serialNum: self.serial, modelNum: 1004000, partNum: 1, armSwVer: 1, mspSwVer: 0, pcbaSN: 1, configABits: 0, configBBits: 0, pumpRev: "0", pcbaRev: "0", pumpAPIVersion: "3.11", controlIQ: true, basalIQ: false) },
+            deviceInfo: { TandemSourceDeviceInfo(serialNum: self.serial, modelNum: 1004000, partNum: 1, armSwVer: 1, mspSwVer: 0, pcbaSN: 1, configABits: 0, configBBits: 0, pumpRev: "0", pcbaRev: "0", pumpAPIVersion: "3.11", dexcomG6: false, basalIQ: false, controlIQ: true) },
             deviceAssignmentId: { "assignment-uuid" },
             fillGaps: { serial, ranges in onFill(serial, ranges) },
             now: { Date(timeIntervalSince1970: 1_793_464_000) },

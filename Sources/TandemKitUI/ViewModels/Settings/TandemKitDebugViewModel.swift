@@ -120,6 +120,9 @@ final class TandemKitDebugViewModel: ObservableObject {
         if let last = state.lastTandemSourceUpload {
             lines.append("Last upload: \(Self.tandemSourceDateFormatter.string(from: last))")
         }
+        if let settings = state.lastTandemSourceSettingsUpload {
+            lines.append("Settings uploaded: \(Self.tandemSourceDateFormatter.string(from: settings))")
+        }
         if let index = state.lastTandemSourceEventIndex {
             lines.append("Server event index: \(index)")
         }

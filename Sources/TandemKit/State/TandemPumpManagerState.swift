@@ -208,6 +208,13 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
     public var lastTandemSourceEventIndex: UInt32?
     /// Human-readable summary of the last upload failure, for the settings screen; nil after success.
     public var lastTandemSourceError: String?
+    /// SHA-256 of the last settings JSON Tandem Source accepted. The Mobi app uploads settings
+    /// only when they differ from what it last sent, and so does the driver.
+    public var lastTandemSourceSettingsHash: String?
+    public var lastTandemSourceSettingsUpload: Date?
+    /// The pump's main supported-features bitmask (`PumpFeaturesV2Request(.mainFeatures)`), which
+    /// the upload's `pumpFeatures` reports. What the pump supports, not what is running.
+    public var pumpMainFeaturesBitmask: UInt32?
 
     public static func == (lhs: TandemPumpManagerState, rhs: TandemPumpManagerState) -> Bool {
         // Not one && chain: that takes the type checker ten times as long, most of a second.
@@ -288,7 +295,10 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
               lhs.tandemSourceDeviceAssignmentId == rhs.tandemSourceDeviceAssignmentId,
               lhs.lastTandemSourceUpload == rhs.lastTandemSourceUpload,
               lhs.lastTandemSourceEventIndex == rhs.lastTandemSourceEventIndex,
-              lhs.lastTandemSourceError == rhs.lastTandemSourceError
+              lhs.lastTandemSourceError == rhs.lastTandemSourceError,
+              lhs.lastTandemSourceSettingsHash == rhs.lastTandemSourceSettingsHash,
+              lhs.lastTandemSourceSettingsUpload == rhs.lastTandemSourceSettingsUpload,
+              lhs.pumpMainFeaturesBitmask == rhs.pumpMainFeaturesBitmask
         else {
             return false
         }
@@ -540,6 +550,9 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         lastTandemSourceUpload = rawValue["lastTandemSourceUpload"] as? Date
         lastTandemSourceEventIndex = rawValue["lastTandemSourceEventIndex"] as? UInt32
         lastTandemSourceError = rawValue["lastTandemSourceError"] as? String
+        lastTandemSourceSettingsHash = rawValue["lastTandemSourceSettingsHash"] as? String
+        lastTandemSourceSettingsUpload = rawValue["lastTandemSourceSettingsUpload"] as? Date
+        pumpMainFeaturesBitmask = rawValue["pumpMainFeaturesBitmask"] as? UInt32
 
         if let rawInsulinType = rawValue["insulinType"] as? InsulinType.RawValue {
             insulinType = InsulinType(rawValue: rawInsulinType)
@@ -607,6 +620,9 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         raw["lastTandemSourceUpload"] = lastTandemSourceUpload
         raw["lastTandemSourceEventIndex"] = lastTandemSourceEventIndex
         raw["lastTandemSourceError"] = lastTandemSourceError
+        raw["lastTandemSourceSettingsHash"] = lastTandemSourceSettingsHash
+        raw["lastTandemSourceSettingsUpload"] = lastTandemSourceSettingsUpload
+        raw["pumpMainFeaturesBitmask"] = pumpMainFeaturesBitmask
         raw["insulinType"] = insulinType?.rawValue
         raw["useSilentTones"] = useSilentTones
         raw["basalRateSchedule"] = TandemPumpManagerState.encodeBasalSchedule(basalRateSchedule)
@@ -818,7 +834,10 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
             "* tandemSourceDeviceAssignmentId: \(tandemSourceDeviceAssignmentId == nil ? "nil" : "set")",
             "* lastTandemSourceUpload: \(debugValue(lastTandemSourceUpload))",
             "* lastTandemSourceEventIndex: \(debugValue(lastTandemSourceEventIndex))",
-            "* lastTandemSourceError: \(debugValue(lastTandemSourceError))"
+            "* lastTandemSourceError: \(debugValue(lastTandemSourceError))",
+            "* lastTandemSourceSettingsHash: \(lastTandemSourceSettingsHash == nil ? "nil" : "set")",
+            "* lastTandemSourceSettingsUpload: \(debugValue(lastTandemSourceSettingsUpload))",
+            "* pumpMainFeaturesBitmask: \(debugValue(pumpMainFeaturesBitmask))"
         ]
         return lines.joined(separator: "\n")
     }

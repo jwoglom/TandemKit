@@ -141,7 +141,15 @@ final class TandemPumpManagerStateEqualityTests: XCTestCase {
             ("lastSiteChangeDate", { $0.lastSiteChangeDate = nil }),
             ("lastCartridgeChangeDate", { $0.lastCartridgeChangeDate = nil }),
             ("lastCannulaFillAmount", { $0.lastCannulaFillAmount = nil }),
-            ("lastPumpSerial", { $0.lastPumpSerial = nil })
+            ("lastPumpSerial", { $0.lastPumpSerial = nil }),
+            ("tandemSourceUploadEnabled", { $0.tandemSourceUploadEnabled = false }),
+            ("tandemSourceDeviceAssignmentId", { $0.tandemSourceDeviceAssignmentId = nil }),
+            ("lastTandemSourceUpload", { $0.lastTandemSourceUpload = nil }),
+            ("lastTandemSourceEventIndex", { $0.lastTandemSourceEventIndex = nil }),
+            ("lastTandemSourceError", { $0.lastTandemSourceError = nil }),
+            ("lastTandemSourceSettingsHash", { $0.lastTandemSourceSettingsHash = nil }),
+            ("lastTandemSourceSettingsUpload", { $0.lastTandemSourceSettingsUpload = nil }),
+            ("pumpMainFeaturesBitmask", { $0.pumpMainFeaturesBitmask = nil })
         ]
     }
 
@@ -286,6 +294,14 @@ final class TandemPumpManagerStateEqualityTests: XCTestCase {
         state.lastCartridgeChangeDate = t0.addingTimeInterval(-.hours(26))
         state.lastCannulaFillAmount = 0.3
         state.lastPumpSerial = pumpSerial
+        state.tandemSourceUploadEnabled = true
+        state.tandemSourceDeviceAssignmentId = "assignment-uuid"
+        state.lastTandemSourceUpload = t0
+        state.lastTandemSourceEventIndex = 4321
+        state.lastTandemSourceError = "http(status: 500)"
+        state.lastTandemSourceSettingsHash = "abc"
+        state.lastTandemSourceSettingsUpload = t0
+        state.pumpMainFeaturesBitmask = 1030
         return state
     }
 }

@@ -22,6 +22,7 @@ final class TandemSourceController {
 
     private let lock = NSLock()
     private var inFlight = false
+    private var settingsInFlight = false
     private var lastAttemptAt: Date?
 
     init(
@@ -66,15 +67,7 @@ final class TandemSourceController {
             let result: Result<TandemSourceUploader.Result, Error>
             do {
                 let client = TandemSourceHTTPClient(baseURL: baseURL, tokenProvider: auth)
-                let assignmentId: String
-                if let configured = inputs.deviceAssignmentId {
-                    assignmentId = configured
-                } else if let resolved = try await client.fetchDeviceAssignmentId(serial: inputs.serial) {
-                    tandemSourceLogger.info("Resolved this pump's Tandem Source device assignment from the account")
-                    assignmentId = resolved
-                } else {
-                    throw TandemSourceUploader.UploadError.notConfigured
-                }
+                let assignmentId = try await resolveAssignmentId(inputs, client: client)
                 let uploader = makeUploader(inputs, api: client, assignmentId: assignmentId)
                 result = .success(try await uploader.uploadPending(serial: inputs.serial))
             } catch {
@@ -85,6 +78,46 @@ final class TandemSourceController {
             lock.unlock()
             completion(result)
         }
+    }
+
+    /// Uploads a settings JSON the caller has already found changed. Not throttled: the caller reads
+    /// settings rarely, and an unchanged read never gets here. `completion` gets the assignment id used.
+    func triggerSettings(_ settingsJSON: Data, inputs: Inputs, completion: @escaping (Result<String, Error>) -> Void) {
+        guard auth.isAuthenticated else { return }
+        lock.lock()
+        if settingsInFlight {
+            lock.unlock()
+            tandemSourceLogger.debug("Tandem Source settings upload skipped: one is already running")
+            return
+        }
+        settingsInFlight = true
+        lock.unlock()
+
+        Task {
+            let result: Result<String, Error>
+            do {
+                let client = TandemSourceHTTPClient(baseURL: baseURL, tokenProvider: auth)
+                let assignmentId = try await resolveAssignmentId(inputs, client: client)
+                result = .success(try await makeUploader(inputs, api: client, assignmentId: assignmentId).uploadSettings(settingsJSON))
+            } catch {
+                result = .failure(error)
+            }
+            lock.lock()
+            settingsInFlight = false
+            lock.unlock()
+            completion(result)
+        }
+    }
+
+    private func resolveAssignmentId(_ inputs: Inputs, client: TandemSourceHTTPClient) async throws -> String {
+        if let configured = inputs.deviceAssignmentId {
+            return configured
+        }
+        guard let resolved = try await client.fetchDeviceAssignmentId(serial: inputs.serial) else {
+            throw TandemSourceUploader.UploadError.notConfigured
+        }
+        tandemSourceLogger.info("Resolved this pump's Tandem Source device assignment from the account")
+        return resolved
     }
 
     private func makeUploader(_ inputs: Inputs, api: TandemSourceAPI, assignmentId: String) -> TandemSourceUploader {

@@ -288,6 +288,8 @@ public class IDPManager {
     }
 
     /// Returns all loaded profiles. Only valid after `isComplete` is true.
+    public var profileStatus: ProfileStatusResponse? { profileStatusResponse }
+
     public func getProfiles() -> [Profile] {
         precondition(isComplete, "IDPManager is not complete - cannot get profiles")
         return profiles

@@ -153,6 +153,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
     // future scheduler hooks may prune from other threads.
     let historyLogPruneLock = NSLock()
     var lastHistoryLogPruneAt: Date?
+    /// Guards `lastTandemSourceSettingsReadAt`, which the sync job and the basal sync both check.
+    let tandemSourceSettingsLock = NSLock()
+    var lastTandemSourceSettingsReadAt: Date?
 
     /// Held for the duration of any history read, so the log viewer and the background backfill
     /// can't consume each other's entries off the shared `historyLogStream`.
@@ -694,6 +697,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             }
 
             self.notifyDelegateStateUpdated()
+            self.refreshTandemSourceSettingsIfDue()
 
             // Kicked off, not awaited: a backfill slice can take far longer than a sync cycle,
             // and the loop is waiting on `completion` for the status reads above, not on

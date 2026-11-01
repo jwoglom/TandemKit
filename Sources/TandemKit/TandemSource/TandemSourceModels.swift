@@ -17,8 +17,10 @@ struct TandemSourceDeviceInfo: Equatable, Codable {
     var pumpRev: String
     var pcbaRev: String
     var pumpAPIVersion: String
-    var controlIQ: Bool
+    /// What the pump supports, as the Mobi app reports it — not what is running.
+    var dexcomG6: Bool
     var basalIQ: Bool
+    var controlIQ: Bool
 }
 
 /// A Tandem Source upload request body. Serialized once; the serialized bytes are what the
@@ -27,8 +29,10 @@ struct TandemSourceUploadBody: Encodable {
     let client = "mHealth"
     let package: Package
 
-    init(device: TandemSourceDeviceInfo, deviceAssignmentId: String, events: [String], now: Date, pumpClock: Date) {
-        package = Package(device: Device(info: device, deviceAssignmentId: deviceAssignmentId, events: events, now: now, pumpClock: pumpClock))
+    /// An upload carries either history `events` or the base64 `settings` JSON, never both, as the
+    /// app's does; the one left nil is omitted from the body.
+    init(device: TandemSourceDeviceInfo, deviceAssignmentId: String, events: [String]? = nil, settings: String? = nil, now: Date, pumpClock: Date) {
+        package = Package(device: Device(info: device, deviceAssignmentId: deviceAssignmentId, events: events, settings: settings, now: now, pumpClock: pumpClock))
     }
 
     struct Package: Encodable {
@@ -48,7 +52,7 @@ struct TandemSourceUploadBody: Encodable {
         let configBBits: UInt32
         let data: DeviceData
 
-        init(info: TandemSourceDeviceInfo, deviceAssignmentId: String, events: [String], now: Date, pumpClock: Date) {
+        init(info: TandemSourceDeviceInfo, deviceAssignmentId: String, events: [String]?, settings: String?, now: Date, pumpClock: Date) {
             pumpRev = info.pumpRev
             armSwVer = info.armSwVer
             mspSwVer = info.mspSwVer
@@ -61,14 +65,16 @@ struct TandemSourceUploadBody: Encodable {
             configBBits = info.configBBits
             data = DeviceData(
                 misc: Misc(info: info, deviceAssignmentId: deviceAssignmentId, now: now, pumpClock: pumpClock),
-                events: events
+                events: events,
+                settings: settings
             )
         }
     }
 
     struct DeviceData: Encodable {
         let misc: Misc
-        let events: [String]
+        let events: [String]?
+        let settings: String?
     }
 
     struct Misc: Encodable {
@@ -88,7 +94,7 @@ struct TandemSourceUploadBody: Encodable {
             pumpDateTime = Self.pumpFormatter.string(from: pumpClock)
             clientDateTimeWithOffset = Self.offsetFormatter.string(from: now)
             self.deviceAssignmentId = deviceAssignmentId
-            pumpFeatures = PumpFeatures(controlIQ: info.controlIQ, basalIQ: info.basalIQ)
+            pumpFeatures = PumpFeatures(dexcomG6: info.dexcomG6, controlIQ: info.controlIQ, basalIQ: info.basalIQ)
         }
 
         /// Pump wall clock, no zone (the pump reports local time with no offset), matching the app's
@@ -110,13 +116,12 @@ struct TandemSourceUploadBody: Encodable {
         }()
     }
 
+    /// The app sends these three false whatever the pump supports.
     struct PumpFeatures: Encodable {
+        let dexcomG6: Bool
         let controlIQ: Bool
         let basalIQ: Bool
-        // The remaining CGM flags are display hints; the pump data carries the real sensor type, and
-        // the server reads the events, not these. Sent false to match the app's shape.
         let dexcomG5 = false
-        let dexcomG6 = false
         let freestyleLibre2 = false
         let freestyleLibre3 = false
     }
