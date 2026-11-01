@@ -54,6 +54,55 @@ import XCTest
         XCTAssertFalse(bluetooth.didSend(CGMStatusV2Request.self))
     }
 
+    func testASwitchToControlIQThePumpNeverAnswersFailsAsUnanswered() {
+        let (viewModel, bluetooth) = makeControlIQSwitchViewModel(sessionState: .active)
+        bluetooth.stub(ChangeControlIQSettingsRequest.self) { _ in nil }
+
+        viewModel.switchAlgorithmToControlIQ()
+        drainMainQueue(until: { viewModel.commandFailure != nil })
+
+        XCTAssertEqual(viewModel.commandFailure, .enableControlIQUnanswered)
+    }
+
+    func testASwitchToControlIQThePumpRefusesFailsAsRejected() {
+        let (viewModel, bluetooth) = makeControlIQSwitchViewModel(sessionState: .active)
+        bluetooth.stub(ChangeControlIQSettingsRequest.self, with: ChangeControlIQSettingsResponse(status: 1))
+
+        viewModel.switchAlgorithmToControlIQ()
+        drainMainQueue(until: { viewModel.commandFailure != nil })
+
+        XCTAssertEqual(viewModel.commandFailure, .enableControlIQ)
+    }
+
+    func testTurningControlIQOffThePumpNeverAnswersFailsAsUnanswered() {
+        let (viewModel, bluetooth) = makeControlIQSwitchViewModel(sessionState: .active)
+        bluetooth.stub(ChangeControlIQSettingsRequest.self) { _ in nil }
+
+        viewModel.switchAlgorithmToDIY()
+        drainMainQueue(until: { viewModel.commandFailure != nil })
+
+        XCTAssertEqual(viewModel.commandFailure, .disableControlIQUnanswered)
+    }
+
+    func testTurningControlIQOffThePumpRefusesFailsAsRejected() {
+        let (viewModel, bluetooth) = makeControlIQSwitchViewModel(sessionState: .active)
+        bluetooth.stub(ChangeControlIQSettingsRequest.self, with: ChangeControlIQSettingsResponse(status: 1))
+
+        viewModel.switchAlgorithmToDIY()
+        drainMainQueue(until: { viewModel.commandFailure != nil })
+
+        XCTAssertEqual(viewModel.commandFailure, .disableControlIQ)
+    }
+
+    func testOnlyAConnectionFailureOrNoAnswerCountsAsUnanswered() {
+        typealias ViewModel = TandemKitSettingsViewModel
+
+        XCTAssertTrue(ViewModel.isUnanswered(ControlIQConfigurationError.noResponse))
+        XCTAssertTrue(ViewModel.isUnanswered(PumpCommError.noResponse))
+        XCTAssertFalse(ViewModel.isUnanswered(ControlIQConfigurationError.pumpRejected(status: 1)))
+        XCTAssertFalse(ViewModel.isUnanswered(ControlIQConfigurationError.weightNotSet))
+    }
+
     func testSettingsViewModelReportsTheFlagsWhenTheyAreOn() {
         let manager = TandemPumpManager(
             state: TandemPumpManagerState(rawValue: [:]),

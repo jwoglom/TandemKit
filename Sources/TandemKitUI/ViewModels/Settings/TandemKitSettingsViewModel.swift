@@ -8,6 +8,8 @@ enum CommandFailure: Int, Identifiable {
     case suspend
     case enableControlIQ
     case disableControlIQ
+    case enableControlIQUnanswered
+    case disableControlIQUnanswered
     case exerciseMode
     case sleepMode
     case stopTempRate
@@ -285,13 +287,19 @@ class TandemKitSettingsViewModel: ObservableObject {
                         self.showNoCGMWarning = true
                     }
                 }
-            case .failure:
+            case let .failure(error):
                 DispatchQueue.main.async {
                     self.isUpdatingPumpState = false
-                    self.commandFailure = .enableControlIQ
+                    self.commandFailure = Self.isUnanswered(error) ? .enableControlIQUnanswered : .enableControlIQ
                 }
             }
         }
+    }
+
+    /// A request that never connected or that nothing answered, as opposed to one the pump or the driver refused.
+    static func isUnanswered(_ error: Error) -> Bool {
+        guard let error = error as? ControlIQConfigurationError else { return true }
+        return error == .noResponse
     }
 
     func switchAlgorithmToDIY() {
@@ -311,8 +319,8 @@ class TandemKitSettingsViewModel: ObservableObject {
                 case .success:
                     self.useControlIQ = false
                     self.showReenableClosedLoopPrompt = true
-                case .failure:
-                    self.commandFailure = .disableControlIQ
+                case let .failure(error):
+                    self.commandFailure = Self.isUnanswered(error) ? .disableControlIQUnanswered : .disableControlIQ
                 }
             }
         }

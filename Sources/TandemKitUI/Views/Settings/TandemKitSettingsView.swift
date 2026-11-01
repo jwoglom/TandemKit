@@ -74,6 +74,13 @@ struct TandemKitSettingsView: View {
         )
     }
 
+    private var controlIQUnansweredMessage: String {
+        String(
+            localized: "The pump did not respond to the Control-IQ change. Keep the pump near your phone and try again.",
+            comment: "Message for a Control-IQ change the pump never answered"
+        )
+    }
+
     private func errorSheetView(for failure: CommandFailure) -> some View {
         let content: ErrorSheetContent
         switch failure {
@@ -85,7 +92,7 @@ struct TandemKitSettingsView: View {
                 ),
                 message: String(
                     localized:
-                    "The pump rejected starting insulin delivery. Check \"View Notifications\" to see the pump's current status and dismiss all active pump notifications. This may have occurred due to active pump notifications, invalid settings, empty cartridge, or not filling the tubing.",
+                    "The pump rejected starting insulin delivery. Check \"Pump notifications\" to see the pump's current status and dismiss all active pump notifications. This may have occurred due to active pump notifications, invalid settings, empty cartridge, or not filling the tubing.",
                     comment: "Message for failed to resume insulin delivery"
                 )
             )
@@ -97,7 +104,7 @@ struct TandemKitSettingsView: View {
                 ),
                 message: String(
                     localized:
-                    "The pump rejected suspending insulin delivery. Check \"View Notifications\" to see the pump's current status and dismiss all active pump notifications. This may have occurred due to an active bolus. To urgently suspend insulin delivery, detach from your site.",
+                    "The pump rejected suspending insulin delivery. Check \"Pump notifications\" to see the pump's current status and dismiss all active pump notifications. This may have occurred due to an active bolus. To urgently suspend insulin delivery, detach from your site.",
                     comment: "Message for failed to suspend insulin delivery"
                 )
             )
@@ -109,7 +116,7 @@ struct TandemKitSettingsView: View {
                 ),
                 message: String(
                     localized:
-                    "The pump rejected the Control-IQ change. Ensure that you have configured your Control-IQ settings for TDI and weight, and that the pump is connected with a CGM. Check \"View Notifications\" to see the pump's current status.",
+                    "The pump rejected the Control-IQ change. Ensure that you have configured your Control-IQ settings for TDI and weight, and that the pump is connected with a CGM. Check \"Pump notifications\" to see the pump's current status.",
                     comment: "Message for failed to enable Control-IQ"
                 )
             )
@@ -120,9 +127,25 @@ struct TandemKitSettingsView: View {
                     comment: "Title for failure to toggle Control-IQ"
                 ),
                 message: String(
-                    localized: "The pump rejected the Control-IQ change. Check \"View Notifications\" to see the pump's current status.",
+                    localized: "The pump rejected the Control-IQ change. Check \"Pump notifications\" to see the pump's current status.",
                     comment: "Message for failed to toggle Control-IQ"
                 )
+            )
+        case .enableControlIQUnanswered:
+            content = ErrorSheetContent(
+                title: String(
+                    localized: "Could not enable Control-IQ",
+                    comment: "Title for failure to enable Control-IQ"
+                ),
+                message: controlIQUnansweredMessage
+            )
+        case .disableControlIQUnanswered:
+            content = ErrorSheetContent(
+                title: String(
+                    localized: "Could not change Control-IQ setting",
+                    comment: "Title for failure to toggle Control-IQ"
+                ),
+                message: controlIQUnansweredMessage
             )
         case .exerciseMode:
             content = ErrorSheetContent(
@@ -131,7 +154,7 @@ struct TandemKitSettingsView: View {
                     comment: "Title for failure to toggle exercise mode"
                 ),
                 message: String(
-                    localized: "The pump rejected the exercise mode change. Check \"View Notifications\" to see the pump's current status.",
+                    localized: "The pump rejected the exercise mode change. Check \"Pump notifications\" to see the pump's current status.",
                     comment: "Message for failed to toggle exercise mode"
                 )
             )
@@ -142,7 +165,7 @@ struct TandemKitSettingsView: View {
                     comment: "Title for failure to toggle sleep mode"
                 ),
                 message: String(
-                    localized: "The pump rejected the sleep mode change. Check \"View Notifications\" to see the pump's current status.",
+                    localized: "The pump rejected the sleep mode change. Check \"Pump notifications\" to see the pump's current status.",
                     comment: "Message for failed to toggle sleep mode"
                 )
             )
@@ -153,7 +176,7 @@ struct TandemKitSettingsView: View {
                     comment: "Title for failure to stop temp rate"
                 ),
                 message: String(
-                    localized: "The pump rejected stopping the temp rate. Check \"View Notifications\" to see the pump's current status.",
+                    localized: "The pump rejected stopping the temp rate. Check \"Pump notifications\" to see the pump's current status.",
                     comment: "Message for failed to stop temp rate"
                 )
             )
