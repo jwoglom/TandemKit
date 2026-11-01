@@ -50,7 +50,7 @@ import XCTest
         let manager = makeManager(settings: TandemPumpManagerSettings(maxBolus: 5.0))
 
         let expectation = expectation(description: "Bolus completion")
-        manager.enactBolus(units: 6.0, activationType: .manualNoRecommendation) { error in
+        manager.enactBolus(decisionId: nil, units: 6.0, activationType: .manualNoRecommendation) { error in
             guard case let .deviceState(underlyingError?) = error,
                   let validationError = underlyingError as? TandemPumpManagerValidationError
             else {
@@ -85,7 +85,7 @@ import XCTest
 
         let expectation = expectation(description: "Bolus completion")
         var error: PumpManagerError?
-        manager.enactBolus(units: 1.0, activationType: .automatic) {
+        manager.enactBolus(decisionId: nil, units: 1.0, activationType: .automatic) {
             error = $0
             expectation.fulfill()
         }
@@ -99,7 +99,7 @@ import XCTest
 
         let expectation = expectation(description: "Temp basal completion")
         var error: PumpManagerError?
-        manager.enactTempBasal(unitsPerHour: 1.0, for: .minutes(30)) {
+        manager.enactTempBasal(decisionId: nil, unitsPerHour: 1.0, for: .minutes(30)) {
             error = $0
             expectation.fulfill()
         }
@@ -118,7 +118,7 @@ import XCTest
     private func enactTempBasal(_ manager: TandemPumpManager, unitsPerHour: Double, for duration: TimeInterval) -> PumpManagerError? {
         let expectation = expectation(description: "Temp basal completion")
         var error: PumpManagerError?
-        manager.enactTempBasal(unitsPerHour: unitsPerHour, for: duration) {
+        manager.enactTempBasal(decisionId: nil, unitsPerHour: unitsPerHour, for: duration) {
             error = $0
             expectation.fulfill()
         }
@@ -574,7 +574,7 @@ import XCTest
     private func enactBolus(_ manager: TandemPumpManager, units: Double, _ activationType: BolusActivationType) -> PumpManagerError? {
         let expectation = expectation(description: "Bolus completion")
         var error: PumpManagerError?
-        manager.enactBolus(units: units, activationType: activationType) {
+        manager.enactBolus(decisionId: nil, units: units, activationType: activationType) {
             error = $0
             expectation.fulfill()
         }

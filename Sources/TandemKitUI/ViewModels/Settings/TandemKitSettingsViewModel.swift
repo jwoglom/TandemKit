@@ -368,7 +368,7 @@ class TandemKitSettingsViewModel: ObservableObject {
     func stopTempRate() {
         isUpdatingPumpState = true
 
-        pumpManager?.enactTempBasal(unitsPerHour: 0, for: 0) { error in
+        pumpManager?.enactTempBasal(decisionId: nil, unitsPerHour: 0, for: 0) { error in
             if error != nil {
                 DispatchQueue.main.async {
                     self.isUpdatingPumpState = false

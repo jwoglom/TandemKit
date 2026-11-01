@@ -65,7 +65,7 @@ import XCTest
     private func enactBolus() -> PumpManagerError? {
         let finished = expectation(description: "enactBolus")
         var result: PumpManagerError?
-        manager.enactBolus(units: Self.units, activationType: .manualNoRecommendation) {
+        manager.enactBolus(decisionId: nil, units: Self.units, activationType: .manualNoRecommendation) {
             result = $0
             finished.fulfill()
         }
@@ -77,7 +77,7 @@ import XCTest
     private func enactTempBasal(unitsPerHour: Double = 1.5) -> PumpManagerError? {
         let finished = expectation(description: "enactTempBasal")
         var result: PumpManagerError?
-        manager.enactTempBasal(unitsPerHour: unitsPerHour, for: .minutes(30)) {
+        manager.enactTempBasal(decisionId: nil, unitsPerHour: unitsPerHour, for: .minutes(30)) {
             result = $0
             finished.fulfill()
         }

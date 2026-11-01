@@ -44,7 +44,7 @@ import XCTest
         bluetooth.stub(InitiateBolusRequest.self, with: InitiateBolusResponse(status: 0, bolusId: bolusId, statusTypeId: 0))
 
         let enacted = expectation(description: "enactBolus")
-        manager.enactBolus(units: units, activationType: .manualNoRecommendation) { error in
+        manager.enactBolus(decisionId: nil, units: units, activationType: .manualNoRecommendation) { error in
             XCTAssertNil(error)
             enacted.fulfill()
         }

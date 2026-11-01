@@ -98,7 +98,7 @@ import XCTest
 
         let expectation = expectation(description: "enactBolus completes")
         var reportedError: PumpManagerError?
-        manager.enactBolus(units: 1.0, activationType: .manualNoRecommendation) { error in
+        manager.enactBolus(decisionId: nil, units: 1.0, activationType: .manualNoRecommendation) { error in
             reportedError = error
             expectation.fulfill()
         }

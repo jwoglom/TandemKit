@@ -476,6 +476,7 @@ extension TandemPumpManager {
             endDate: end,
             value: chunk.unitsPerHour,
             unit: .unitsPerHour,
+            decisionId: nil,
             deliveredUnits: TandemPumpCapabilities.roundToReportingResolution(chunk.unitsPerHour * end.timeIntervalSince(start) / .hours(1)),
             description: "Basal from pump record \(chunk.sequenceNum)",
             syncIdentifier: raw.hexadecimalString,

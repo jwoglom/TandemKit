@@ -238,7 +238,7 @@ final class BasalScheduleSyncIntegrationTests: FaketandemIntegrationTestCase {
         // against the larger of the two rates, and a request equal to it sends no temp at all.
         let rate = driver.manager.getScheduledBasalRate() / 2
         let box = ResultBox<PumpManagerError?>()
-        driver.manager.enactTempBasal(unitsPerHour: rate, for: .minutes(30)) { box.set($0) }
+        driver.manager.enactTempBasal(decisionId: nil, unitsPerHour: rate, for: .minutes(30)) { box.set($0) }
         let error = try box.wait("enactTempBasal completion", timeout: 60)
         driver.drainDelegate()
         return error

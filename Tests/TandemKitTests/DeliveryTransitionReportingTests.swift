@@ -181,7 +181,7 @@ import XCTest
     private func appTempBasal(_ rate: Double) {
         bluetooth.stubBasalPump(profileMilliunits: UInt32(Self.scheduledRate * 1000), tempRateId: 50)
         let done = expectation(description: "enactTempBasal")
-        manager.enactTempBasal(unitsPerHour: rate, for: .minutes(30)) { error in
+        manager.enactTempBasal(decisionId: nil, unitsPerHour: rate, for: .minutes(30)) { error in
             XCTAssertNil(error)
             done.fulfill()
         }
@@ -567,7 +567,7 @@ import XCTest
 
         bluetooth.stubBasalPump(profileMilliunits: 1000, runningTempPercent: 120, tempRateId: 50)
         let done = expectation(description: "enactTempBasal")
-        manager.enactTempBasal(unitsPerHour: 2.0, for: .minutes(30)) { error in
+        manager.enactTempBasal(decisionId: nil, unitsPerHour: 2.0, for: .minutes(30)) { error in
             XCTAssertNil(error)
             done.fulfill()
         }
@@ -1191,7 +1191,7 @@ import XCTest
         bluetooth.stub(BolusPermissionRequest.self, with: BolusPermissionResponse(status: 0, bolusId: Self.bolusId, nackReasonId: 0))
         bluetooth.stub(InitiateBolusRequest.self, with: InitiateBolusResponse(status: 0, bolusId: Self.bolusId, statusTypeId: 0))
         let done = expectation(description: "enactBolus")
-        manager.enactBolus(units: 2.0, activationType: .manualNoRecommendation) { error in
+        manager.enactBolus(decisionId: nil, units: 2.0, activationType: .manualNoRecommendation) { error in
             XCTAssertNil(error)
             done.fulfill()
         }

@@ -135,7 +135,7 @@ final class ReportedBasalLedgerTests: XCTestCase {
 
     func testBolusesAreNotRecorded() {
         let bolus = NewPumpEvent.bolus(
-            dose: DoseEntry(type: .bolus, startDate: t0, endDate: t0, value: 1, unit: .units, deliveredUnits: 1),
+            dose: DoseEntry(type: .bolus, startDate: t0, endDate: t0, value: 1, unit: .units, decisionId: nil, deliveredUnits: 1),
             date: t0
         )
 

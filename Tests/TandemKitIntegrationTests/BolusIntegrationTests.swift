@@ -11,7 +11,7 @@ final class BolusIntegrationTests: FaketandemIntegrationTestCase {
 
     private func enactBolus(_ driver: FaketandemHarness.Driver) throws -> PumpManagerError? {
         let box = ResultBox<PumpManagerError?>()
-        driver.manager.enactBolus(units: Self.units, activationType: .manualNoRecommendation) { box.set($0) }
+        driver.manager.enactBolus(decisionId: nil, units: Self.units, activationType: .manualNoRecommendation) { box.set($0) }
         return try box.wait("enactBolus completion", timeout: 60)
     }
 
