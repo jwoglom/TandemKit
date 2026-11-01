@@ -943,4 +943,35 @@
     // MARK: - CGM Manager
 
     public protocol CGMManagerUI {}
+
+    // MARK: - Keychain
+
+    // Darwin's type for Security framework status codes, which KeychainManagerError carries.
+    public typealias OSStatus = Int32
+
+    public enum KeychainManagerError: Error {
+        case add(OSStatus)
+        case copy(OSStatus)
+        case delete(OSStatus)
+        case unknownResult
+    }
+
+    /// In memory: Linux has no keychain. Only the members the driver uses, declared as LoopKit does.
+    public struct KeychainManager {
+        nonisolated(unsafe) private static var items: [String: String] = [:]
+        private static let lock = NSLock()
+
+        public init() {}
+
+        public func replaceGenericPassword(_ password: String?, forService service: String) throws {
+            Self.lock.lock(); defer { Self.lock.unlock() }
+            Self.items[service] = password
+        }
+
+        public func getGenericPasswordForService(_ service: String) throws -> String {
+            Self.lock.lock(); defer { Self.lock.unlock() }
+            guard let password = Self.items[service] else { throw KeychainManagerError.copy(-25300) }
+            return password
+        }
+    }
 #endif

@@ -1,5 +1,8 @@
 @testable import TandemKit
 import XCTest
+#if canImport(FoundationNetworking)
+    import FoundationNetworking
+#endif
 
 final class TandemSourceClientTests: XCTestCase {
     /// Intercepts the client's requests so the retry-on-401 path runs without a network.

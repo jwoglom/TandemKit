@@ -71,12 +71,14 @@ enum TandemSourceConfig {
         return "\(v.majorVersion).\(v.minorVersion)"
     }
 
-    private static var hardwareModel: String {
-        var size = 0
-        sysctlbyname("hw.machine", nil, &size, nil, 0)
-        guard size > 0 else { return "iPhone" }
-        var machine = [CChar](repeating: 0, count: size)
-        sysctlbyname("hw.machine", &machine, &size, nil, 0)
-        return String(cString: machine)
-    }
+    #if canImport(UIKit)
+        private static var hardwareModel: String {
+            var size = 0
+            sysctlbyname("hw.machine", nil, &size, nil, 0)
+            guard size > 0 else { return "iPhone" }
+            var machine = [CChar](repeating: 0, count: size)
+            sysctlbyname("hw.machine", &machine, &size, nil, 0)
+            return String(cString: machine)
+        }
+    #endif
 }

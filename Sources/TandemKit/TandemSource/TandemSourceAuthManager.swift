@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+    import FoundationNetworking
+#endif
 import LoopKit
 
 /// Holds the Tandem Source OIDC tokens and refreshes them.
