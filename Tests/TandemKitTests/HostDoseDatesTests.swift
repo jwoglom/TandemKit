@@ -11,7 +11,7 @@ import XCTest
     }
 
     private func bolus(from start: Date, to end: Date) -> NewPumpEvent {
-        let dose = DoseEntry(type: .bolus, startDate: start, endDate: end, value: 1, unit: .units, deliveredUnits: 1, insulinType: .novolog)
+        let dose = DoseEntry(type: .bolus, startDate: start, endDate: end, value: 1, unit: .units, decisionId: nil, deliveredUnits: 1, insulinType: .novolog)
         return NewPumpEvent(date: start, dose: dose, raw: Data([1, 2, 3]), title: "Bolus", type: .bolus)
     }
 
