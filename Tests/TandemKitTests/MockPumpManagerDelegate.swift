@@ -124,6 +124,7 @@ nonisolated final class MockPumpManagerDelegate: PumpManagerDelegate {
 
     var detectedSystemTimeOffset: TimeInterval = 0
     var automaticDosingEnabled: Bool = false
+    var automatedTreatmentState: AutomatedTreatmentState?
 
     /// Returned from `startDateToFilterNewPumpEvents(for:)`. Settable so a test can model a host
     /// app whose boundary marches forward as events are reported — Trio returns
