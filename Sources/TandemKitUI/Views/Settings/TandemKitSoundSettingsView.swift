@@ -178,11 +178,12 @@ struct TandemKitSoundSettingsView: View {
         .foregroundColor(isEditing ? Color.accentColor : Color.primary)
 
         if isEditing {
-            ResizeablePicker(
-                selection: value,
-                data: soundValueRange,
-                formatter: { value in soundSettingFormatter(value) }
-            )
+            Picker("", selection: value) {
+                ForEach(soundValueRange, id: \.self) { value in
+                    Text(soundSettingFormatter(value)).tag(value)
+                }
+            }
+            .pickerStyle(.wheel)
             .padding(.horizontal)
         }
     }
