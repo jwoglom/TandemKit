@@ -6,14 +6,8 @@ import Foundation
 /// The Mobi app is a relay: the 26-byte record it reads over BLE is the same record it sends to the
 /// cloud, but with the byte order flipped. Over BLE every integer is little-endian; in the cloud the
 /// header is big-endian and each of the four 4-byte payload words is reversed. `HistoryLogNetwork
-/// ExtensionKt.getUploadableBytes` in the Mobi app does exactly this, word by word. We reproduce it
-/// as a byte transform on the raw record so the pump's own `typeId`, timestamp and sequence number
-/// cross unchanged in value — the header high nibble included, which a re-emit from the masked
-/// `typeId` would drop.
-///
-/// Verified byte-for-byte against a captured Mobi upload during development: a bolus record and a
-/// Dexcom G7 reading both encoded to the exact bytes Tandem received. See
-/// `TandemSourceEventEncoderTests`.
+/// ExtensionKt.getUploadableBytes` in the Mobi app does exactly this, word by word, from the 12-bit
+/// type it parsed (`rawU16 & 0x0FFF`), so the header's high nibble never reaches the cloud.
 enum TandemSourceEventEncoder {
     /// Reverse each of these byte groups in the 26-byte record: typeId (2), timestamp (4), sequence
     /// number (4), then the four payload words (4 each). Little-endian in, big-endian out.
@@ -33,6 +27,8 @@ enum TandemSourceEventEncoder {
         for group in groups {
             out.append(contentsOf: le[group].reversed())
         }
+        // A Mobi sets the high nibble on every record; the Mobi app never uploads it.
+        out[0] &= 0x0F
         return Data(out)
     }
 }

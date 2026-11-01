@@ -32,11 +32,14 @@ final class TandemSourceEventEncoderTests: XCTestCase {
         XCTAssertEqual(HistoryLogParser.parse(ble).typeId, 0x18F)
     }
 
-    /// The transform is its own inverse, so re-encoding the decoded form returns the original.
-    func testTransformIsInvolution() {
-        let ble = hex("1801" + "00000000" + "01000000" + "deadbeef" + "cafef00d" + "12345678" + "9abcdef0")
+    func testHeaderHighNibbleIsDroppedAsTheMobiAppDropsIt() {
+        // BASAL_DELIVERY as a Mobi writes it: raw type 0x1117.
+        let ble = hex("1711" + "00000000" + "03000000" + "00000000" + "00000000" + "00000000" + "00000000")
+
         let cloud = TandemSourceEventEncoder.uploadableBytes(from: ble)
-        XCTAssertEqual(TandemSourceEventEncoder.uploadableBytes(from: cloud), ble)
+
+        XCTAssertEqual(cloud.prefix(2), hex("0117"))
+        XCTAssertEqual(cloud.subdata(in: 6 ..< 10), hex("00000003"))
     }
 
     private func stored(_ cargo: Data) -> StoredHistoryLog {

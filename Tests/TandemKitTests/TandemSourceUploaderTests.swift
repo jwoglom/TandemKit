@@ -123,7 +123,7 @@ final class TandemSourceUploaderTests: XCTestCase {
         XCTAssertEqual(result.uploadedCount, 1)
         let uploaded = await api.uploadedBatches
         let event = try XCTUnwrap(uploaded.first?.first)
-        XCTAssertEqual(TandemSourceEventEncoder.uploadableBytes(from: try XCTUnwrap(Data(base64Encoded: event))), cargo)
+        XCTAssertEqual(Data(base64Encoded: event), TandemSourceEventEncoder.uploadableBytes(from: cargo))
     }
 
     func testStopsAtTheFirstRecordItCouldNotRead() async throws {
