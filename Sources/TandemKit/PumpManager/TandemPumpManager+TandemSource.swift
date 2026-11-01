@@ -23,11 +23,42 @@ extension TandemPumpManager {
             deviceInfo: tandemSourceDeviceInfo(),
             deviceAssignmentId: state.tandemSourceDeviceAssignmentId,
             store: historyLogStore,
-            // The backfill coordinator fills the store from the pump on its own schedule; a range it
-            // hasn't reached when the upload runs is skipped (the uploader logs how many).
-            fillGaps: { _, _ in },
+            fillGaps: { [weak self] _, ranges in await self?.readHistoryForTandemSource(ranges) },
+            resendFrom: state.tandemSourceResendFrom,
             pumpClock: { [weak self] in self?.state.currentPumpTime ?? Date() }
         )
+    }
+
+    /// Sends the last `records` records again, from the pump where the session store lacks them.
+    /// Repairs what the server's index moved past before uploads stopped at gaps.
+    public func resendTandemSourceHistory(records: UInt32) {
+        guard let index = state.lastTandemSourceEventIndex else { return }
+        state.tandemSourceResendFrom = index > records ? index - records + 1 : 1
+        logger.info("Tandem Source: re-sending the last \(records) records")
+        notifyDelegateStateUpdated()
+        uploadToTandemSourceIfDue(force: true)
+    }
+
+    /// Reads `ranges` from the pump into the session store, oldest first. Returns the oldest entry
+    /// the pump holds, or nil if a read didn't finish.
+    func readHistoryForTandemSource(_ ranges: [ClosedRange<UInt32>]) async -> UInt32? {
+        var pumpFirst: UInt32?
+        for range in ranges {
+            let fetcher = HistoryLogFetcher(pumpManager: self)
+            let result = await withCheckedContinuation { continuation in
+                fetcher.start(numberOfLogs: range.count, endingAtSequenceNum: range.upperBound) {
+                    continuation.resume(returning: $0)
+                }
+            }
+            switch result {
+            case let .success(progress):
+                pumpFirst = progress.pumpFirstSequenceNum
+            case let .failure(error):
+                logger.warning("Tandem Source: couldn't read history \(range.lowerBound)-\(range.upperBound) from the pump: \(error.localizedDescription)")
+                return nil
+            }
+        }
+        return pumpFirst
     }
 
     public var tandemSourceIsAuthenticated: Bool { tandemSource.isAuthenticated }
@@ -64,12 +95,13 @@ extension TandemPumpManager {
             logger.info("Tandem Source: uploaded \(uploaded.uploadedCount) events, server at \(uploaded.serverMaxEventIndex)")
             state.lastTandemSourceUpload = now
             state.lastTandemSourceEventIndex = uploaded.serverMaxEventIndex
+            state.tandemSourceResendFrom = uploaded.resendFrom
             // Persist an id resolved automatically from the account so later uploads skip the lookup
             // and the settings screen can show it.
             if state.tandemSourceDeviceAssignmentId != uploaded.deviceAssignmentId {
                 state.tandemSourceDeviceAssignmentId = uploaded.deviceAssignmentId
             }
-            state.lastTandemSourceError = nil
+            state.lastTandemSourceError = uploaded.waitingForSequenceNum.map { "Waiting for pump history from record \($0)" }
         case let .failure(error):
             logger.error("Tandem Source upload failed: \(error)")
             state.lastTandemSourceError = String(describing: error)

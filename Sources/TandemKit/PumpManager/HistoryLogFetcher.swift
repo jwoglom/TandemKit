@@ -18,6 +18,8 @@ public final class HistoryLogFetcher {
         public let expectedCount: Int
         public let earliestFetched: Date?
         public let latestFetched: Date?
+        /// The oldest entry the pump still holds; nil when the pump's history log was empty.
+        public var pumpFirstSequenceNum: UInt32?
     }
 
     public enum FetchError: LocalizedError {
@@ -83,6 +85,7 @@ public final class HistoryLogFetcher {
     private var windowEnd: Int64 = -1
     private var earliestPumpTimeSec: UInt32?
     private var latestPumpTimeSec: UInt32?
+    private var pumpFirstSequenceNum: UInt32?
     private var fetchActive = false
     private var cancelled = false
 
@@ -212,6 +215,7 @@ public final class HistoryLogFetcher {
         fetchActive = true
         cancelled = false
         receivedSeqNums = []
+        pumpFirstSequenceNum = nil
         earliestPumpTimeSec = nil
         latestPumpTimeSec = nil
         windowStart = 0
@@ -263,6 +267,9 @@ public final class HistoryLogFetcher {
 
         let first = Int64(status.firstSequenceNum)
         let last = Int64(status.lastSequenceNum)
+        lock.lock()
+        pumpFirstSequenceNum = status.firstSequenceNum
+        lock.unlock()
         let requestedEnd = endingAtSequenceNum.map { Int64($0) } ?? last
         let end = min(max(requestedEnd, first), last)
         let start = min(max(first, end - Int64(numberOfLogs) + 1), end)
@@ -425,7 +432,8 @@ public final class HistoryLogFetcher {
             fetchedCount: fetched,
             expectedCount: expected,
             earliestFetched: earliestPumpTimeSec.map { Dates.fromJan12008EpochSecondsToDate(TimeInterval($0)) },
-            latestFetched: latestPumpTimeSec.map { Dates.fromJan12008EpochSecondsToDate(TimeInterval($0)) }
+            latestFetched: latestPumpTimeSec.map { Dates.fromJan12008EpochSecondsToDate(TimeInterval($0)) },
+            pumpFirstSequenceNum: pumpFirstSequenceNum
         )
     }
 

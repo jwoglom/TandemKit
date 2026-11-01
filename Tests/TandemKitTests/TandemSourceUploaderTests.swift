@@ -23,23 +23,38 @@ final class TandemSourceUploaderTests: XCTestCase {
         }
     }
 
+    private func record(_ seq: UInt32) -> StoredHistoryLog {
+        var cargo = Data(count: HistoryLog.length)
+        cargo.replaceSubrange(6 ..< 10, with: Bytes.toUint32(seq)) // seq at the record's offset
+        return StoredHistoryLog(pumpSerial: serial, sequenceNum: seq, typeId: 280, pumpTimeSec: 0, cargo: cargo)
+    }
+
     private func store(seqs: [UInt32]) -> InMemoryHistoryLogStore {
         let store = InMemoryHistoryLogStore()
-        try! store.insert(seqs.map { seq in
-            var cargo = Data(count: HistoryLog.length)
-            cargo.replaceSubrange(6 ..< 10, with: Bytes.toUint32(seq)) // seq at the record's offset
-            return StoredHistoryLog(pumpSerial: serial, sequenceNum: seq, typeId: 280, pumpTimeSec: 0, cargo: cargo)
-        })
+        try! store.insert(seqs.map(record))
         return store
     }
 
-    private func deps(api: TandemSourceAPI, store: HistoryLogStore, onFill: @escaping (UInt32, [ClosedRange<UInt32>]) -> Void = { _, _ in }) -> TandemSourceUploader.Dependencies {
+    private func uploadedSeqs(_ api: StubAPI) async -> [UInt32] {
+        await api.uploadedBatches.flatMap { $0 }.map { event in
+            let bytes = TandemSourceEventEncoder.uploadableBytes(from: Data(base64Encoded: event)!)
+            return Bytes.readUint32(bytes, 6)
+        }
+    }
+
+    private func deps(
+        api: TandemSourceAPI,
+        store: HistoryLogStore,
+        resendFrom: UInt32? = nil,
+        onFill: @escaping (UInt32, [ClosedRange<UInt32>]) -> UInt32? = { _, _ in nil }
+    ) -> TandemSourceUploader.Dependencies {
         TandemSourceUploader.Dependencies(
             api: api,
             store: store,
             deviceInfo: { TandemSourceDeviceInfo(serialNum: self.serial, modelNum: 1004000, partNum: 1, armSwVer: 1, mspSwVer: 0, pcbaSN: 1, configABits: 0, configBBits: 0, pumpRev: "0", pcbaRev: "0", pumpAPIVersion: "3.11", dexcomG6: false, basalIQ: false, controlIQ: true) },
             deviceAssignmentId: { "assignment-uuid" },
             fillGaps: { serial, ranges in onFill(serial, ranges) },
+            resendFrom: { resendFrom },
             now: { Date(timeIntervalSince1970: 1_793_464_000) },
             pumpClock: { Date(timeIntervalSince1970: 1_793_464_000) }
         )
@@ -86,7 +101,7 @@ final class TandemSourceUploaderTests: XCTestCase {
         let api = StubAPI(maxPumpEventIndex: 100)
         // Stored has 101 and 105; 102...104 are missing within the (101...105) upload range.
         var filled: [ClosedRange<UInt32>] = []
-        let uploader = TandemSourceUploader(deps: deps(api: api, store: store(seqs: [101, 105]), onFill: { _, ranges in filled = ranges }))
+        let uploader = TandemSourceUploader(deps: deps(api: api, store: store(seqs: [101, 105]), onFill: { _, ranges in filled = ranges; return nil }))
 
         _ = try await uploader.uploadPending(serial: serial)
 
@@ -109,5 +124,85 @@ final class TandemSourceUploaderTests: XCTestCase {
         let uploaded = await api.uploadedBatches
         let event = try XCTUnwrap(uploaded.first?.first)
         XCTAssertEqual(TandemSourceEventEncoder.uploadableBytes(from: try XCTUnwrap(Data(base64Encoded: event))), cargo)
+    }
+
+    func testStopsAtTheFirstRecordItCouldNotRead() async throws {
+        let api = StubAPI(maxPumpEventIndex: 100)
+        let uploader = TandemSourceUploader(deps: deps(api: api, store: store(seqs: [101, 102, 104, 105])))
+
+        let result = try await uploader.uploadPending(serial: serial)
+
+        let uploaded = await uploadedSeqs(api)
+        XCTAssertEqual(uploaded, [101, 102])
+        XCTAssertEqual(result.serverMaxEventIndex, 102)
+        XCTAssertEqual(result.waitingForSequenceNum, 103)
+    }
+
+    func testAGapAtTheStartUploadsNothingAndLeavesTheIndex() async throws {
+        let api = StubAPI(maxPumpEventIndex: 100)
+        let uploader = TandemSourceUploader(deps: deps(api: api, store: store(seqs: [103, 104])))
+
+        let result = try await uploader.uploadPending(serial: serial)
+
+        let uploaded = await uploadedSeqs(api)
+        XCTAssertEqual(uploaded, [])
+        XCTAssertEqual(result.serverMaxEventIndex, 100)
+        XCTAssertEqual(result.waitingForSequenceNum, 101)
+    }
+
+    func testRecordsReadFromThePumpAreUploadedInOrder() async throws {
+        let api = StubAPI(maxPumpEventIndex: 100)
+        let store = store(seqs: [101, 104])
+        let uploader = TandemSourceUploader(deps: deps(api: api, store: store, onFill: { _, ranges in
+            try! store.insert(ranges.flatMap { Array($0) }.map(self.record))
+            return 1
+        }))
+
+        let result = try await uploader.uploadPending(serial: serial)
+
+        let uploaded = await uploadedSeqs(api)
+        XCTAssertEqual(uploaded, [101, 102, 103, 104])
+        XCTAssertNil(result.waitingForSequenceNum)
+    }
+
+    func testRecordsThePumpNoLongerHoldsAreSkipped() async throws {
+        let api = StubAPI(maxPumpEventIndex: 100)
+        // The pump's oldest entry is 104, so 101...103 can never be read.
+        let uploader = TandemSourceUploader(deps: deps(api: api, store: store(seqs: [104, 105]), onFill: { _, _ in 104 }))
+
+        let result = try await uploader.uploadPending(serial: serial)
+
+        let uploaded = await uploadedSeqs(api)
+        XCTAssertEqual(uploaded, [104, 105])
+        XCTAssertEqual(result.serverMaxEventIndex, 105)
+        XCTAssertNil(result.waitingForSequenceNum)
+    }
+
+    func testResendSendsRecordsTheServerAlreadyPassed() async throws {
+        let api = StubAPI(maxPumpEventIndex: 105)
+        let uploader = TandemSourceUploader(deps: deps(api: api, store: store(seqs: [101, 102, 103, 104, 105]), resendFrom: 102))
+
+        let result = try await uploader.uploadPending(serial: serial)
+
+        let uploaded = await uploadedSeqs(api)
+        XCTAssertEqual(uploaded, [102, 103, 104, 105])
+        XCTAssertEqual(result.serverMaxEventIndex, 105)
+        XCTAssertNil(result.resendFrom)
+    }
+
+    func testAResendStoppedByAGapResumesFromIt() async throws {
+        let api = StubAPI(maxPumpEventIndex: 105)
+        let uploader = TandemSourceUploader(deps: deps(api: api, store: store(seqs: [101, 102, 104, 105]), resendFrom: 101))
+
+        let result = try await uploader.uploadPending(serial: serial)
+
+        let uploaded = await uploadedSeqs(api)
+        XCTAssertEqual(uploaded, [101, 102])
+        XCTAssertEqual(result.serverMaxEventIndex, 105)
+        XCTAssertEqual(result.resendFrom, 103)
+    }
+
+    func testTheOldestGapIsReadFirstWithinTheCap() {
+        XCTAssertEqual(TandemSourceUploader.capped([20 ... 29, 1 ... 5], to: 8), [1 ... 5, 20 ... 22])
     }
 }

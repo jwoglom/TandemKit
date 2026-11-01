@@ -211,6 +211,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
     /// SHA-256 of the last settings JSON Tandem Source accepted. The Mobi app uploads settings
     /// only when they differ from what it last sent, and so does the driver.
     public var lastTandemSourceSettingsHash: String?
+    /// Where a re-send of history the server already holds resumes; nil when none is under way.
+    public var tandemSourceResendFrom: UInt32?
     public var lastTandemSourceSettingsUpload: Date?
     /// The pump's main supported-features bitmask (`PumpFeaturesV2Request(.mainFeatures)`), which
     /// the upload's `pumpFeatures` reports. What the pump supports, not what is running.
@@ -297,6 +299,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
               lhs.lastTandemSourceEventIndex == rhs.lastTandemSourceEventIndex,
               lhs.lastTandemSourceError == rhs.lastTandemSourceError,
               lhs.lastTandemSourceSettingsHash == rhs.lastTandemSourceSettingsHash,
+              lhs.tandemSourceResendFrom == rhs.tandemSourceResendFrom,
               lhs.lastTandemSourceSettingsUpload == rhs.lastTandemSourceSettingsUpload,
               lhs.pumpMainFeaturesBitmask == rhs.pumpMainFeaturesBitmask
         else {
@@ -551,6 +554,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         lastTandemSourceEventIndex = rawValue["lastTandemSourceEventIndex"] as? UInt32
         lastTandemSourceError = rawValue["lastTandemSourceError"] as? String
         lastTandemSourceSettingsHash = rawValue["lastTandemSourceSettingsHash"] as? String
+        tandemSourceResendFrom = rawValue["tandemSourceResendFrom"] as? UInt32
         lastTandemSourceSettingsUpload = rawValue["lastTandemSourceSettingsUpload"] as? Date
         pumpMainFeaturesBitmask = rawValue["pumpMainFeaturesBitmask"] as? UInt32
 
@@ -621,6 +625,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         raw["lastTandemSourceEventIndex"] = lastTandemSourceEventIndex
         raw["lastTandemSourceError"] = lastTandemSourceError
         raw["lastTandemSourceSettingsHash"] = lastTandemSourceSettingsHash
+        raw["tandemSourceResendFrom"] = tandemSourceResendFrom
         raw["lastTandemSourceSettingsUpload"] = lastTandemSourceSettingsUpload
         raw["pumpMainFeaturesBitmask"] = pumpMainFeaturesBitmask
         raw["insulinType"] = insulinType?.rawValue
@@ -837,6 +842,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
             "* lastTandemSourceError: \(debugValue(lastTandemSourceError))",
             "* lastTandemSourceSettingsHash: \(lastTandemSourceSettingsHash == nil ? "nil" : "set")",
             "* lastTandemSourceSettingsUpload: \(debugValue(lastTandemSourceSettingsUpload))",
+            "* tandemSourceResendFrom: \(debugValue(tandemSourceResendFrom))",
             "* pumpMainFeaturesBitmask: \(debugValue(pumpMainFeaturesBitmask))"
         ]
         return lines.joined(separator: "\n")

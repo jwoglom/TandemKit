@@ -2,15 +2,11 @@ import Foundation
 
 /// Relays stored pump history to Tandem Source, resuming from the server's high-water mark.
 ///
-/// This does for Tandem's cloud what the Mobi app does: `getlasteventuploaded` gives the last pump
-/// event index the cloud holds, and everything the driver has stored past that is sent, ascending,
-/// in batches, as base64 records in an upload body. The pump's own sequence numbers are the cloud's
-/// index, so overlapping re-sends are harmless and a later switch back to the Mobi app stays
-/// continuous.
-///
-/// It owns no BLE or storage of its own: the history store, the pump-connected gap fetch, and the
-/// device metadata are injected, so the whole flow is exercised in tests against a stub API and an
-/// `InMemoryHistoryLogStore`.
+/// `getlasteventuploaded` gives the last pump event index the cloud holds, and the records after it
+/// are sent ascending, in batches, as the Mobi app sends them. The pump's own sequence numbers are
+/// the cloud's index, so overlapping re-sends are harmless and a switch back to the Mobi app stays
+/// continuous. Only an unbroken run is sent: the server's index is a high-water mark, so a record
+/// sent past a gap moves it beyond the missing ones, and no later run would send them.
 actor TandemSourceUploader {
     struct Result: Equatable {
         var uploadedCount: Int
@@ -18,6 +14,10 @@ actor TandemSourceUploader {
         /// The assignment id actually used (resolved automatically when not already configured), so
         /// the caller can persist it.
         var deviceAssignmentId: String
+        /// The first record this run stopped at because it couldn't be read; nil when caught up.
+        var waitingForSequenceNum: UInt32? = nil
+        /// Where a re-send left off, for the next run; nil once it has reached the server's index.
+        var resendFrom: UInt32? = nil
     }
 
     enum UploadError: Error, Equatable {
@@ -30,9 +30,12 @@ actor TandemSourceUploader {
         var store: HistoryLogStore
         var deviceInfo: () -> TandemSourceDeviceInfo?
         var deviceAssignmentId: () -> String?
-        /// Best-effort fetch of missing sequence ranges from the pump before uploading. May be a
-        /// no-op (e.g. the pump is unreachable); the uploader still sends whatever it has.
-        var fillGaps: (_ serial: UInt32, _ ranges: [ClosedRange<UInt32>]) async -> Void
+        /// Reads `ranges` from the pump into `store`. Returns the oldest sequence number the pump
+        /// still holds, or nil when the read didn't complete (the pump unreachable, or another
+        /// reader holding its history stream).
+        var fillGaps: (_ serial: UInt32, _ ranges: [ClosedRange<UInt32>]) async -> UInt32?
+        /// Set to send again from an index the server has already passed.
+        var resendFrom: () -> UInt32? = { nil }
         var now: () -> Date = { Date() }
         var pumpClock: () -> Date
     }
@@ -40,6 +43,8 @@ actor TandemSourceUploader {
     /// Records per upload body. The capture sent 1–36; 50 keeps bodies small while cutting round
     /// trips on a large backfill.
     static let batchSize = 50
+    /// The most records one run reads from the pump; at 255 per request, about ten requests.
+    static let maxFillPerRun = 2500
 
     private let deps: Dependencies
 
@@ -52,22 +57,36 @@ actor TandemSourceUploader {
         guard let device = deps.deviceInfo() else { throw UploadError.noDeviceInfo }
 
         let last = try await deps.api.getLastEventUploaded(serial: serial, deviceAssignmentId: assignmentId)
-        guard let newest = try deps.store.newest(pumpSerial: serial), newest.sequenceNum > last.maxPumpEventIndex else {
-            return Result(uploadedCount: 0, serverMaxEventIndex: last.maxPumpEventIndex, deviceAssignmentId: assignmentId)
+        let serverIndex = last.maxPumpEventIndex
+        tandemSourceLogger.debug("Tandem Source server at \(serverIndex), processing status \(last.processingStatus)")
+        let resendFrom = deps.resendFrom().flatMap { $0 <= serverIndex ? $0 : nil }
+        let start = resendFrom ?? serverIndex + 1
+        guard let newest = try deps.store.newest(pumpSerial: serial), newest.sequenceNum >= start else {
+            return Result(uploadedCount: 0, serverMaxEventIndex: serverIndex, deviceAssignmentId: assignmentId)
         }
 
-        let range = (last.maxPumpEventIndex + 1) ... newest.sequenceNum
-        let missing = try deps.store.missingRanges(pumpSerial: serial, in: range)
+        let range = start ... newest.sequenceNum
+        var missing = try deps.store.missingRanges(pumpSerial: serial, in: range)
         if !missing.isEmpty {
-            await deps.fillGaps(serial, missing)
-            let unfilled = try deps.store.missingRanges(pumpSerial: serial, in: range)
-            if !unfilled.isEmpty {
-                // The server's index moves past them with this upload, so no later run sends them.
-                tandemSourceLogger.warning("Tandem Source: \(Self.count(unfilled)) of \(Self.count([range])) records past server index \(last.maxPumpEventIndex) aren't in the session store and won't be uploaded")
+            if let pumpFirst = await deps.fillGaps(serial, Self.capped(missing, to: Self.maxFillPerRun)) {
+                missing = try deps.store.missingRanges(pumpSerial: serial, in: range)
+                let gone = missing.filter { $0.lowerBound < pumpFirst }
+                if !gone.isEmpty {
+                    let count = gone.reduce(0) { $0 + Int(min($1.upperBound, pumpFirst - 1) - $1.lowerBound) + 1 }
+                    tandemSourceLogger.warning("Tandem Source: skipping \(count) records the pump no longer holds")
+                    missing = missing.compactMap { $0.upperBound < pumpFirst ? nil : max($0.lowerBound, pumpFirst) ... $0.upperBound }
+                }
+            } else {
+                missing = try deps.store.missingRanges(pumpSerial: serial, in: range)
             }
         }
 
-        let pending = try deps.store.logs(pumpSerial: serial, in: range)
+        let through = missing.first.map { $0.lowerBound - 1 } ?? newest.sequenceNum
+        let pending = through >= start ? try deps.store.logs(pumpSerial: serial, in: start ... through) : []
+        if let gap = missing.first {
+            tandemSourceLogger.warning("Tandem Source: waiting for records \(gap.lowerBound)-\(gap.upperBound) from the pump; uploading \(pending.count) before them")
+        }
+
         var uploaded = 0
         for batch in stride(from: 0, to: pending.count, by: Self.batchSize) {
             let slice = Array(pending[batch ..< min(batch + Self.batchSize, pending.count)])
@@ -75,7 +94,27 @@ actor TandemSourceUploader {
             try await upload(slice, device: device, assignmentId: assignmentId)
             uploaded += slice.count
         }
-        return Result(uploadedCount: uploaded, serverMaxEventIndex: newest.sequenceNum, deviceAssignmentId: assignmentId)
+        let reached = pending.last?.sequenceNum ?? (start == 0 ? 0 : start - 1)
+        return Result(
+            uploadedCount: uploaded,
+            serverMaxEventIndex: max(serverIndex, reached),
+            deviceAssignmentId: assignmentId,
+            waitingForSequenceNum: missing.first?.lowerBound,
+            resendFrom: resendFrom != nil && reached < serverIndex ? reached + 1 : nil
+        )
+    }
+
+    /// The lowest ranges first, trimmed to `limit` records: the upload goes ascending, so the oldest
+    /// gap is the one holding it back.
+    static func capped(_ ranges: [ClosedRange<UInt32>], to limit: Int) -> [ClosedRange<UInt32>] {
+        var left = limit
+        var out: [ClosedRange<UInt32>] = []
+        for range in ranges.sorted(by: { $0.lowerBound < $1.lowerBound }) where left > 0 {
+            let take = min(range.count, left)
+            out.append(range.lowerBound ... range.lowerBound + UInt32(take - 1))
+            left -= take
+        }
+        return out
     }
 
     /// Sends the pump's settings JSON as the app does: an upload with `settings` and no events.
@@ -91,10 +130,6 @@ actor TandemSourceUploader {
         )
         try await deps.api.upload(bodyJSON: JSONEncoder().encode(body))
         return assignmentId
-    }
-
-    private static func count(_ ranges: [ClosedRange<UInt32>]) -> Int {
-        ranges.reduce(0) { $0 + $1.count }
     }
 
     /// Record type names and counts, e.g. `BasalDelivery×3, CgmDataG7×2`.

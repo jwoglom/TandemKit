@@ -151,6 +151,9 @@ struct TandemKitDebugView: View {
                     Button(String(localized: "Upload now", comment: "Tandem Source: force an upload")) {
                         viewModel.uploadTandemSourceNow()
                     }
+                    Button(String(localized: "Re-send the last day of history", comment: "Tandem Source: re-upload recent history the server already holds")) {
+                        viewModel.resendTandemSourceHistory()
+                    }
                     Button(role: .destructive) {
                         viewModel.signOutTandemSource()
                     } label: {

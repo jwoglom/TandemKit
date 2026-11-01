@@ -142,6 +142,12 @@ final class TandemKitDebugViewModel: ObservableObject {
         scheduleTandemSourceRefreshes()
     }
 
+    /// Under Loop a Mobi logged about 180 records an hour, so this is a little over a day.
+    func resendTandemSourceHistory() {
+        pumpManager?.resendTandemSourceHistory(records: 5000)
+        scheduleTandemSourceRefreshes()
+    }
+
     /// The upload that resolves the assignment id and advances the server index runs in a background
     /// task, so a single refresh right after kicking it off would miss the result. Re-read state a
     /// few times over the next several seconds to pick it up.
