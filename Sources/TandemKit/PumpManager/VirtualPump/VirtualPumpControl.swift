@@ -234,7 +234,7 @@ enum VirtualPumpControl {
             raw = event.raw
             title = event.title
             dose = event.dose
-            type = event.type.map(EventType.init)
+            type = event.type.flatMap(EventType.init)
             alarmType = event.alarmType
         }
 
@@ -247,7 +247,8 @@ enum VirtualPumpControl {
         case alarm, alarmClear, basal, bolus, prime, resume, rewind, suspend, tempBasal
         case replaceReservoir, replacePump, replaceInfusionSet
 
-        init(_ type: PumpEventType) {
+        /// Nil for a time zone sync, which the driver never reports.
+        init?(_ type: PumpEventType) {
             switch type {
             case .alarm: self = .alarm
             case .alarmClear: self = .alarmClear
@@ -261,6 +262,7 @@ enum VirtualPumpControl {
             case .replaceComponent(componentType: .reservoir): self = .replaceReservoir
             case .replaceComponent(componentType: .pump): self = .replacePump
             case .replaceComponent(componentType: .infusionSet): self = .replaceInfusionSet
+            case .timeZoneSync: return nil
             }
         }
 
