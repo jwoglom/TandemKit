@@ -113,18 +113,23 @@ extension TandemPumpManager {
             return
         }
         guard temp.active else { return }
-        let pumpStart = hostDate(forPumpDate: temp.startTime)
-        // Stamped before the pump's clock went back (a DST change), so it says nothing of when it started.
-        let startIsAhead = pumpStart > now.addingTimeInterval(Self.transitionMatchTolerance)
-        if startIsAhead {
-            logger.warning("The pump dates the temp basal it runs at \(pumpStart), ahead of the phone; its clock went back since")
+        // The pump stamped the start on the clock in force then, which a set since (a DST change) has
+        // moved: a temp begun before a set back reads ahead of the phone, or less ahead than it ran.
+        let stamped = hostDate(forPumpDate: temp.startTime)
+        let onClockBefore = state.lastPumpClockStep
+            .flatMap { $0.foundAt > held.startDate ? stamped.addingTimeInterval($0.by) : nil }
+        let latest = now.addingTimeInterval(Self.transitionMatchTolerance)
+        if stamped > latest {
+            logger.warning("The pump dates the temp basal it runs at \(stamped), ahead of the phone; its clock went back since")
         }
-        let start = startIsAhead ? now : pumpStart
+        let starts = [stamped, onClockBefore].compactMap { $0 }.filter { $0 <= latest }
         let otherPercent = held.tempPercent.map { $0 != temp.percentage } ?? false
         // A held temp cut at a segment change starts there, after the pump's record of its start.
-        guard otherPercent || !startIsAhead && start > held.startDate.addingTimeInterval(Self.transitionMatchTolerance) else {
+        let heldStart = held.startDate.addingTimeInterval(Self.transitionMatchTolerance)
+        guard otherPercent || !starts.isEmpty && !starts.contains(where: { $0 <= heldStart }) else {
             return
         }
+        let start = starts.first ?? now
 
         logger.warning("The pump runs a \(temp.percentage)% temp basal from \(start) in place of the one reported at \(held.startDate); dating the change from pump history")
         let lastSeen = state.deliveryTransitions.lastConfirmedObservation ?? held.startDate
@@ -188,7 +193,7 @@ extension TandemPumpManager {
     ) -> UnfinalizedDose {
         let crossedAChange = !pumpSegmentChanges(after: start, through: detectedAt).isEmpty
         let rate = crossedAChange
-            ? roundToSupportedBasalRate(unitsPerHour: getScheduledBasalRate(at: start.addingTimeInterval(state.pumpClockOffset)) * Double(replacement.percent) / 100)
+            ? roundToSupportedBasalRate(unitsPerHour: pumpScheduledBasalRate(at: start) * Double(replacement.percent) / 100)
             : replacement.rate
         return UnfinalizedDose(
             tempRate: rate,

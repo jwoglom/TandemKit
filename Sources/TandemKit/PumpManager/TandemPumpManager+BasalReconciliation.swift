@@ -71,7 +71,7 @@ extension TandemPumpManager {
             guard start >= floor, !state.reportedBasal.rows.contains(where: { $0.raw == raw }) else { continue }
             let percent = Int(activated.percent.rounded())
             let temp = UnfinalizedDose(
-                tempRate: roundToSupportedBasalRate(unitsPerHour: getScheduledBasalRate(at: start.addingTimeInterval(state.pumpClockOffset)) * Double(percent) / 100),
+                tempRate: roundToSupportedBasalRate(unitsPerHour: pumpScheduledBasalRate(at: start) * Double(percent) / 100),
                 duration: TimeInterval(activated.durationMilliseconds) / 1000,
                 automatic: true,
                 insulinType: state.insulinType,

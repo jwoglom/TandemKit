@@ -522,6 +522,34 @@ import XCTest
         XCTAssertNil(manager.state.deliveryTransitions.pending)
     }
 
+    func testATempBegunMoreThanAnHourBeforeThePumpsClockWentBackIsTheHeldOne() {
+        runningTempBasal(0.5, percent: 50)
+        advance(to: minutes(70))
+        // Found by the clock read, which DaylightSavingTimeTests covers.
+        manager.state.lastPumpClockStep = PumpClockStep(foundAt: minutes(69), by: -.hours(1))
+        observeTemp(percent: 50, from: minutes(60))
+
+        XCTAssertNil(manager.state.deliveryTransitions.pending)
+    }
+
+    func testAReplacementStampedBeforeThePumpsClockWentBackIsDatedOnTheClockBefore() {
+        runningTempBasal(1.5, percent: 150)
+        advance(to: minutes(25))
+        manager.state.lastPumpClockStep = PumpClockStep(foundAt: minutes(21), by: -.hours(1))
+        observeTemp(percent: 0, from: minutes(65))
+
+        XCTAssertEqual(manager.state.deliveryTransitions.pending?.replacement?.start, minutes(5))
+    }
+
+    func testAClockSetBeforeTheHeldTempBeganLeavesItsStampAlone() {
+        manager.state.lastPumpClockStep = PumpClockStep(foundAt: start.addingTimeInterval(-60), by: -.hours(1))
+        runningTempBasal(1.5, percent: 150)
+        advance(to: minutes(25))
+        observeTemp(percent: 150, from: minutes(10))
+
+        XCTAssertEqual(manager.state.deliveryTransitions.pending?.replacement?.start, minutes(10))
+    }
+
     func testAReplacementThePumpDatesAheadOfThePhoneIsDatedAtDetection() throws {
         runningTempBasal(1.5, percent: 150)
         advance(to: minutes(12))

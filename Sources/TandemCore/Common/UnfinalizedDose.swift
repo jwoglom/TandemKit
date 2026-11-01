@@ -299,8 +299,9 @@ public class UnfinalizedDose: Equatable {
         insulineType: InsulinType?,
         now: Date = Date()
     ) -> UnfinalizedDose {
-        let startOfDay = Calendar.current.startOfDay(for: now)
-        let nowTimeInterval = now.timeIntervalSince(startOfDay)
+        // The wall clock's time of day, which the time since midnight is not on a DST change's day.
+        let local = now.timeIntervalSince1970 + TimeInterval(TimeZone.current.secondsFromGMT(for: now))
+        let nowTimeInterval = local - (local / 86400).rounded(.down) * 86400
 
         let currentRate = basalSchedule.items.last(where: { $0.startTime < nowTimeInterval })?.value ?? 0
         return UnfinalizedDose(

@@ -298,7 +298,7 @@ Nothing in Trio changes for it:
 - The tests reach the driver inside Trio through `VirtualPumpControl.Client`: `pair` (with a
   long-term key the test also gives faketandem, so only the quick-reconnect rounds run, or without
   one through the whole JPAKE exchange), `applyOnboardingSettings`, `bolus`, `cancelBolus`,
-  `syncBasalSchedule`, `tempBasal` (a duration of 0 cancels), `suspend`, `resume`,
+  `syncBasalSchedule`, `syncPumpTime`, `tempBasal` (a duration of 0 cancels), `suspend`, `resume`,
   `recordCartridgeChange`, `recordSiteChange`, `setFeatureFlag`, `deletePumpManager`
   (`prepareForDeactivation`, as the pump settings screen's remove does; nothing reaches the manager
   afterwards), `sync`, `status`, and `pumpEventBatches`, every batch handed to Trio with Trio's
@@ -452,6 +452,11 @@ simulator withdraws its services, so the driver sees its next request fail rathe
   writes one of these records when a bolus starts and another when it completes, and they carry
   the source the driver takes a history bolus's `automatic` from. Conformance D16 appends them
   itself.
+- **A running temp's start is stamped on the clock in force now.** faketandem's `TempRateHandler`
+  encodes the start with the pump's current clock setting, where a Mobi keeps the stamp it began
+  under, an hour ahead of the phone after the pump's clock was set back for DST. No test is bent by
+  it: conformance G5 and the Trio and Loop Sync Time scenarios run with the start on the new clock,
+  and `DeliveryTransitionReportingTests` covers the stale stamp.
 - **No extended bolus is delivered.** faketandem's bolus runs only an up-front part. Conformance D13
   and group J (`ExtendedBolusConformanceTests`) append the records a pump writes for one
   (`ExtendedBolusHistory.swift`), so nothing checks that the emulator would write them in that order.

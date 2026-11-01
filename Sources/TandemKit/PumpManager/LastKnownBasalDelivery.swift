@@ -177,7 +177,7 @@ public extension TandemPumpManager {
         switch dose.type {
         case .tempBasal where dose.estimatedEndDate > lastContact:
             // Once the temp ends the pump runs its own profile on its own clock, skewed or not.
-            let profileRate = getScheduledBasalRate(at: dose.estimatedEndDate.addingTimeInterval(state.pumpClockOffset))
+            let profileRate = pumpScheduledBasalRate(at: dose.estimatedEndDate)
             return LastKnownBasalDelivery(
                 lastContact: lastContact,
                 delivery: .tempBasal(unitsPerHour: dose.value, endDate: dose.estimatedEndDate, profileUnitsPerHourAfter: profileRate)
