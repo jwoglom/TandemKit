@@ -134,7 +134,16 @@ final class TandemKitDebugViewModel: ObservableObject {
 
     func uploadTandemSourceNow() {
         pumpManager?.uploadToTandemSourceIfDue(force: true)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in self?.refreshTandemSource() }
+        scheduleTandemSourceRefreshes()
+    }
+
+    /// The upload that resolves the assignment id and advances the server index runs in a background
+    /// task, so a single refresh right after kicking it off would miss the result. Re-read state a
+    /// few times over the next several seconds to pick it up.
+    private func scheduleTandemSourceRefreshes() {
+        for delay in [2.0, 5.0, 10.0] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in self?.refreshTandemSource() }
+        }
     }
 
     func signOutTandemSource() {
@@ -155,6 +164,8 @@ final class TandemKitDebugViewModel: ObservableObject {
         do {
             let (code, verifier, redirect) = try await TandemSourceLoginSession(anchor: anchor).authorize()
             try await pumpManager.completeTandemSourceSignIn(code: code, codeVerifier: verifier, redirectURI: redirect)
+            // Sign-in kicks a first upload in the background; pick up the resolved id when it lands.
+            scheduleTandemSourceRefreshes()
         } catch TandemSourceLoginSession.LoginError.cancelled {
             // User dismissed the sheet; nothing to report.
         } catch {
