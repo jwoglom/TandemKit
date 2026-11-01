@@ -207,14 +207,16 @@ extension TandemPumpManager {
                 return
             }
 
-            for item in reconciliation.itemsToIssue {
-                self.logger.info("Issuing LoopKit alert \(item.stableIdentifier)")
-                delegate.issueAlert(item.loopKitAlert)
-            }
+            Task {
+                for item in reconciliation.itemsToIssue {
+                    self.logger.info("Issuing LoopKit alert \(item.stableIdentifier)")
+                    await delegate.issueAlert(item.loopKitAlert)
+                }
 
-            for identifier in reconciliation.identifiersToRetract {
-                self.logger.info("Retracting LoopKit alert \(identifier)")
-                delegate.retractAlert(identifier: TandemPumpManager.alertIdentifier(identifier))
+                for identifier in reconciliation.identifiersToRetract {
+                    self.logger.info("Retracting LoopKit alert \(identifier)")
+                    await delegate.retractAlert(identifier: TandemPumpManager.alertIdentifier(identifier))
+                }
             }
 
             self.state.issuedAlertIdentifiers = reconciliation.updatedIssuedIdentifiers

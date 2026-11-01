@@ -3079,6 +3079,18 @@ extension TandemPumpManager: AlertResponder, AlertSoundVendor {
         []
     }
 
+    public func acknowledgeAlert(alertIdentifier: LoopKit.Alert.AlertIdentifier) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            acknowledgeAlert(alertIdentifier: alertIdentifier) { error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume()
+                }
+            }
+        }
+    }
+
     public func acknowledgeAlert(alertIdentifier: LoopKit.Alert.AlertIdentifier, completion: @escaping ((any Error)?) -> Void) {
         guard let parsed = NotificationItem.parseStableIdentifier(alertIdentifier) else {
             // Not an identifier this driver minted (e.g. from a newer version) — nothing to

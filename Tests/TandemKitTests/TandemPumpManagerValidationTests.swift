@@ -959,6 +959,7 @@ import XCTest
         manager.reconcilePumpClockSkewAlert()
         manager.reconcilePumpClockSkewAlert()
         queue.sync {}
+        delegate.waitForAlerts { !delegate.issuedAlerts.isEmpty }
 
         XCTAssertEqual(delegate.issuedAlerts.map(\.identifier.alertIdentifier), [TandemPumpManager.pumpClockSkewAlertIdentifier])
         XCTAssertTrue(manager.state.pumpClockSkewAlertIssued)
@@ -966,6 +967,7 @@ import XCTest
         skewPumpClock(manager, minutes: 0)
         manager.reconcilePumpClockSkewAlert()
         queue.sync {}
+        delegate.waitForAlerts { !delegate.retractedAlerts.isEmpty }
 
         XCTAssertEqual(delegate.retractedAlerts.map(\.alertIdentifier), [TandemPumpManager.pumpClockSkewAlertIdentifier])
         XCTAssertFalse(manager.state.pumpClockSkewAlertIssued)
