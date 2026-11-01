@@ -1,5 +1,5 @@
 import Foundation
-import HealthKit
+import LoopAlgorithm
 import LoopKit
 @testable import TandemKit
 // Package.swift: on Linux the oracles and MockPumpManagerDelegate are compiled into TandemKitTests.
@@ -12,7 +12,6 @@ import XCTest
 /// command validation"): what reaches the pump, what the pump holds afterwards, and that a refused
 /// command leaves no dose in either host.
 final class DeliveryLimitIntegrationTests: ConformanceTestCase {
-    private static let basalUnit = HKUnit.internationalUnit().unitDivided(by: .hour())
 
     override func setUpWithError() throws {
         try super.setUpWithError()
@@ -24,8 +23,8 @@ final class DeliveryLimitIntegrationTests: ConformanceTestCase {
     private func syncDeliveryLimits(maxBasal: Double, maxBolus: Double) throws -> Result<DeliveryLimits, Error> {
         let manager = try XCTUnwrap(current, "no driver").manager
         let limits = DeliveryLimits(
-            maximumBasalRate: HKQuantity(unit: Self.basalUnit, doubleValue: maxBasal),
-            maximumBolus: HKQuantity(unit: .internationalUnit(), doubleValue: maxBolus)
+            maximumBasalRate: LoopQuantity(unit: .internationalUnitsPerHour, doubleValue: maxBasal),
+            maximumBolus: LoopQuantity(unit: .internationalUnit, doubleValue: maxBolus)
         )
         let box = ResultBox<Result<DeliveryLimits, Error>>()
         manager.syncDeliveryLimits(limits: limits) { box.set($0) }

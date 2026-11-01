@@ -1,5 +1,5 @@
 import Foundation
-import HealthKit
+import LoopAlgorithm
 import LoopKit
 @testable import TandemKit
 import XCTest
@@ -219,7 +219,6 @@ final class LoopDoseStoreOracle: DoseOracle {
     /// each gap before a basal, temp basal or suspend, from `start`, each piece keyed on its own dates.
     static func overlaying(_ doses: [DoseEntry], with schedule: BasalRateSchedule, startingAt start: Date) -> [DoseEntry] {
         let formatter = ISO8601DateFormatter()
-        let unitsPerHour = HKUnit.internationalUnit().unitDivided(by: .hour())
         var entries: [DoseEntry] = []
         var lastBasal = DoseEntry(resumeDate: start, automatic: true)
         for dose in doses {
@@ -235,8 +234,9 @@ final class LoopDoseStoreOracle: DoseOracle {
                         endDate: pieceEnd,
                         value: scheduled.rate,
                         unit: .unitsPerHour,
+                        decisionId: nil,
                         syncIdentifier: "BasalRateSchedule \(formatter.string(from: pieceStart)) \(formatter.string(from: pieceEnd))",
-                        scheduledBasalRate: HKQuantity(unit: unitsPerHour, doubleValue: scheduled.rate),
+                        scheduledBasalRate: LoopQuantity(unit: .internationalUnitsPerHour, doubleValue: scheduled.rate),
                         insulinType: lastBasal.insulinType,
                         automatic: lastBasal.automatic
                     ))
