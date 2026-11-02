@@ -858,6 +858,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             let sentAt = self.now
             guard let initiateResponse = self.bluetooth.write(bolusRequest) else {
                 completion(self.settleUnansweredBolus(
+                    decisionId: decisionId,
                     units: units,
                     activationType: activationType,
                     bolusId: permissionResponse.bolusId,
@@ -874,6 +875,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             }
 
             self.registerCommandedBolus(
+                decisionId: decisionId,
                 units: units,
                 activationType: activationType,
                 bolusId: permissionResponse.bolusId,
@@ -887,6 +889,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     /// An `InitiateBolus` whose answer was lost may still have started the bolus, and a write gives
     /// nil whether the request never left the phone, the pump refused it or its answer was lost.
     private func settleUnansweredBolus(
+        decisionId: UUID?,
         units: Double,
         activationType: BolusActivationType,
         bolusId: Int,
@@ -896,7 +899,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         switch finding {
         case .started:
             logger.warning("No answer to InitiateBolus, but the pump took bolus \(bolusId); reporting it")
-            registerCommandedBolus(units: units, activationType: activationType, bolusId: bolusId, startDate: sentAt, isUnconfirmed: false)
+            registerCommandedBolus(decisionId: decisionId, units: units, activationType: activationType, bolusId: bolusId, startDate: sentAt, isUnconfirmed: false)
             return nil
         case .notStarted:
             logger.error("No answer to InitiateBolus, and the pump did not start bolus \(bolusId)")
@@ -904,7 +907,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             return .communication(PumpCommError.noResponse)
         case .unanswered, .hiddenByLaterBolus:
             logger.error("No answer to InitiateBolus, and the pump can't say whether it started bolus \(bolusId); reporting it as delivering")
-            registerCommandedBolus(units: units, activationType: activationType, bolusId: bolusId, startDate: sentAt, isUnconfirmed: true)
+            registerCommandedBolus(decisionId: decisionId, units: units, activationType: activationType, bolusId: bolusId, startDate: sentAt, isUnconfirmed: true)
             return .uncertainDelivery
         }
     }
@@ -912,6 +915,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     /// Reported mutable at its programmed amount from the moment the pump may have it, so neither
     /// host can dose without counting it.
     private func registerCommandedBolus(
+        decisionId: UUID?,
         units: Double,
         activationType: BolusActivationType,
         bolusId: Int,
@@ -925,6 +929,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             activationType: activationType,
             insulinType: state.insulinType,
             bolusId: bolusId,
+            decisionId: decisionId,
             now: startDate
         )
         dose.isUnconfirmed = isUnconfirmed
@@ -951,7 +956,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
             eventDate: event.date,
             automatic: activationType.isAutomatic,
             isFinalized: false,
-            units: doseEntry.programmedUnits
+            units: doseEntry.programmedUnits,
+            decisionId: decisionId
         ))
 
         state.bolusDose = dose
@@ -1162,7 +1168,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             let request = SetTempRateRequest(minutes: minutes, percent: percent)
             guard let response = self.bluetooth.write(request) else {
                 self.logger.error("Failed to set temp rate")
-                let outcome = self.adoptUnansweredTempBasal(rate: absoluteRate, percent: percent, duration: programmedDuration, origin: .host)
+                let outcome = self.adoptUnansweredTempBasal(rate: absoluteRate, percent: percent, duration: programmedDuration, origin: .host, decisionId: decisionId)
                 if !outcome.adopted, outcome.status?.basalType == .basal {
                     self.restoreStoppedTempBasal(stoppedTemp)
                 }
@@ -1196,6 +1202,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                         duration: programmedDuration,
                         tempRateId: response.tempRateId,
                         origin: .host,
+                        decisionId: decisionId,
                         completion: completion
                     )
                     return
@@ -1204,7 +1211,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 self.logger.warning("No basal status after setting the temp basal; reporting it as commanded")
             }
 
-            self.recordTempBasal(rate: absoluteRate, percent: percent, duration: programmedDuration, tempRateId: response.tempRateId, origin: .host)
+            self.recordTempBasal(rate: absoluteRate, percent: percent, duration: programmedDuration, tempRateId: response.tempRateId, origin: .host, decisionId: decisionId)
             self.logger.info("Temp basal enacted!")
             completion(nil)
         }
@@ -1348,7 +1355,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
         rate: Double,
         percent: Int,
         duration: TimeInterval,
-        origin: TempBasalOrigin
+        origin: TempBasalOrigin,
+        decisionId: UUID?
     ) -> (status: CurrentBasalStatusResponse?, adopted: Bool) {
         guard let status = bluetooth.write(CurrentBasalStatusRequest()) else {
             logger.warning("No basal status after an unanswered SetTempRate; the next reading settles it")
@@ -1362,7 +1370,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             return (status, false)
         }
         logger.warning("The pump runs the \(percent)% temp basal whose SetTempRate answer was lost; reporting it")
-        recordTempBasal(rate: rate, percent: percent, duration: duration, tempRateId: nil, origin: origin)
+        recordTempBasal(rate: rate, percent: percent, duration: duration, tempRateId: nil, origin: origin, decisionId: decisionId)
         return (status, true)
     }
 
@@ -1386,7 +1394,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
             percent: percent,
             duration: .minutes(Double(minutes)),
             tempRateId: response.tempRateId,
-            origin: TempBasalOrigin(of: stopped)
+            origin: TempBasalOrigin(of: stopped),
+            decisionId: stopped.decisionId
         )
     }
 
@@ -1411,7 +1420,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         return state.settings.maxTempBasalRate
     }
 
-    func recordTempBasal(rate: Double, percent: Int, duration: TimeInterval, tempRateId: Int?, origin: TempBasalOrigin) {
+    func recordTempBasal(rate: Double, percent: Int, duration: TimeInterval, tempRateId: Int?, origin: TempBasalOrigin, decisionId: UUID?) {
         settleDeliveryTransition()
         let dose = UnfinalizedDose(
             tempRate: rate,
@@ -1422,7 +1431,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
             startDate: now,
             tempRateId: tempRateId,
             tempPercent: percent,
-            eventRaw: tempBasalEventRaw(tempRateId: tempRateId)
+            eventRaw: tempBasalEventRaw(tempRateId: tempRateId),
+            decisionId: decisionId
         )
         var events = getActivePumpEvents(endDate: dose.startDate)
         events.append(NewPumpEvent.tempBasal(dose: dose.toDoseEntry(isMutable: true), of: dose))
@@ -1507,6 +1517,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         duration: TimeInterval,
         tempRateId: Int,
         origin: TempBasalOrigin,
+        decisionId: UUID?,
         completion: @escaping (PumpManagerError?) -> Void
     ) {
         logger.error(
@@ -1519,7 +1530,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
         switch readback.basalType {
         case .tempBasal:
-            recordTempBasal(rate: readback.currentBasalRate, percent: percent, duration: duration, tempRateId: tempRateId, origin: origin)
+            recordTempBasal(rate: readback.currentBasalRate, percent: percent, duration: duration, tempRateId: tempRateId, origin: origin, decisionId: decisionId)
         case .suspend:
             observeDeliveryState(.suspend)
         default:

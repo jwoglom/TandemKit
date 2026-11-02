@@ -51,7 +51,7 @@ import XCTest
         ))
     }
 
-    private func startBolus() {
+    private func startBolus(decisionId: UUID? = nil) {
         bluetooth.stub(BolusPermissionRequest.self, with: BolusPermissionResponse(
             status: 0,
             bolusId: Self.bolusId,
@@ -64,7 +64,7 @@ import XCTest
         ))
 
         let enacted = expectation(description: "enactBolus")
-        manager.enactBolus(decisionId: nil, units: Self.programmedUnits, activationType: .manualNoRecommendation) { error in
+        manager.enactBolus(decisionId: decisionId, units: Self.programmedUnits, activationType: .manualNoRecommendation) { error in
             XCTAssertNil(error)
             enacted.fulfill()
         }
@@ -141,6 +141,28 @@ import XCTest
 
         XCTAssertGreaterThanOrEqual(bolusEvents.count, 2)
         assertOneIdentity()
+    }
+
+    func testEveryReportOfACompletedBolusCarriesItsDecision() {
+        let decisionId = UUID()
+        startBolus(decisionId: decisionId)
+        stubLastBolus(deliveredVolume: 1949)
+
+        reportBolusFinished()
+
+        XCTAssertGreaterThanOrEqual(bolusEvents.count, 2)
+        XCTAssertEqual(Set(bolusEvents.map(\.dose?.decisionId)), [decisionId])
+    }
+
+    func testEveryReportOfACancelledBolusCarriesItsDecision() {
+        let decisionId = UUID()
+        startBolus(decisionId: decisionId)
+        stubLastBolus(deliveredVolume: 500)
+
+        cancelBolus()
+
+        XCTAssertGreaterThanOrEqual(bolusEvents.count, 2)
+        XCTAssertEqual(Set(bolusEvents.map(\.dose?.decisionId)), [decisionId])
     }
 
     func testBolusFinalizedFromAHeldDoseKeepsTheEnactEventsIdentity() {

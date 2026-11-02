@@ -157,7 +157,7 @@ extension TandemPumpManager {
             let request = SetTempRateRequest(minutes: minutes, percent: percent)
             guard let response = self.bluetooth.write(request) else {
                 self.logger.error("Failed to set a manual temp rate")
-                let outcome = self.adoptUnansweredTempBasal(rate: rate, percent: percent, duration: programmedDuration, origin: .settings)
+                let outcome = self.adoptUnansweredTempBasal(rate: rate, percent: percent, duration: programmedDuration, origin: .settings, decisionId: nil)
                 if !outcome.adopted, outcome.status?.basalType == .basal {
                     self.restoreStoppedTempBasal(stoppedTemp)
                 }
@@ -202,13 +202,14 @@ extension TandemPumpManager {
                         duration: programmedDuration,
                         tempRateId: response.tempRateId,
                         origin: .settings,
+                        decisionId: nil,
                         completion: completion
                     )
                     return
                 }
             }
 
-            self.recordTempBasal(rate: rate, percent: percent, duration: programmedDuration, tempRateId: response.tempRateId, origin: .settings)
+            self.recordTempBasal(rate: rate, percent: percent, duration: programmedDuration, tempRateId: response.tempRateId, origin: .settings, decisionId: nil)
             self.logger.info("Manual temp basal enacted at \(percent)% (\(rate) U/hr) for \(minutes) min")
             completion(nil)
         }
@@ -229,7 +230,7 @@ extension TandemPumpManager {
         logger.error("The pump reports \(reported) temp rate after taking a manual temp of \(percent)%")
         if let running {
             let rate = roundToSupportedBasalRate(unitsPerHour: profileBasalRate * Double(running) / 100)
-            recordTempBasal(rate: rate, percent: running, duration: duration, tempRateId: tempRateId, origin: .settings)
+            recordTempBasal(rate: rate, percent: running, duration: duration, tempRateId: tempRateId, origin: .settings, decisionId: nil)
         } else {
             startScheduledBasalDose()
         }
