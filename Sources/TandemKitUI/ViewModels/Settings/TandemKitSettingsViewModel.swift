@@ -6,7 +6,10 @@ import LoopKit
 enum CommandFailure: Int, Identifiable {
     case resume
     case suspend
-    case controlIQ
+    case enableControlIQ
+    case disableControlIQ
+    case enableControlIQUnanswered
+    case disableControlIQUnanswered
     case exerciseMode
     case sleepMode
     case stopTempRate
@@ -225,9 +228,9 @@ class TandemKitSettingsViewModel: ObservableObject {
     ///
     /// Control-IQ can only close the loop when a CGM is connected to the pump; without one the
     /// pump silently runs Control-IQ in open-loop while our DIY algorithm is disabled — a strictly
-    /// worse state for the user. To prevent that, first confirm a CGM sensor session is configured
-    /// on the pump. Only when one is present do we surface the switch confirmation; otherwise we
-    /// show a blocking prompt directing the user to connect a CGM and leave the algorithm unchanged.
+    /// worse state for the user. So the pump is checked first (`checkControlIQCanBeEnabled`, which
+    /// the Control-IQ screen's Save runs too), and only a switch nothing blocks gets the confirmation.
+    /// Otherwise a prompt says what is missing, and the algorithm is left unchanged.
     func attemptSwitchToControlIQ() {
         guard let pumpManager else { return }
         guard !isCheckingCGMForCIQ else { return }
@@ -237,24 +240,20 @@ class TandemKitSettingsViewModel: ObservableObject {
             return
         }
 
-        // Control-IQ doses from body weight and total daily insulin, and a pump that has never run
-        // it has neither, so the driver refuses the enable. Open the screen where they can be
-        // entered instead of attempting a request that cannot succeed (#223).
-        guard pumpManager.state.controlIQWeightLbs != nil,
-              pumpManager.state.controlIQTotalDailyInsulin != nil
-        else {
-            showControlIQValuesRequired = true
-            return
-        }
-
         isCheckingCGMForCIQ = true
-        pumpManager.getCGMStatus { response in
+        pumpManager.checkControlIQCanBeEnabled(
+            weightLbs: pumpManager.state.controlIQWeightLbs,
+            totalDailyInsulin: pumpManager.state.controlIQTotalDailyInsulin
+        ) { blocker in
             DispatchQueue.main.async {
                 self.isCheckingCGMForCIQ = false
-                if response?.isSensorSessionConfigured == true {
+                switch ControlIQEnablePrompt(blocker) {
+                case .confirm:
                     self.showSwitchToCIQConfirm = true
-                } else {
+                case .cgmRequired:
                     self.showCGMRequiredForCIQ = true
+                case .valuesRequired:
+                    self.showControlIQValuesRequired = true
                 }
             }
         }
@@ -288,13 +287,19 @@ class TandemKitSettingsViewModel: ObservableObject {
                         self.showNoCGMWarning = true
                     }
                 }
-            case .failure:
+            case let .failure(error):
                 DispatchQueue.main.async {
                     self.isUpdatingPumpState = false
-                    self.commandFailure = .controlIQ
+                    self.commandFailure = Self.isUnanswered(error) ? .enableControlIQUnanswered : .enableControlIQ
                 }
             }
         }
+    }
+
+    /// A request that never connected or that nothing answered, as opposed to one the pump or the driver refused.
+    static func isUnanswered(_ error: Error) -> Bool {
+        guard let error = error as? ControlIQConfigurationError else { return true }
+        return error == .noResponse
     }
 
     func switchAlgorithmToDIY() {
@@ -314,8 +319,8 @@ class TandemKitSettingsViewModel: ObservableObject {
                 case .success:
                     self.useControlIQ = false
                     self.showReenableClosedLoopPrompt = true
-                case .failure:
-                    self.commandFailure = .controlIQ
+                case let .failure(error):
+                    self.commandFailure = Self.isUnanswered(error) ? .disableControlIQUnanswered : .disableControlIQ
                 }
             }
         }

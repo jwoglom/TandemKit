@@ -2506,6 +2506,22 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
+    /// What blocks switching to Control-IQ with these values, nil if nothing; every screen asks this.
+    /// An unanswered CGM read blocks: a switch made blind may leave the pump open-loop.
+    func checkControlIQCanBeEnabled(
+        weightLbs: Int?,
+        totalDailyInsulin: Int?,
+        completion: @escaping (ControlIQEnableBlocker?) -> Void
+    ) {
+        guard weightLbs != nil, totalDailyInsulin != nil else {
+            completion(.valuesRequired)
+            return
+        }
+        getCGMStatus { response in
+            completion(response?.isSensorSessionConfigured == true ? nil : .cgmRequired)
+        }
+    }
+
     func stopCGMSensor(completion: @escaping (Bool) -> Void) {
         logger.info("Stopping CGM Session")
 

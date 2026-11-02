@@ -334,23 +334,29 @@ final class HistoryBackfillCoordinator {
         return isRunning
     }
 
-    /// The oldest and newest records this session has read, on the pump's clock.
+    /// The oldest and newest records this session has read, on the pump's clock, including those of a
+    /// slice still streaming in. A slice is noted as covered only once it ends, several seconds after
+    /// its first entries arrive, and one slice spans most of a setup load's window.
     func sessionPumpTimeSpan() -> ClosedRange<Date>? {
-        guard let pumpManager, let serial = pumpManager.historyLogStoreSerial, let covered = sessionCoverage else {
-            return nil
-        }
-        do {
-            guard let oldest = try pumpManager.historyLogStore.logs(pumpSerial: serial.rawValue, in: covered.lowerBound ... covered.lowerBound).first,
-                  let newest = try pumpManager.historyLogStore.logs(pumpSerial: serial.rawValue, in: covered.upperBound ... covered.upperBound).first
-            else {
-                return nil
+        var dates: [Date] = []
+        if let pumpManager, let serial = pumpManager.historyLogStoreSerial, let covered = sessionCoverage {
+            do {
+                let store = pumpManager.historyLogStore
+                let ends = try [covered.lowerBound, covered.upperBound].compactMap {
+                    try store.logs(pumpSerial: serial.rawValue, in: $0 ... $0).first
+                }
+                dates += ends.map { Dates.fromJan12008EpochSecondsToDate(TimeInterval($0.pumpTimeSec)) }
+            } catch {
+                logger.warning("Could not read the span of this session's history: \(error)")
             }
-            let dates = [oldest, newest].map { Dates.fromJan12008EpochSecondsToDate(TimeInterval($0.pumpTimeSec)) }
-            return dates.min()! ... dates.max()!
-        } catch {
-            logger.warning("Could not read the span of this session's history: \(error)")
+        }
+        if let streaming = fetcher.progressInFlight {
+            dates += [streaming.earliestFetched, streaming.latestFetched].compactMap { $0 }
+        }
+        guard let oldest = dates.min(), let newest = dates.max() else {
             return nil
         }
+        return oldest ... newest
     }
 
     private var sessionCoverage: ClosedRange<UInt32>? {

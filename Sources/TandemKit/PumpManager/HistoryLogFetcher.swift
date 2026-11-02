@@ -412,6 +412,13 @@ public final class HistoryLogFetcher {
         }
     }
 
+    /// What the fetch under way has streamed in so far, nil between fetches.
+    var progressInFlight: Progress? {
+        lock.lock()
+        defer { lock.unlock() }
+        return fetchActive ? progressLocked() : nil
+    }
+
     private func currentProgress() -> Progress {
         lock.lock()
         defer { lock.unlock() }
