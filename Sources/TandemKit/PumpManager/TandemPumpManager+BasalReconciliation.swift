@@ -367,7 +367,8 @@ extension TandemPumpManager {
                 insulinType: held.insulinType,
                 startDate: start,
                 tempRateId: held.tempRateId,
-                tempPercent: held.tempPercent
+                tempPercent: held.tempPercent,
+                decisionId: held.decisionId
             )
         }
         var events = finished + [NewPumpEvent.tempBasal(dose: running.toDoseEntry(isMutable: false, endDate: start, now: pass.now), of: running)]

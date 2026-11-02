@@ -177,7 +177,8 @@ extension TandemPumpManager {
             insulinType: interrupted.insulinType,
             startDate: start,
             tempRateId: interrupted.tempRateId,
-            tempPercent: interrupted.tempPercent
+            tempPercent: interrupted.tempPercent,
+            decisionId: interrupted.decisionId
         )
     }
 

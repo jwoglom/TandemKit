@@ -273,7 +273,7 @@ extension TandemPumpManager {
             endDate: dose.endDate,
             value: dose.programmedUnits,
             unit: .units,
-            decisionId: nil,
+            decisionId: entry.decisionId,
             deliveredUnits: dose.deliveredUnits,
             description: dose.description,
             syncIdentifier: entry.raw.hexadecimalString,

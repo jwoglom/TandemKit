@@ -48,6 +48,7 @@ final class UnfinalizedDoseEqualityTests: XCTestCase {
             ("tempRateId", { $0["tempRateId"] = nil }),
             ("tempPercent", { $0["tempPercent"] = nil }),
             ("eventRaw", { $0["eventRaw"] = nil }),
+            ("decisionId", { $0["decisionId"] = nil }),
             ("type", { $0["type"] = DoseType.tempBasal.rawValue }),
             ("startDate", { $0["startDate"] = t0.addingTimeInterval(1) }),
             ("deliveryStartDate", { $0["deliveryStartDate"] = nil }),
@@ -69,6 +70,7 @@ final class UnfinalizedDoseEqualityTests: XCTestCase {
             bolusId: 2004,
             now: t0
         )
+        dose.decisionId = UUID(uuidString: "6F1E6D5C-2B0A-4C1D-9E3F-0A1B2C3D4E5F")
         dose.tempRateId = 17
         dose.tempPercent = 150
         dose.eventRaw = Data([0x01, 0x02, 0x40, 0xE2, 0x01, 0x00, 0x11, 0x00, 0x00, 0x00])
