@@ -62,7 +62,8 @@ public struct DeliveryTransitionLedger: Equatable {
             self.prior = prior
             self.observed = observed
             self.detectedAt = detectedAt
-            self.lastConfirmed = lastConfirmed
+            // A held dose dated ahead of the phone sets it past detection, and the window between the two traps.
+            self.lastConfirmed = min(lastConfirmed, detectedAt)
             self.replacement = replacement
         }
     }

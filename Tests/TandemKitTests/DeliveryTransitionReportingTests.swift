@@ -583,6 +583,36 @@ import XCTest
         XCTAssertTrue(temps.allSatisfy { $0.endDate >= $0.startDate }, "\(temps)")
     }
 
+    func testAStopOfATempHeldAheadOfThePhoneIsReportedFromHistory() {
+        // Ahead of the phone, as a pump stamp from before its clock went back could date a held temp.
+        runningTempBasal(1.5, percent: 150, from: minutes(15))
+        advance(to: minutes(5))
+        observe(1)
+
+        pass([suspended(at: minutes(4))])
+
+        XCTAssertNil(manager.state.deliveryTransitions.pending)
+        XCTAssertEqual(manager.state.basalDose.type, .suspend)
+        XCTAssertEqual(events(.suspend).count, 1)
+        let doses = events.compactMap(\.dose)
+        XCTAssertTrue(doses.allSatisfy { $0.startDate <= minutes(5) && $0.endDate >= $0.startDate }, "\(doses)")
+    }
+
+    func testAPendingChangeSavedWithItsLastReadingAfterDetectionDecodesAtDetection() throws {
+        var raw = DeliveryTransitionLedger.PendingTransition(
+            prior: manager.state.basalDose,
+            observed: .suspend,
+            detectedAt: minutes(5),
+            lastConfirmed: minutes(4)
+        ).rawValue
+        // As a build that took a held temp's start ahead of the phone for its last reading saved it.
+        raw["lastConfirmed"] = minutes(15).timeIntervalSinceReferenceDate
+
+        let decoded = try XCTUnwrap(DeliveryTransitionLedger.PendingTransition(rawValue: raw))
+
+        XCTAssertEqual(decoded.lastConfirmed, minutes(5))
+    }
+
     func testAReplacementHistoryShowsToBeTheHeldTempIsDropped() {
         runningTempBasal(1.5, tempRateId: 7, percent: 150)
         advance(to: minutes(12))
