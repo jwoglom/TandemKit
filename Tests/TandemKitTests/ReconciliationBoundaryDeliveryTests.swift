@@ -250,6 +250,29 @@ import XCTest
         queue.sync {}
     }
 
+    func testHeldReportsReachAHostThatSetsNoQueueOnTheMainQueue() {
+        let suspendDate = Date().addingTimeInterval(-120)
+        let resumeDate = Date().addingTimeInterval(-60)
+        manager.emitPumpEvents([NewPumpEvent.siteChange(date: suspendDate)], replacePendingEvents: false)
+        manager.emitPumpEvents([NewPumpEvent.cartridgeChange(date: resumeDate)], replacePendingEvents: false)
+
+        let delegate = MockPumpManagerDelegate()
+        manager.pumpManagerDelegate = delegate
+        XCTAssertEqual(manager.heldPumpEventBatchCount, 2, "nothing goes out before the grace")
+
+        let waited = expectation(description: "past the unset delegate queue grace")
+        DispatchQueue.main.asyncAfter(deadline: .now() + TandemPumpManager.unsetDelegateQueueGrace + 0.2) {
+            waited.fulfill()
+        }
+        wait(for: [waited], timeout: TandemPumpManager.unsetDelegateQueueGrace + 5)
+        let drained = expectation(description: "main queue drained")
+        DispatchQueue.main.async { drained.fulfill() }
+        wait(for: [drained], timeout: 5)
+
+        XCTAssertEqual(manager.heldPumpEventBatchCount, 0)
+        XCTAssertEqual(delegate.pumpEvents.map(\.date), [suspendDate, resumeDate])
+    }
+
     func testDoseEventsEmittedWithoutADelegateAreReplayedInOrder() {
         let suspendDate = Date().addingTimeInterval(-120)
         let resumeDate = Date().addingTimeInterval(-60)

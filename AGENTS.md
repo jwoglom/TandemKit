@@ -76,7 +76,9 @@ a direct call from a driver queue crashes it, as a backfill tick reading
 `delete()` first takes a turn on the queue, so it follows every batch sent before it.
 
 Nothing goes out until the host has set both the delegate and its queue (`canNotifyDelegate`):
-`pumpDelegate.queue` reads `.main` until then, and Trio sets the delegate first.
+`pumpDelegate.queue` reads `.main` until then, and Trio sets the delegate first. Loop next-dev
+sets no queue and takes its pump calls on `.main`, so a delegate still without a queue
+`unsetDelegateQueueGrace` later is reported to on `.main`.
 `deliverStateMissedByTheDelegate` replays what was held once the second one lands, with the status
 but not `pumpManagerDidUpdateState`: Loop and Trio save `rawValue` on the main thread right after
 attaching, and a second save from their delegate queue races it (Trio's launch hung in a Thread
