@@ -274,7 +274,13 @@ class LoopTestCase: FaketandemIntegrationTestCase {
         assertSamePumpEvents(events, oracle.pumpEvents.map(LoopStoredPumpEvent.init), file: file, line: line)
         let predicted = oracle.cachedDoses.map(LoopCachedDose.init)
         assertSameDoses(doses.filter { !$0.isScheduleFill }, predicted.filter { !$0.isScheduleFill }, file: file, line: line)
-        assertSameScheduleFill(in: doses, predicted.filter(\.isScheduleFill), file: file, line: line)
+        assertSameScheduleFill(
+            in: doses,
+            predicted.filter(\.isScheduleFill),
+            scheduleChanges: try store.basalScheduleChangeDates(),
+            file: file,
+            line: line
+        )
         return (events.sorted(by: Self.rowOrder), doses.sorted { $0.startDate < $1.startDate }, oracle)
     }
 
@@ -344,20 +350,36 @@ class LoopTestCase: FaketandemIntegrationTestCase {
     /// Piece for piece in date order. Each starts at the end of the last immutable basal or the first pump
     /// event, and ends at a dose or the reconciliation boundary, all dates the driver gave, so they agree to
     /// Core Data's rounding. Loop counts a piece at its schedule's rate over whatever it covers.
+    ///
+    /// Loop also splits its fill wherever its stored basal schedule changed (`getBasalHistory`), which
+    /// the oracle doesn't model. In these tests the only change is the time zone Loop gives its schedules
+    /// at the pump's first status (`setScheduleTimeZone`), at a moment that races the pump's first event
+    /// by milliseconds. A split there is joined back into one piece before comparing. When the change
+    /// falls in the second the piece began, both halves share a key and the later one overwrites the
+    /// earlier, so the piece starts at the change instead.
     private func assertSameScheduleFill(
         in doses: [LoopCachedDose],
         _ predicted: [LoopCachedDose],
+        scheduleChanges: [Date],
         file: StaticString,
         line: UInt
     ) {
-        let fill = doses.filter(\.isScheduleFill).sorted { $0.startDate < $1.startDate }
+        let fill = Self.joinedAtScheduleChanges(
+            doses.filter(\.isScheduleFill).sorted { $0.startDate < $1.startDate },
+            scheduleChanges
+        )
         let predicted = predicted.sorted { $0.startDate < $1.startDate }
         let report = "Loop's schedule fill:\n\(fill.map { "  \($0)" }.joined(separator: "\n"))\noracle predicted:\n\(predicted.map { "  \($0)" }.joined(separator: "\n"))"
         guard fill.count == predicted.count else {
             return XCTFail("schedule fill counts differ\n\(report)", file: file, line: line)
         }
         for (actual, expected) in zip(fill, predicted) {
-            XCTAssertEqual(actual.startDate.timeIntervalSince(expected.startDate), 0, accuracy: 1e-3, report, file: file, line: line)
+            let startsAtAScheduleChange = actual.syncIdentifier == expected.syncIdentifier &&
+                actual.startDate > expected.startDate &&
+                scheduleChanges.contains { abs($0.timeIntervalSince(actual.startDate)) < 1e-3 }
+            if !startsAtAScheduleChange {
+                XCTAssertEqual(actual.startDate.timeIntervalSince(expected.startDate), 0, accuracy: 1e-3, report, file: file, line: line)
+            }
             XCTAssertEqual(actual.endDate.timeIntervalSince(expected.endDate), 0, accuracy: 1e-3, report, file: file, line: line)
             XCTAssertEqual(actual.isMutable, expected.isMutable, report, file: file, line: line)
             XCTAssertEqual(actual.isDeleted, expected.isDeleted, report, file: file, line: line)
@@ -368,6 +390,24 @@ class LoopTestCase: FaketandemIntegrationTestCase {
                 XCTFail("Loop counts its schedule over a dose the driver reported: \(piece) overlaps \(dose)", file: file, line: line)
             }
         }
+    }
+
+    /// Joins each live, finished fill piece to the next where both meet at a schedule change.
+    private static func joinedAtScheduleChanges(_ fill: [LoopCachedDose], _ changes: [Date]) -> [LoopCachedDose] {
+        var joined: [LoopCachedDose] = []
+        for piece in fill {
+            if var last = joined.last, !last.isDeleted, !last.isMutable, !piece.isDeleted,
+               abs(last.endDate.timeIntervalSince(piece.startDate)) < 1e-3,
+               changes.contains(where: { abs($0.timeIntervalSince(piece.startDate)) < 1e-3 }) {
+                last.endDate = piece.endDate
+                last.value += piece.value
+                last.isMutable = piece.isMutable
+                joined[joined.count - 1] = last
+            } else {
+                joined.append(piece)
+            }
+        }
+        return joined
     }
 
     /// A strict expected failure for LoopKit/LoopKit#688: Loop stores a suspend its resume closed, with

@@ -132,6 +132,28 @@ final class LoopStore {
         }
     }
 
+    /// When Loop's stored basal schedule changed: each `SettingsObject` whose schedule differs from the
+    /// one before it, as `SettingsStore.getBasalHistory` compares them. A change of time zone alone counts:
+    /// Loop sets its schedules to the pump's zone at the pump's first status (`setScheduleTimeZone`).
+    func basalScheduleChangeDates() throws -> [Date] {
+        let rows = try query("SELECT ZDATE, ZDATA FROM ZSETTINGSOBJECT ORDER BY ZDATE, Z_PK") { row in
+            (date: Date(timeIntervalSinceReferenceDate: row.double(0) ?? 0), data: row.data(1))
+        }
+        var changes: [Date] = []
+        var last: NSDictionary?
+        for row in rows {
+            guard let data = row.data,
+                  let settings = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
+                  let schedule = settings["basalRateSchedule"] as? NSDictionary
+            else { continue }
+            if let last, !last.isEqual(schedule) {
+                changes.append(row.date)
+            }
+            last = schedule
+        }
+        return changes
+    }
+
     /// LoopKit's model v6 renamed the dose's units from `value` to `deliveredUnits`, so the column
     /// follows the LoopKit Loop was built with.
     private func cachedDoseUnitsColumn() throws -> String {
