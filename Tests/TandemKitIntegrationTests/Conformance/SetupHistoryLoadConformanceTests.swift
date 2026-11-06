@@ -479,12 +479,9 @@ final class SetupHistoryLoadConformanceTests: ConformanceTestCase {
         }
 
         // Loaded finalized to its programmed end, the other app's temp is stored at Loop's first save
-        // after that end, and only empty batches have followed it.
-        XCTExpectFailure("Loop leaves a finalized temp out of IOB from a boundary past its end until its next save (AGENTS.md, Deleting the pump manager: still open)") {
-            XCTAssertTrue(loop.normalizedDoses().contains { $0.syncIdentifier == runningTemp.hexadecimalString }, "Loop counts the other app's temp after its end")
-        }
-        loop.syncPumpEventsToInsulinDeliveryStore(now: clock.now)
-        XCTAssertNotNil(loop.assertPermanent(raw: runningTemp, "at the host's next save"))
+        // after that end, which an empty batch makes too.
+        XCTAssertTrue(loop.normalizedDoses().contains { $0.syncIdentifier == runningTemp.hexadecimalString }, "Loop counts the other app's temp after its end")
+        XCTAssertNotNil(loop.assertPermanent(raw: runningTemp, "at the host's first save after its end"))
 
         let firstCycle = try XCTUnwrap(timeline.basalCycles.first { $0.start >= since })
         try assertHostsCountThePumpsBasal(from: firstCycle.start, loop, trio)

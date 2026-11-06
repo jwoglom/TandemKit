@@ -341,25 +341,25 @@ class LoopTestCase: FaketandemIntegrationTestCase {
         }
     }
 
-    /// The first piece starts a day before the save, on Loop's clock where the oracle has the driver's,
-    /// so it is compared to a minute. Loop counts a piece at its schedule's rate over whatever it covers.
+    /// Piece for piece in date order. Each starts at the end of the last immutable basal or the first pump
+    /// event, and ends at a dose or the reconciliation boundary, all dates the driver gave, so they agree to
+    /// Core Data's rounding. Loop counts a piece at its schedule's rate over whatever it covers.
     private func assertSameScheduleFill(
         in doses: [LoopCachedDose],
         _ predicted: [LoopCachedDose],
         file: StaticString,
         line: UInt
     ) {
-        let stored = doses.filter(\.isScheduleFill).sorted { $0.startDate < $1.startDate }
-        let fill = Self.withoutRepeatsOfTheFirstPiece(stored)
+        let fill = doses.filter(\.isScheduleFill).sorted { $0.startDate < $1.startDate }
         let predicted = predicted.sorted { $0.startDate < $1.startDate }
-        let report = "Loop's schedule fill:\n\(stored.map { "  \($0)" }.joined(separator: "\n"))\noracle predicted:\n\(predicted.map { "  \($0)" }.joined(separator: "\n"))"
+        let report = "Loop's schedule fill:\n\(fill.map { "  \($0)" }.joined(separator: "\n"))\noracle predicted:\n\(predicted.map { "  \($0)" }.joined(separator: "\n"))"
         guard fill.count == predicted.count else {
             return XCTFail("schedule fill counts differ\n\(report)", file: file, line: line)
         }
-        for (index, (actual, expected)) in zip(fill, predicted).enumerated() {
-            XCTAssertEqual(actual.startDate.timeIntervalSince(expected.startDate), 0, accuracy: index == 0 ? 60 : 1e-3, report, file: file, line: line)
+        for (actual, expected) in zip(fill, predicted) {
+            XCTAssertEqual(actual.startDate.timeIntervalSince(expected.startDate), 0, accuracy: 1e-3, report, file: file, line: line)
             XCTAssertEqual(actual.endDate.timeIntervalSince(expected.endDate), 0, accuracy: 1e-3, report, file: file, line: line)
-            XCTAssertEqual(actual.isMutable, false, report, file: file, line: line)
+            XCTAssertEqual(actual.isMutable, expected.isMutable, report, file: file, line: line)
             XCTAssertEqual(actual.isDeleted, expected.isDeleted, report, file: file, line: line)
         }
         let reported = doses.filter { !$0.isScheduleFill && !$0.isBolus && !$0.isDeleted }
@@ -370,13 +370,17 @@ class LoopTestCase: FaketandemIntegrationTestCase {
         }
     }
 
-    /// DoseStore overlays a save before InsulinDeliveryStore has stored the last one's, so saves either
-    /// side of a second each write the first piece, keyed on its own day-ago start.
-    private static func withoutRepeatsOfTheFirstPiece(_ fill: [LoopCachedDose]) -> [LoopCachedDose] {
-        guard let first = fill.first else { return fill }
-        return [first] + fill.dropFirst().filter {
-            abs($0.endDate.timeIntervalSince(first.endDate)) > 1e-3 || $0.startDate.timeIntervalSince(first.startDate) > 60
-        }
+    /// A strict expected failure for LoopKit/LoopKit#688: Loop stores a suspend its resume closed, with
+    /// no basal dose after it, as running to the reconciliation boundary. A LoopKit fix turns the block
+    /// into an unexpected pass, so the wrapper is removed with it.
+    func expectLoopKit688<R>(_ body: () throws -> R) rethrows -> R {
+        let options = XCTExpectedFailure.Options()
+        options.isStrict = true
+        return try XCTExpectFailure(
+            "Loop stores a resumed suspend as running to the boundary (LoopKit/LoopKit#688)",
+            options: options,
+            failingBlock: body
+        )
     }
 
     static func milliunits(_ units: Double) -> Int {

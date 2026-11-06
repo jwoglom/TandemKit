@@ -271,8 +271,9 @@ host queue, so its state stays behind its lock.
   part, which the pump runs on to its programmed end, is cut at the deletion as a temp basal is: the
   share of its programmed amount up to then under its own `raw`, and the rest a finalized dose of its
   own to its programmed end under a new `raw`.
-- Still open: Loop leaves the remainder out of IOB from a boundary past its end that came with no
-  save (the next pump manager's empty batch) until that manager's next non-empty batch. Across a
+- Still open: Loop next-dev saves on every batch, empty ones included, so the remainder is stored to its
+  programmed end once that passes, before the next manager's history reports how the pump ran it, and
+  a report from that history starting before then is not stored (conformance K5). Across a
   segment change the remainder over-counts wherever the pump runs it below its highest rate; across two
   or more, a later manager's load reports the parts past the first again, which both hosts count too.
 
