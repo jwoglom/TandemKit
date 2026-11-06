@@ -14,11 +14,13 @@ final class LoopSuspendTests: LoopTestCase {
         try control.send(.init(command: .resume))
 
         try loopStored("the resume", until: Self.hasResume)
-        let stored = try assertLoopStoredWhatTheOracleExpects()
-        let temps = stored.doses.filter { $0.isTempBasal && !$0.isDeleted }
-        XCTAssertEqual(temps.map(\.programmedTempBasalRate), [0.5])
-        XCTAssertEqual(temps.map(\.isMutable), [false])
-        try assertOneSuspendClosedByItsResume(stored.events, stored.doses)
+        try expectLoopKit688 {
+            let stored = try assertLoopStoredWhatTheOracleExpects()
+            let temps = stored.doses.filter { $0.isTempBasal && !$0.isDeleted }
+            XCTAssertEqual(temps.map(\.programmedTempBasalRate), [0.5])
+            XCTAssertEqual(temps.map(\.isMutable), [false])
+            try assertOneSuspendClosedByItsResume(stored.events, stored.doses)
+        }
     }
 
     func testASuspendAndResumeOnThePumpAreStoredByLoopAsTheOracleExpects() throws {
@@ -31,8 +33,10 @@ final class LoopSuspendTests: LoopTestCase {
         try harness.client.resume()
 
         try loopStored("the pump's resume", syncing: true, until: Self.hasResume)
-        let stored = try assertLoopStoredWhatTheOracleExpects()
-        try assertOneSuspendClosedByItsResume(stored.events, stored.doses)
+        try expectLoopKit688 {
+            let stored = try assertLoopStoredWhatTheOracleExpects()
+            try assertOneSuspendClosedByItsResume(stored.events, stored.doses)
+        }
     }
 
     /// Loop counts a suspend as running until the next resume, so the resume must close it.
