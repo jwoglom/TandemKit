@@ -271,8 +271,12 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     /// `pumpDelegate.queue` reads back as `.main` until the host sets one, and the host asserts its
-    /// delegate methods run on its own queue, so this cannot be inferred from the holder.
+    /// delegate methods run on its own queue, so this cannot be inferred from the holder. Also set
+    /// once a host that never sets one is taken to want `.main` (`adoptMainQueueIfTheHostSetNone`).
     private var hasDelegateQueue = false
+
+    /// Long enough for a host that sets its queue right after the delegate (Trio) to have done so.
+    static let unsetDelegateQueueGrace: TimeInterval = 1
 
     private static func makeStatus(from state: TandemPumpManagerState) -> PumpManagerStatus {
         PumpManagerStatus(
@@ -526,7 +530,22 @@ public class TandemPumpManager: PumpManager, Pluggable {
         set {
             pumpDelegate.delegate = newValue
             deliverStateMissedByTheDelegate()
+            if newValue != nil, !hasDelegateQueue {
+                DispatchQueue.main.asyncAfter(deadline: .now() + Self.unsetDelegateQueueGrace) { [weak self] in
+                    self?.adoptMainQueueIfTheHostSetNone()
+                }
+            }
         }
+    }
+
+    /// Loop next-dev sets no pump delegate queue and takes its calls on `.main`, where the holder
+    /// sends them. Holding reports for a queue that never comes left Loop dosing without counting
+    /// what it delivered.
+    private func adoptMainQueueIfTheHostSetNone() {
+        guard pumpDelegate.delegate != nil, !hasDelegateQueue else { return }
+        logger.info("The host set no delegate queue; reporting to it on the main queue")
+        hasDelegateQueue = true
+        deliverStateMissedByTheDelegate()
     }
 
     /// Catches the host up on what only gets pushed once, since the manager reads the pump before
