@@ -411,8 +411,9 @@ class LoopTestCase: FaketandemIntegrationTestCase {
     }
 
     /// A strict expected failure for LoopKit/LoopKit#688: Loop stores a suspend its resume closed, with
-    /// no basal dose after it, as running to the reconciliation boundary. A LoopKit fix turns the block
-    /// into an unexpected pass, so the wrapper is removed with it.
+    /// no basal dose after it, as running to the reconciliation boundary. Fixed in LoopKit `next-dev` by
+    /// `0cff7afa` (LoopKit/LoopKit#689), which LoopWorkspace `next-dev` doesn't pin yet. Once it does,
+    /// the block passes, which fails the test, so remove this wrapper and its uses.
     func expectLoopKit688<R>(_ body: () throws -> R) rethrows -> R {
         let options = XCTExpectedFailure.Options()
         options.isStrict = true
