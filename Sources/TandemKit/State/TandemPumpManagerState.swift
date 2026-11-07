@@ -71,6 +71,9 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
     public var lastTempRateEventRaw: Data?
     /// The last bolus `raw` minted from the pump's `bolusId`; see `bolusEventRaw`.
     public var lastBolusEventRaw: Data?
+    /// `HistoryLogSyncIdentifier.tempRate` of each temp set from TandemKit's settings, and when; see
+    /// `rememberManualTempRate`.
+    public var manualTempRates: [Data: Date] = [:]
     public var deliveryTransitions = DeliveryTransitionLedger()
     public var bolusState: PumpManagerStatus.BolusState = .noBolus
     public var insulinType: InsulinType?
@@ -216,6 +219,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
               lhs.reportedBasal == rhs.reportedBasal,
               lhs.lastTempRateEventRaw == rhs.lastTempRateEventRaw,
               lhs.lastBolusEventRaw == rhs.lastBolusEventRaw,
+              lhs.manualTempRates == rhs.manualTempRates,
               lhs.deliveryTransitions == rhs.deliveryTransitions,
               lhs.bolusState == rhs.bolusState,
               lhs.insulinType == rhs.insulinType,
@@ -393,6 +397,11 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         }
         lastTempRateEventRaw = rawValue["lastTempRateEventRaw"] as? Data
         lastBolusEventRaw = rawValue["lastBolusEventRaw"] as? Data
+        for entry in rawValue["manualTempRates"] as? [[String: Any]] ?? [] {
+            if let raw = entry["raw"] as? Data, let setAt = entry["setAt"] as? Date {
+                manualTempRates[raw] = setAt
+            }
+        }
 
         if let ledgerRaw = rawValue["deliveryTransitions"] as? DeliveryTransitionLedger.RawValue,
            let ledger = DeliveryTransitionLedger(rawValue: ledgerRaw)
@@ -616,6 +625,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         raw["reportedBasal"] = reportedBasal.rawValue
         raw["lastTempRateEventRaw"] = lastTempRateEventRaw
         raw["lastBolusEventRaw"] = lastBolusEventRaw
+        raw["manualTempRates"] = manualTempRates.map { ["raw": $0.key, "setAt": $0.value] }
         raw["deliveryTransitions"] = deliveryTransitions.rawValue
 
         if let encodedBolusState = TandemPumpManagerState.encodeBolusState(bolusState) {
@@ -729,6 +739,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         lines += debugSection("reportedBasal", reportedBasal.debugFields)
         lines.append("* lastTempRateEventRaw: \(lastTempRateEventRaw?.hexadecimalString ?? "nil")")
         lines.append("* lastBolusEventRaw: \(lastBolusEventRaw?.hexadecimalString ?? "nil")")
+        lines.append("* manualTempRates: \(manualTempRates.map { "\($0.key.hexadecimalString) at \($0.value)" }.sorted())")
         lines += debugSection("deliveryTransitions", deliveryTransitions.debugFields)
         lines += [
             "* bolusState: \(bolusState)",

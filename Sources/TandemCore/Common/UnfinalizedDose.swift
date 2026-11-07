@@ -24,6 +24,9 @@ public class UnfinalizedDose: Equatable {
     public var deliveredUnits: Double = 0
     public let insulinType: InsulinType?
     public let automatic: Bool
+    /// A temp basal the host set through `enactTempBasal`, as opposed to one set from TandemKit's
+    /// settings or adopted from pump history, which `automatic` alone does not tell apart.
+    public let setByHost: Bool
     /// A bolus whose `InitiateBolus` went unanswered, until the pump says whether it started it.
     public var isUnconfirmed = false
 
@@ -40,6 +43,7 @@ public class UnfinalizedDose: Equatable {
             lhs.deliveredUnits == rhs.deliveredUnits &&
             lhs.insulinType == rhs.insulinType &&
             lhs.automatic == rhs.automatic &&
+            lhs.setByHost == rhs.setByHost &&
             lhs.isUnconfirmed == rhs.isUnconfirmed
     }
 
@@ -57,6 +61,7 @@ public class UnfinalizedDose: Equatable {
         estimatedEndDate = now.addingTimeInterval(duration)
         self.insulinType = insulinType
         automatic = activationType.isAutomatic
+        setByHost = false
         self.bolusId = bolusId
     }
 
@@ -67,12 +72,14 @@ public class UnfinalizedDose: Equatable {
         estimatedEndDate = startDate
         self.insulinType = insulinType
         automatic = false
+        setByHost = false
     }
 
     public init(
         tempRate: Double,
         duration: TimeInterval,
         automatic: Bool,
+        setByHost: Bool = false,
         insulinType: InsulinType?,
         startDate: Date = Date.now,
         tempRateId: Int? = nil,
@@ -85,6 +92,7 @@ public class UnfinalizedDose: Equatable {
         self.insulinType = insulinType
         estimatedEndDate = startDate.addingTimeInterval(duration)
         self.automatic = automatic
+        self.setByHost = setByHost
         self.tempRateId = tempRateId
         self.tempPercent = tempPercent
         self.eventRaw = eventRaw
@@ -96,6 +104,7 @@ public class UnfinalizedDose: Equatable {
         startDate = suspendStartTime
         estimatedEndDate = startDate
         automatic = false // OSAID does not use suspend function
+        setByHost = false
         insulinType = nil
     }
 
@@ -106,6 +115,7 @@ public class UnfinalizedDose: Equatable {
         estimatedEndDate = startDate
         self.insulinType = insulinType
         automatic = false // OSAID does not use resume function
+        setByHost = false
     }
 
     /// The start of insulin delivery: the pump's own if we saw it, else when we programmed the
@@ -173,6 +183,9 @@ public class UnfinalizedDose: Equatable {
             return nil
         }
 
+        // Saved before the flag existed reads as not the host's: a temp taken for the host's may be
+        // replaced without asking.
+        setByHost = rawValue["setByHost"] as? Bool ?? false
         deliveryStartDate = rawValue["deliveryStartDate"] as? Date
 
         if let bolusIdRaw = rawValue["bolusId"] as? Int {
@@ -198,6 +211,7 @@ public class UnfinalizedDose: Equatable {
         raw["deliveredUnits"] = deliveredUnits
         raw["insulinType"] = insulinType?.rawValue
         raw["automatic"] = automatic
+        raw["setByHost"] = setByHost
         raw["bolusId"] = bolusId
         raw["tempRateId"] = tempRateId
         raw["tempPercent"] = tempPercent
@@ -278,6 +292,22 @@ public class UnfinalizedDose: Equatable {
         }
     }
 
+    /// This temp basal at `rate` from `start` to `end`: a part after a segment change, a continuation
+    /// or a remainder. Every re-statement goes through here, so each part keeps the temp's flags.
+    public func tempBasalPart(rate: Double, from start: Date, until end: Date, eventRaw: Data? = nil) -> UnfinalizedDose {
+        UnfinalizedDose(
+            tempRate: rate,
+            duration: end.timeIntervalSince(start),
+            automatic: automatic,
+            setByHost: setByHost,
+            insulinType: insulinType,
+            startDate: start,
+            tempRateId: tempRateId,
+            tempPercent: tempPercent,
+            eventRaw: eventRaw
+        )
+    }
+
     /// The `raw` every report of this temp basal carries, however it ends: hosts key the dose on
     /// it, so finishing it early must not change it.
     public var tempBasalRaw: Data {
@@ -328,6 +358,7 @@ extension UnfinalizedDose: CustomDebugStringConvertible {
         parts.append(estimatedEndDate == startDate ? "at \(startDate)" : "\(startDate) to \(estimatedEndDate)")
         if let deliveryStartDate { parts.append("delivery started \(deliveryStartDate)") }
         if automatic { parts.append("automatic") }
+        if setByHost { parts.append("set by host") }
         if let bolusId { parts.append("bolusId \(bolusId)") }
         if let tempRateId { parts.append("tempRateId \(tempRateId)") }
         if let tempPercent { parts.append("tempPercent \(tempPercent)%") }

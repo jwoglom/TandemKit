@@ -1212,7 +1212,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             let request = SetTempRateRequest(minutes: minutes, percent: percent)
             guard let response = self.bluetooth.write(request) else {
                 self.logger.error("Failed to set temp rate")
-                let outcome = self.adoptUnansweredTempBasal(rate: absoluteRate, percent: percent, duration: programmedDuration)
+                let outcome = self.adoptUnansweredTempBasal(rate: absoluteRate, percent: percent, duration: programmedDuration, origin: .host)
                 if !outcome.adopted, outcome.status?.basalType == .basal {
                     self.restoreStoppedTempBasal(stoppedTemp)
                 }
@@ -1244,6 +1244,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                         percent: percent,
                         duration: programmedDuration,
                         tempRateId: response.tempRateId,
+                        origin: .host,
                         completion: completion
                     )
                     return
@@ -1252,7 +1253,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 self.logger.warning("No basal status after setting the temp basal; reporting it as commanded")
             }
 
-            self.recordTempBasal(rate: absoluteRate, percent: percent, duration: programmedDuration, tempRateId: response.tempRateId)
+            self.recordTempBasal(rate: absoluteRate, percent: percent, duration: programmedDuration, tempRateId: response.tempRateId, origin: .host)
             self.logger.info("Temp basal enacted!")
             completion(nil)
         }
@@ -1263,7 +1264,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
     private func adoptUnansweredTempBasal(
         rate: Double,
         percent: Int,
-        duration: TimeInterval
+        duration: TimeInterval,
+        origin: TempBasalOrigin
     ) -> (status: CurrentBasalStatusResponse?, adopted: Bool) {
         guard let status = bluetooth.write(CurrentBasalStatusRequest()) else {
             logger.warning("No basal status after an unanswered SetTempRate; the next reading settles it")
@@ -1276,7 +1278,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             return (status, false)
         }
         logger.warning("The pump runs the \(percent)% temp basal whose SetTempRate answer was lost; reporting it")
-        recordTempBasal(rate: rate, percent: percent, duration: duration, tempRateId: nil)
+        recordTempBasal(rate: rate, percent: percent, duration: duration, tempRateId: nil, origin: origin)
         return (status, true)
     }
 
@@ -1295,7 +1297,13 @@ public class TandemPumpManager: PumpManager, Pluggable {
             return
         }
         logger.warning("Restored the stopped \(percent)% temp basal for the \(minutes) min left of it")
-        recordTempBasal(rate: stopped.value, percent: percent, duration: .minutes(Double(minutes)), tempRateId: response.tempRateId)
+        recordTempBasal(
+            rate: stopped.value,
+            percent: percent,
+            duration: .minutes(Double(minutes)),
+            tempRateId: response.tempRateId,
+            origin: TempBasalOrigin(of: stopped)
+        )
     }
 
     /// The pump refuses a temp above its max basal rate limit, so a request above it is made the
@@ -1315,12 +1323,13 @@ public class TandemPumpManager: PumpManager, Pluggable {
         return limit
     }
 
-    private func recordTempBasal(rate: Double, percent: Int, duration: TimeInterval, tempRateId: Int?) {
+    private func recordTempBasal(rate: Double, percent: Int, duration: TimeInterval, tempRateId: Int?, origin: TempBasalOrigin) {
         settleDeliveryTransition()
         let dose = UnfinalizedDose(
             tempRate: rate,
             duration: duration,
-            automatic: true,
+            automatic: origin.automatic,
+            setByHost: origin.setByHost,
             insulinType: state.insulinType,
             startDate: now,
             tempRateId: tempRateId,
@@ -1409,6 +1418,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         percent: Int,
         duration: TimeInterval,
         tempRateId: Int,
+        origin: TempBasalOrigin,
         completion: @escaping (PumpManagerError?) -> Void
     ) {
         logger.error(
@@ -1421,7 +1431,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
         switch readback.basalType {
         case .tempBasal:
-            recordTempBasal(rate: readback.currentBasalRate, percent: percent, duration: duration, tempRateId: tempRateId)
+            recordTempBasal(rate: readback.currentBasalRate, percent: percent, duration: duration, tempRateId: tempRateId, origin: origin)
         case .suspend:
             observeDeliveryState(.suspend)
         default:
@@ -1968,14 +1978,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 }
                 // One dose at its highest rate (the host can only over-count), keyed as the part a later load reports:
                 // a part from a future segment change would start ahead of Trio's clock, which stores it at its own.
-                let remainder = UnfinalizedDose(
-                    tempRate: laterRates.reduce(running.value, max),
-                    duration: end.timeIntervalSince(cut),
-                    automatic: running.automatic,
-                    insulinType: running.insulinType,
-                    startDate: cut,
-                    tempRateId: running.tempRateId,
-                    tempPercent: running.tempPercent,
+                let remainder = running.tempBasalPart(
+                    rate: laterRates.reduce(running.value, max),
+                    from: cut,
+                    until: end,
                     eventRaw: rescaled ? running.eventRaw.flatMap(HistoryLogSyncIdentifier.nextTempRatePart(after:)) : nil
                 )
                 events.append(NewPumpEvent.tempBasal(dose: remainder.toDoseEntry(isMutable: false, endDate: end, now: now), of: remainder))
@@ -3026,16 +3032,7 @@ extension TandemPumpManager {
             let entry = running.toDoseEntry(isMutable: false, endDate: change.date, now: now)
             finished.append(NewPumpEvent.tempBasal(dose: entry, of: running))
             part = part.flatMap(HistoryLogSyncIdentifier.nextTempRatePart(after:))
-            running = UnfinalizedDose(
-                tempRate: rate,
-                duration: dose.estimatedEndDate.timeIntervalSince(change.date),
-                automatic: dose.automatic,
-                insulinType: dose.insulinType,
-                startDate: change.date,
-                tempRateId: dose.tempRateId,
-                tempPercent: percent,
-                eventRaw: part
-            )
+            running = dose.tempBasalPart(rate: rate, from: change.date, until: dose.estimatedEndDate, eventRaw: part)
         }
         if !finished.isEmpty {
             logger.info("Temp basal at \(percent)% crossed \(finished.count) pump segment change(s); now \(running.value) U/hr")
