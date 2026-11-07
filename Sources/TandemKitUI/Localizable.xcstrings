@@ -41,6 +41,17 @@
     "%.2f U/hr" : {
 
     },
+    "%1$d%% (%2$@U/hr) with %3$@ remaining" : {
+      "comment" : "Subtext of the settings row that stops a manual temp basal (1: percent, 2: rate, 3: time left)",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$d%% (%2$@U/hr) with %3$@ remaining"
+          }
+        }
+      }
+    },
     "%1$d%% of the %2$@ U/hr profile basal rate" : {
       "comment" : "Caption under a temp basal rate in units per hour (1: the percent, 2: the profile's rate now)",
       "localizations" : {
@@ -4853,6 +4864,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Stop CGM Sensor"
+          }
+        }
+      }
+    },
+    "Stop manual temp basal" : {
+      "comment" : "Label for the row that stops a temp basal set from TandemKit's settings",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stop manual temp basal"
           }
         }
       }
