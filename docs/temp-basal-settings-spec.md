@@ -73,13 +73,16 @@ These came out of writing the first draft. Each one is listed with what was deci
 - The spec uses two wheels, hours 0–72 and minutes in 5-minute steps (**D3**,
   [§6.6](#66-duration)).
 
-**F6. pumpX2's notes disagree on temp rates under Control-IQ.**
-- `SetTempRateRequest`: "Note that ControlIQ must be off before setting a temp rate."
-- `ControlIQCycleHistoryLog.getProgrammedBasalRate()`: "On Control-IQ v7.6 Mobi firmware this is the
-  profile rate even during a temp rate". So a temp rate and Control-IQ cycles have run together.
+**F6. Some Mobi firmware takes a temp rate under Control-IQ and some doesn't.**
+- pumpX2 has notes for both. `SetTempRateRequest` says "Note that ControlIQ must be off before
+  setting a temp rate". `ControlIQCycleHistoryLog.getProgrammedBasalRate()` says "On Control-IQ v7.6
+  Mobi firmware this is the profile rate even during a temp rate".
 - **Decided (D11):** the screen offers a manual temp rate while Control-IQ runs, and the stop works
-  then too. A refusal from the pump reaches the user as the pump's refusal. T9 records what the pump
-  does ([§12.3](#123-hardware-test-plan-additions)).
+  then too.
+  - Nothing checks the firmware or works out whether the pump will take it. The driver sends the
+    command, and a pump that doesn't allow it refuses, like any other refusal.
+  - Nothing is stopped before the set under Control-IQ (the host sets no temps then, and clock skew
+    compensation is off), so a refusal leaves the pump as it was.
 
 ---
 
@@ -140,7 +143,7 @@ Limits and behaviour the UI has to respect:
   - What the pump does when a segment change takes a running temp above the max basal limit or
     below 0.1 U/hr.
   - Whether it accepts a temp while suspended.
-  - Whether it accepts one while Control-IQ runs, and what Control-IQ does while one runs (F6).
+  - What Control-IQ does while a temp runs, on firmware that takes one (F6).
 
 ---
 
@@ -608,10 +611,11 @@ confirmation, in the minutes after the user stopped its last one.
   - The sheet says "A temp rate started while you were on this screen."
   - The screen reloads into Active temp rate.
 
-**Under Control-IQ** the pump may refuse the set (F6).
-- The sheet gives the pump's refusal, as for any other.
+**Under Control-IQ**, firmware that doesn't allow a temp then refuses the set (F6).
+- The sheet gives the pump's refusal, as for any other. Nothing is checked beforehand.
 - `PumpRefusal.tempBasal` adds a sentence when `useControlIQ` is on: "Control-IQ is on, and the pump
-  may not take a temp rate while it runs."
+  may not take a temp rate while it runs." The pump gives only a status code, so this is the one hint
+  the user gets.
 
 **No answer** (`.communication(noResponse)`)
 - The pump may still have started the temp. The driver reads it back first, as the host path does
@@ -1097,7 +1101,7 @@ Rows for [docs/hardware-test-plan.md](hardware-test-plan.md):
 | T5 | With a profile segment change 20 minutes away, set 130% for 1 hour. | Record the pump's rate before and after the change, and that the host's held dose is cut there and stays manual. |
 | T6 | With the max basal limit at 2.0 U/hr and a segment change from 0.8 to 1.0 U/hr ahead, set 250% across it. | The screen refuses 250% (pMax = 200%). Separately, set 240% just before the change on the pump's screen, and record what the pump does at the change (2.4 U/hr > limit). |
 | T7 | In Trio's and in Loop's closed loop, stop the loop's temp, then set a temp from settings. Let it run past a few loop cycles, then stop it. Repeat, letting it run to its end. | The host stops dosing for its length (Trio: "Manual Temp Basal Active"; Loop: the closed-loop switch explains why), the "Manual Temp Basal" highlight shows, and the host resumes at the stop and at the end. Record how Trio's alert and TandemKit's highlight read together. |
-| T9 | Turn Control-IQ on. Set 130% for 30 minutes from TandemKit's settings, watch a few 5-minute cycles, then stop it from the settings row. Repeat with the temp set on the pump's screen, and turn Control-IQ off and on while one runs. | **Record:** whether the pump accepts `SetTempRate` (pumpX2 says Control-IQ must be off) and with what status if not; `basalModifiedBitmask` and `currentBasalRate` while the temp runs; whether Control-IQ keeps adjusting delivery, and around which rate; whether the temp survives Control-IQ being turned off or on; that the stop works. Reword the Control-IQ card to match. |
+| T9 | Turn Control-IQ on. Set 130% for 30 minutes from TandemKit's settings, watch a few 5-minute cycles, then stop it from the settings row. Repeat with the temp set on the pump's screen, and turn Control-IQ off and on while one runs. Run it on more than one firmware version. | **Record** the firmware version and: on firmware that refuses, the status code, and that the refusal reaches the user with nothing else changed; on firmware that takes it, `basalModifiedBitmask` and `currentBasalRate` while the temp runs, whether Control-IQ keeps adjusting delivery and around which rate, whether the temp survives Control-IQ being turned off or on, and that the stop works. Reword the Control-IQ card to match. |
 
 ---
 
@@ -1116,4 +1120,4 @@ Rows for [docs/hardware-test-plan.md](hardware-test-plan.md):
 | D8 | "(currently X.XX U/hr)": the temp's rate or the profile's? | **The temp's rate.** |
 | D9 | Warn on "Delete Pump" while a temp runs? | **No.** |
 | D10 | Hide the screen on pumps pumpX2 doesn't mark as supported? | **No**, not gated. |
-| D11 | Allow a manual temp rate while Control-IQ runs? | **Yes.** The set and the settings stop skip the Control-IQ refusal; the host's temps stay refused. The form shows a Control-IQ card, and T9 settles what the pump does (F6). |
+| D11 | Allow a manual temp rate while Control-IQ runs? | **Yes, with no firmware check.** Some Mobi firmware takes it and some doesn't; the driver sends it and relies on the pump to refuse. The set and the settings stop skip the driver's Control-IQ refusal; the host's temps stay refused. The form shows a Control-IQ card (F6). |
