@@ -45,7 +45,7 @@ These came out of writing the first draft. Each one is listed with what was deci
   pauses automatic dosing while it runs and starts again when it ends or is stopped, so the user does
   not have to go to open loop first.
   - The set form has no closed-loop card. The requested one would be untrue once the temp is
-    reported as manual, and nothing replaces it ([§6.2](#62-control-iq-card)).
+    reported as manual, and nothing replaces it ([§6.2](#62-no-cards)).
   - The driver has to keep the flag `false` everywhere it re-states the temp
     ([§8.4](#84-carrying-automatic-false)).
 
@@ -208,7 +208,7 @@ screen is manual, so the loop's temps and the pump screen's never switch the row
             └────────────────────────────────┘
 ```
 
-- This is the same confirmation as the active view's ([§7.4](#74-stop-temp-rate)), as a new
+- This is the same confirmation as the active view's ([§7.3](#73-stop-temp-rate)), as a new
   `SettingsAlertType.stopManualTempBasal`.
 - Confirming runs the same stop as the active view, `stopTempBasalFromSettings` ([§8.3](#83-stop)).
 - On success the row goes back to "Set temp basal" with the status update. On failure the existing
@@ -221,7 +221,7 @@ screen is manual, so the loop's temps and the pump screen's never switch the row
 | Normal delivery | Enabled | Enabled |
 | Suspended (`isDeliverySuspended`) | Disabled. The pump stops a temp at a suspend, and whether it accepts one while suspended is unconfirmed. | Not shown: the suspend ended the temp. |
 | Delivery state unknown (`suspendResumeText == nil`) | Disabled, like the "Insulin delivery status unknown" row | Disabled |
-| Control-IQ on (`useControlIQ`) | Enabled (D11). The form shows a Control-IQ card ([§6.2](#62-control-iq-card)). | Enabled. The settings stop is not refused under Control-IQ ([§8.3](#83-stop)). |
+| Control-IQ on (`useControlIQ`) | Enabled (D11). | Enabled. The settings stop is not refused under Control-IQ ([§8.3](#83-stop)). |
 | A pump command in flight (`isUpdatingPumpState`) | Disabled, as the suspend/resume row is | Disabled, with its spinner if the stop is the command |
 
 ### 4.4 Existing tap-to-stop in the header
@@ -230,8 +230,9 @@ screen is manual, so the loop's temps and the pump screen's never switch the row
   opens the "Temp Basal Active" alert. A second "WARNING" alert follows in closed loop
   (`:638-668`).
 - That tap should push the new screen instead, so a stop always comes with the same one confirmation.
-  The two alerts and `SettingsAlertType.stopTempRate` / `.stopTempRateClosedLoopWarning` go. The
-  closed-loop alert's copy names "the oref algorithm", which reads wrong in Loop.
+  The two alerts and `SettingsAlertType.stopTempRate` / `.stopTempRateClosedLoopWarning` go, and
+  nothing replaces the closed-loop warning. Its copy named "the oref algorithm", which read wrong in
+  Loop.
 - `TandemKitSettingsViewModel.stopTempRate()` stays, for the row in §4.2, and the new view model
   calls the same stop.
 
@@ -349,40 +350,19 @@ Percent tab:
 ```
 
 - Navigation title "Temp basal" (large).
-- The view is a `List` in `InsetGroupedListStyle`, like the settings screen. Under Control-IQ the
-  card in §6.2 sits in its own section above the picker.
+- The view is a `List` in `InsetGroupedListStyle`, like the settings screen.
 - The primary button sits below the list: `ContinueButton`, which is `ActionButtonStyle(.primary)`
   with a spinner while `loading`.
 
-### 6.2 Control-IQ card
+### 6.2 No cards
 
-The set form shows no closed-loop card. The one first requested ("…You need to move to open loop
-before setting a temp basal, or it will be overridden in the next loop cycle.") would be untrue once
-the temp is reported as manual (D1), and no replacement was asked for.
+The set form shows no warning or notice card, in any loop mode or under Control-IQ (D1, D11).
 
-**Shown when** Control-IQ runs (`state.useControlIQ`). It is re-read on each status update.
-
-**Looks like** the fill-tubing warning (`TandemKitFillTubingView.swift:151-167`):
-- an `HStack` with `exclamationmark.triangle.fill` in `guidanceColors.warning`, `.title2`;
-- a `VStack` with the headline "Important" in the warning colour, and the message in `.subheadline`;
-- `.wizardCard(background: guidanceColors.warning.opacity(0.1))`.
-
-Factor it out as a shared `WarningCard(title:message:)` rather than copying it; the active view's
-notice in §7.3 uses it too.
-
-**Copy**
-
-> Control-IQ is on, so \<App\> is not adjusting your insulin. Control-IQ may still adjust your insulin
-> while this temp basal runs.
-
-- The first sentence is what the settings screen's "Control-IQ pump algorithm enabled" banner already
-  says: the driver refuses the host's temps and automatic boluses while Control-IQ runs.
-- The second is as far as anything confirms. Reword it once T9 shows what Control-IQ does during a
-  temp rate.
-- `<App>` is "Trio", "Loop" or "This app". `HostApp.appName` gives "this app" in lower case, for use
-  mid-sentence (`HostApp.swift:22-32`), so this sentence needs a sentence-start variant.
-- Pass the name into one localized format string, as the existing banners do, rather than
-  concatenating, so translators can move it.
+- The closed-loop card first requested ("…You need to move to open loop before setting a temp basal,
+  or it will be overridden in the next loop cycle.") would be untrue once the temp is reported as
+  manual (D1).
+- Nothing replaces it. While a manual temp runs, the host says its loop is paused, and TandemKit's
+  "Manual Temp Basal" status highlight shows ([§8.5](#85-status-highlight)).
 
 ### 6.3 Percent rate / Unit rate
 
@@ -637,22 +617,7 @@ confirmation, in the minutes after the user stopped its last one.
   temp runs (as at a DST change) moves the stamped start by the step (`lastPumpClockStep`), so the
   time left is off by that step until the temp ends.
 
-### 7.3 Closed-loop notice on the active view
-
-When `isClosedLoopEnabled` is true and the temp is not a manual one (the held dose doesn't match it,
-or matches with `automatic == true`), a warning card like §6.2 sits above the details:
-
-> \<App\> is currently managing basal delivery in closed loop and may have set this temp rate. If you
-> stop it, \<App\> can set a new one at its next loop cycle.
-
-- This takes over the meaning of the current `stopTempRateClosedLoopWarning` alert
-  (`TandemKitSettingsView.swift:656-668`), shown before the confirmation rather than as a second alert
-  after it.
-- A manual temp gets no card: the host is paused for it.
-- Under Control-IQ no card shows. The host sets no temps then, so the temp is the user's or the pump
-  screen's.
-
-### 7.4 Stop temp rate
+### 7.3 Stop temp rate
 
 "Stop temp rate" is a full-width `ActionButtonStyle(.destructive)` button, which is red. It shows the
 confirmation from [§4.2](#42-stop-manual-temp-basal): "Stop the active temp rate of XX%?" with a red
@@ -680,7 +645,7 @@ confirmation from [§4.2](#42-stop-manual-temp-basal): "Stop the active temp rat
 - A manual temp: stopping it ends the host's pause. Trio runs a loop at once
   (`APSManager.swift:268-280`); Loop resumes at the status update.
 - An automatic temp: the host counts the scheduled basal from the stop. In closed loop it sets its
-  next temp at its next cycle, which the card in §7.3 says.
+  next temp at its next cycle.
 
 ---
 
@@ -698,7 +663,6 @@ public struct TempRateStatus {
     public let currentBasalRate: Double
     public let isSuspended: Bool
     public let isClockSkewCompensation: Bool
-    public let automatic: Bool?              // held dose's flag when it matches, else nil
 }
 
 public func readTempRateStatus(completion: @escaping (Result<TempRateStatus, PumpManagerError>) -> Void)
@@ -857,7 +821,7 @@ and `PumpManager/OmniPumpManager.swift:2846-2997`.
 | **Rate floor** | 0 U/hr; any 0.05 step | 0%, or the lowest % the pump accepts (≥ 0.1 U/hr) |
 | **Duration** | One wheel, 30 min–12 h in 30-min steps (24 choices) | Hours + minutes wheels, 15 min–72 h, 5-minute steps |
 | **Defaults** | 0.00 U/hr for 30 min (a zero temp, one tap from set) | 100% (Set disabled until changed) for 30 min |
-| **Closed loop** | No detection. A static footnote: "Your insulin delivery will not be automatically adjusted until the temporary basal rate finishes or is canceled." | Nothing in the set form. The active view warns before stopping a temp the loop may have set. |
+| **Closed loop** | No detection. A static footnote: "Your insulin delivery will not be automatically adjusted until the temporary basal rate finishes or is canceled." | Nothing on either screen. The host shows its own pause, and TandemKit's status highlight shows. |
 | **Confirmation to set** | None | "Set a temp rate for 130% of profile basal (currently 1.30 U/hr) for a duration of 1 hour, 30 minutes?" |
 | **Set errors** | Alert "Temporary Basal Failed": "Unable to set a temporary basal rate: …". The sheet stays open. | Error sheet "Could not set temp rate" with the driver's reason. The form keeps its values. |
 | **Success** | The sheet closes; the settings row turns into Cancel + Remaining. | Reloads into "Active temp rate"; the settings row turns into "Stop manual temp basal". |
@@ -917,8 +881,6 @@ All strings go in `Localizable.xcstrings` with comments. `<App>` is `HostApp`'s 
 | Status highlight | Manual Temp Basal |
 | Screen title (no temp) | Temp basal |
 | Screen title (temp) | Active temp rate |
-| Card title | Important |
-| Control-IQ card | Control-IQ is on, so \<App\> is not adjusting your insulin. Control-IQ may still adjust your insulin while this temp basal runs. |
 | Set refused under Control-IQ (added to the refusal) | Control-IQ is on, and the pump may not take a temp rate while it runs. |
 | Tabs | Percent rate · Unit rate |
 | Percent caption | of the profile basal rate (currently %@ U/hr) |
@@ -932,7 +894,6 @@ All strings go in `Localizable.xcstrings` with comments. `<App>` is `HostApp`'s 
 | Temp started meanwhile | A temp rate started while you were on this screen. |
 | Active: rate line | %@ U/hr right now |
 | Active: row | Remaining |
-| Active: closed-loop card | \<App\> is currently managing basal delivery in closed loop and may have set this temp rate. If you stop it, \<App\> can set a new one at its next loop cycle. |
 | Stop button | Stop temp rate |
 | Stop confirmation | Stop the active temp rate of %d%%? |
 | Stop confirmation buttons | Stop temp rate (destructive) · Cancel |
@@ -980,11 +941,7 @@ Every new test file goes in the `TandemKitTests` target (`scripts/check_xcodepro
   - 0 h 10 min and 72 h 5 min disable Set;
   - the default is 30 min;
   - the formatter gives "1 hour, 30 minutes" and "45 minutes".
-- The set form shows no closed-loop card, in any loop mode.
-- The Control-IQ card shows while `useControlIQ` is on and hides when not, follows a status update,
-  and names Trio, Loop or "This app".
-- The active view's closed-loop card shows for an automatic or unknown temp in closed loop, and not
-  for a manual one.
+- Neither screen shows a card, in any loop mode or under Control-IQ.
 - The confirmation text, for each tab, with the temp's rate in brackets.
 - A failure keeps the form's values. A success reloads.
 - Remaining is `startTimeRaw + duration` less the pump's time now, and is the same whatever the
@@ -1058,7 +1015,7 @@ Rows for [docs/hardware-test-plan.md](hardware-test-plan.md):
 | T5 | With a profile segment change 20 minutes away, set 130% for 1 hour. | Record the pump's rate before and after the change, and that the host's held dose is cut there and stays manual. |
 | T6 | With the max basal limit at 2.0 U/hr and a segment change from 0.8 to 1.0 U/hr ahead, set 250% across it. | The screen refuses 250% (pMax = 200%). Separately, set 240% just before the change on the pump's screen, and record what the pump does at the change (2.4 U/hr > limit). |
 | T7 | In Trio's and in Loop's closed loop, stop the loop's temp, then set a temp from settings. Let it run past a few loop cycles, then stop it. Repeat, letting it run to its end. | The host stops dosing for its length (Trio: "Manual Temp Basal Active"; Loop: the closed-loop switch explains why), the "Manual Temp Basal" highlight shows, and the host resumes at the stop and at the end. Record how Trio's alert and TandemKit's highlight read together. |
-| T9 | Turn Control-IQ on. Set 130% for 30 minutes from TandemKit's settings, watch a few 5-minute cycles, then stop it from the settings row. Repeat with the temp set on the pump's screen, and turn Control-IQ off and on while one runs. Run it on more than one firmware version. | **Record** the firmware version and: on firmware that refuses, the status code, and that the refusal reaches the user with nothing else changed; on firmware that takes it, `basalModifiedBitmask` and `currentBasalRate` while the temp runs, whether Control-IQ keeps adjusting delivery and around which rate, whether the temp survives Control-IQ being turned off or on, and that the stop works. Reword the Control-IQ card to match. |
+| T9 | Turn Control-IQ on. Set 130% for 30 minutes from TandemKit's settings, watch a few 5-minute cycles, then stop it from the settings row. Repeat with the temp set on the pump's screen, and turn Control-IQ off and on while one runs. Run it on more than one firmware version. | **Record** the firmware version and: on firmware that refuses, the status code, and that the refusal reaches the user with nothing else changed; on firmware that takes it, `basalModifiedBitmask` and `currentBasalRate` while the temp runs, whether Control-IQ keeps adjusting delivery and around which rate, whether the temp survives Control-IQ being turned off or on, and that the stop works. |
 
 ---
 
@@ -1066,7 +1023,7 @@ Rows for [docs/hardware-test-plan.md](hardware-test-plan.md):
 
 | ID | Question | Decided |
 |---|---|---|
-| D1 | Report a temp set from settings as manual (`automatic: false`), so Loop and Trio pause automatic dosing while it runs? | **Yes.** The set form shows no closed-loop card (§6.2). The driver keeps the flag (§8.4). |
+| D1 | Report a temp set from settings as manual (`automatic: false`), so Loop and Trio pause automatic dosing while it runs? | **Yes.** Neither screen shows a closed-loop card (§6.2). The driver keeps the flag (§8.4). |
 | D2 | In closed loop, should the active view offer to replace the loop's temp with a manual one? | **No.** Stop it, then set. |
 | — | If the loop sets a temp between that stop and "Set temp rate"? | **Replace it if it is automatic**; fail and reload for any other temp (§6.9). |
 | D3 | Minutes wheel step? | **5 minutes.** |
@@ -1077,4 +1034,4 @@ Rows for [docs/hardware-test-plan.md](hardware-test-plan.md):
 | D8 | "(currently X.XX U/hr)": the temp's rate or the profile's? | **The temp's rate.** |
 | D9 | Warn on "Delete Pump" while a temp runs? | **No.** |
 | D10 | Hide the screen on pumps pumpX2 doesn't mark as supported? | **No**, not gated. |
-| D11 | Allow a manual temp rate while Control-IQ runs? | **Yes, with no firmware check.** Some Mobi firmware takes it and some doesn't; the driver sends it and relies on the pump to refuse. The set and the settings stop skip the driver's Control-IQ refusal; the host's temps stay refused. The form shows a Control-IQ card (F6). |
+| D11 | Allow a manual temp rate while Control-IQ runs? | **Yes, with no firmware check.** Some Mobi firmware takes it and some doesn't; the driver sends it and relies on the pump to refuse. The set and the settings stop skip the driver's Control-IQ refusal; the host's temps stay refused. No Control-IQ card (F6). |
