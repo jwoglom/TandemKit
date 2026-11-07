@@ -519,8 +519,27 @@ host queue, so its state stays behind its lock.
   Control-IQ the pump also counts basal above and below the profile, so nothing is compared. Whether
   the pump moves boluses already given to a shortened insulin duration is unknown, so the longer one
   stays the window until that long after the change.
-- There is **no app-side temp basal rate check**; the pump's own max basal limit is the
-  only ceiling.
+- There is **no app-side rate check on the host's temp basals**; the pump's own max basal limit is
+  the only ceiling.
+
+### Temp basal from TandemKit's settings
+- `enactManualTempBasal` sends the percent the user confirmed or nothing. 100%, and a non-zero
+  percent under the pump's 0.1 U/hr minimum or over its max basal limit at any profile rate in force
+  over the duration (`manualTempBasalPercents`), are refused, not clamped or raised: what the pump
+  does when a segment change takes a running temp past either is unconfirmed. The rest of the host
+  path's checks apply as they are.
+- It is reported manual (`automatic: false`), so Loop and Trio pause automatic dosing while it runs,
+  and remembered in `manualTempRates`. A "Manual Temp Basal" status highlight shows while a manual temp
+  runs, below every other.
+- It replaces only the host's own temp (held `setByHost`, matching the read's percent and end) and the
+  clock-skew temp, with nothing more asked: the user asked for a new temp. Any other running temp,
+  a manual one included, refuses it with `tempBasalAlreadyRunning` and nothing is stopped.
+- Under Control-IQ it is sent anyway: some Mobi firmware takes a temp rate then and some refuses, and
+  nothing checks which. A refusal says Control-IQ is on, and the pump's acceptance is the confirmation,
+  since Control-IQ may set the rate the status read gives. `stopTempBasalFromSettings` is the host's
+  cancel without its Control-IQ refusal, so a temp set then can be stopped.
+- `readTempRateStatus` dates the end from `TempRateResponse`'s start and duration (seconds), both on
+  the pump's clock, so it holds however far off that clock is.
 
 ### Unanswered bolus command
 - `write` gives nil whether `InitiateBolus` never left the phone, the pump refused it or its answer
