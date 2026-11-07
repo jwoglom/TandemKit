@@ -1793,7 +1793,7 @@
       }
     },
     "Done" : {
-      "comment" : "Button text\nbutton text",
+      "comment" : "Button text\nbutton text\nButton that closes the tubing fill without resuming insulin delivery",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3063,17 +3063,6 @@
         }
       }
     },
-    "No, Go back" : {
-      "comment" : "Cancel button",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No, Go back"
-          }
-        }
-      }
-    },
     "No, Keep Pump As Is" : {
       "comment" : "Button text to cancel pump time sync",
       "localizations" : {
@@ -4062,6 +4051,17 @@
     },
     "Resume" : {
 
+    },
+    "Resume delivery" : {
+      "comment" : "Confirm button",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resume delivery"
+          }
+        }
+      }
     },
     "Resume Delivery" : {
 
@@ -5773,17 +5773,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Yes, Cancel"
-          }
-        }
-      }
-    },
-    "Yes, Resume delivery" : {
-      "comment" : "Confirm button",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Yes, Resume delivery"
           }
         }
       }
