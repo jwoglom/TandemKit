@@ -10,8 +10,8 @@ inputs:
     description: Trio repository (must contain a TandemKit submodule at path TandemKit).
     default: nightscout/Trio
   ref:
-    description: Branch, tag or SHA of the Trio repository.
-    default: feat/tandem-closed-beta
+    description: Branch, tag or SHA of the Trio repository; empty for feat/tandem-closed-beta.
+    default: ''
   token:
     description: Token that can read the Trio repository, if it is private.
     default: ''
@@ -32,7 +32,7 @@ runs:
       uses: actions/checkout@v6
       with:
         repository: ${{ inputs.repository }}
-        ref: ${{ inputs.ref }}
+        ref: ${{ inputs.ref || 'feat/tandem-closed-beta' }}
         path: trio
         submodules: false
         fetch-depth: 1
