@@ -44,8 +44,8 @@ These came out of writing the first draft. Each one is listed with what was deci
 - **Decided (D1):** a temp set from settings is reported as manual (`automatic: false`). The host
   pauses automatic dosing while it runs and starts again when it ends or is stopped, so the user does
   not have to go to open loop first.
-  - The closed-loop card in the set form now says that the loop will pause, and that the pause
-    includes lowering insulin for a falling glucose ([§6.2](#62-closed-loop-card)).
+  - The set form has no closed-loop card. The requested one would be untrue once the temp is
+    reported as manual, and nothing replaces it ([§6.2](#62-control-iq-card)).
   - The driver has to keep the flag `false` everywhere it re-states the temp
     ([§8.4](#84-carrying-automatic-false)).
 
@@ -221,7 +221,7 @@ screen is manual, so the loop's temps and the pump screen's never switch the row
 | Normal delivery | Enabled | Enabled |
 | Suspended (`isDeliverySuspended`) | Disabled. The pump stops a temp at a suspend, and whether it accepts one while suspended is unconfirmed. | Not shown: the suspend ended the temp. |
 | Delivery state unknown (`suspendResumeText == nil`) | Disabled, like the "Insulin delivery status unknown" row | Disabled |
-| Control-IQ on (`useControlIQ`) | Enabled (D11). The form shows a Control-IQ card in place of the closed-loop card ([§6.2](#62-closed-loop-card)). | Enabled. The settings stop is not refused under Control-IQ ([§8.3](#83-stop)). |
+| Control-IQ on (`useControlIQ`) | Enabled (D11). The form shows a Control-IQ card ([§6.2](#62-control-iq-card)). | Enabled. The settings stop is not refused under Control-IQ ([§8.3](#83-stop)). |
 | A pump command in flight (`isUpdatingPumpState`) | Disabled, as the suspend/resume row is | Disabled, with its spinner if the stop is the command |
 
 ### 4.4 Existing tap-to-stop in the header
@@ -316,24 +316,13 @@ read where state already tells (suspended) and again after it. Control-IQ blocks
 
 ### 6.1 Layout
 
-Percent tab, closed loop on, Trio:
+Percent tab:
 
 ```
 ┌──────────────────────────────────────────┐
 │ ‹ Tandem Mobi                            │
 │                                          │
 │ Temp basal                               │
-│                                          │
-│ ┌──────────────────────────────────────┐ │
-│ │ ⚠  Important                         │ │
-│ │    While this temp basal runs, Trio  │ │
-│ │    pauses closed loop. It will not   │ │
-│ │    adjust your insulin, including    │ │
-│ │    lowering it if your glucose       │ │
-│ │    drops. Closed loop resumes when   │ │
-│ │    the temp basal ends or you stop   │ │
-│ │    it.                               │ │
-│ └──────────────────────────────────────┘ │
 │                                          │
 │  ┌──────────────────┬─────────────────┐  │
 │  │▐  Percent rate  ▌│    Unit rate    │  │
@@ -347,14 +336,11 @@ Percent tab, closed loop on, Trio:
 │ │       of the profile basal rate      │ │
 │ │       (currently 1.00 U/hr)          │ │
 │ └──────────────────────────────────────┘ │
-│  0% or 10% to 250%. Choose a rate other  │
-│  than 100%.                              │
 │                                          │
 │ DURATION                                 │
 │ ┌──────────────────────────────────────┐ │
 │ │ Duration                   30 min  ⌄ │ │
 │ └──────────────────────────────────────┘ │
-│  15 minutes to 72 hours                  │
 │                                          │
 │ ┌──────────────────────────────────────┐ │
 │ │           Set temp rate              │ │  ← disabled at 100%
@@ -363,47 +349,28 @@ Percent tab, closed loop on, Trio:
 ```
 
 - Navigation title "Temp basal" (large).
-- The view is a `List` in `InsetGroupedListStyle`, like the settings screen, with the closed-loop card
-  in its own section above the picker.
+- The view is a `List` in `InsetGroupedListStyle`, like the settings screen. Under Control-IQ the
+  card in §6.2 sits in its own section above the picker.
 - The primary button sits below the list: `ContinueButton`, which is `ActionButtonStyle(.primary)`
   with a spinner while `loading`.
 
-### 6.2 Closed-loop card
+### 6.2 Control-IQ card
 
-**Shown when** the host reports automatic dosing on: `pumpManagerDelegate?.automaticDosingEnabled`,
-already read into `TandemKitSettingsViewModel.isClosedLoopEnabled`
-(`TandemKitSettingsViewModel.swift:456`). It is re-read on each status update, so the card appears
-and disappears as the user switches loop modes in the host without leaving the screen. It is not
-shown while Control-IQ runs, which has a card of its own (below).
+The set form shows no closed-loop card. The one first requested ("…You need to move to open loop
+before setting a temp basal, or it will be overridden in the next loop cycle.") would be untrue once
+the temp is reported as manual (D1), and no replacement was asked for.
 
-- **Loop.** `automaticDosingEnabled` is closed loop on *and* allowed.
-- **Trio.** It is true in every dosing mode but open: closed, low glucose suspend and basal testing
-  (`DosingMode.automation != .off`). Trio pauses for a manual temp in all three, so the card shows in
-  all three.
+**Shown when** Control-IQ runs (`state.useControlIQ`). It is re-read on each status update.
 
 **Looks like** the fill-tubing warning (`TandemKitFillTubingView.swift:151-167`):
 - an `HStack` with `exclamationmark.triangle.fill` in `guidanceColors.warning`, `.title2`;
 - a `VStack` with the headline "Important" in the warning colour, and the message in `.subheadline`;
 - `.wizardCard(background: guidanceColors.warning.opacity(0.1))`.
 
-Factor it out as a shared `WarningCard(title:message:)` rather than copying it.
+Factor it out as a shared `WarningCard(title:message:)` rather than copying it; the active view's
+notice in §7.3 uses it too.
 
 **Copy**
-
-> While this temp basal runs, \<App\> pauses closed loop. It will not adjust your insulin, including
-> lowering it if your glucose drops. Closed loop resumes when the temp basal ends or you stop it.
-
-- The middle sentence is the safety point. While the temp runs, the loop does nothing for a falling
-  glucose: no lower temp, no suspend, and no automatic bolus either. Keep it in any rewording.
-- `<App>` is "Trio", "Loop" or "This app". `HostApp.appName` gives "this app" in lower case, for use
-  mid-sentence (`HostApp.swift:22-32`), so this sentence needs a sentence-start variant.
-- Pass the name into one localized format string, as the existing banners do, rather than
-  concatenating, so translators can move it.
-
-The originally requested copy ("…You need to move to open loop before setting a temp basal, or it will
-be overridden in the next loop cycle.") would be untrue once the temp is reported as manual (D1).
-
-**Under Control-IQ** (`state.useControlIQ`) the same card shows with this copy instead:
 
 > Control-IQ is on, so \<App\> is not adjusting your insulin. Control-IQ may still adjust your insulin
 > while this temp basal runs.
@@ -412,6 +379,10 @@ be overridden in the next loop cycle.") would be untrue once the temp is reporte
   says: the driver refuses the host's temps and automatic boluses while Control-IQ runs.
 - The second is as far as anything confirms. Reword it once T9 shows what Control-IQ does during a
   temp rate.
+- `<App>` is "Trio", "Loop" or "This app". `HostApp.appName` gives "this app" in lower case, for use
+  mid-sentence (`HostApp.swift:22-32`), so this sentence needs a sentence-start variant.
+- Pass the name into one localized format string, as the existing banners do, rather than
+  concatenating, so translators can move it.
 
 ### 6.3 Percent rate / Unit rate
 
@@ -430,8 +401,8 @@ be overridden in the next loop cycle.") would be untrue once the temp is reporte
 
 **Typing**
 - Tapping the number opens a text field with the number pad.
-- The value is checked as typed. One outside the valid set (below) shows the footer in
-  `guidanceColors.critical` and disables "Set temp rate".
+- The value is checked as typed. One outside the valid set (below) shows in
+  `guidanceColors.critical` and disables "Set temp rate". There is no subtitle under the section.
 - A typed value is never clamped or rounded silently. If the user typed 300, the screen does not
   change it to 250 for them.
 
@@ -458,14 +429,11 @@ pMax = min( 250,
   `pumpSegmentChanges(after: now, through: now + duration)` rate.
 - Working the bounds out over the whole duration is the conservative choice. What the pump does when
   a segment change takes a temp past its limits is unconfirmed ([§3](#3-what-the-pump-accepts)).
-- Changing the duration can therefore move the bounds. A value that falls outside them shows the
-  footer in red, and is not clamped.
-
-**The footer** states the bounds, for example "0% or 18% to 250%". It reads "0% to 250%" when the
-minimum is 1%.
+- Changing the duration can therefore move the bounds. A value that falls outside them turns red,
+  and is not clamped.
 
 **100%** is valid but changes nothing (F3).
-- At 100% the button stays disabled, with "Choose a rate other than 100%." in the footer.
+- At 100% the button stays disabled. The value stays in its normal colour, since 100% is valid.
 - 100% stays the starting value as requested. It is the user's current rate, so nothing is preset.
 
 ### 6.5 Unit rate
@@ -479,9 +447,6 @@ minimum is 1%.
 │ │     130% of the 1.00 U/hr profile    │ │
 │ │     basal rate                       │ │
 │ └──────────────────────────────────────┘ │
-│  0.00 or 0.10 to 2.50 U/hr. The pump     │
-│  runs a percent of its profile, so the   │
-│  rate changes when the profile does.     │
 ```
 
 - **The value** shown is `profileBasalRate × percent / 100`, rounded to two decimals. The pump's own
@@ -493,12 +458,12 @@ minimum is 1%.
   - A typed rate becomes the nearest whole percent: `round(u / profileBasalRate × 100)`.
   - That percent's rate is then shown in place of what was typed, with the percent under it. For
     example, 1.05 at a 0.85 U/hr profile becomes 124%, shown as 1.05 U/hr.
-  - If the nearest percent falls outside the valid set, the footer turns red and the field keeps what
+  - If the nearest percent falls outside the valid set, the value turns red and the field keeps what
     was typed.
 - **The highest rate** is `pMax × profileBasalRate`: 250% of the profile, or less if the pump's max
   basal limit is lower.
-- **Segment changes.** As [§6.7](#67-profile-changes-during-the-temp) shows, a temp crossing one runs
-  at a different rate after it. The footer says so in one line.
+- **Segment changes.** A temp crossing one runs at a different rate after it, which
+  [§6.7](#67-profile-changes-during-the-temp) covers.
 
 ### 6.6 Duration
 
@@ -515,14 +480,14 @@ Health apps do.
 │ │       ▶   1   hours      30   min    │ │
 │ │           2   hours      35   min    │ │
 │ └──────────────────────────────────────┘ │
-│  15 minutes to 72 hours                  │
 ```
 
 - **Hours wheel:** 0–72.
 - **Minutes wheel:** 00–55 in 5-minute steps (**D3**). Every value it offers is a whole number of
   minutes, which is all the pump asks.
-- **Out of range** (0 h with under 15 min, or 72 h with any minutes) turns the footer red and disables
-  "Set temp rate". The wheels are not moved for the user.
+- **Out of range** (0 h with under 15 min, or 72 h with any minutes) shows the collapsed row's value in
+  `guidanceColors.critical` and disables "Set temp rate". The wheels are not moved for the user, and
+  there is no subtitle under the section.
 - **Default:** 30 minutes (**D4**), as in OmnipodKit's entry view and in the hosts' own temps.
 - **Collapsed row:** the duration formatted with `DateComponentsFormatter`, `.abbreviated` style,
   `[.hour, .minute]`.
@@ -683,7 +648,7 @@ or matches with `automatic == true`), a warning card like §6.2 sits above the d
 - This takes over the meaning of the current `stopTempRateClosedLoopWarning` alert
   (`TandemKitSettingsView.swift:656-668`), shown before the confirmation rather than as a second alert
   after it.
-- A manual temp gets no card: the host is paused for it, which is what the set form told the user.
+- A manual temp gets no card: the host is paused for it.
 - Under Control-IQ no card shows. The host sets no temps then, so the temp is the user's or the pump
   screen's.
 
@@ -892,7 +857,7 @@ and `PumpManager/OmniPumpManager.swift:2846-2997`.
 | **Rate floor** | 0 U/hr; any 0.05 step | 0%, or the lowest % the pump accepts (≥ 0.1 U/hr) |
 | **Duration** | One wheel, 30 min–12 h in 30-min steps (24 choices) | Hours + minutes wheels, 15 min–72 h, 5-minute steps |
 | **Defaults** | 0.00 U/hr for 30 min (a zero temp, one tap from set) | 100% (Set disabled until changed) for 30 min |
-| **Closed loop** | No detection. A static footnote: "Your insulin delivery will not be automatically adjusted until the temporary basal rate finishes or is canceled." | Detects `automaticDosingEnabled` and names the host. A warning card that closed loop pauses, including for a falling glucose. |
+| **Closed loop** | No detection. A static footnote: "Your insulin delivery will not be automatically adjusted until the temporary basal rate finishes or is canceled." | Nothing in the set form. The active view warns before stopping a temp the loop may have set. |
 | **Confirmation to set** | None | "Set a temp rate for 130% of profile basal (currently 1.30 U/hr) for a duration of 1 hour, 30 minutes?" |
 | **Set errors** | Alert "Temporary Basal Failed": "Unable to set a temporary basal rate: …". The sheet stays open. | Error sheet "Could not set temp rate" with the driver's reason. The form keeps its values. |
 | **Success** | The sheet closes; the settings row turns into Cancel + Remaining. | Reloads into "Active temp rate"; the settings row turns into "Stop manual temp basal". |
@@ -920,8 +885,7 @@ and `PumpManager/OmniPumpManager.swift:2846-2997`.
 - **Confirmation.** OmnipodKit sets with one tap from a sheet that opens on a zero temp, and cancels
   with one tap. TandemKit confirms both.
 - **Closed loop** now works the same way in both: the temp is reported manual and the host pauses.
-  TandemKit says so up front, with the host's name and the low-glucose caveat. OmnipodKit says it in a
-  footnote and shows it whatever the loop mode.
+  OmnipodKit says so in a footnote; TandemKit's set form says nothing about it.
 - **The cost of manual reporting.** OmnipodKit's flag is set once and never re-derived. TandemKit
   re-derives `automatic` from history and basal reconciliation, so it needs §8.4 to keep it.
 
@@ -953,19 +917,14 @@ All strings go in `Localizable.xcstrings` with comments. `<App>` is `HostApp`'s 
 | Status highlight | Manual Temp Basal |
 | Screen title (no temp) | Temp basal |
 | Screen title (temp) | Active temp rate |
-| Closed-loop card title | Important |
+| Card title | Important |
 | Control-IQ card | Control-IQ is on, so \<App\> is not adjusting your insulin. Control-IQ may still adjust your insulin while this temp basal runs. |
 | Set refused under Control-IQ (added to the refusal) | Control-IQ is on, and the pump may not take a temp rate while it runs. |
-| Closed-loop card | While this temp basal runs, \<App\> pauses closed loop. It will not adjust your insulin, including lowering it if your glucose drops. Closed loop resumes when the temp basal ends or you stop it. |
 | Tabs | Percent rate · Unit rate |
 | Percent caption | of the profile basal rate (currently %@ U/hr) |
 | Unit caption | %d%% of the %@ U/hr profile basal rate |
-| Rate footer | %d%% to %d%% / 0%% or %d%% to %d%% |
-| Rate footer, 100% | Choose a rate other than 100%. |
-| Unit footer note | The pump runs a percent of its profile, so the rate changes when the profile does. |
 | Segment note | At %1$@ your profile changes to %2$@ U/hr, and this temp rate will run at %3$@ U/hr (%4$d%%). |
 | Duration row | Duration |
-| Duration footer | 15 minutes to 72 hours |
 | Primary button | Set temp rate |
 | Set confirmation | Set a temp rate for %1$d%% of profile basal (currently %2$@ U/hr) for a duration of %3$@? |
 | Set confirmation buttons | Set temp rate · Cancel |
@@ -1010,7 +969,7 @@ Every new test file goes in the `TandemKitTests` target (`scripts/check_xcodepro
   - 20 − → 18 − → 0 at an 18% minimum;
   - 0 + → the minimum;
   - disabled at the ends.
-- A typed value outside the set is kept, turns the footer red and disables Set. It is never clamped.
+- A typed value outside the set is kept, shows in red and disables Set. It is never clamped.
 - The unit tab:
   - a typed rate becomes the nearest whole percent;
   - one step is 10%;
@@ -1021,11 +980,9 @@ Every new test file goes in the `TandemKitTests` target (`scripts/check_xcodepro
   - 0 h 10 min and 72 h 5 min disable Set;
   - the default is 30 min;
   - the formatter gives "1 hour, 30 minutes" and "45 minutes".
-- The closed-loop card:
-  - shows when `automaticDosingEnabled` and hides when not;
-  - gives way to the Control-IQ card while `useControlIQ` is on;
-  - follows a status update;
-  - names Trio, Loop or "This app".
+- The set form shows no closed-loop card, in any loop mode.
+- The Control-IQ card shows while `useControlIQ` is on and hides when not, follows a status update,
+  and names Trio, Loop or "This app".
 - The active view's closed-loop card shows for an automatic or unknown temp in closed loop, and not
   for a manual one.
 - The confirmation text, for each tab, with the temp's rate in brackets.
@@ -1109,7 +1066,7 @@ Rows for [docs/hardware-test-plan.md](hardware-test-plan.md):
 
 | ID | Question | Decided |
 |---|---|---|
-| D1 | Report a temp set from settings as manual (`automatic: false`), so Loop and Trio pause automatic dosing while it runs? | **Yes.** The closed-loop card says the loop pauses, rather than telling the user to go to open loop (§6.2). The driver keeps the flag (§8.4). |
+| D1 | Report a temp set from settings as manual (`automatic: false`), so Loop and Trio pause automatic dosing while it runs? | **Yes.** The set form shows no closed-loop card (§6.2). The driver keeps the flag (§8.4). |
 | D2 | In closed loop, should the active view offer to replace the loop's temp with a manual one? | **No.** Stop it, then set. |
 | — | If the loop sets a temp between that stop and "Set temp rate"? | **Replace it if it is automatic**; fail and reload for any other temp (§6.9). |
 | D3 | Minutes wheel step? | **5 minutes.** |
