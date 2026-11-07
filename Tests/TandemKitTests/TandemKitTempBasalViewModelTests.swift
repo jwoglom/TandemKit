@@ -113,6 +113,8 @@ import XCTest
         let viewModel = makeViewModel(maxBasalLimit: 3.0)
         viewModel.apply(.success(status()))
         viewModel.percent = 160
+        // Ends at 13:55, before the 14:00 segment change.
+        viewModel.minutes = 15
 
         XCTAssertTrue(viewModel.isPercentValid)
         viewModel.hours = 1
@@ -125,6 +127,8 @@ import XCTest
         let viewModel = makeViewModel()
         viewModel.apply(.success(status()))
         viewModel.percent = 130
+        // Ends at 13:55, before the 14:00 segment change.
+        viewModel.minutes = 15
 
         XCTAssertNil(viewModel.profileChange)
         viewModel.hours = 1
