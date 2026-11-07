@@ -58,28 +58,28 @@ These came out of writing the first draft. Each one is listed with what was deci
   confirmation, "Set temp rate" stops it and sets the user's. Any other temp that appeared still fails
   the set and reloads the screen ([§6.9](#69-sending-success-and-failure)).
 
-**F3. The time left on a temp the app didn't set may be unknown.**
-- The pump's `TempRateResponse` gives a start time and a `duration` whose unit has not been
-  confirmed (CLAUDE.md, Therapy command validation).
-- For a temp TandemKit set, the held dose gives the end. For one set on the pump's screen or by
-  another app, the end comes from history's `TempRateActivated` record if backfill has read it.
-  Otherwise the screen says the time left is unknown ([§7.2](#72-where-each-value-comes-from)).
-- A hardware check of the unit would close this (T4 in [§12.3](#123-hardware-test-plan-additions)).
-
-**F4. A 100% temp rate changes nothing.**
+**F3. A 100% temp rate changes nothing.**
 - The driver treats 100% as "no change" and sends nothing in the host path
   (`TandemPumpManager.swift:1202`). Whether the pump accepts an explicit 100% is unconfirmed (CLAUDE.md).
 - The form starts at 100%, as requested, and keeps "Set temp rate" disabled until the value is
   something else ([§6.4](#64-percent-rate)).
 
-**F5. A SwiftUI `Alert` cannot show bold text.**
+**F4. A SwiftUI `Alert` cannot show bold text.**
 - **Decided (D5):** the confirmations are plain `Alert`s, and the bold in the original request is
   dropped.
 
-**F6. Duration up to 72 hours rules out the standard countdown picker.**
+**F5. Duration up to 72 hours rules out the standard countdown picker.**
 - `UIDatePicker` in `.countDownTimer` mode stops at 23 h 59 min.
 - The spec uses two wheels, hours 0–72 and minutes in 5-minute steps (**D3**,
   [§6.6](#66-duration)).
+
+**F6. pumpX2's notes disagree on temp rates under Control-IQ.**
+- `SetTempRateRequest`: "Note that ControlIQ must be off before setting a temp rate."
+- `ControlIQCycleHistoryLog.getProgrammedBasalRate()`: "On Control-IQ v7.6 Mobi firmware this is the
+  profile rate even during a temp rate". So a temp rate and Control-IQ cycles have run together.
+- **Decided (D11):** the screen offers a manual temp rate while Control-IQ runs, and the stop works
+  then too. A refusal from the pump reaches the user as the pump's refusal. T9 records what the pump
+  does ([§12.3](#123-hardware-test-plan-additions)).
 
 ---
 
@@ -94,13 +94,13 @@ These came out of writing the first draft. Each one is listed with what was deci
   - the active temp rate, with a Stop button and a confirmation.
 - A driver entry point that sets a temp rate at a given percent, and a read of the temp rate status.
 - Reporting the temp to the host as manual, and keeping it manual.
+- Manual temp rates while the pump's Control-IQ algorithm runs (**D11**). The host's own temps stay
+  refused then, as today.
 - A "Manual Temp Basal" status highlight in the host while a manual temp runs (**D6**).
 
 **Not in scope**
 
 - Changing how the host's own temp basals are enacted (`enactTempBasal(unitsPerHour:for:)`).
-- Temp rates while Control-IQ runs. The driver refuses every temp then
-  (`TandemPumpManager.swift:1087`), and so does this screen.
 - Restoring a manual temp after a suspend and resume. The pump stops the temp at a suspend, and no
   path restores it. OmnipodKit doesn't restore one either.
 - A warning in the "Delete Pump" dialog about a running temp (**D9**: no).
@@ -115,7 +115,7 @@ These came out of writing the first draft. Each one is listed with what was deci
 | `SetTempRateRequest` (`Sources/TandemCore/Messages/Control/SetTempRate.swift`) | `percent` (UInt16), duration as **milliseconds** (UInt32), built from whole `minutes` | Signed; marked `modifiesInsulinDelivery`, `minApi: .mobiApiV3_5`, `supportedDevices: .mobiOnly` (from pumpX2). Nothing enforces those markings, and this screen doesn't either (D10). |
 | `SetTempRateResponse` | `status`, `tempRateId` | `status` 0 is accepted. A refusal carries a status code and no reason. |
 | `StopTempRateRequest` / `Response` | `status`, `tempRateId` | |
-| `TempRateRequest` → `TempRateResponse` (`CurrentStatus/TempRate.swift`) | `active`, `percentage` (one byte), `startTimeRaw` (pump-clock seconds since 2008), `duration` (**unit unconfirmed**) | The read this screen is built on. |
+| `TempRateRequest` → `TempRateResponse` (`CurrentStatus/TempRate.swift`) | `active`, `percentage` (one byte), `startTimeRaw` (seconds since 2008-01-01 on the pump's clock), `duration` (seconds) | The read this screen is built on. pumpX2's `TempRateResponseTest` decodes captured 15- and 30-minute temps as 900 and 1800, and ControlX2 shows `duration / 60` as minutes. |
 | `CurrentBasalStatusRequest` → `Response` | `basalType`, `profileBasalRate`, `currentBasalRate` | `profileBasalRate` is the pump's own rate in force, the base of any percent. |
 
 Limits and behaviour the UI has to respect:
@@ -140,6 +140,7 @@ Limits and behaviour the UI has to respect:
   - What the pump does when a segment change takes a running temp above the max basal limit or
     below 0.1 U/hr.
   - Whether it accepts a temp while suspended.
+  - Whether it accepts one while Control-IQ runs, and what Control-IQ does while one runs (F6).
 
 ---
 
@@ -206,8 +207,7 @@ screen is manual, so the loop's temps and the pump screen's never switch the row
 
 - This is the same confirmation as the active view's ([§7.4](#74-stop-temp-rate)), as a new
   `SettingsAlertType.stopManualTempBasal`.
-- Confirming runs the same stop as the active view: the existing cancel path,
-  `enactTempBasal(unitsPerHour: 0, for: 0)`.
+- Confirming runs the same stop as the active view, `stopTempBasalFromSettings` ([§8.3](#83-stop)).
 - On success the row goes back to "Set temp basal" with the status update. On failure the existing
   "Could not stop temp rate" sheet shows.
 
@@ -218,7 +218,7 @@ screen is manual, so the loop's temps and the pump screen's never switch the row
 | Normal delivery | Enabled | Enabled |
 | Suspended (`isDeliverySuspended`) | Disabled. The pump stops a temp at a suspend, and whether it accepts one while suspended is unconfirmed. | Not shown: the suspend ended the temp. |
 | Delivery state unknown (`suspendResumeText == nil`) | Disabled, like the "Insulin delivery status unknown" row | Disabled |
-| Control-IQ on (`useControlIQ`) | Enabled. The screen explains that temp rates are off while Control-IQ runs ([§5.2](#52-blocked-states)). A disabled row with no reason would read as a bug. | Disabled. The cancel path refuses under Control-IQ. |
+| Control-IQ on (`useControlIQ`) | Enabled (D11). The form shows a Control-IQ card in place of the closed-loop card ([§6.2](#62-closed-loop-card)). | Enabled. The settings stop is not refused under Control-IQ ([§8.3](#83-stop)). |
 | A pump command in flight (`isUpdatingPumpState`) | Disabled, as the suspend/resume row is | Disabled, with its spinner if the stop is the command |
 
 ### 4.4 Existing tap-to-stop in the header
@@ -287,17 +287,16 @@ on the pump's screen or by another app may not be in the held state yet. The rea
   - The screen treats it as no temp, and shows the set form.
   - A temp set from the form replaces it, as the host path already does.
 - The loop's own temp counts as active. The user stops it there, then sets theirs (D2).
-- A temp that runs out while the screen is open: a timer at the held end, or a minute after it if
-  the end is unknown, reloads the screen.
+- A temp that runs out while the screen is open: a timer at the end the read gives
+  ([§7.2](#72-where-each-value-comes-from)) reloads the screen.
 
 ### 5.2 Blocked states
 
 These replace the form, or the Stop button, with a card that says why. They are checked before the
-read where state already tells (Control-IQ, suspended) and again after it.
+read where state already tells (suspended) and again after it. Control-IQ blocks nothing here (D11).
 
 | Condition | Source | Card text |
 |---|---|---|
-| Control-IQ on | `state.useControlIQ` | "Temp rates are not available while the pump's Control-IQ algorithm is on." |
 | Suspended | read `basalType == .suspend` | "Insulin delivery is suspended. Resume delivery before setting a temp basal." |
 | Bolus running | `bolusIsStillRunning()` | "A bolus is being delivered. You can set a temp basal once it finishes." |
 | Pump clock untrusted (non-zero temps only) | `state.isPumpClockUntrusted` | "The pump's clock is more than a day off this phone's. Sync the pump time before setting a temp basal." |
@@ -306,8 +305,7 @@ read where state already tells (Control-IQ, suspended) and again after it.
 
 - A 0% temp skips the last three rows, as the host path does (CLAUDE.md: "A zero temp basal is always
   allowed"). The form stays usable at 0%, with a note that only 0% is available.
-- Stop is blocked only by Control-IQ and a running bolus, the two guards the cancel path has
-  (`TandemPumpManager.swift:1087-1096`).
+- Stop is blocked only by a running bolus, as the cancel path is (`TandemPumpManager.swift:1093-1096`).
 
 ---
 
@@ -372,7 +370,8 @@ Percent tab, closed loop on, Trio:
 **Shown when** the host reports automatic dosing on: `pumpManagerDelegate?.automaticDosingEnabled`,
 already read into `TandemKitSettingsViewModel.isClosedLoopEnabled`
 (`TandemKitSettingsViewModel.swift:456`). It is re-read on each status update, so the card appears
-and disappears as the user switches loop modes in the host without leaving the screen.
+and disappears as the user switches loop modes in the host without leaving the screen. It is not
+shown while Control-IQ runs, which has a card of its own (below).
 
 - **Loop.** `automaticDosingEnabled` is closed loop on *and* allowed.
 - **Trio.** It is true in every dosing mode but open: closed, low glucose suspend and basal testing
@@ -400,6 +399,16 @@ Factor it out as a shared `WarningCard(title:message:)` rather than copying it.
 
 The originally requested copy ("…You need to move to open loop before setting a temp basal, or it will
 be overridden in the next loop cycle.") would be untrue once the temp is reported as manual (D1).
+
+**Under Control-IQ** (`state.useControlIQ`) the same card shows with this copy instead:
+
+> Control-IQ is on, so \<App\> is not adjusting your insulin. Control-IQ may still adjust your insulin
+> while this temp basal runs.
+
+- The first sentence is what the settings screen's "Control-IQ pump algorithm enabled" banner already
+  says: the driver refuses the host's temps and automatic boluses while Control-IQ runs.
+- The second is as far as anything confirms. Reword it once T9 shows what Control-IQ does during a
+  temp rate.
 
 ### 6.3 Percent rate / Unit rate
 
@@ -452,7 +461,7 @@ pMax = min( 250,
 **The footer** states the bounds, for example "0% or 18% to 250%". It reads "0% to 250%" when the
 minimum is 1%.
 
-**100%** is valid but changes nothing (F4).
+**100%** is valid but changes nothing (F3).
 - At 100% the button stays disabled, with "Choose a rate other than 100%." in the footer.
 - 100% stays the starting value as requested. It is the user's current rate, so nothing is preset.
 
@@ -599,6 +608,11 @@ confirmation, in the minutes after the user stopped its last one.
   - The sheet says "A temp rate started while you were on this screen."
   - The screen reloads into Active temp rate.
 
+**Under Control-IQ** the pump may refuse the set (F6).
+- The sheet gives the pump's refusal, as for any other.
+- `PumpRefusal.tempBasal` adds a sentence when `useControlIQ` is on: "Control-IQ is on, and the pump
+  may not take a temp rate while it runs."
+
 **No answer** (`.communication(noResponse)`)
 - The pump may still have started the temp. The driver reads it back first, as the host path does
   (`adoptUnansweredTempBasal`).
@@ -645,11 +659,14 @@ confirmation, in the minutes after the user stopped its last one.
 | Percent | `TempRateResponse.percentage`. |
 | Rate right now | `CurrentBasalStatusResponse.currentBasalRate`: what the pump runs, already rescaled at any segment change. |
 | Profile rate | `CurrentBasalStatusResponse.profileBasalRate`. |
-| Remaining | (1) The held dose's `estimatedEndDate`, when `state.basalDose` is a temp whose `tempPercent` matches and whose start is within `transitionMatchTolerance` of `hostDate(forPumpDate: TempRateResponse.startTime)`. (2) The `TempRateActivated` record with this start in the session's `historyLogStore` (`durationMilliseconds`), when backfill has read it. (3) `startTime + duration`, once the unit of `TempRateResponse.duration` is confirmed (T4). (4) Otherwise "Unknown", with "The pump did not say when this temp rate ends." under it. |
+| Remaining | `startTimeRaw + duration`, less the pump's time now, all in seconds on the pump's clock. The pump's time now is the phone's `now` plus `state.pumpClockOffset`, from the last `TimeSinceReset` read. Nothing is converted to the phone's clock, so it holds however far off the pump's clock is. |
 
-A temp set on the pump's screen is reported to the host finished at detection
-(`closeReplacement`, `TandemPumpManager+DeliveryTransitions.swift:378-397`), so the held dose is no
-help for it. That is why the screen reads the pump rather than the held state.
+- The read covers every temp the same way, whoever set it. A temp set on the pump's screen is
+  reported to the host finished at detection (`closeReplacement`,
+  `TandemPumpManager+DeliveryTransitions.swift:378-397`), so the held dose could not show it.
+- The pump stamps the start on the clock in force when the temp began. A pump clock set while the
+  temp runs (as at a DST change) moves the stamped start by the step (`lastPumpClockStep`), so the
+  time left is off by that step until the temp ends.
 
 ### 7.3 Closed-loop notice on the active view
 
@@ -663,6 +680,8 @@ or matches with `automatic == true`), a warning card like §6.2 sits above the d
   (`TandemKitSettingsView.swift:656-668`), shown before the confirmation rather than as a second alert
   after it.
 - A manual temp gets no card: the host is paused for it, which is what the set form told the user.
+- Under Control-IQ no card shows. The host sets no temps then, so the temp is the user's or the pump
+  screen's.
 
 ### 7.4 Stop temp rate
 
@@ -671,8 +690,9 @@ confirmation from [§4.2](#42-stop-manual-temp-basal): "Stop the active temp rat
 "Stop temp rate" and "Cancel".
 
 **Confirming**
-- Calls the existing cancel path, `enactTempBasal(unitsPerHour: 0, for: 0)`, as
-  `TandemKitSettingsViewModel.stopTempRate()` does today.
+- Calls `stopTempBasalFromSettings` ([§8.3](#83-stop)), the cancel path that
+  `TandemKitSettingsViewModel.stopTempRate()` reaches today through
+  `enactTempBasal(unitsPerHour: 0, for: 0)`, without its Control-IQ refusal.
 - That path stops the temp, starts the scheduled basal dose, reports both to the host and moves the
   boundary.
 
@@ -704,7 +724,7 @@ public struct TempRateStatus {
     public let isActive: Bool
     public let percent: Int?                 // nil when inactive
     public let startDate: Date?              // phone clock
-    public let endDate: Date?                // nil when unknown (§7.2)
+    public let endDate: Date?                // phone clock, from the pump's (§7.2); nil when inactive
     public let profileBasalRate: Double
     public let currentBasalRate: Double
     public let isSuspended: Bool
@@ -742,22 +762,34 @@ It differs from `enactTempBasal(unitsPerHour:for:)` where the user, not the host
 | Within `segmentChangeWindow` of a change | Worked out against the larger rate, reported at the request | Sent as given; reported at `percent × profileBasalRate`, and cut at the change by `splitAtSegmentChanges` as any temp is |
 | 100% | No command; scheduled basal restarted | Refused (`invalidSetting`); the UI never sends it |
 | A temp already running | Stopped, then replaced (`restoreStoppedTempBasal` on refusal) | An automatic temp the driver holds, or the clock-skew temp: stopped, then replaced, with `restoreStoppedTempBasal` on refusal. **Anything else: refused** (`tempBasalAlreadyRunning`), nothing stopped. |
+| Control-IQ on | Refused (`controlIQModeActive`) | **Allowed** (D11) |
+| Read-back after the set | `tempBasalReadbackMatches`: a temp within one 0.01 U/hr step of the percent | The same without Control-IQ. Under it, `TempRateResponse` active at the percent sent, since Control-IQ may set `currentBasalRate`. |
 | Reported `automatic` | `true` | `false` |
 
 **Shared with the host path, factored out rather than copied**
-- Control-IQ refused.
 - A bolus running refused, before and after connecting.
 - Duration outside 15 min–72 h refused; whole minutes only.
 - Pump clock untrusted, profile not synced, profile update failed and a 0 U/hr profile refused for a
   non-zero percent.
-- The `SetTempRate` read-back check (`tempBasalReadbackMatches`, `rejectMismatchedTempBasal`).
+- The `SetTempRate` read-back check without Control-IQ (`tempBasalReadbackMatches`,
+  `rejectMismatchedTempBasal`).
 - `adoptUnansweredTempBasal` on a lost answer.
+- `recordTempBasal` under Control-IQ too. The host counts the temp's rate. With
+  `basalHistoryReporting`, basal reconciliation corrects any 5-minute cycle Control-IQ ran at another
+  rate, as it does for a held temp the pump runs at another rate.
 - `recordTempBasal`, with an `automatic` parameter added in place of the hard-coded `true`.
 
 ### 8.3 Stop
 
-No new driver call. The settings row and the active view both use
-`enactTempBasal(unitsPerHour: 0, for: 0)`.
+```swift
+public func stopTempBasalFromSettings(completion: @escaping (PumpManagerError?) -> Void)
+```
+
+- The cancel half of `enactTempBasal` (stop, start the scheduled basal dose, report both), factored
+  out and called by both. The settings row and the active view use this one.
+- It has the cancel's guards (a running bolus) but not the Control-IQ one, so a manual temp set under
+  Control-IQ can always be stopped from where it was set.
+- `enactTempBasal(unitsPerHour: 0, for: 0)` from the host stays refused under Control-IQ.
 
 ### 8.4 Carrying `automatic: false`
 
@@ -787,7 +819,8 @@ turn automatic partway through, and its pause ends early.
 
 Add a "Manual Temp Basal" highlight to `buildPumpStatusHighlight()`
 (`Sources/TandemKitUI/TandemPumpManager+UI.swift:110`) (**D6**).
-- It comes last, after "Control-IQ On", so every other highlight wins.
+- It comes last, after "Control-IQ On", so every other highlight wins. A manual temp under Control-IQ
+  therefore shows "Control-IQ On".
 - `imageName: "exclamationmark.circle.fill"`, `state: .warning`, as "Control-IQ On" has.
 - The condition is the one that switches the settings row ([§4.2](#42-stop-manual-temp-basal)): the
   held dose is a temp with `automatic == false` and its end is still ahead.
@@ -807,8 +840,14 @@ These already happen to any temp, and should be covered in the tests.
   so it will not fight a manual temp. When the manual temp ends, compensation resumes on the next read.
 - **Deleting the pump in the app** finalizes the held temp (`prepareForDeactivation`), but the pump
   keeps running it to its end: up to 72 hours. The delete dialog is unchanged (D9).
-- **Control-IQ turned on** while a manual temp runs: whatever the pump does, the driver's held temp
-  is closed by the next reading. Unconfirmed on firmware.
+- **Control-IQ turned on or off** while a manual temp runs: whether the pump keeps the temp is
+  unconfirmed (T9). Whatever it does, the next reading closes the driver's held temp if it ended.
+- **`CurrentBasalStatus` under Control-IQ.** `basalType` matches `basalModifiedBitmask` exactly
+  (`0x01` suspend, `0x02` temp, anything else basal). A temp with a Control-IQ bit also set would read
+  as `.basal`, so `observeDeliveryState` would take the temp as ended.
+  - The screen decides "active" from `TempRateResponse`, so it is not affected.
+  - The driver's delivery tracking may need to test the temp bit rather than the whole value. T9
+    records the bitmask.
 
 ---
 
@@ -842,7 +881,7 @@ and `PumpManager/OmniPumpManager.swift:2846-2997`.
 | **Entry point** | "Set Temporary Basal Rate", in its own untitled section after Actions. Opens a modal sheet. | "Set temp basal" › in Actions, between "Pump notifications" and suspend/resume. Pushes a screen. |
 | **Row while a manual temp runs** | Becomes "Cancel Manual Basal" (warning icon) plus a separate "Remaining 1 hour, 29 minutes" row. | Becomes "Stop manual temp basal", subtext "130% (1.30U/hr) with 1h 12m remaining". |
 | **Row while another temp runs** | The normal "Set" row; the sheet can replace it. | The normal "Set temp basal" row; the screen opens on "Active temp rate" for it. |
-| **Row disabled when** | No pod, activating, deactivating or faulted. Not while suspended, bolusing or in closed loop. | Suspended, delivery state unknown, or a command in flight. Control-IQ and bolus are explained on the screen. |
+| **Row disabled when** | No pod, activating, deactivating or faulted. Not while suspended, bolusing or in closed loop. | Suspended, delivery state unknown, or a command in flight. A running bolus is explained on the screen. |
 | **Title** | "Temporary Basal" (sheet) | "Temp basal" / "Active temp rate" |
 | **Rate input** | Absolute U/hr only: one wheel, 0–max basal in 0.05 U/hr steps, 0.00 included. | Percent (default) or U/hr view of a percent. Steppers of 10%, typed entry. 0 or pMin–pMax whole %. |
 | **Rate ceiling** | The host-synced max basal rate (`state.maxBasalRateUnitsPerHour`). Above it, the driver only logs. | min(250%, pump's max basal limit ÷ profile) over the duration's segments. Above it, the driver refuses. |
@@ -857,7 +896,7 @@ and `PumpManager/OmniPumpManager.swift:2846-2997`.
 | **Stop** | "Cancel Manual Basal": immediate, **no confirmation**. Error alert "Failed to Cancel Manual Basal". | "Stop manual temp basal" on the row, or the red "Stop temp rate" on the active view, both with "Stop the active temp rate of 130%?" |
 | **Manual vs automatic** | `enactTempBasal(…, automatic: false)`. Persisted in `UnfinalizedDose` and `PendingCommand`. | `enactManualTempBasal`, reported `automatic: false`. Persisted in `UnfinalizedDose`, and kept manual through history and reconciliation (§8.4). |
 | **A temp in the way** | Cancels any running temp first. | Replaces an automatic one; refuses any other. |
-| **Other driver guards** | Refuses when suspended. A bolus running is only logged. | Refuses Control-IQ, a running bolus, an untrusted clock and an unsynced profile, as the host path does. |
+| **Other driver guards** | Refuses when suspended. A bolus running is only logged. | Refuses a running bolus, an untrusted clock and an unsynced profile, as the host path does. Allows Control-IQ, which the host path refuses (D11). |
 | **Status highlight** | "Manual Basal", `exclamationmark.circle.fill`, warning, lowest priority. | "Manual Temp Basal", `exclamationmark.circle.fill`, warning, lowest priority. |
 | **Suspend / resume** | A suspend cancels it; a resume doesn't restore it. | The same (pump behaviour). |
 | **Relaunch** | Persisted; the highlight and the Cancel row come back. | Persisted (held dose); the highlight and the Stop row come back. The screen reads the pump anyway. |
@@ -911,6 +950,8 @@ All strings go in `Localizable.xcstrings` with comments. `<App>` is `HostApp`'s 
 | Screen title (no temp) | Temp basal |
 | Screen title (temp) | Active temp rate |
 | Closed-loop card title | Important |
+| Control-IQ card | Control-IQ is on, so \<App\> is not adjusting your insulin. Control-IQ may still adjust your insulin while this temp basal runs. |
+| Set refused under Control-IQ (added to the refusal) | Control-IQ is on, and the pump may not take a temp rate while it runs. |
 | Closed-loop card | While this temp basal runs, \<App\> pauses closed loop. It will not adjust your insulin, including lowering it if your glucose drops. Closed loop resumes when the temp basal ends or you stop it. |
 | Tabs | Percent rate · Unit rate |
 | Percent caption | of the profile basal rate (currently %@ U/hr) |
@@ -927,13 +968,11 @@ All strings go in `Localizable.xcstrings` with comments. `<App>` is `HostApp`'s 
 | Set failure title | Could not set temp rate |
 | Temp started meanwhile | A temp rate started while you were on this screen. |
 | Active: rate line | %@ U/hr right now |
-| Active: rows | Remaining · Unknown |
-| Active: unknown end | The pump did not say when this temp rate ends. |
+| Active: row | Remaining |
 | Active: closed-loop card | \<App\> is currently managing basal delivery in closed loop and may have set this temp rate. If you stop it, \<App\> can set a new one at its next loop cycle. |
 | Stop button | Stop temp rate |
 | Stop confirmation | Stop the active temp rate of %d%%? |
 | Stop confirmation buttons | Stop temp rate (destructive) · Cancel |
-| Blocked: Control-IQ | Temp rates are not available while the pump's Control-IQ algorithm is on. |
 | Blocked: suspended | Insulin delivery is suspended. Resume delivery before setting a temp basal. |
 | Blocked: bolus | A bolus is being delivered. You can set a temp basal once it finishes. |
 | Blocked: clock | The pump's clock is more than a day off this phone's. Sync the pump time before setting a temp basal. |
@@ -980,16 +1019,15 @@ Every new test file goes in the `TandemKitTests` target (`scripts/check_xcodepro
   - the formatter gives "1 hour, 30 minutes" and "45 minutes".
 - The closed-loop card:
   - shows when `automaticDosingEnabled` and hides when not;
+  - gives way to the Control-IQ card while `useControlIQ` is on;
   - follows a status update;
   - names Trio, Loop or "This app".
 - The active view's closed-loop card shows for an automatic or unknown temp in closed loop, and not
   for a manual one.
 - The confirmation text, for each tab, with the temp's rate in brackets.
 - A failure keeps the form's values. A success reloads.
-- Remaining:
-  - from a matching held dose;
-  - from `TempRateActivated`;
-  - "Unknown" with neither.
+- Remaining is `startTimeRaw + duration` less the pump's time now, and is the same whatever the
+  pump clock's offset from the phone.
 
 **`TandemKitSettingsViewModelTests`**
 - The row is "Set temp basal" with no temp, with an automatic temp and with a pump-screen temp.
@@ -1006,7 +1044,6 @@ Every new test file goes in the `TandemKitTests` target (`scripts/check_xcodepro
   - under 0.1 U/hr;
   - 100%;
   - outside 15 min–72 h;
-  - under Control-IQ;
   - while a bolus runs;
   - an untrusted clock (non-zero only);
   - an unsynced profile (non-zero only).
@@ -1017,6 +1054,12 @@ Every new test file goes in the `TandemKitTests` target (`scripts/check_xcodepro
   - a manual temp, or one the driver doesn't hold, fails `tempBasalAlreadyRunning` with no
     `StopTempRate` sent.
 - The read-back mismatch, and a lost answer adopted, as `UnansweredTempBasalTests` does for the host path.
+- Under Control-IQ:
+  - the set goes out, and the read-back takes `TempRateResponse` active at the percent, whatever
+    `currentBasalRate` says;
+  - a refusal carries the Control-IQ sentence;
+  - `stopTempBasalFromSettings` stops the temp;
+  - the host's `enactTempBasal`, cancel included, is still refused.
 - The reported dose: `percent × profileBasalRate`, `tempPercent`, `eventRaw` from `tempRateId`, and
   `automatic: false`.
 - `automatic: false` survives:
@@ -1050,10 +1093,11 @@ Rows for [docs/hardware-test-plan.md](hardware-test-plan.md):
 | ID | Steps | Expected / record |
 |---|---|---|
 | T3 | In open loop, set 130% for 45 minutes from TandemKit's settings. Read the pump's screen. Stop it from the settings row after 10 minutes. | The pump shows a 130% temp with about 45 min left. The row and the active view show 130%, the rate, and a time left that matches the pump's. After the stop, the pump and the host return to the profile rate. |
-| T4 | Set a temp rate on the pump's own screen for 1 h 15 min, then open the screen. | It shows "Active temp rate" with the pump's percent. **Record `TempRateResponse.duration`** for a known duration, to fix its unit (F3). |
+| T4 | Set a temp rate on the pump's own screen for 1 h 15 min, then open the screen. | It shows "Active temp rate" with the pump's percent, and the time left the pump's screen shows. |
 | T5 | With a profile segment change 20 minutes away, set 130% for 1 hour. | Record the pump's rate before and after the change, and that the host's held dose is cut there and stays manual. |
 | T6 | With the max basal limit at 2.0 U/hr and a segment change from 0.8 to 1.0 U/hr ahead, set 250% across it. | The screen refuses 250% (pMax = 200%). Separately, set 240% just before the change on the pump's screen, and record what the pump does at the change (2.4 U/hr > limit). |
 | T7 | In Trio's and in Loop's closed loop, stop the loop's temp, then set a temp from settings. Let it run past a few loop cycles, then stop it. Repeat, letting it run to its end. | The host stops dosing for its length (Trio: "Manual Temp Basal Active"; Loop: the closed-loop switch explains why), the "Manual Temp Basal" highlight shows, and the host resumes at the stop and at the end. Record how Trio's alert and TandemKit's highlight read together. |
+| T9 | Turn Control-IQ on. Set 130% for 30 minutes from TandemKit's settings, watch a few 5-minute cycles, then stop it from the settings row. Repeat with the temp set on the pump's screen, and turn Control-IQ off and on while one runs. | **Record:** whether the pump accepts `SetTempRate` (pumpX2 says Control-IQ must be off) and with what status if not; `basalModifiedBitmask` and `currentBasalRate` while the temp runs; whether Control-IQ keeps adjusting delivery, and around which rate; whether the temp survives Control-IQ being turned off or on; that the stop works. Reword the Control-IQ card to match. |
 
 ---
 
@@ -1072,3 +1116,4 @@ Rows for [docs/hardware-test-plan.md](hardware-test-plan.md):
 | D8 | "(currently X.XX U/hr)": the temp's rate or the profile's? | **The temp's rate.** |
 | D9 | Warn on "Delete Pump" while a temp runs? | **No.** |
 | D10 | Hide the screen on pumps pumpX2 doesn't mark as supported? | **No**, not gated. |
+| D11 | Allow a manual temp rate while Control-IQ runs? | **Yes.** The set and the settings stop skip the Control-IQ refusal; the host's temps stay refused. The form shows a Control-IQ card, and T9 settles what the pump does (F6). |

@@ -38,7 +38,9 @@ public class TempRateResponse: Message {
     public var cargo: Data
     public var active: Bool
     public var percentage: Int
+    /// Seconds since 2008-01-01 on the pump's clock.
     public var startTimeRaw: UInt32
+    /// Seconds.
     public var duration: UInt32
 
     public required init(cargo: Data) {

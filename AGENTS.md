@@ -468,10 +468,10 @@ host queue, so its state stays behind its lock.
   change is none), a start stamped while the held temp ran is also read on the clock before it, and
   one still ahead of the phone is taken for the held temp unless its percent differs, then dated at
   detection. A `timeChange` batch reads the clock before the basal status
-  (`QualifyingEventFetch.timeSinceReset`). The new one's duration only history gives
-  (`TempRateResponse.duration`'s unit is unknown), so it is reported finished: at the last reading
-  that saw it when above the schedule, at detection when below. A temp the driver never sees reaches
-  the host after the fact, through basal reconciliation.
+  (`QualifyingEventFetch.timeSinceReset`). `PendingTransition.ReplacingTemp` keeps the start and
+  percent `TempRateResponse` gives but not its duration (seconds), so the new one is reported
+  finished at detection: at the last reading that saw it when above the schedule, at detection when
+  below. A temp the driver never sees reaches the host after the fact, through basal reconciliation.
 - `write` gives nil for a lost answer and a refusal alike (#340), so after `SuspendPumping` and
   `ResumePumping` the driver reads `CurrentBasalStatus` back unless the answer confirmed it. The
   command succeeds whenever the pump reads suspended, so a cartridge wizard can go on, or delivering,
