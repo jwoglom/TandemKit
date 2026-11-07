@@ -14,7 +14,14 @@ import XCTest
         XCTAssertFalse(flags.isOverridden(.controlIQSupport))
     }
 
-    func testEveryFlagButControlIQSupportIsOnUntilSomeoneTurnsItOff() {
+    func testManualTempBasalSupportIsOffUntilSomeoneTurnsItOn() {
+        let flags = TandemFeatureFlags.default
+
+        XCTAssertFalse(flags.manualTempBasalSupport)
+        XCTAssertFalse(flags.isOverridden(.manualTempBasalSupport))
+    }
+
+    func testTheHistoryAndQuickBolusFlagsAreOnUntilSomeoneTurnsThemOff() {
         let flags = TandemFeatureFlags.default
 
         XCTAssertTrue(flags.quickBolusButtonSupport)

@@ -26,6 +26,7 @@ enum TandemScreen {
     case reconciliation
     case featureFlags
     case troubleshootConnection
+    case tempBasal
 
     func next() -> TandemScreen? {
         switch self {
@@ -229,6 +230,7 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
                 openControlIQSettings: { [weak self] in self?.navigateTo(.controlIQSettings) },
                 openQuickBolus: { [weak self] in self?.navigateTo(.quickBolus) },
                 openAlertSettings: { [weak self] in self?.navigateTo(.alertSettings) },
+                openTempBasal: { [weak self] in self?.navigateTo(.tempBasal) },
                 openDebug: { [weak self] in self?.navigateTo(.debug) },
                 openTroubleshootConnection: { [weak self] in self?.navigateTo(.troubleshootConnection) },
                 allowDebugFeatures: allowDebugFeatures
@@ -374,6 +376,18 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
                 rootView: TandemKitTroubleshootConnectionView(viewModel: viewModel),
                 title: String(localized: "Troubleshoot connection", comment: "Title for troubleshoot connection screen")
             )
+
+        case .tempBasal:
+            let viewModel = TandemKitTempBasalViewModel(pumpManager: pumpManager)
+            let controller = hostingController(
+                rootView: TandemKitTempBasalView(viewModel: viewModel),
+                title: viewModel.title,
+                largeTitleDisplayMode: .always
+            )
+            viewModel.onTitleChange = { [weak controller] title in
+                controller?.navigationItem.title = title
+            }
+            return controller
         }
     }
 
