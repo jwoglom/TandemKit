@@ -353,8 +353,9 @@ import XCTest
         XCTAssertEqual(highlight.localizedMessage, "Manual Temp Basal")
         XCTAssertEqual(highlight.state, .warning)
 
+        // Half an hour with no sync raises the connection highlight, which outranks any other.
         clock.advance(by: .minutes(31))
-        XCTAssertNil(manager.pumpStatusHighlight)
+        XCTAssertNotEqual(manager.pumpStatusHighlight?.localizedMessage, "Manual Temp Basal")
     }
 
     func testTheLoopsTempIsNoStatusHighlight() {
