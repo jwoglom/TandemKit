@@ -173,7 +173,7 @@ suspend/resume row. The new row goes between them. It has two states.
 
 - Built with the existing `navigationLink(label:value:action:)` helper, so it gets the same chevron
   (`chevron.right`, 35% opacity) as "Pump notifications".
-- Tapping it calls a new `openTempBasal` closure on `TandemKitSettingsViewModel`. That closure pushes
+- Tapping it calls a new openTempBasal closure on `TandemKitSettingsViewModel`. That closure pushes
   a new `TandemScreen.tempBasal` from `TandemUICoordinator`, the same way `.notifications` is pushed.
 - It shows whenever no manual temp runs. While the loop's own temp runs, the screen opens on the set
   form; while a temp set on the pump's screen or by another app runs, on "Active temp rate".
@@ -212,8 +212,8 @@ screen is manual, so the loop's temps and the pump screen's never switch the row
 ```
 
 - This is the same confirmation as the active view's ([§7.3](#73-stop-temp-rate)), as a new
-  `SettingsAlertType.stopManualTempBasal`.
-- Confirming runs the same stop as the active view, `stopTempBasalFromSettings` ([§8.3](#83-stop)).
+  a new `SettingsAlertType` case, stopManualTempBasal.
+- Confirming runs the same stop as the active view, stopTempBasalFromSettings ([§8.3](#83-stop)).
 - On success the row goes back to "Set temp basal" with the status update. On failure the existing
   "Could not stop temp rate" sheet shows.
 
@@ -381,7 +381,7 @@ The set form shows no warning or notice card, in any loop mode or under Control-
 - Both tabs edit **one value**, the whole percent that will be sent. The unit view shows that percent
   as a rate and turns what is typed into a percent ([§6.5](#65-unit-rate)). Switching tabs never
   changes the value.
-- The chosen tab may be remembered per user (`@AppStorage`); the value itself is not.
+- The chosen tab may be remembered per user; the value itself is not.
 
 ### 6.4 Percent rate
 
@@ -451,7 +451,7 @@ pMax = min( 250,
     example, 1.05 at a 0.85 U/hr profile becomes 124%, shown as 1.05 U/hr.
   - If the nearest percent falls outside the valid set, the value turns red and the field keeps what
     was typed.
-- **The highest rate** is `pMax × profileBasalRate`: 250% of the profile, or less if the pump's max
+- **The highest rate** is the highest valid percent of `profileBasalRate`: 250% of the profile, or less if the pump's max
   basal limit is lower.
 - **Segment changes.** A temp crossing one runs at a different rate after it, which
   [§6.7](#67-profile-changes-during-the-temp) covers.
@@ -541,7 +541,7 @@ Tapping it shows a confirmation, a plain SwiftUI `Alert` (**D5**).
 
 **Sending**
 - Every control is disabled, and the button shows an `ActivityIndicator`.
-- The driver call is `enactManualTempBasal(percent:duration:)` ([§8.2](#82-set-a-temp-rate-at-a-percent)).
+- The driver call is enactManualTempBasal(percent:duration:) ([§8.2](#82-set-a-temp-rate-at-a-percent)).
 
 **Success**
 - The screen goes back to Loading and reads the pump again.
@@ -559,10 +559,10 @@ Tapping it shows a confirmation, a plain SwiftUI `Alert` (**D5**).
 **A temp running when Set is confirmed.** The loop's temp may have been there when the screen
 loaded, or the loop may have set one since.
 - **The loop's own temp** ([§5.1](#51-deciding-active)) or the clock-skew temp:
-  `enactManualTempBasal` stops it and sets the user's temp, with no extra warning. If the pump then
+  enactManualTempBasal stops it and sets the user's temp, with no extra warning. If the pump then
   refuses the set, the stopped temp is put back (`restoreStoppedTempBasal`), as the host path does.
 - **Anything else** (a manual temp, a temp set on the pump's screen or by another app, or one the
-  driver doesn't hold): `enactManualTempBasal` fails with a new `tempBasalAlreadyRunning` and stops
+  driver doesn't hold): enactManualTempBasal fails with a new tempBasalAlreadyRunning and stops
   nothing.
   - The sheet says "A temp rate started while you were on this screen."
   - The screen reloads into Active temp rate.
@@ -638,7 +638,7 @@ confirmation from [§4.2](#42-stop-manual-temp-basal): "Stop the active temp rat
 "Stop temp rate" and "Cancel".
 
 **Confirming**
-- Calls `stopTempBasalFromSettings` ([§8.3](#83-stop)), the cancel path that
+- Calls stopTempBasalFromSettings ([§8.3](#83-stop)), the cancel path that
   `TandemKitSettingsViewModel.stopTempRate()` reaches today through
   `enactTempBasal(unitsPerHour: 0, for: 0)`, without its Control-IQ refusal.
 - That path stops the temp, starts the scheduled basal dose, reports both to the host and moves the
@@ -690,8 +690,8 @@ public func readTempRateStatus(completion: @escaping (Result<TempRateStatus, Pum
   machinery, or the screen would show a temp, or its absence, that the host has not been told of.
 - No answer to either read is `.communication(noResponse)`.
 - **The loop's temp.** `recordTempBasal` called from `enactTempBasal` records the held temp as the
-  host's (a persisted `hostTempRateId`, or a flag on the held dose that every re-statement of it
-  carries, as `automatic` is). `isLoopTemp` is that, matched to the read as in §5.1. A temp adopted from
+  host's, in a persisted flag on the held dose that every re-statement of it carries, as `automatic`
+  is. isLoopTemp is that, matched to the read as in §5.1. A temp adopted from
   history, set from settings or restored keeps whatever it had: only the host path sets it.
 
 ### 8.2 Set a temp rate at a percent
@@ -706,14 +706,14 @@ public func enactManualTempBasal(
 
 It differs from `enactTempBasal(unitsPerHour:for:)` where the user, not the host, chose the number:
 
-| | `enactTempBasal` (host) | `enactManualTempBasal` (settings) |
+| | `enactTempBasal` (host) | enactManualTempBasal (settings) |
 |---|---|---|
 | Input | U/hr, turned into a percent (`tempBasalPercentAndRate`) | Percent, sent as given |
-| Over the pump's max basal limit | Clamped to the limit (`clampedToPumpMaximumBasalRate`) | **Refused** (`manualTempBasalOutOfRange`). The user confirmed a number, so no other number goes out. |
+| Over the pump's max basal limit | Clamped to the limit (`clampedToPumpMaximumBasalRate`) | **Refused** (manualTempBasalOutOfRange). The user confirmed a number, so no other number goes out. |
 | Under the pump's 0.1 U/hr minimum | Raised to the lowest accepted percent | **Refused**, as above |
 | Within `segmentChangeWindow` of a change | Worked out against the larger rate, reported at the request | Sent as given; reported at `percent × profileBasalRate`, and cut at the change by `splitAtSegmentChanges` as any temp is |
-| 100% | No command; scheduled basal restarted | Refused (`invalidSetting`); the UI never sends it |
-| A temp already running | Stopped, then replaced (`restoreStoppedTempBasal` on refusal) | The loop's own temp (§5.1) or the clock-skew temp: stopped, then replaced, with `restoreStoppedTempBasal` on refusal. **Anything else: refused** (`tempBasalAlreadyRunning`), nothing stopped. |
+| 100% | No command; scheduled basal restarted | Refused; the UI never sends it |
+| A temp already running | Stopped, then replaced (`restoreStoppedTempBasal` on refusal) | The loop's own temp (§5.1) or the clock-skew temp: stopped, then replaced, with `restoreStoppedTempBasal` on refusal. **Anything else: refused** (tempBasalAlreadyRunning), nothing stopped. |
 | Control-IQ on | Refused (`controlIQModeActive`) | **Allowed** (D11) |
 | Read-back after the set | `tempBasalReadbackMatches`: a temp within one 0.01 U/hr step of the percent | The same without Control-IQ. Under it, `TempRateResponse` active at the percent sent, since Control-IQ may set `currentBasalRate`. |
 | Reported `automatic` | `true` | `false` |
@@ -756,8 +756,8 @@ turn automatic partway through, and its pause ends early.
     `restoreStoppedTempBasal` and `adoptUnansweredTempBasal` pass the stopped or requested temp's flag.
   - **History adoption** (`TandemPumpManager+DeliveryTransitions.swift:597`): it marks a temp
     `automatic` whenever a `SetTempRateResponse` record names its `tempRateId`, which a temp set from
-    settings also has. Keep a small persisted set of manual `tempRateId`s (or a `manualTempRateId` on
-    state), and treat those as manual.
+    settings also has. Keep a small persisted set of manual `tempRateId`s on state, and treat those
+    as manual.
   - **Basal reconciliation** (`TandemPumpManager+BasalReconciliation.swift:483`): `setByTheApp` counts
     as automatic, and needs the same exception.
   - **Setup history load:** a temp set from settings before a re-pair would come back automatic. That
@@ -823,8 +823,8 @@ top of TandemKit's status highlight; check that the two don't read as two differ
 ## 10. Comparison with OmnipodKit
 
 Reference: `loopandlearn/OmnipodKit@0c6d68b`, mainly `PumpManagerUI/Views/ManualTempBasalEntryView.swift`,
-`PumpManagerUI/Views/OmniSettingsView.swift:412-440`, `PumpManagerUI/ViewModels/OmniSettingsViewModel.swift`
-and `PumpManager/OmniPumpManager.swift:2846-2997`.
+`PumpManagerUI/Views/OmniSettingsView.swift` (lines 412–440), `PumpManagerUI/ViewModels/OmniSettingsViewModel.swift`
+and `PumpManager/OmniPumpManager.swift` (lines 2846–2997).
 
 ### 10.1 Side by side
 
@@ -846,7 +846,7 @@ and `PumpManager/OmniPumpManager.swift:2846-2997`.
 | **Success** | The sheet closes; the settings row turns into Cancel + Remaining. | Reloads into "Active temp rate"; the settings row turns into "Stop manual temp basal". |
 | **Viewing a running temp** | Settings rows only: no rate, no end time. The header shows the U/hr. "Remaining" does not tick. | The settings row (%, U/hr, time left, ticking) for a manual temp, and a dedicated view (%, U/hr now, profile, time left) for any temp but the loop's. |
 | **Stop** | "Cancel Manual Basal": immediate, **no confirmation**. Error alert "Failed to Cancel Manual Basal". | "Stop manual temp basal" on the row, or the red "Stop temp rate" on the active view, both with "Stop the active temp rate of 130%?" |
-| **Manual vs automatic** | `enactTempBasal(…, automatic: false)`. Persisted in `UnfinalizedDose` and `PendingCommand`. | `enactManualTempBasal`, reported `automatic: false`. Persisted in `UnfinalizedDose`, and kept manual through history and reconciliation (§8.4). |
+| **Manual vs automatic** | `enactTempBasal(…, automatic: false)`. Persisted in `UnfinalizedDose` and `PendingCommand`. | enactManualTempBasal, reported `automatic: false`. Persisted in `UnfinalizedDose`, and kept manual through history and reconciliation (§8.4). |
 | **A temp in the way** | Cancels any running temp first. | Replaces the loop's own, with no warning; refuses any other. No way to stop the loop's temp on its own. |
 | **Other driver guards** | Refuses when suspended. A bolus running is only logged. | Refuses a running bolus, an untrusted clock and an unsynced profile, as the host path does. Allows Control-IQ, which the host path refuses (D11). |
 | **Status highlight** | "Manual Basal", `exclamationmark.circle.fill`, warning, lowest priority. | "Manual Temp Basal", `exclamationmark.circle.fill`, warning, lowest priority. |
@@ -932,7 +932,7 @@ Every new test file goes in the `TandemKitTests` target (`scripts/check_xcodepro
 
 ### 12.1 Unit tests
 
-**`TandemKitTempBasalViewModelTests`**
+**TandemKitTempBasalViewModelTests**
 - The screen state follows the read:
   - inactive → form;
   - active → active view, except the loop's own temp → form;
@@ -975,7 +975,7 @@ Every new test file goes in the `TandemKitTests` target (`scripts/check_xcodepro
 - Tapping the stop row asks for confirmation, and only a confirmed stop sends the cancel.
 - The header tap opens the screen.
 
-**`ManualTempBasalTests`** (driver)
+**ManualTempBasalTests** (driver)
 - The percent is sent as given, with the duration in whole minutes as milliseconds.
 - Refused, with nothing sent:
   - over the max basal limit;
@@ -989,14 +989,14 @@ Every new test file goes in the `TandemKitTests` target (`scripts/check_xcodepro
   - the loop's own temp is stopped and replaced, whether it ran when the screen loaded or started since;
   - a refused set after that stop puts the loop's temp back;
   - the clock-skew temp is replaced;
-  - a manual temp, or one the driver doesn't hold, fails `tempBasalAlreadyRunning` with no
+  - a manual temp, or one the driver doesn't hold, fails tempBasalAlreadyRunning with no
     `StopTempRate` sent.
 - The read-back mismatch, and a lost answer adopted, as `UnansweredTempBasalTests` does for the host path.
 - Under Control-IQ:
   - the set goes out, and the read-back takes `TempRateResponse` active at the percent, whatever
     `currentBasalRate` says;
   - a refusal carries the Control-IQ sentence;
-  - `stopTempBasalFromSettings` stops the temp;
+  - stopTempBasalFromSettings stops the temp;
   - the host's `enactTempBasal`, cancel included, is still refused.
 - The reported dose: `percent × profileBasalRate`, `tempPercent`, `eventRaw` from `tempRateId`, and
   `automatic: false`.
@@ -1009,12 +1009,12 @@ Every new test file goes in the `TandemKitTests` target (`scripts/check_xcodepro
   - a relaunch (`rawValue` round trip).
 - The status highlight is "Manual Temp Basal" for a manual temp, is outranked by every other
   highlight, and clears once the temp ends.
-- `readTempRateStatus` passes its basal reading to `observeDeliveryState`. A temp found running that
+- readTempRateStatus passes its basal reading to `observeDeliveryState`. A temp found running that
   the held state lacks is handled as the sync path handles it.
 
 ### 12.2 Integration (faketandem)
 
-- `ManualTempBasalIntegrationTests`:
+- A manual temp basal integration test:
   - set 130% for 45 min from the settings path, read back active, stop it, read back inactive;
   - the host receives a manual temp and the stop;
   - with the host's own temp running, open the screen (the set form) and set from settings: the
