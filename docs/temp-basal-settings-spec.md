@@ -307,20 +307,14 @@ on the pump's screen or by another app may not be in the held state yet. The rea
 
 ### 5.2 Blocked states
 
-These replace the form, or the Stop button, with a card that says why. They are checked before the
-read where state already tells (suspended) and again after it. Control-IQ blocks nothing here (D11).
-
-| Condition | Source | Card text |
-|---|---|---|
-| Suspended | read `basalType == .suspend` | "Insulin delivery is suspended. Resume delivery before setting a temp basal." |
-| Bolus running | `bolusIsStillRunning()` | "A bolus is being delivered. You can set a temp basal once it finishes." |
-| Pump clock untrusted (non-zero temps only) | `state.isPumpClockUntrusted` | "The pump's clock is more than a day off this phone's. Sync the pump time before setting a temp basal." |
-| Profile never synced, or its update failed (non-zero temps only) | `hasSyncedBasalRateSchedule`, `basalProfileUpdateFailed` | The existing `basalScheduleNotSynced` / `failedUpdatePumpProfile` descriptions. |
-| Profile rate 0 U/hr (non-zero temps only) | read `profileBasalRate == 0` | The existing `pumpProfileBasalRateIsZero` description. |
-
-- A 0% temp skips the last three rows, as the host path does (CLAUDE.md: "A zero temp basal is always
-  allowed"). The form stays usable at 0%, with a note that only 0% is available.
-- Stop is blocked only by a running bolus, as the cancel path is (`TandemPumpManager.swift:1093-1096`).
+- **Suspended** (the read's `basalType == .suspend`) replaces the form with "Insulin delivery is
+  suspended. Resume delivery before setting a temp basal."
+- **Everything else the driver refuses** reaches the user as its refusal when they press Set or Stop,
+  in the error sheet: a running bolus, an untrusted pump clock, a profile never synced or whose update
+  failed, a 0 U/hr profile. Each already has a description and a recovery suggestion, and the driver
+  checks them again at the command anyway. A 0% temp skips the last four, as the host path does
+  (CLAUDE.md: "A zero temp basal is always allowed").
+- Control-IQ blocks nothing here (D11).
 
 ---
 
@@ -794,12 +788,12 @@ These already happen to any temp, and should be covered in the tests.
 - **Deleting the pump in the app** finalizes the held temp (`prepareForDeactivation`), but the pump
   keeps running it to its end: up to 72 hours. The delete dialog is unchanged (D9).
 - **Control-IQ turned on or off** while a manual temp runs: whether the pump keeps the temp is
-  unconfirmed (T9). Whatever it does, the next reading closes the driver's held temp if it ended.
+  unconfirmed (T8). Whatever it does, the next reading closes the driver's held temp if it ended.
 - **`CurrentBasalStatus` under Control-IQ.** `basalType` matches `basalModifiedBitmask` exactly
   (`0x01` suspend, `0x02` temp, anything else basal). A temp with a Control-IQ bit also set would read
   as `.basal`, so `observeDeliveryState` would take the temp as ended.
   - The screen decides "active" from `TempRateResponse`, so it is not affected.
-  - The driver's delivery tracking may need to test the temp bit rather than the whole value. T9
+  - The driver's delivery tracking may need to test the temp bit rather than the whole value. T8
     records the bitmask.
 
 ---
@@ -1037,9 +1031,9 @@ Rows for [docs/hardware-test-plan.md](hardware-test-plan.md):
 | T3 | In open loop, set 130% for 45 minutes from TandemKit's settings. Read the pump's screen. Stop it from the settings row after 10 minutes. | The pump shows a 130% temp with about 45 min left. The row and the active view show 130%, the rate, and a time left that matches the pump's. After the stop, the pump and the host return to the profile rate. |
 | T4 | Set a temp rate on the pump's own screen for 1 h 15 min, then open the screen. | It shows "Active temp rate" with the pump's percent, and the time left the pump's screen shows. |
 | T5 | With a profile segment change 20 minutes away, set 130% for 1 hour. | Record the pump's rate before and after the change, and that the host's held dose is cut there and stays manual. |
-| T6 | With the max basal limit at 2.0 U/hr and a segment change from 0.8 to 1.0 U/hr ahead, set 250% across it. | The screen refuses 250% (pMax = 200%). Separately, set 240% just before the change on the pump's screen, and record what the pump does at the change (2.4 U/hr > limit). |
+| T6 | With the max basal limit at 2.0 U/hr and a segment change from 0.8 to 1.0 U/hr ahead, set 250% across it. | The screen refuses 250% (the highest valid percent is 200%). Separately, set 240% just before the change on the pump's screen, and record what the pump does at the change (2.4 U/hr > limit). |
 | T7 | In Trio's and in Loop's closed loop, with the loop's temp running, open the screen and set a temp from settings. Let it run past a few loop cycles, then stop it. Repeat, letting it run to its end. | The screen opens on the set form, and the user's temp replaces the loop's. The host stops dosing for its length (Trio: "Manual Temp Basal Active"; Loop: the closed-loop switch explains why), the "Manual Temp Basal" highlight shows, and the host resumes at the stop and at the end. Record how Trio's alert and TandemKit's highlight read together. |
-| T9 | Turn Control-IQ on. Set 130% for 30 minutes from TandemKit's settings, watch a few 5-minute cycles, then stop it from the settings row. Repeat with the temp set on the pump's screen, and turn Control-IQ off and on while one runs. Run it on more than one firmware version. | **Record** the firmware version and: on firmware that refuses, the status code, and that the refusal reaches the user with nothing else changed; on firmware that takes it, `basalModifiedBitmask` and `currentBasalRate` while the temp runs, whether Control-IQ keeps adjusting delivery and around which rate, whether the temp survives Control-IQ being turned off or on, and that the stop works. |
+| T8 | Turn Control-IQ on. Set 130% for 30 minutes from TandemKit's settings, watch a few 5-minute cycles, then stop it from the settings row. Repeat with the temp set on the pump's screen, and turn Control-IQ off and on while one runs. Run it on more than one firmware version. | **Record** the firmware version and: on firmware that refuses, the status code, and that the refusal reaches the user with nothing else changed; on firmware that takes it, `basalModifiedBitmask` and `currentBasalRate` while the temp runs, whether Control-IQ keeps adjusting delivery and around which rate, whether the temp survives Control-IQ being turned off or on, and that the stop works. |
 
 ---
 

@@ -124,6 +124,7 @@ let package = Package(
                 "TandemKitTests/TandemKitReconciliationViewModelTests.swift",
                 "TandemKitTests/TandemKitLoadHistoryViewModelTests.swift",
                 "TandemKitTests/TandemKitSetupCompleteViewModelTests.swift",
+                "TandemKitTests/TandemKitTempBasalViewModelTests.swift",
                 "TandemKitTests/TandemUICoordinatorOnboardingTests.swift"
             ],
             sources: ["TandemKitTests", "TandemKitIntegrationTests/Conformance/Oracles"]
