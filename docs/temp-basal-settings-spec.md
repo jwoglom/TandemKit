@@ -1,0 +1,1074 @@
+# Set temp basal from TandemKit's settings: design spec
+
+**Status: draft. The open questions are resolved ([§13](#13-decisions)); nothing is implemented.**
+
+This spec covers a "Set temp basal" screen in TandemKit's settings: one that sets a temp rate when the
+pump runs none, and shows and stops the one it runs when it does. It describes the UI as requested,
+with the decisions from review folded in, plus the driver work it needs, how Loop and Trio react to
+it, and how OmnipodKit's manual temp basal compares. Mockups are ASCII, about phone width. The
+contributor-facing parts are written against `dev` at `d10ff40`.
+
+None of the user-facing text here is dosing advice, and the screen should give none. Whether and
+when to use a temp basal is for the person and their care team.
+
+---
+
+## Contents
+
+1. [Findings from review](#1-findings-from-review)
+2. [Scope](#2-scope)
+3. [What the pump accepts](#3-what-the-pump-accepts)
+4. [Entry point on the settings screen](#4-entry-point-on-the-settings-screen)
+5. [Screen states](#5-screen-states)
+6. [Temp basal (no temp rate running)](#6-temp-basal-no-temp-rate-running)
+7. [Active temp rate](#7-active-temp-rate)
+8. [Driver changes](#8-driver-changes)
+9. [How Loop and Trio treat a temp basal](#9-how-loop-and-trio-treat-a-temp-basal)
+10. [Comparison with OmnipodKit](#10-comparison-with-omnipodkit)
+11. [Copy](#11-copy)
+12. [Tests](#12-tests)
+13. [Decisions](#13-decisions)
+
+---
+
+## 1. Findings from review
+
+These came out of writing the first draft. Each one is listed with what was decided.
+
+**F1. Loop and Trio already pause automatic dosing for a manual temp basal.**
+- Both read the pump's `basalDeliveryState`. A `.tempBasal` whose `DoseEntry.automatic` is `false`
+  stops their loop until it ends ([§9](#9-how-loop-and-trio-treat-a-temp-basal)).
+- OmnipodKit's manual temp basal relies on exactly this.
+- TandemKit reports every temp it sets as `automatic: true` (`TandemPumpManager.swift:1323`), so
+  today a temp set from settings would be overridden at the next loop cycle.
+- **Decided (D1):** a temp set from settings is reported as manual (`automatic: false`). The host
+  pauses automatic dosing while it runs and starts again when it ends or is stopped, so the user does
+  not have to go to open loop first.
+  - The closed-loop card in the set form now says that the loop will pause, and that the pause
+    includes lowering insulin for a falling glucose ([§6.2](#62-closed-loop-card)).
+  - The driver has to keep the flag `false` everywhere it re-states the temp
+    ([§8.4](#84-carrying-automatic-false)).
+
+**F2. In closed loop the screen will usually open on "Active temp rate".**
+- The loop sets a temp almost every cycle, so the pump nearly always runs one, and the set form only
+  shows when no temp runs.
+- **Decided (D2):** the user stops the loop's temp first, then sets theirs. The active view has no
+  "replace" button.
+- **Decided (race):** if the loop sets another automatic temp between that stop and the user's
+  confirmation, "Set temp rate" stops it and sets the user's. Any other temp that appeared still fails
+  the set and reloads the screen ([§6.9](#69-sending-success-and-failure)).
+
+**F3. The time left on a temp the app didn't set may be unknown.**
+- The pump's `TempRateResponse` gives a start time and a `duration` whose unit has not been
+  confirmed (CLAUDE.md, Therapy command validation).
+- For a temp TandemKit set, the held dose gives the end. For one set on the pump's screen or by
+  another app, the end comes from history's `TempRateActivated` record if backfill has read it.
+  Otherwise the screen says the time left is unknown ([§7.2](#72-where-each-value-comes-from)).
+- A hardware check of the unit would close this (T4 in [§12.3](#123-hardware-test-plan-additions)).
+
+**F4. A 100% temp rate changes nothing.**
+- The driver treats 100% as "no change" and sends nothing in the host path
+  (`TandemPumpManager.swift:1202`). Whether the pump accepts an explicit 100% is unconfirmed (CLAUDE.md).
+- The form starts at 100%, as requested, and keeps "Set temp rate" disabled until the value is
+  something else ([§6.4](#64-percent-rate)).
+
+**F5. A SwiftUI `Alert` cannot show bold text.**
+- **Decided (D5):** the confirmations are plain `Alert`s, and the bold in the original request is
+  dropped.
+
+**F6. Duration up to 72 hours rules out the standard countdown picker.**
+- `UIDatePicker` in `.countDownTimer` mode stops at 23 h 59 min.
+- The spec uses two wheels, hours 0–72 and minutes in 5-minute steps (**D3**,
+  [§6.6](#66-duration)).
+
+---
+
+## 2. Scope
+
+**In scope**
+
+- A "Set temp basal" row in the Actions section of TandemKit's settings. While a manual temp runs,
+  that row becomes "Stop manual temp basal".
+- A screen that reads the pump's temp rate status and shows either:
+  - a set form: percent or unit rate, a duration and a confirmation, or
+  - the active temp rate, with a Stop button and a confirmation.
+- A driver entry point that sets a temp rate at a given percent, and a read of the temp rate status.
+- Reporting the temp to the host as manual, and keeping it manual.
+- A "Manual Temp Basal" status highlight in the host while a manual temp runs (**D6**).
+
+**Not in scope**
+
+- Changing how the host's own temp basals are enacted (`enactTempBasal(unitsPerHour:for:)`).
+- Temp rates while Control-IQ runs. The driver refuses every temp then
+  (`TandemPumpManager.swift:1087`), and so does this screen.
+- Restoring a manual temp after a suspend and resume. The pump stops the temp at a suspend, and no
+  path restores it. OmnipodKit doesn't restore one either.
+- A warning in the "Delete Pump" dialog about a running temp (**D9**: no).
+- Hiding the screen on any pump model (**D10**: not gated).
+
+---
+
+## 3. What the pump accepts
+
+| Message | Fields | Notes |
+|---|---|---|
+| `SetTempRateRequest` (`Sources/TandemCore/Messages/Control/SetTempRate.swift`) | `percent` (UInt16), duration as **milliseconds** (UInt32), built from whole `minutes` | Signed; marked `modifiesInsulinDelivery`, `minApi: .mobiApiV3_5`, `supportedDevices: .mobiOnly` (from pumpX2). Nothing enforces those markings, and this screen doesn't either (D10). |
+| `SetTempRateResponse` | `status`, `tempRateId` | `status` 0 is accepted. A refusal carries a status code and no reason. |
+| `StopTempRateRequest` / `Response` | `status`, `tempRateId` | |
+| `TempRateRequest` → `TempRateResponse` (`CurrentStatus/TempRate.swift`) | `active`, `percentage` (one byte), `startTimeRaw` (pump-clock seconds since 2008), `duration` (**unit unconfirmed**) | The read this screen is built on. |
+| `CurrentBasalStatusRequest` → `Response` | `basalType`, `profileBasalRate`, `currentBasalRate` | `profileBasalRate` is the pump's own rate in force, the base of any percent. |
+
+Limits and behaviour the UI has to respect:
+
+- **Percent.** A whole percent, 0–250 (`TandemPumpManager.maximumTempBasalPercent`).
+- **Duration.** 15 minutes to 72 hours, in whole minutes (`supportedTempBasalMinutes = 15 ... 72 * 60`).
+  The pump refuses anything outside that range. The driver refuses it before sending, because the pump
+  would refuse only after any running temp had been stopped.
+- **Lowest rate.** The pump refuses a non-zero percent whose share of the profile rate is under its
+  0.1 U/hr minimum (status 1 on a Mobi; `minimumTempBasalPercent(baseline:)`). For 0.58 U/hr, 17% is
+  refused and 18% is the lowest accepted.
+- **Highest rate.** The pump refuses a temp above its max basal limit. The limit is read from the pump
+  (`state.maxBasalLimitMilliunits`); until that read, the host's synced `settings.maxTempBasalRate`
+  stands in.
+- **One at a time.** The pump refuses a `SetTempRate` while a temp runs, so a running temp is stopped
+  first.
+- **Segment changes.** At each profile segment change the pump rescales a running temp: 130% of
+  1.00 U/hr becomes 130% of the next segment's rate. A temp is a percent, not a rate.
+- **Five-minute cycles.** A change of rate takes effect at the next `BasalDelivery` record, 0–5 minutes
+  after the command (CLAUDE.md, Therapy command validation).
+- **Unconfirmed.**
+  - What the pump does when a segment change takes a running temp above the max basal limit or
+    below 0.1 U/hr.
+  - Whether it accepts a temp while suspended.
+
+---
+
+## 4. Entry point on the settings screen
+
+The Actions section today (`TandemKitSettingsView.swift:367-414`) holds "Pump notifications" and the
+suspend/resume row. The new row goes between them. It has two states.
+
+```
+  No manual temp running                   A manual temp running
+  ACTIONS                                  ACTIONS
+ ┌──────────────────────────────────┐     ┌──────────────────────────────────┐
+ │ Pump notifications          (2) ›│     │ Pump notifications          (2) ›│
+ ├──────────────────────────────────┤     ├──────────────────────────────────┤
+ │ Set temp basal                  ›│     │ Stop manual temp basal           │
+ ├──────────────────────────────────┤     │ 130% (1.30U/hr) with 1h 12m      │
+ │ Suspend Insulin Delivery         │     │ remaining                        │
+ └──────────────────────────────────┘     ├──────────────────────────────────┤
+                                          │ Suspend Insulin Delivery         │
+                                          └──────────────────────────────────┘
+```
+
+### 4.1 "Set temp basal"
+
+- Built with the existing `navigationLink(label:value:action:)` helper, so it gets the same chevron
+  (`chevron.right`, 35% opacity) as "Pump notifications".
+- Tapping it calls a new `openTempBasal` closure on `TandemKitSettingsViewModel`. That closure pushes
+  a new `TandemScreen.tempBasal` from `TandemUICoordinator`, the same way `.notifications` is pushed.
+- It shows whenever no manual temp runs, including while the loop's own temp or a temp set on the
+  pump's screen runs. For those, the screen opens on "Active temp rate".
+
+### 4.2 "Stop manual temp basal"
+
+**When it shows.** In place of "Set temp basal" while the held dose (`state.basalDose`) is a temp
+basal with `automatic == false` whose `estimatedEndDate` is still ahead. Only a temp set from this
+screen is manual, so the loop's temps and the pump screen's never switch the row.
+
+**What it shows.**
+- The label "Stop manual temp basal", in the accent colour as a button. There is no chevron.
+- A `.footnote` subtext in the secondary colour: "XX% (X.XXU/hr) with XXh XXm remaining".
+  - The percent is the held dose's `tempPercent`.
+  - The rate is the held dose's `value`. After a segment change that is the part now running, which
+    `splitAtSegmentChanges` has already rescaled.
+  - The time left is `estimatedEndDate - now`, rounded up to the minute and formatted by
+    `DateComponentsFormatter`, `.abbreviated` style, `[.hour, .minute]`: "1h 12m", "45m", "72h".
+  - It updates once a minute (`TimelineView(.everyMinute)`, as the connection issue banner does).
+- An `ActivityIndicator` at the trailing edge while the stop is in flight, as the suspend/resume row
+  shows one.
+
+**Tapping it** shows the stop confirmation on the settings screen itself, with no navigation:
+
+```
+            ┌────────────────────────────────┐
+            │                                │
+            │ Stop the active temp rate of   │
+            │ 130%?                          │
+            │                                │
+            ├────────────────────────────────┤
+            │        Stop temp rate          │  ← .destructive (red)
+            ├────────────────────────────────┤
+            │            Cancel              │
+            └────────────────────────────────┘
+```
+
+- This is the same confirmation as the active view's ([§7.4](#74-stop-temp-rate)), as a new
+  `SettingsAlertType.stopManualTempBasal`.
+- Confirming runs the same stop as the active view: the existing cancel path,
+  `enactTempBasal(unitsPerHour: 0, for: 0)`.
+- On success the row goes back to "Set temp basal" with the status update. On failure the existing
+  "Could not stop temp rate" sheet shows.
+
+### 4.3 When the rows are disabled
+
+| Pump state (from `TandemKitSettingsViewModel`) | "Set temp basal" | "Stop manual temp basal" |
+|---|---|---|
+| Normal delivery | Enabled | Enabled |
+| Suspended (`isDeliverySuspended`) | Disabled. The pump stops a temp at a suspend, and whether it accepts one while suspended is unconfirmed. | Not shown: the suspend ended the temp. |
+| Delivery state unknown (`suspendResumeText == nil`) | Disabled, like the "Insulin delivery status unknown" row | Disabled |
+| Control-IQ on (`useControlIQ`) | Enabled. The screen explains that temp rates are off while Control-IQ runs ([§5.2](#52-blocked-states)). A disabled row with no reason would read as a bug. | Disabled. The cancel path refuses under Control-IQ. |
+| A pump command in flight (`isUpdatingPumpState`) | Disabled, as the suspend/resume row is | Disabled, with its spinner if the stop is the command |
+
+### 4.4 Existing tap-to-stop in the header
+
+- Tapping the temp rate in the header (`deliveryStatus`, `TandemKitSettingsView.swift:852-857`)
+  opens the "Temp Basal Active" alert. A second "WARNING" alert follows in closed loop
+  (`:638-668`).
+- That tap should push the new screen instead, so a stop always comes with the same one confirmation.
+  The two alerts and `SettingsAlertType.stopTempRate` / `.stopTempRateClosedLoopWarning` go. The
+  closed-loop alert's copy names "the oref algorithm", which reads wrong in Loop.
+- `TandemKitSettingsViewModel.stopTempRate()` stays, for the row in §4.2, and the new view model
+  calls the same stop.
+
+---
+
+## 5. Screen states
+
+The screen reads the pump each time it appears, and does not rely on the held state alone: a temp set
+on the pump's screen or by another app may not be in the held state yet. The read is
+`TempRateRequest` plus `CurrentBasalStatusRequest`, through a new driver call
+([§8.1](#81-read-the-temp-rate-status)).
+
+```
+                       screen appears / pull to refresh / Retry
+                                        │
+                                        ▼
+                             ┌─────────────────────┐
+                             │ Loading             │
+                             │ TempRate +          │
+                             │ CurrentBasalStatus  │
+                             └─────────────────────┘
+                 no answer ╱        │          │        ╲ blocked
+                          ╱         │          │         ╲ (§5.2)
+                         ▼          │          │          ▼
+            ┌──────────────────┐    │          │   ┌──────────────────┐
+            │ Can't reach pump │    │          │   │ Unavailable      │
+            │ [Retry]          │    │          │   │ (reason card)    │
+            └──────────────────┘    │          │   └──────────────────┘
+                                    │          │
+                       active=false │          │ active=true
+                     (or skew temp) │          │
+                                    ▼          ▼
+                   ┌────────────────────┐  ┌────────────────────┐
+                   │ Temp basal         │  │ Active temp rate   │
+                   │ (set form, §6)     │  │ (§7)               │
+                   └────────────────────┘  └────────────────────┘
+                          │ Set ▸ confirm           │ Stop ▸ confirm
+                          ▼                         ▼
+                   ┌────────────────────┐  ┌────────────────────┐
+                   │ Setting…           │  │ Stopping…          │
+                   │ (controls disabled)│  │ (button spinner)   │
+                   └────────────────────┘  └────────────────────┘
+                     ok │        │ fail        ok │       │ fail
+                        ▼        ▼                ▼       ▼
+                     Loading   error sheet     Loading   error sheet
+                     (→ §7)    (stay on form)  (→ §6)    (stay on view)
+```
+
+### 5.1 Deciding "active"
+
+- The screen shows **Active temp rate** when `TempRateResponse.active` is true, with one exception:
+  the temp is the driver's own clock skew compensation temp (`skewCompensationTemp != nil`, CLAUDE.md
+  Therapy command validation).
+  - That temp stands in for the profile while the pump's clock is skewed, and the host is never told
+    of it.
+  - The screen treats it as no temp, and shows the set form.
+  - A temp set from the form replaces it, as the host path already does.
+- The loop's own temp counts as active. The user stops it there, then sets theirs (D2).
+- A temp that runs out while the screen is open: a timer at the held end, or a minute after it if
+  the end is unknown, reloads the screen.
+
+### 5.2 Blocked states
+
+These replace the form, or the Stop button, with a card that says why. They are checked before the
+read where state already tells (Control-IQ, suspended) and again after it.
+
+| Condition | Source | Card text |
+|---|---|---|
+| Control-IQ on | `state.useControlIQ` | "Temp rates are not available while the pump's Control-IQ algorithm is on." |
+| Suspended | read `basalType == .suspend` | "Insulin delivery is suspended. Resume delivery before setting a temp basal." |
+| Bolus running | `bolusIsStillRunning()` | "A bolus is being delivered. You can set a temp basal once it finishes." |
+| Pump clock untrusted (non-zero temps only) | `state.isPumpClockUntrusted` | "The pump's clock is more than a day off this phone's. Sync the pump time before setting a temp basal." |
+| Profile never synced, or its update failed (non-zero temps only) | `hasSyncedBasalRateSchedule`, `basalProfileUpdateFailed` | The existing `basalScheduleNotSynced` / `failedUpdatePumpProfile` descriptions. |
+| Profile rate 0 U/hr (non-zero temps only) | read `profileBasalRate == 0` | The existing `pumpProfileBasalRateIsZero` description. |
+
+- A 0% temp skips the last three rows, as the host path does (CLAUDE.md: "A zero temp basal is always
+  allowed"). The form stays usable at 0%, with a note that only 0% is available.
+- Stop is blocked only by Control-IQ and a running bolus, the two guards the cancel path has
+  (`TandemPumpManager.swift:1087-1096`).
+
+---
+
+## 6. Temp basal (no temp rate running)
+
+### 6.1 Layout
+
+Percent tab, closed loop on, Trio:
+
+```
+┌──────────────────────────────────────────┐
+│ ‹ Tandem Mobi                            │
+│                                          │
+│ Temp basal                               │
+│                                          │
+│ ┌──────────────────────────────────────┐ │
+│ │ ⚠  Important                         │ │
+│ │    While this temp basal runs, Trio  │ │
+│ │    pauses closed loop. It will not   │ │
+│ │    adjust your insulin, including    │ │
+│ │    lowering it if your glucose       │ │
+│ │    drops. Closed loop resumes when   │ │
+│ │    the temp basal ends or you stop   │ │
+│ │    it.                               │ │
+│ └──────────────────────────────────────┘ │
+│                                          │
+│  ┌──────────────────┬─────────────────┐  │
+│  │▐  Percent rate  ▌│    Unit rate    │  │
+│  └──────────────────┴─────────────────┘  │
+│                                          │
+│ RATE                                     │
+│ ┌──────────────────────────────────────┐ │
+│ │                                      │ │
+│ │   (−)         100%           (+)     │ │
+│ │                                      │ │
+│ │       of the profile basal rate      │ │
+│ │       (currently 1.00 U/hr)          │ │
+│ └──────────────────────────────────────┘ │
+│  0% or 10% to 250%. Choose a rate other  │
+│  than 100%.                              │
+│                                          │
+│ DURATION                                 │
+│ ┌──────────────────────────────────────┐ │
+│ │ Duration                   30 min  ⌄ │ │
+│ └──────────────────────────────────────┘ │
+│  15 minutes to 72 hours                  │
+│                                          │
+│ ┌──────────────────────────────────────┐ │
+│ │           Set temp rate              │ │  ← disabled at 100%
+│ └──────────────────────────────────────┘ │
+└──────────────────────────────────────────┘
+```
+
+- Navigation title "Temp basal" (large).
+- The view is a `List` in `InsetGroupedListStyle`, like the settings screen, with the closed-loop card
+  in its own section above the picker.
+- The primary button sits below the list: `ContinueButton`, which is `ActionButtonStyle(.primary)`
+  with a spinner while `loading`.
+
+### 6.2 Closed-loop card
+
+**Shown when** the host reports automatic dosing on: `pumpManagerDelegate?.automaticDosingEnabled`,
+already read into `TandemKitSettingsViewModel.isClosedLoopEnabled`
+(`TandemKitSettingsViewModel.swift:456`). It is re-read on each status update, so the card appears
+and disappears as the user switches loop modes in the host without leaving the screen.
+
+- **Loop.** `automaticDosingEnabled` is closed loop on *and* allowed.
+- **Trio.** It is true in every dosing mode but open: closed, low glucose suspend and basal testing
+  (`DosingMode.automation != .off`). Trio pauses for a manual temp in all three, so the card shows in
+  all three.
+
+**Looks like** the fill-tubing warning (`TandemKitFillTubingView.swift:151-167`):
+- an `HStack` with `exclamationmark.triangle.fill` in `guidanceColors.warning`, `.title2`;
+- a `VStack` with the headline "Important" in the warning colour, and the message in `.subheadline`;
+- `.wizardCard(background: guidanceColors.warning.opacity(0.1))`.
+
+Factor it out as a shared `WarningCard(title:message:)` rather than copying it.
+
+**Copy**
+
+> While this temp basal runs, \<App\> pauses closed loop. It will not adjust your insulin, including
+> lowering it if your glucose drops. Closed loop resumes when the temp basal ends or you stop it.
+
+- The middle sentence is the safety point. While the temp runs, the loop does nothing for a falling
+  glucose: no lower temp, no suspend, and no automatic bolus either. Keep it in any rewording.
+- `<App>` is "Trio", "Loop" or "This app". `HostApp.appName` gives "this app" in lower case, for use
+  mid-sentence (`HostApp.swift:22-32`), so this sentence needs a sentence-start variant.
+- Pass the name into one localized format string, as the existing banners do, rather than
+  concatenating, so translators can move it.
+
+The originally requested copy ("…You need to move to open loop before setting a temp basal, or it will
+be overridden in the next loop cycle.") would be untrue once the temp is reported as manual (D1).
+
+### 6.3 Percent rate / Unit rate
+
+- A segmented `Picker` with "Percent rate" (the default) and "Unit rate".
+- Both tabs edit **one value**, the whole percent that will be sent. The unit view shows that percent
+  as a rate and turns what is typed into a percent ([§6.5](#65-unit-rate)). Switching tabs never
+  changes the value.
+- The chosen tab may be remembered per user (`@AppStorage`); the value itself is not.
+
+### 6.4 Percent rate
+
+**The value**
+- Large, centred text, "100%".
+- Under it, "of the profile basal rate (currently X.XX U/hr)". The rate is `profileBasalRate` from the
+  read, to two decimals.
+
+**Typing**
+- Tapping the number opens a text field with the number pad.
+- The value is checked as typed. One outside the valid set (below) shows the footer in
+  `guidanceColors.critical` and disables "Set temp rate".
+- A typed value is never clamped or rounded silently. If the user typed 300, the screen does not
+  change it to 250 for them.
+
+**Stepping**
+- (−) and (+) go to the next multiple of 10 below or above, so 95 + → 100 and 100 + → 110.
+- Within the valid set:
+  - (+) from 0 goes to the lowest valid non-zero value (10%, or the minimum, whichever is higher).
+  - (−) from the minimum goes to 0.
+  - (−) never steps past the minimum: with an 18% minimum, 20 − → 18 − → 0.
+- Each button is disabled at its end of the range.
+
+**The valid set**
+
+```
+valid = { 0 }  ∪  [ pMin , pMax ]
+
+pMin = max over the profile rates r in force during the duration of
+         minimumTempBasalPercent(baseline: r)        (pump's 0.1 U/hr minimum)
+pMax = min( 250,
+            min over those r of floor(maxBasalLimit / r × 100) )
+```
+
+- "The profile rates in force during the duration" is `profileBasalRate` now, plus each
+  `pumpSegmentChanges(after: now, through: now + duration)` rate.
+- Working the bounds out over the whole duration is the conservative choice. What the pump does when
+  a segment change takes a temp past its limits is unconfirmed ([§3](#3-what-the-pump-accepts)).
+- Changing the duration can therefore move the bounds. A value that falls outside them shows the
+  footer in red, and is not clamped.
+
+**The footer** states the bounds, for example "0% or 18% to 250%". It reads "0% to 250%" when the
+minimum is 1%.
+
+**100%** is valid but changes nothing (F4).
+- At 100% the button stays disabled, with "Choose a rate other than 100%." in the footer.
+- 100% stays the starting value as requested. It is the user's current rate, so nothing is preset.
+
+### 6.5 Unit rate
+
+```
+│ RATE                                     │
+│ ┌──────────────────────────────────────┐ │
+│ │                                      │ │
+│ │   (−)       1.30 U/hr        (+)     │ │
+│ │                                      │ │
+│ │     130% of the 1.00 U/hr profile    │ │
+│ │     basal rate                       │ │
+│ └──────────────────────────────────────┘ │
+│  0.00 or 0.10 to 2.50 U/hr. The pump     │
+│  runs a percent of its profile, so the   │
+│  rate changes when the profile does.     │
+```
+
+- **The value** shown is `profileBasalRate × percent / 100`, rounded to two decimals. The pump's own
+  rounding is unknown; its read-back is checked to one 0.01 U/hr step (`tempBasalReadbackMatches`).
+- **Stepping.** (−) and (+) move the underlying percent by 10, under the same rules as the percent
+  tab. One step is therefore 10% of the profile rate (0.10 U/hr at a 1.00 U/hr profile), as requested.
+- **Typing.**
+  - Tapping the number opens a decimal-pad field.
+  - A typed rate becomes the nearest whole percent: `round(u / profileBasalRate × 100)`.
+  - That percent's rate is then shown in place of what was typed, with the percent under it. For
+    example, 1.05 at a 0.85 U/hr profile becomes 124%, shown as 1.05 U/hr.
+  - If the nearest percent falls outside the valid set, the footer turns red and the field keeps what
+    was typed.
+- **The highest rate** is `pMax × profileBasalRate`: 250% of the profile, or less if the pump's max
+  basal limit is lower.
+- **Segment changes.** As [§6.7](#67-profile-changes-during-the-temp) shows, a temp crossing one runs
+  at a different rate after it. The footer says so in one line.
+
+### 6.6 Duration
+
+The pump takes whole minutes from 15 minutes to 72 hours. `UIDatePicker`'s countdown mode stops at
+23 h 59 min, so the duration is a row that expands into two wheel `Picker`s, as Apple's Timer and
+Health apps do.
+
+```
+│ DURATION                                 │
+│ ┌──────────────────────────────────────┐ │
+│ │ Duration               1 hr 30 min ⌃ │ │
+│ ├──────────────────────────────────────┤ │
+│ │           0   hours      25   min    │ │
+│ │       ▶   1   hours      30   min    │ │
+│ │           2   hours      35   min    │ │
+│ └──────────────────────────────────────┘ │
+│  15 minutes to 72 hours                  │
+```
+
+- **Hours wheel:** 0–72.
+- **Minutes wheel:** 00–55 in 5-minute steps (**D3**). Every value it offers is a whole number of
+  minutes, which is all the pump asks.
+- **Out of range** (0 h with under 15 min, or 72 h with any minutes) turns the footer red and disables
+  "Set temp rate". The wheels are not moved for the user.
+- **Default:** 30 minutes (**D4**), as in OmnipodKit's entry view and in the hosts' own temps.
+- **Collapsed row:** the duration formatted with `DateComponentsFormatter`, `.abbreviated` style,
+  `[.hour, .minute]`.
+
+### 6.7 Profile changes during the temp
+
+When a segment change falls inside the chosen duration, a line under the rate section says what the
+temp becomes:
+
+```
+│  ⓘ At 2:00 PM your profile changes to    │
+│    0.80 U/hr, and this temp rate will    │
+│    run at 1.04 U/hr (130%).              │
+```
+
+- The changes come from `pumpSegmentChanges(after:through:)`, on the pump's clock.
+- Show the first change only, plus "and N more" if there are others.
+- Without it, a user who sets "1.30 U/hr" in the unit tab gets a different rate an hour later
+  without being told.
+
+### 6.8 Set temp rate and its confirmation
+
+"Set temp rate" is the primary button. It is enabled when:
+- the value is in the valid set and is not 100%,
+- the duration is valid, and
+- nothing is in flight.
+
+Tapping it shows a confirmation, a plain SwiftUI `Alert` (**D5**).
+
+```
+            ┌────────────────────────────────┐
+            │                                │
+            │ Set a temp rate for 130% of    │
+            │ profile basal (currently       │
+            │ 1.30 U/hr) for a duration of   │
+            │ 1 hour, 30 minutes?            │
+            │                                │
+            ├────────────────────────────────┤
+            │         Set temp rate          │
+            ├────────────────────────────────┤
+            │            Cancel              │
+            └────────────────────────────────┘
+```
+
+> Set a temp rate for XXX% of profile basal (currently X.XX U/hr) for a duration of N hours M minutes?
+
+- **"(currently X.XX U/hr)"** is the temp's own rate, `profileBasalRate × percent / 100` (**D8**): 130%
+  of a 1.00 U/hr profile shows "currently 1.30 U/hr". "Currently" because the rate changes at the next
+  segment change ([§6.7](#67-profile-changes-during-the-temp)).
+- **The duration** is formatted with `DateComponentsFormatter`, `.full` style, `[.hour, .minute]`:
+  - "1 hour, 30 minutes", "2 hours", "45 minutes";
+  - not "0 hours 45 minutes" or "2 hours 0 minutes".
+  - It is localized and pluralized for free.
+- **Buttons.** "Set temp rate" is the default button. It is not destructive: a temp is a normal
+  action. "Cancel" is `.cancel`.
+- **In the unit tab** the same sentence is used. The command is a percent, and the sentence gives both
+  numbers.
+
+### 6.9 Sending, success and failure
+
+**Sending**
+- Every control is disabled, and the button shows an `ActivityIndicator`.
+- The driver call is `enactManualTempBasal(percent:duration:)` ([§8.2](#82-set-a-temp-rate-at-a-percent)).
+
+**Success**
+- The screen goes back to Loading and reads the pump again.
+- It should land on Active temp rate, which is the confirmation that the temp runs. There is no
+  separate success message.
+- Back on the settings screen, the row reads "Stop manual temp basal".
+
+**Failure**
+- An `ErrorSheetView` (`Utils/ErrorSheet.swift`) with `guidanceColors.critical`, titled "Could not set
+  temp rate", and the error's description as the message.
+- The driver's refusal texts already say why where it can tell (`PumpRefusal.tempBasal`): below the
+  pump's 0.1 U/hr, or above its max basal limit.
+- The form keeps its values.
+
+**A temp started since the screen loaded.** The loop may set one between the read and the
+confirmation, in the minutes after the user stopped its last one.
+- **An automatic temp the driver holds** (the held dose is a temp with `automatic == true` and
+  matches the read): `enactManualTempBasal` stops it and sets the user's temp. If the pump then refuses
+  the set, the stopped temp is put back (`restoreStoppedTempBasal`), as the host path does.
+- **Anything else** (a manual temp, a temp set on the pump's screen or by another app, or one the
+  driver doesn't hold): `enactManualTempBasal` fails with a new `tempBasalAlreadyRunning` and stops
+  nothing.
+  - The sheet says "A temp rate started while you were on this screen."
+  - The screen reloads into Active temp rate.
+
+**No answer** (`.communication(noResponse)`)
+- The pump may still have started the temp. The driver reads it back first, as the host path does
+  (`adoptUnansweredTempBasal`).
+- The screen reloads either way, so it shows what the pump actually runs.
+
+---
+
+## 7. Active temp rate
+
+### 7.1 Layout
+
+```
+┌──────────────────────────────────────────┐
+│ ‹ Tandem Mobi                            │
+│                                          │
+│ Active temp rate                         │
+│                                          │
+│ ┌──────────────────────────────────────┐ │
+│ │                                      │ │
+│ │                130%                  │ │
+│ │                                      │ │
+│ │        1.30 U/hr right now           │ │
+│ │   (130% of the 1.00 U/hr profile)    │ │
+│ ├──────────────────────────────────────┤ │
+│ │ Remaining              1 hr 12 min   │ │
+│ └──────────────────────────────────────┘ │
+│                                          │
+│ ┌──────────────────────────────────────┐ │
+│ │           Stop temp rate             │ │  ← red, filled
+│ └──────────────────────────────────────┘ │
+└──────────────────────────────────────────┘
+```
+
+- Navigation title "Active temp rate".
+- The view shows the percent, the rate it delivers through the profile, and the time left, as
+  requested. No other rows (**D7**).
+- "Remaining" updates once a minute (`TimelineView(.everyMinute)`), rounded up so that 30 seconds left
+  reads "1 min".
+
+### 7.2 Where each value comes from
+
+| Field | Source, in order of preference |
+|---|---|
+| Percent | `TempRateResponse.percentage`. |
+| Rate right now | `CurrentBasalStatusResponse.currentBasalRate`: what the pump runs, already rescaled at any segment change. |
+| Profile rate | `CurrentBasalStatusResponse.profileBasalRate`. |
+| Remaining | (1) The held dose's `estimatedEndDate`, when `state.basalDose` is a temp whose `tempPercent` matches and whose start is within `transitionMatchTolerance` of `hostDate(forPumpDate: TempRateResponse.startTime)`. (2) The `TempRateActivated` record with this start in the session's `historyLogStore` (`durationMilliseconds`), when backfill has read it. (3) `startTime + duration`, once the unit of `TempRateResponse.duration` is confirmed (T4). (4) Otherwise "Unknown", with "The pump did not say when this temp rate ends." under it. |
+
+A temp set on the pump's screen is reported to the host finished at detection
+(`closeReplacement`, `TandemPumpManager+DeliveryTransitions.swift:378-397`), so the held dose is no
+help for it. That is why the screen reads the pump rather than the held state.
+
+### 7.3 Closed-loop notice on the active view
+
+When `isClosedLoopEnabled` is true and the temp is not a manual one (the held dose doesn't match it,
+or matches with `automatic == true`), a warning card like §6.2 sits above the details:
+
+> \<App\> is currently managing basal delivery in closed loop and may have set this temp rate. If you
+> stop it, \<App\> can set a new one at its next loop cycle.
+
+- This takes over the meaning of the current `stopTempRateClosedLoopWarning` alert
+  (`TandemKitSettingsView.swift:656-668`), shown before the confirmation rather than as a second alert
+  after it.
+- A manual temp gets no card: the host is paused for it, which is what the set form told the user.
+
+### 7.4 Stop temp rate
+
+"Stop temp rate" is a full-width `ActionButtonStyle(.destructive)` button, which is red. It shows the
+confirmation from [§4.2](#42-stop-manual-temp-basal): "Stop the active temp rate of XX%?" with a red
+"Stop temp rate" and "Cancel".
+
+**Confirming**
+- Calls the existing cancel path, `enactTempBasal(unitsPerHour: 0, for: 0)`, as
+  `TandemKitSettingsViewModel.stopTempRate()` does today.
+- That path stops the temp, starts the scheduled basal dose, reports both to the host and moves the
+  boundary.
+
+**Success**
+- Reload. The screen should land on the set form.
+- The 1 s pause and `syncPumpData` that `stopTempRate()` runs today are not needed here: the reload is
+  the read-back.
+
+**Failure**
+- The existing "Could not stop temp rate" sheet.
+- Its message ("The pump rejected stopping the temp rate…") should give way to the driver's error
+  description when there is one. `PumpRefusal.stopTempBasal` already words it, and "rejected" is wrong
+  for a lost answer.
+
+**What happens next in the host**
+- A manual temp: stopping it ends the host's pause. Trio runs a loop at once
+  (`APSManager.swift:268-280`); Loop resumes at the status update.
+- An automatic temp: the host counts the scheduled basal from the stop. In closed loop it sets its
+  next temp at its next cycle, which the card in §7.3 says.
+
+---
+
+## 8. Driver changes
+
+### 8.1 Read the temp rate status
+
+```swift
+public struct TempRateStatus {
+    public let isActive: Bool
+    public let percent: Int?                 // nil when inactive
+    public let startDate: Date?              // phone clock
+    public let endDate: Date?                // nil when unknown (§7.2)
+    public let profileBasalRate: Double
+    public let currentBasalRate: Double
+    public let isSuspended: Bool
+    public let isClockSkewCompensation: Bool
+    public let automatic: Bool?              // held dose's flag when it matches, else nil
+}
+
+public func readTempRateStatus(completion: @escaping (Result<TempRateStatus, PumpManagerError>) -> Void)
+```
+
+- `ensureConnected`, then `TempRateRequest` and `CurrentBasalStatusRequest` on the command queue,
+  under `watchdogged`.
+- **Required:** pass the basal read to `observeDeliveryState(_:)`, as every other
+  `CurrentBasalStatus` read does. A read that sees a change of delivery has to start the transition
+  machinery, or the screen would show a temp, or its absence, that the host has not been told of.
+- No answer to either read is `.communication(noResponse)`.
+
+### 8.2 Set a temp rate at a percent
+
+```swift
+public func enactManualTempBasal(
+    percent: Int,
+    duration: TimeInterval,
+    completion: @escaping (PumpManagerError?) -> Void
+)
+```
+
+It differs from `enactTempBasal(unitsPerHour:for:)` where the user, not the host, chose the number:
+
+| | `enactTempBasal` (host) | `enactManualTempBasal` (settings) |
+|---|---|---|
+| Input | U/hr, turned into a percent (`tempBasalPercentAndRate`) | Percent, sent as given |
+| Over the pump's max basal limit | Clamped to the limit (`clampedToPumpMaximumBasalRate`) | **Refused** (`manualTempBasalOutOfRange`). The user confirmed a number, so no other number goes out. |
+| Under the pump's 0.1 U/hr minimum | Raised to the lowest accepted percent | **Refused**, as above |
+| Within `segmentChangeWindow` of a change | Worked out against the larger rate, reported at the request | Sent as given; reported at `percent × profileBasalRate`, and cut at the change by `splitAtSegmentChanges` as any temp is |
+| 100% | No command; scheduled basal restarted | Refused (`invalidSetting`); the UI never sends it |
+| A temp already running | Stopped, then replaced (`restoreStoppedTempBasal` on refusal) | An automatic temp the driver holds, or the clock-skew temp: stopped, then replaced, with `restoreStoppedTempBasal` on refusal. **Anything else: refused** (`tempBasalAlreadyRunning`), nothing stopped. |
+| Reported `automatic` | `true` | `false` |
+
+**Shared with the host path, factored out rather than copied**
+- Control-IQ refused.
+- A bolus running refused, before and after connecting.
+- Duration outside 15 min–72 h refused; whole minutes only.
+- Pump clock untrusted, profile not synced, profile update failed and a 0 U/hr profile refused for a
+  non-zero percent.
+- The `SetTempRate` read-back check (`tempBasalReadbackMatches`, `rejectMismatchedTempBasal`).
+- `adoptUnansweredTempBasal` on a lost answer.
+- `recordTempBasal`, with an `automatic` parameter added in place of the hard-coded `true`.
+
+### 8.3 Stop
+
+No new driver call. The settings row and the active view both use
+`enactTempBasal(unitsPerHour: 0, for: 0)`.
+
+### 8.4 Carrying `automatic: false`
+
+The flag has to stay `false` everywhere the temp is re-stated. Otherwise the host sees a manual temp
+turn automatic partway through, and its pause ends early.
+- `UnfinalizedDose.automatic` is already persisted. `basalDeliveryState` passes it through
+  (`TandemPumpManagerState.swift:798-799`).
+- These already carry it: `splitAtSegmentChanges` (`running.automatic`) and the `interruptedTemp`
+  continuation.
+- These need changing:
+  - **`recordTempBasal`** (`TandemPumpManager.swift:1318`): `automatic: true` becomes a parameter.
+    `restoreStoppedTempBasal` and `adoptUnansweredTempBasal` pass the stopped or requested temp's flag.
+  - **History adoption** (`TandemPumpManager+DeliveryTransitions.swift:597`): it marks a temp
+    `automatic` whenever a `SetTempRateResponse` record names its `tempRateId`, which a temp set from
+    settings also has. Keep a small persisted set of manual `tempRateId`s (or a `manualTempRateId` on
+    state), and treat those as manual.
+  - **Basal reconciliation** (`TandemPumpManager+BasalReconciliation.swift:483`): `setByTheApp` counts
+    as automatic, and needs the same exception.
+  - **Setup history load:** a temp set from settings before a re-pair would come back automatic. That
+    is acceptable, since it is history only, but say so in CLAUDE.md.
+- **The status push.** Trio's `isManualTempBasal` has no end-date check
+  (`BasalDeliveryState+Extension.swift`), so Trio stays paused until the driver's status shows the
+  temp ended. The driver closes an ended temp at the next reading after its end. Check that Trio
+  still asks for pump data while paused, so that the reading comes. Loop checks `endDate` itself.
+
+### 8.5 Status highlight
+
+Add a "Manual Temp Basal" highlight to `buildPumpStatusHighlight()`
+(`Sources/TandemKitUI/TandemPumpManager+UI.swift:110`) (**D6**).
+- It comes last, after "Control-IQ On", so every other highlight wins.
+- `imageName: "exclamationmark.circle.fill"`, `state: .warning`, as "Control-IQ On" has.
+- The condition is the one that switches the settings row ([§4.2](#42-stop-manual-temp-basal)): the
+  held dose is a temp with `automatic == false` and its end is still ahead.
+- It is title case, like the other highlights. Trio and Loop show it in their pump status area, so a
+  temp that can run for 72 hours is visible outside TandemKit's settings.
+
+### 8.6 Interactions with existing driver behaviour
+
+These already happen to any temp, and should be covered in the tests.
+
+- **A basal schedule save that changes the rate in force stops a running non-zero temp**
+  (CLAUDE.md, Onboarding and the basal schedule). A manual temp is stopped too, and that ends the
+  host's pause.
+- **A suspend stops the temp** (`suspendDelivery`, `TandemPumpManager.swift:1444-1460`). A resume
+  does not restore it.
+- **Clock skew compensation leaves a temp it did not set alone** (`maintainPumpClockSkewCompensation`),
+  so it will not fight a manual temp. When the manual temp ends, compensation resumes on the next read.
+- **Deleting the pump in the app** finalizes the held temp (`prepareForDeactivation`), but the pump
+  keeps running it to its end: up to 72 hours. The delete dialog is unchanged (D9).
+- **Control-IQ turned on** while a manual temp runs: whatever the pump does, the driver's held temp
+  is closed by the next reading. Unconfirmed on firmware.
+
+---
+
+## 9. How Loop and Trio treat a temp basal
+
+References are to Loop `b05f7be` and Trio `nightscout/Trio@23bb3be` (dev).
+
+| | Loop | Trio |
+|---|---|---|
+| How the pump manager learns the loop is on | `automaticDosingEnabled` = `isAutomaticDosingAllowed && dosingEnabled` (`LoopAppManager.swift:291-295`) | `dosingMode.automation != .off` (`DeviceDataManager.swift:358-360`): closed, low glucose suspend and basal testing |
+| A temp reported `automatic: true` (the loop's own) | Its own. Replaced at the next cycle in closed loop. Cancelled when closed loop is turned off, when the max basal rate drops below it, and when CGM data is unreliable while it is above the schedule (`LoopDataManager.swift:226-234, 619-641, 1930-1938`). | Its own. Replaced at the next determination. Cancelled when basal testing starts (`APSManager.swift:1503`); not when closed loop is turned off. |
+| A temp reported `automatic: false` (set from settings), not ended | `pumpIsAllowingAutomation = false` (`DeviceDataManager.swift:1203-1209`), so automatic dosing is off. The closed-loop switch says "Your pump is delivering a manual temporary basal rate." None of the cancels above touch it. | `isManualTempBasal` (`BasalDeliveryState+Extension.swift`). Each loop ends with `APSError.manualBasalTemp` (`APSManager.swift:786-788`), raised as a "Manual Temp Basal Active" alert (fired at once). The loop icon shows the manual-temp state. "Not Looping" alerts are held off (`NotLoopingMonitor.swift:96`). |
+| When the manual temp ends | Automation allowed again at the next status update after `endDate`. | `isManualTempBasal` goes false at the status update that drops the temp, and Trio runs `loop()` at once (`APSManager.swift:268-280`). |
+
+So a temp set from settings is left alone by both hosts, as OmnipodKit's is, and the user does not
+leave closed loop for it. In Trio the user also gets "Manual Temp Basal Active" from Trio itself, on
+top of TandemKit's status highlight; check that the two don't read as two different problems (T7).
+
+---
+
+## 10. Comparison with OmnipodKit
+
+Reference: `loopandlearn/OmnipodKit@0c6d68b`, mainly `PumpManagerUI/Views/ManualTempBasalEntryView.swift`,
+`PumpManagerUI/Views/OmniSettingsView.swift:412-440`, `PumpManagerUI/ViewModels/OmniSettingsViewModel.swift`
+and `PumpManager/OmniPumpManager.swift:2846-2997`.
+
+### 10.1 Side by side
+
+| | OmnipodKit | TandemKit (this spec) |
+|---|---|---|
+| **Entry point** | "Set Temporary Basal Rate", in its own untitled section after Actions. Opens a modal sheet. | "Set temp basal" › in Actions, between "Pump notifications" and suspend/resume. Pushes a screen. |
+| **Row while a manual temp runs** | Becomes "Cancel Manual Basal" (warning icon) plus a separate "Remaining 1 hour, 29 minutes" row. | Becomes "Stop manual temp basal", subtext "130% (1.30U/hr) with 1h 12m remaining". |
+| **Row while another temp runs** | The normal "Set" row; the sheet can replace it. | The normal "Set temp basal" row; the screen opens on "Active temp rate" for it. |
+| **Row disabled when** | No pod, activating, deactivating or faulted. Not while suspended, bolusing or in closed loop. | Suspended, delivery state unknown, or a command in flight. Control-IQ and bolus are explained on the screen. |
+| **Title** | "Temporary Basal" (sheet) | "Temp basal" / "Active temp rate" |
+| **Rate input** | Absolute U/hr only: one wheel, 0–max basal in 0.05 U/hr steps, 0.00 included. | Percent (default) or U/hr view of a percent. Steppers of 10%, typed entry. 0 or pMin–pMax whole %. |
+| **Rate ceiling** | The host-synced max basal rate (`state.maxBasalRateUnitsPerHour`). Above it, the driver only logs. | min(250%, pump's max basal limit ÷ profile) over the duration's segments. Above it, the driver refuses. |
+| **Rate floor** | 0 U/hr; any 0.05 step | 0%, or the lowest % the pump accepts (≥ 0.1 U/hr) |
+| **Duration** | One wheel, 30 min–12 h in 30-min steps (24 choices) | Hours + minutes wheels, 15 min–72 h, 5-minute steps |
+| **Defaults** | 0.00 U/hr for 30 min (a zero temp, one tap from set) | 100% (Set disabled until changed) for 30 min |
+| **Closed loop** | No detection. A static footnote: "Your insulin delivery will not be automatically adjusted until the temporary basal rate finishes or is canceled." | Detects `automaticDosingEnabled` and names the host. A warning card that closed loop pauses, including for a falling glucose. |
+| **Confirmation to set** | None | "Set a temp rate for 130% of profile basal (currently 1.30 U/hr) for a duration of 1 hour, 30 minutes?" |
+| **Set errors** | Alert "Temporary Basal Failed": "Unable to set a temporary basal rate: …". The sheet stays open. | Error sheet "Could not set temp rate" with the driver's reason. The form keeps its values. |
+| **Success** | The sheet closes; the settings row turns into Cancel + Remaining. | Reloads into "Active temp rate"; the settings row turns into "Stop manual temp basal". |
+| **Viewing a running temp** | Settings rows only: no rate, no end time. The header shows the U/hr. "Remaining" does not tick. | The settings row (%, U/hr, time left, ticking), and a dedicated view (%, U/hr now, profile, time left) for any temp, the loop's and the pump screen's included. |
+| **Stop** | "Cancel Manual Basal": immediate, **no confirmation**. Error alert "Failed to Cancel Manual Basal". | "Stop manual temp basal" on the row, or the red "Stop temp rate" on the active view, both with "Stop the active temp rate of 130%?" |
+| **Manual vs automatic** | `enactTempBasal(…, automatic: false)`. Persisted in `UnfinalizedDose` and `PendingCommand`. | `enactManualTempBasal`, reported `automatic: false`. Persisted in `UnfinalizedDose`, and kept manual through history and reconciliation (§8.4). |
+| **A temp in the way** | Cancels any running temp first. | Replaces an automatic one; refuses any other. |
+| **Other driver guards** | Refuses when suspended. A bolus running is only logged. | Refuses Control-IQ, a running bolus, an untrusted clock and an unsynced profile, as the host path does. |
+| **Status highlight** | "Manual Basal", `exclamationmark.circle.fill`, warning, lowest priority. | "Manual Temp Basal", `exclamationmark.circle.fill`, warning, lowest priority. |
+| **Suspend / resume** | A suspend cancels it; a resume doesn't restore it. | The same (pump behaviour). |
+| **Relaunch** | Persisted; the highlight and the Cancel row come back. | Persisted (held dose); the highlight and the Stop row come back. The screen reads the pump anyway. |
+| **Tests** | None pin manual temp behaviour. | See §12. |
+
+### 10.2 What differs, and why
+
+- **Percent.** A Tandem pump takes a percent of its profile, not a rate, and rescales it at segment
+  changes. OmnipodKit's U/hr wheel suits Omnipod, which takes an absolute rate. TandemKit's unit tab
+  is a view of a percent, and §6.7's segment note exists because "1.30 U/hr" does not stay 1.30 U/hr
+  on a Tandem pump.
+- **Refuse, don't clamp.** OmnipodKit only logs a rate over max basal, as a workaround for hosts that
+  send one. That reasoning is about host commands. For a number a person typed and confirmed, sending
+  a different one is worse than refusing.
+- **Duration.** The Tandem pump takes 15 min–72 h to the minute. A 30-minute grid up to 12 h would
+  throw most of that away.
+- **Confirmation.** OmnipodKit sets with one tap from a sheet that opens on a zero temp, and cancels
+  with one tap. TandemKit confirms both.
+- **Closed loop** now works the same way in both: the temp is reported manual and the host pauses.
+  TandemKit says so up front, with the host's name and the low-glucose caveat. OmnipodKit says it in a
+  footnote and shows it whatever the loop mode.
+- **The cost of manual reporting.** OmnipodKit's flag is set once and never re-derived. TandemKit
+  re-derives `automatic` from history and basal reconciliation, so it needs §8.4 to keep it.
+
+### 10.3 Taken from OmnipodKit, and not
+
+- **Taken:**
+  - `automatic: false` and the host pause (D1).
+  - The settings row that turns into a stop control with the time left (D7). TandemKit's adds the
+    percent and rate, and a confirmation.
+  - The status highlight (D6).
+- **Not taken:**
+  - The zero-temp default.
+  - Set and cancel without confirmation.
+  - The U/hr-only wheel.
+  - Logging a rate over max basal instead of refusing it.
+
+---
+
+## 11. Copy
+
+All strings go in `Localizable.xcstrings` with comments. `<App>` is `HostApp`'s name: "Trio",
+"Loop", "This app" at the start of a sentence, "this app" mid-sentence.
+
+| Key / place | English |
+|---|---|
+| Settings row | Set temp basal |
+| Settings row, manual temp running | Stop manual temp basal |
+| Settings row subtext | %1$d%% (%2$@U/hr) with %3$@ remaining |
+| Status highlight | Manual Temp Basal |
+| Screen title (no temp) | Temp basal |
+| Screen title (temp) | Active temp rate |
+| Closed-loop card title | Important |
+| Closed-loop card | While this temp basal runs, \<App\> pauses closed loop. It will not adjust your insulin, including lowering it if your glucose drops. Closed loop resumes when the temp basal ends or you stop it. |
+| Tabs | Percent rate · Unit rate |
+| Percent caption | of the profile basal rate (currently %@ U/hr) |
+| Unit caption | %d%% of the %@ U/hr profile basal rate |
+| Rate footer | %d%% to %d%% / 0%% or %d%% to %d%% |
+| Rate footer, 100% | Choose a rate other than 100%. |
+| Unit footer note | The pump runs a percent of its profile, so the rate changes when the profile does. |
+| Segment note | At %1$@ your profile changes to %2$@ U/hr, and this temp rate will run at %3$@ U/hr (%4$d%%). |
+| Duration row | Duration |
+| Duration footer | 15 minutes to 72 hours |
+| Primary button | Set temp rate |
+| Set confirmation | Set a temp rate for %1$d%% of profile basal (currently %2$@ U/hr) for a duration of %3$@? |
+| Set confirmation buttons | Set temp rate · Cancel |
+| Set failure title | Could not set temp rate |
+| Temp started meanwhile | A temp rate started while you were on this screen. |
+| Active: rate line | %@ U/hr right now |
+| Active: rows | Remaining · Unknown |
+| Active: unknown end | The pump did not say when this temp rate ends. |
+| Active: closed-loop card | \<App\> is currently managing basal delivery in closed loop and may have set this temp rate. If you stop it, \<App\> can set a new one at its next loop cycle. |
+| Stop button | Stop temp rate |
+| Stop confirmation | Stop the active temp rate of %d%%? |
+| Stop confirmation buttons | Stop temp rate (destructive) · Cancel |
+| Blocked: Control-IQ | Temp rates are not available while the pump's Control-IQ algorithm is on. |
+| Blocked: suspended | Insulin delivery is suspended. Resume delivery before setting a temp basal. |
+| Blocked: bolus | A bolus is being delivered. You can set a temp basal once it finishes. |
+| Blocked: clock | The pump's clock is more than a day off this phone's. Sync the pump time before setting a temp basal. |
+| Can't reach pump | Could not read the pump's temp rate. Keep the pump near your phone and try again. · Retry |
+
+These strings say what the pump and the loop will do, and do not suggest when to use a temp basal or
+at what rate.
+
+---
+
+## 12. Tests
+
+Every new test file goes in the `TandemKitTests` target (`scripts/check_xcodeproj_source_membership.rb --fix`).
+
+### 12.1 Unit tests
+
+**`TandemKitTempBasalViewModelTests`**
+- The screen state follows the read:
+  - inactive → form;
+  - active → active view, the loop's own temp included;
+  - the clock-skew temp → form;
+  - no answer → error;
+  - each blocked state → its card.
+- The valid set:
+  - pMin at 0.58 U/hr is 18%;
+  - pMax is capped by the max basal limit;
+  - both are worked out over the duration's segments;
+  - changing the duration moves them.
+- Steppers:
+  - 95 + → 100;
+  - 20 − → 18 − → 0 at an 18% minimum;
+  - 0 + → the minimum;
+  - disabled at the ends.
+- A typed value outside the set is kept, turns the footer red and disables Set. It is never clamped.
+- The unit tab:
+  - a typed rate becomes the nearest whole percent;
+  - one step is 10%;
+  - switching tabs keeps the percent.
+- 100% disables Set.
+- The duration:
+  - the minutes wheel offers 00–55 in steps of 5;
+  - 0 h 10 min and 72 h 5 min disable Set;
+  - the default is 30 min;
+  - the formatter gives "1 hour, 30 minutes" and "45 minutes".
+- The closed-loop card:
+  - shows when `automaticDosingEnabled` and hides when not;
+  - follows a status update;
+  - names Trio, Loop or "This app".
+- The active view's closed-loop card shows for an automatic or unknown temp in closed loop, and not
+  for a manual one.
+- The confirmation text, for each tab, with the temp's rate in brackets.
+- A failure keeps the form's values. A success reloads.
+- Remaining:
+  - from a matching held dose;
+  - from `TempRateActivated`;
+  - "Unknown" with neither.
+
+**`TandemKitSettingsViewModelTests`**
+- The row is "Set temp basal" with no temp, with an automatic temp and with a pump-screen temp.
+- The row is "Stop manual temp basal" with a manual temp, with the subtext "130% (1.30U/hr) with
+  1h 12m remaining", and goes back to "Set temp basal" once the temp's end has passed.
+- The row's enabled state for each pump state in [§4.3](#43-when-the-rows-are-disabled).
+- Tapping the stop row asks for confirmation, and only a confirmed stop sends the cancel.
+- The header tap opens the screen.
+
+**`ManualTempBasalTests`** (driver)
+- The percent is sent as given, with the duration in whole minutes as milliseconds.
+- Refused, with nothing sent:
+  - over the max basal limit;
+  - under 0.1 U/hr;
+  - 100%;
+  - outside 15 min–72 h;
+  - under Control-IQ;
+  - while a bolus runs;
+  - an untrusted clock (non-zero only);
+  - an unsynced profile (non-zero only).
+- A temp in the way:
+  - an automatic held temp is stopped and replaced;
+  - a refused set after that stop puts the automatic temp back;
+  - the clock-skew temp is replaced;
+  - a manual temp, or one the driver doesn't hold, fails `tempBasalAlreadyRunning` with no
+    `StopTempRate` sent.
+- The read-back mismatch, and a lost answer adopted, as `UnansweredTempBasalTests` does for the host path.
+- The reported dose: `percent × profileBasalRate`, `tempPercent`, `eventRaw` from `tempRateId`, and
+  `automatic: false`.
+- `automatic: false` survives:
+  - a segment cut;
+  - an occlusion stop and its continuation;
+  - a restore after a refused replacement;
+  - history adoption (`observeReplacedTempBasal`);
+  - basal reconciliation;
+  - a relaunch (`rawValue` round trip).
+- The status highlight is "Manual Temp Basal" for a manual temp, is outranked by every other
+  highlight, and clears once the temp ends.
+- `readTempRateStatus` passes its basal reading to `observeDeliveryState`. A temp found running that
+  the held state lacks is handled as the sync path handles it.
+
+### 12.2 Integration (faketandem)
+
+- `ManualTempBasalIntegrationTests`:
+  - set 130% for 45 min from the settings path, read back active, stop it, read back inactive;
+  - the host receives a manual temp and the stop;
+  - with the host's own temp running, stop it, let the host set another, then set from settings:
+    the host's temp is replaced.
+- The host pause itself (no `enactTempBasal` from the host while the manual temp runs) belongs in
+  conformance tests if the harness can't drive the host side.
+- If it is a flagged-only class, name it in both the macOS `integration` job and the Linux
+  `virtual-pump` job (CLAUDE.md).
+
+### 12.3 Hardware test plan additions
+
+Rows for [docs/hardware-test-plan.md](hardware-test-plan.md):
+
+| ID | Steps | Expected / record |
+|---|---|---|
+| T3 | In open loop, set 130% for 45 minutes from TandemKit's settings. Read the pump's screen. Stop it from the settings row after 10 minutes. | The pump shows a 130% temp with about 45 min left. The row and the active view show 130%, the rate, and a time left that matches the pump's. After the stop, the pump and the host return to the profile rate. |
+| T4 | Set a temp rate on the pump's own screen for 1 h 15 min, then open the screen. | It shows "Active temp rate" with the pump's percent. **Record `TempRateResponse.duration`** for a known duration, to fix its unit (F3). |
+| T5 | With a profile segment change 20 minutes away, set 130% for 1 hour. | Record the pump's rate before and after the change, and that the host's held dose is cut there and stays manual. |
+| T6 | With the max basal limit at 2.0 U/hr and a segment change from 0.8 to 1.0 U/hr ahead, set 250% across it. | The screen refuses 250% (pMax = 200%). Separately, set 240% just before the change on the pump's screen, and record what the pump does at the change (2.4 U/hr > limit). |
+| T7 | In Trio's and in Loop's closed loop, stop the loop's temp, then set a temp from settings. Let it run past a few loop cycles, then stop it. Repeat, letting it run to its end. | The host stops dosing for its length (Trio: "Manual Temp Basal Active"; Loop: the closed-loop switch explains why), the "Manual Temp Basal" highlight shows, and the host resumes at the stop and at the end. Record how Trio's alert and TandemKit's highlight read together. |
+
+---
+
+## 13. Decisions
+
+| ID | Question | Decided |
+|---|---|---|
+| D1 | Report a temp set from settings as manual (`automatic: false`), so Loop and Trio pause automatic dosing while it runs? | **Yes.** The closed-loop card says the loop pauses, rather than telling the user to go to open loop (§6.2). The driver keeps the flag (§8.4). |
+| D2 | In closed loop, should the active view offer to replace the loop's temp with a manual one? | **No.** Stop it, then set. |
+| — | If the loop sets a temp between that stop and "Set temp rate"? | **Replace it if it is automatic**; fail and reload for any other temp (§6.9). |
+| D3 | Minutes wheel step? | **5 minutes.** |
+| D4 | Default duration? | **30 minutes.** |
+| D5 | Bold text in the confirmations? | **No.** Plain `Alert`s. |
+| D6 | A status highlight while a manual temp runs? | **Yes**, "Manual Temp Basal", warning, lowest priority (§8.5). |
+| D7 | Extra details? | **The settings row** turns into "Stop manual temp basal" with "XX% (X.XXU/hr) with XXh XXm remaining" while a manual temp runs, and tapping it asks to stop (§4.2). Manual temps only. No percent on the "Set temp basal" row, and no "Started", "Ends at" or "Set by" on the active view. |
+| D8 | "(currently X.XX U/hr)": the temp's rate or the profile's? | **The temp's rate.** |
+| D9 | Warn on "Delete Pump" while a temp runs? | **No.** |
+| D10 | Hide the screen on pumps pumpX2 doesn't mark as supported? | **No**, not gated. |
