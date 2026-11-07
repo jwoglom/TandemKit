@@ -1911,8 +1911,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
-    /// Tears the transport down, reports the held doses and the pump's removal, then asks the host to
-    /// delete this manager. Returns once the host has removed it.
     public func delete() async {
         logger.debug("Deleting pump manager – tearing down transport")
         #if TANDEMKIT_VIRTUAL_PUMP
@@ -1922,8 +1920,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         telemetryScheduler.cancelAll()
         finalizeHeldDosesForDeactivation()
 
-        // The finalized doses and the removal go out on the delegate queue. Queue behind them, as
-        // notifyDelegateOfDeactivation did, so the host has them before it deletes this manager.
+        // A turn on the delegate queue, behind the batches above, so the host stores them before deleting.
         let delegate = await withCheckedContinuation { (continuation: CheckedContinuation<PumpManagerDelegate?, Never>) in
             pumpDelegate.notify { continuation.resume(returning: $0) }
         }

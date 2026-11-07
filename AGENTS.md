@@ -71,7 +71,9 @@ on the Doubles. A discrepancy that rounding explains never fails a command.
 `delegateQueue.async`. Loop opens them with `dispatchPrecondition(condition: .onQueue(queue))`, so
 a direct call from a driver queue crashes it, as a backfill tick reading
 `startDateToFilterNewPumpEvents` from the command queue did. `pumpDelegate.call` is a
-`queue.sync`, which deadlocks a caller already on the delegate queue.
+`queue.sync`, which deadlocks a caller already on the delegate queue. The exception is
+`pumpManagerWantsDeletion`, which is async and awaited off it, as LoopKit's default `delete()` does;
+`delete()` first takes a turn on the queue, so it follows every batch sent before it.
 
 Nothing goes out until the host has set both the delegate and its queue (`canNotifyDelegate`):
 `pumpDelegate.queue` reads `.main` until then, and Trio sets the delegate first.
@@ -237,8 +239,8 @@ host queue, so its state stays behind its lock.
   caller's own change, so its callers settle the pending change first.
 
 ### Deleting the pump manager
-- `prepareForDeactivation` sends one replacing batch that finalizes every held dose before
-  `pumpManagerWillDeactivate` (#350): left mutable, the host's next replacing batch, from whichever
+- `delete()` sends one replacing batch that finalizes every held dose before
+  `pumpManagerWantsDeletion` (#350): left mutable, the host's next replacing batch, from whichever
   pump manager comes next, deletes what it holds. A Tandem pump keeps delivering after the app
   forgets it, so nothing is stopped and no `.suspend` is due. A pending delivery change is reported
   at detection first. The batch also carries a "Pump Removed" `.replaceComponent(.pump)` if the
