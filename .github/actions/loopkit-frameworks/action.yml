@@ -88,7 +88,7 @@ runs:
           echo "prebuilt=false" >> "${GITHUB_OUTPUT}"
         fi
 
-    - name: Checkout LoopKit at the pinned revision
+    - name: Checkout LoopKit at the picked revision
       if: steps.loopkit.outputs.prebuilt != 'true'
       uses: actions/checkout@v6
       with:
