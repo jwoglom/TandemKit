@@ -1,4 +1,3 @@
-import LoopAlgorithm
 import LoopKit
 @testable import TandemKit
 import XCTest
