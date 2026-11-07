@@ -2,7 +2,6 @@ import Combine
 import CoreBluetooth
 import Dispatch
 import Foundation
-import LoopAlgorithm
 import LoopKit
 #if canImport(UIKit)
 import UIKit
