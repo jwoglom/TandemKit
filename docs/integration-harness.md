@@ -252,7 +252,7 @@ and a few seconds per pairing.
 4. Assert on `driver.delegate` / `driver.manager.state` and on
    `harness.client.snapshot()` / `harness.requestsSeen()`.
    `shutDownDriver()` ends a driver as the app going away does, for a relaunch: the host is told
-   nothing. `deactivateDriver()` is the host deleting the pump manager (`prepareForDeactivation`),
+   nothing. `deactivateDriver()` is the host deleting the pump manager (`delete()`),
    which finalizes every dose the host holds as mutable, so it is no relaunch. A setup flow's manager
    is made with `attachDelegate: false` and handed to the host with `Driver.adoptByHost()`, after
    `ConformanceTestCase.loadHistoryForSetup()` if the scenario loads the pump's history.
@@ -301,7 +301,7 @@ Nothing in Trio changes for it:
   one through the whole JPAKE exchange), `applyOnboardingSettings`, `bolus`, `cancelBolus`,
   `syncBasalSchedule`, `syncPumpTime`, `tempBasal` (a duration of 0 cancels), `suspend`, `resume`,
   `recordCartridgeChange`, `recordSiteChange`, `setFeatureFlag`, `deletePumpManager`
-  (`prepareForDeactivation`, as the pump settings screen's remove does; nothing reaches the manager
+  (`delete()`, as the pump settings screen's remove does; nothing reaches the manager
   afterwards), `sync`, `status`, and `pumpEventBatches`, every batch handed to Trio with Trio's
   completion. Trio completes a batch once it has saved it, so a completed log is all in the store.
   What the pump does on its own (a suspend, a bolus from its screen, a dropped link) goes through
