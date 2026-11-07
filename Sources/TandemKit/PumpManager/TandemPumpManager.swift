@@ -2007,8 +2007,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
-    public func prepareForDeactivation(_ completion: @escaping (Error?) -> Void) {
-        logger.debug("Preparing for pump deactivation – tearing down transport")
+    /// Tears the transport down, reports the held doses and the pump's removal, then asks the host to
+    /// delete this manager. Returns once the host has removed it.
+    public func delete() async {
+        logger.debug("Deleting pump manager – tearing down transport")
         #if TANDEMKIT_VIRTUAL_PUMP
         VirtualPumpControl.detach(self)
         #endif
@@ -2016,9 +2018,12 @@ public class TandemPumpManager: PumpManager, Pluggable {
         telemetryScheduler.cancelAll()
         finalizeHeldDosesForDeactivation()
 
-        notifyDelegateOfDeactivation {
-            completion(nil)
+        // The finalized doses and the removal go out on the delegate queue. Queue behind them, as
+        // notifyDelegateOfDeactivation did, so the host has them before it deletes this manager.
+        let delegate = await withCheckedContinuation { (continuation: CheckedContinuation<PumpManagerDelegate?, Never>) in
+            pumpDelegate.notify { continuation.resume(returning: $0) }
         }
+        await delegate?.pumpManagerWantsDeletion(self)
     }
 
     /// A setup flow left before the host was handed the manager (#603). Nothing owns it from here, so

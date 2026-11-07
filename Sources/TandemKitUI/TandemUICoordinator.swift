@@ -397,10 +397,9 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
         } else {
             // Held to the end: Trio's sheet lets this flow go once its pump manager is nil, and then only
             // this call dismisses the sheet.
-            pumpManager.prepareForDeactivation { _ in
-                DispatchQueue.main.async {
-                    self.completionDelegate?.completionNotifyingDidComplete(self)
-                }
+            Task { @MainActor in
+                await self.pumpManager.delete()
+                self.completionDelegate?.completionNotifyingDidComplete(self)
             }
         }
     }
