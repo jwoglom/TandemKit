@@ -581,7 +581,7 @@ final class PumpSideConformanceTests: ConformanceTestCase {
     // MARK: - D7
 
     /// The host deletes the pump manager while a bolus and a temp basal are running, through the
-    /// `prepareForDeactivation` Loop and Trio call. A Tandem pump keeps delivering both after the app
+    /// `delete()` Loop and Trio call. A Tandem pump keeps delivering both after the app
     /// forgets it, so no `.suspend` is due: the host is given both finalized as the pump will deliver
     /// them, before it is told of the deletion. Loop stores a finalized dose only once it has ended, so
     /// the temp basal is cut at the deletion and what remains of it is a dose of its own.
@@ -616,7 +616,7 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         try deactivateDriver()
         driver.drainDelegate()
 
-        XCTAssertEqual(driver.delegate.willDeactivateCount, 1, "pumpManagerWillDeactivate fires once")
+        XCTAssertEqual(driver.delegate.willDeactivateCount, 1, "pumpManagerWantsDeletion fires once")
         let journal = driver.delegate.journal
         let willDeactivate = try XCTUnwrap(journal.first { if case .willDeactivate = $0.kind { true } else { false } }?.index)
         let lastBatch = try XCTUnwrap(journal.last { $0.pumpEventBatch != nil }?.index)

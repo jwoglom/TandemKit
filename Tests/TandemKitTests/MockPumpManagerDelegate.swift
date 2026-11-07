@@ -329,8 +329,9 @@ nonisolated final class MockPumpManagerDelegate: PumpManagerDelegate {
         return false
     }
 
-    func pumpManagerWillDeactivate(_ manager: PumpManager) {
-        expectDelegateQueue(of: manager)
+    // Async, so LoopKit calls it off the delegate queue; TandemPumpManager.delete() queues behind the
+    // dose batches first, which `lastBatchAndDeactivation` pins.
+    func pumpManagerWantsDeletion(_: PumpManager) async {
         synchronized {
             _willDeactivateCount += 1
             record(.willDeactivate)
