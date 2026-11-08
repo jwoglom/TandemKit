@@ -410,20 +410,6 @@ class LoopTestCase: FaketandemIntegrationTestCase {
         return joined
     }
 
-    /// A strict expected failure for LoopKit/LoopKit#688: Loop stores a suspend its resume closed, with
-    /// no basal dose after it, as running to the reconciliation boundary. Fixed in LoopKit `next-dev` by
-    /// `0cff7afa` (LoopKit/LoopKit#689), which LoopWorkspace `next-dev` doesn't pin yet. Once it does,
-    /// the block passes, which fails the test, so remove this wrapper and its uses.
-    func expectLoopKit688<R>(_ body: () throws -> R) rethrows -> R {
-        let options = XCTExpectedFailure.Options()
-        options.isStrict = true
-        return try XCTExpectFailure(
-            "Loop stores a resumed suspend as running to the boundary (LoopKit/LoopKit#688)",
-            options: options,
-            failingBlock: body
-        )
-    }
-
     static func milliunits(_ units: Double) -> Int {
         Int((units * 1000).rounded())
     }

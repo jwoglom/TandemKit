@@ -22,7 +22,7 @@ final class LoopCartridgeTests: LoopTestCase {
         try loopStored("the resume") { events in
             events.contains { $0.type == .resume }
         }
-        let events = try expectLoopKit688 { try assertLoopStoredWhatTheOracleExpects().events }
+        let events = try assertLoopStoredWhatTheOracleExpects().events
         let basal = [PumpEventType.basal, .tempBasal].map(\.rawValue)
         XCTAssertEqual(
             events.compactMap(\.type).filter { !basal.contains($0) },
