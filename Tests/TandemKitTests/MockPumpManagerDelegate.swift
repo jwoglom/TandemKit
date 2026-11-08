@@ -329,8 +329,8 @@ nonisolated final class MockPumpManagerDelegate: PumpManagerDelegate {
         return false
     }
 
-    func pumpManagerWillDeactivate(_ manager: PumpManager) {
-        expectDelegateQueue(of: manager)
+    // Async, so off the delegate queue; `lastBatchAndDeactivation` pins its order instead.
+    func pumpManagerWantsDeletion(_: PumpManager) async {
         synchronized {
             _willDeactivateCount += 1
             record(.willDeactivate)

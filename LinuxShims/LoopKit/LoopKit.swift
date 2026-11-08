@@ -170,7 +170,7 @@
     {
         func pumpManagerBLEHeartbeatDidFire(_ pumpManager: PumpManager)
         func pumpManagerMustProvideBLEHeartbeat(_ pumpManager: PumpManager) -> Bool
-        func pumpManagerWillDeactivate(_ pumpManager: PumpManager)
+        func pumpManagerWantsDeletion(_ pumpManager: PumpManager) async
         func pumpManagerPumpWasReplaced(_ pumpManager: PumpManager)
         func pumpManager(
             _ pumpManager: PumpManager,
@@ -296,7 +296,7 @@
             limits deliveryLimits: DeliveryLimits,
             completion: @escaping (_ result: Result<DeliveryLimits, Error>) -> Void
         )
-        func prepareForDeactivation(_ completion: @escaping (Error?) -> Void)
+        func delete() async
     }
 
     @available(macOS 13.0, iOS 14.0, *) public extension PumpManager {
@@ -308,15 +308,8 @@
             supportedBolusVolumes.filter { $0 <= units }.max() ?? 0
         }
 
-        func prepareForDeactivation(_ completion: @escaping (Error?) -> Void) {
-            notifyDelegateOfDeactivation { completion(nil) }
-        }
-
-        func notifyDelegateOfDeactivation(completion: @escaping () -> Void) {
-            delegateQueue.async {
-                self.pumpManagerDelegate?.pumpManagerWillDeactivate(self)
-                completion()
-            }
+        func delete() async {
+            await pumpManagerDelegate?.pumpManagerWantsDeletion(self)
         }
     }
 

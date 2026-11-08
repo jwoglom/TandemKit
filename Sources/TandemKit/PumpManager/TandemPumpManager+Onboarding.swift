@@ -1,5 +1,4 @@
 import Foundation
-import LoopAlgorithm
 import LoopKit
 
 /// No clock or sounds field: neither failed write blocks setup. `showPumpTimeSyncWarning` flags a

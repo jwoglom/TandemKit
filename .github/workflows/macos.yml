@@ -26,6 +26,14 @@ on:
         description: "Run every TandemKitIntegrationTests class on macOS, not only those that need it"
         type: boolean
         default: false
+      trio_ref:
+        description: "nightscout/Trio branch/tag/SHA for the trio job; every job then builds against its LoopKit submodule (default: feat/tandem-closed-beta, and loopkit-frameworks' pinned LoopKit)"
+        required: false
+        default: ""
+      loop_ref:
+        description: "LoopKit/LoopWorkspace branch/tag/SHA for the loop job (default: feat/tandem-closed-beta)"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -48,6 +56,8 @@ jobs:
     outputs:
       run: ${{ steps.plan.outputs.run }}
       marker: ${{ steps.plan.outputs.marker }}
+      loopkit-repository: ${{ steps.loopkit.outputs.repository }}
+      loopkit-revision: ${{ steps.loopkit.outputs.revision }}
     steps:
       - name: Checkout TandemKit
         uses: actions/checkout@v6
@@ -64,6 +74,29 @@ jobs:
             jwoglom/faketandem ${{ github.head_ref }}
             nightscout/Trio feat/tandem-closed-beta
             LoopKit/LoopWorkspace feat/tandem-closed-beta
+
+      # Without trio_ref, loopkit-frameworks builds its pinned LoopKit.
+      - name: Pick LoopKit from trio_ref's submodule
+        id: loopkit
+        if: inputs.trio_ref != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TRIO_REF: ${{ inputs.trio_ref }}
+        run: |
+          set -euo pipefail
+          submodule="$(gh api "repos/nightscout/Trio/contents/LoopKit?ref=${TRIO_REF}" \
+            --jq 'select(.type == "submodule") | "\(.submodule_git_url) \(.sha)"')"
+          read -r url revision <<< "${submodule}"
+          if [[ -z "${revision:-}" ]]; then
+            echo "::error::nightscout/Trio ${TRIO_REF} has no LoopKit submodule"
+            exit 1
+          fi
+          repository="${url#https://github.com/}"
+          repository="${repository#git@github.com:}"
+          repository="${repository%.git}"
+          echo "repository=${repository}" >> "${GITHUB_OUTPUT}"
+          echo "revision=${revision}" >> "${GITHUB_OUTPUT}"
+          echo "### LoopKit: ${repository}@${revision} (nightscout/Trio ${TRIO_REF})" >> "${GITHUB_STEP_SUMMARY}"
 
   unit:
     name: unit tests
@@ -104,6 +137,8 @@ jobs:
           derived-data-path: ${{ env.DERIVED_DATA_PATH }}
           destination: ${{ env.SIMULATOR_DESTINATION }}
           xcode-version: ${{ env.XCODE_VERSION }}
+          loopkit-repository: ${{ needs.plan.outputs.loopkit-repository }}
+          loopkit-revision: ${{ needs.plan.outputs.loopkit-revision }}
 
       - name: Build TandemKitTests
         run: |
@@ -140,7 +175,7 @@ jobs:
 
   integration:
     name: integration tests (faketandem)
-    needs: unit
+    needs: [plan, unit]
     runs-on: [self-hosted, macOS]
     # A warm run takes ~5 minutes; with every class, ~25.
     timeout-minutes: ${{ inputs.all_integration_tests && 45 || 20 }}
@@ -182,6 +217,8 @@ jobs:
           derived-data-path: ${{ env.DERIVED_DATA_PATH }}
           destination: ${{ env.SIMULATOR_DESTINATION }}
           xcode-version: ${{ env.XCODE_VERSION }}
+          loopkit-repository: ${{ needs.plan.outputs.loopkit-repository }}
+          loopkit-revision: ${{ needs.plan.outputs.loopkit-revision }}
 
       # TANDEMKIT_VIRTUAL_PUMP swaps CoreBluetooth for the faketandem socket (VirtualPump/). The
       # TandemKitTests build carries VirtualCoreBluetoothTests, and fails if the driver starts using
@@ -260,7 +297,7 @@ jobs:
   # TrioDoseStoreOracle's prediction.
   trio:
     name: Trio in the simulator (faketandem)
-    needs: unit
+    needs: [plan, unit]
     runs-on: [self-hosted, macOS]
     # Trio, its LoopKit and the other kits build from source, incrementally from the derived data
     # cache when its key hits; the time covers a build from nothing.
@@ -298,11 +335,14 @@ jobs:
           derived-data-path: ${{ env.DERIVED_DATA_PATH }}
           destination: ${{ env.SIMULATOR_DESTINATION }}
           xcode-version: ${{ env.XCODE_VERSION }}
+          loopkit-repository: ${{ needs.plan.outputs.loopkit-repository }}
+          loopkit-revision: ${{ needs.plan.outputs.loopkit-revision }}
 
       - name: Check out Trio with this TandemKit
         id: trio
         uses: ./TandemKit/.github/actions/checkout-trio
         with:
+          ref: ${{ inputs.trio_ref }}
           tandemkit-ref: ${{ github.sha }}
 
       # Sets TRIO_DIR and TRIO_DERIVED_DATA, under $HOME so they are the same absolute paths on
@@ -366,7 +406,7 @@ jobs:
   # DoseStore's tables with LoopDoseStoreOracle's prediction.
   loop:
     name: Loop in the simulator (faketandem)
-    needs: unit
+    needs: [plan, unit]
     runs-on: [self-hosted, macOS]
     # Loop, its LoopKit and the other kits build from source, incrementally from the derived data
     # cache when its key hits; the time covers a build from nothing.
@@ -404,11 +444,14 @@ jobs:
           derived-data-path: ${{ env.DERIVED_DATA_PATH }}
           destination: ${{ env.SIMULATOR_DESTINATION }}
           xcode-version: ${{ env.XCODE_VERSION }}
+          loopkit-repository: ${{ needs.plan.outputs.loopkit-repository }}
+          loopkit-revision: ${{ needs.plan.outputs.loopkit-revision }}
 
       - name: Check out LoopWorkspace with this TandemKit
         id: loop
         uses: ./TandemKit/.github/actions/checkout-loop
         with:
+          ref: ${{ inputs.loop_ref }}
           tandemkit-ref: ${{ github.sha }}
 
       # As in trio: LOOP_DIR and LOOP_DERIVED_DATA under $HOME, the same on every runner.
