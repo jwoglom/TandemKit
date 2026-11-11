@@ -493,8 +493,8 @@ host queue, so its state stays behind its lock.
   highlight. While skewed, wherever the host counts its own scheduled rate the pump runs a temp at
   the percent of its own rate that delivers it (`maintainPumpClockSkewCompensation`). The host is not
   told of it: what it counts is what runs. A temp the driver did not set is left alone. A request
-  equal to the pump's own rate goes out as an explicit 100% temp, reported at that rate; whether
-  firmware accepts 100% is unconfirmed, and a refusal fails the command.
+  equal to the pump's own rate goes out as an explicit 100% temp, reported at that rate, which the
+  pump takes and flags as a temp in `CurrentBasalStatus`.
 - A pump clock more than `pumpClockOffsetTrustLimit` (24 h) off the phone's is more than a time zone
   or DST change explains, so nothing that adds insulin acts on it: `enactBolus` and `enactTempBasal`
   fail with `pumpClockUntrusted`, except a zero temp and a cancel, which only reduce delivery. It
@@ -519,8 +519,32 @@ host queue, so its state stays behind its lock.
   Control-IQ the pump also counts basal above and below the profile, so nothing is compared. Whether
   the pump moves boluses already given to a shortened insulin duration is unknown, so the longer one
   stays the window until that long after the change.
-- There is **no app-side temp basal rate check**; the pump's own max basal limit is the
-  only ceiling.
+- There is **no app-side rate check on the host's temp basals**; the pump's own max basal limit is
+  the only ceiling.
+
+### Temp basal from TandemKit's settings
+- `enactManualTempBasal` sends the percent the user confirmed or nothing. A non-zero percent under
+  the pump's 0.1 U/hr minimum or over its max basal limit at any profile rate in force over the
+  duration (`manualTempBasalPercents`) is refused, not clamped or raised: what the pump does when a
+  segment change takes a running temp past either is unconfirmed. 100% goes out as an explicit temp,
+  which holds the profile rate and keeps the host from adjusting basal while it runs. The rest of
+  the host path's checks apply as they are.
+- It is reported manual (`automatic: false`), so Loop and Trio pause automatic dosing while it runs,
+  and remembered in `manualTempRates`. A "Manual Temp Basal" status highlight shows while a manual temp
+  runs, below every other.
+- It replaces only the host's own temp (held `setByHost`, matching the read's percent and end) and the
+  clock-skew temp, with nothing more asked: the user asked for a new temp. Any other running temp,
+  a manual one included, refuses it with `tempBasalAlreadyRunning` and nothing is stopped.
+- Without Control-IQ it is confirmed as the host's temp is (`tempBasalReadbackMatches`), 100%
+  included. Under Control-IQ, which may set the rate the basal status reads, it is confirmed by
+  `TempRateResponse` active at the percent sent, and a lost answer is adopted from `TempRateResponse`
+  alone. A temp the pump took but reports at another percent, or none, fails
+  `tempRateReadbackMismatch` and is reported as the pump reports it.
+- Under Control-IQ it is sent anyway: some Mobi firmware takes a temp rate then and some refuses, and
+  nothing checks which. A refusal says Control-IQ is on. `stopTempBasalFromSettings` is the host's
+  cancel without its Control-IQ refusal, so a temp set then can be stopped.
+- `readTempRateStatus` dates the end from `TempRateResponse`'s start and duration (seconds), both on
+  the pump's clock, so it holds however far off that clock is.
 
 ### Unanswered bolus command
 - `write` gives nil whether `InitiateBolus` never left the phone, the pump refused it or its answer

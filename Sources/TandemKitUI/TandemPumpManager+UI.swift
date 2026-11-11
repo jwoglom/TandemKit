@@ -201,6 +201,19 @@ extension TandemPumpManager {
             )
         }
 
+        // A manual temp pauses the host's automatic dosing, and from TandemKit's settings it can run
+        // for 72 hours: the host's status is where the user sees that.
+        if state.basalDose.type == .tempBasal, !state.basalDose.automatic, state.basalDose.estimatedEndDate > now {
+            return PumpStatusHighlight(
+                localizedMessage: String(
+                    localized: "Manual Temp Basal",
+                    comment: "Status highlight that a manual temp basal is running, which pauses the app's automatic dosing."
+                ),
+                imageName: "exclamationmark.circle.fill",
+                state: .warning
+            )
+        }
+
         return nil
     }
 }
