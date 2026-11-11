@@ -27,7 +27,7 @@ on:
         type: boolean
         default: false
       trio_ref:
-        description: "nightscout/Trio branch/tag/SHA for the trio job; every job then builds against its LoopKit submodule (default: feat/tandem-closed-beta, and loopkit-frameworks' pinned LoopKit)"
+        description: "nightscout/Trio branch/tag/SHA for the trio job; every job then builds against its LoopKit submodule (default: feat/tandem-closed-beta, or -next-dev on a TandemKit branch named for next-dev; and loopkit-frameworks' pinned LoopKit)"
         required: false
         default: ""
       trio_repository:
@@ -35,7 +35,7 @@ on:
         required: false
         default: ""
       loop_ref:
-        description: "LoopKit/LoopWorkspace branch/tag/SHA for the loop job (default: feat/tandem-closed-beta)"
+        description: "LoopKit/LoopWorkspace branch/tag/SHA for the loop job (default: feat/tandem-closed-beta, or -next-dev on a TandemKit branch named for next-dev)"
         required: false
         default: ""
 
@@ -76,8 +76,8 @@ jobs:
           workflow: macos
           externals: |
             jwoglom/faketandem ${{ github.head_ref }}
-            nightscout/Trio feat/tandem-closed-beta
-            LoopKit/LoopWorkspace feat/tandem-closed-beta
+            nightscout/Trio ${{ contains(github.head_ref || github.ref_name, 'next-dev') && 'feat/tandem-closed-beta-next-dev' || 'feat/tandem-closed-beta' }}
+            LoopKit/LoopWorkspace ${{ contains(github.head_ref || github.ref_name, 'next-dev') && 'feat/tandem-closed-beta-next-dev' || 'feat/tandem-closed-beta' }}
 
       # Without trio_ref, loopkit-frameworks builds its pinned LoopKit.
       - name: Pick LoopKit from trio_ref's submodule
