@@ -23,9 +23,8 @@ public enum ManualTempBasalForm {
         TandemPumpManager.supportedTempBasalMinutes.contains(Int(duration.minutes.rounded(.down)))
     }
 
-    /// 100% changes nothing, so it is never set.
     public static func canSet(_ percent: Int, accepted: ClosedRange<Int>?, duration: TimeInterval) -> Bool {
-        percent != 100 && isValid(percent, accepted: accepted) && isValid(duration: duration)
+        isValid(percent, accepted: accepted) && isValid(duration: duration)
     }
 
     /// The next multiple of 10 up, raised to the lowest percent the pump takes; nil at the top.

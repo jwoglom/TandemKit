@@ -950,7 +950,7 @@ Every new test file goes in the `TandemKitTests` target (`scripts/check_xcodepro
   - a typed rate becomes the nearest whole percent;
   - one step is 10%;
   - switching tabs keeps the percent.
-- 100% disables Set.
+- 100% can be set.
 - The duration:
   - the minutes wheel offers 00–55 in steps of 5;
   - 0 h 10 min and 72 h 5 min disable Set;
@@ -975,7 +975,6 @@ Every new test file goes in the `TandemKitTests` target (`scripts/check_xcodepro
 - Refused, with nothing sent:
   - over the max basal limit;
   - under 0.1 U/hr;
-  - 100%;
   - outside 15 min–72 h;
   - while a bolus runs;
   - an untrusted clock (non-zero only);
