@@ -18,6 +18,13 @@ enum CommandFailure: Int, Identifiable {
     var id: Int { rawValue }
 }
 
+/// A temp basal set from TandemKit's settings, which the settings row offers to stop.
+struct ManualTempBasalRow: Equatable {
+    let percent: Int
+    let unitsPerHour: Double
+    let endDate: Date
+}
+
 class TandemKitSettingsViewModel: ObservableObject {
     private let log = TandemLogger(category: "TandemKitSettingsViewModel")
     private var pumpManager: TandemPumpManager?
@@ -94,6 +101,7 @@ class TandemKitSettingsViewModel: ObservableObject {
     @Published var controlIQSupportEnabled: Bool = false
     @Published var quickBolusButtonSupportEnabled: Bool = false
     @Published var manualTempBasalSupportEnabled: Bool = false
+    @Published var manualTempBasal: ManualTempBasalRow?
 
     /// Whether to warn that Control-IQ is running open-loop for want of a CGM. Only a pump we know
     /// has no sensor session earns the warning; an unknown session state does not.
@@ -154,6 +162,7 @@ class TandemKitSettingsViewModel: ObservableObject {
         controlIQSupportEnabled = pumpManager?.state.featureFlags.controlIQSupport ?? false
         quickBolusButtonSupportEnabled = pumpManager?.state.featureFlags.quickBolusButtonSupport ?? false
         manualTempBasalSupportEnabled = pumpManager?.state.featureFlags.manualTempBasalSupport ?? false
+        manualTempBasal = pumpManager.flatMap(Self.manualTempBasal(in:))
         isCGMActiveOnPump = pumpManager?.state.isCGMSensorSessionConfigured
         reservoirValue = pumpManager?.reservoirLevel
         connectionIssue = pumpManager?.connectionIssue
@@ -395,6 +404,49 @@ class TandemKitSettingsViewModel: ObservableObject {
         }
     }
 
+    /// Not a temp the loop or the pump's screen set: only one set from TandemKit's settings is
+    /// remembered by its `tempRateId`.
+    static func manualTempBasal(in pumpManager: TandemPumpManager) -> ManualTempBasalRow? {
+        let held = pumpManager.state.basalDose
+        guard held.type == .tempBasal, !held.automatic, held.estimatedEndDate > pumpManager.now,
+              let percent = held.tempPercent, let tempRateId = held.tempRateId, pumpManager.isManualTempRate(tempRateId)
+        else {
+            return nil
+        }
+        return ManualTempBasalRow(percent: percent, unitsPerHour: held.value, endDate: held.estimatedEndDate)
+    }
+
+    /// Rounded up, so a temp with seconds left still reads "1m".
+    static func manualTempBasalSubtext(_ temp: ManualTempBasalRow, now: Date) -> String {
+        let formatter = DateComponentsFormatter()
+        formatter.unitsStyle = .abbreviated
+        formatter.allowedUnits = [.hour, .minute]
+        let minutes = (max(0, temp.endDate.timeIntervalSince(now)) / 60).rounded(.up)
+        return String(
+            format: String(
+                localized: "%1$d%% (%2$@U/hr) with %3$@ remaining",
+                comment: "Subtext of the settings row that stops a manual temp basal (1: percent, 2: rate, 3: time left)"
+            ),
+            temp.percent,
+            String(format: "%.2f", temp.unitsPerHour),
+            formatter.string(from: minutes * 60) ?? ""
+        )
+    }
+
+    /// The settings stop, which Control-IQ does not refuse: a temp set under it can be stopped here.
+    func stopManualTempBasal() {
+        guard let pumpManager else { return }
+        isUpdatingPumpState = true
+        pumpManager.stopTempBasalFromSettings { error in
+            DispatchQueue.main.async {
+                self.isUpdatingPumpState = false
+                if error != nil {
+                    self.commandFailure = .stopTempRate
+                }
+            }
+        }
+    }
+
     func syncPumpTime() {
         guard let pumpManager = pumpManager else {
             return
@@ -455,6 +507,7 @@ extension TandemKitSettingsViewModel: PumpManagerStatusObserver {
             self.controlIQSupportEnabled = pumpManager.state.featureFlags.controlIQSupport
             self.quickBolusButtonSupportEnabled = pumpManager.state.featureFlags.quickBolusButtonSupport
             self.manualTempBasalSupportEnabled = pumpManager.state.featureFlags.manualTempBasalSupport
+            self.manualTempBasal = Self.manualTempBasal(in: pumpManager)
             self.isCGMActiveOnPump = pumpManager.state.isCGMSensorSessionConfigured
             self.scheduledBasal = pumpManager.scheduledBasalRateInForce()
             self.pumpState = pumpManager.state.pumpState

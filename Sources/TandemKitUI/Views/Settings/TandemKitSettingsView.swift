@@ -10,6 +10,7 @@ private enum SettingsAlertType: Identifiable {
     case noCGMConnected
     case stopTempRate
     case stopTempRateClosedLoopWarning
+    case stopManualTempBasal
     case suspendDelivery
     case resumeDelivery
 
@@ -23,6 +24,7 @@ private enum SettingsAlertType: Identifiable {
         case .noCGMConnected: return "noCGMConnected"
         case .stopTempRate: return "stopTempRate"
         case .stopTempRateClosedLoopWarning: return "stopTempRateClosedLoopWarning"
+        case .stopManualTempBasal: return "stopManualTempBasal"
         case .suspendDelivery: return "suspendDelivery"
         case .resumeDelivery: return "resumeDelivery"
         }
@@ -388,12 +390,17 @@ struct TandemKitSettingsView: View {
                     action: { viewModel.openNotifications() }
                 )
 
-                if viewModel.manualTempBasalSupportEnabled {
-                    navigationLink(
-                        label: Text("Set temp basal", comment: "Label for the row that opens the temp basal screen"),
-                        action: { viewModel.openTempBasal() }
-                    )
-                    .disabled(viewModel.isDeliverySuspended || viewModel.suspendResumeText == nil || viewModel.isUpdatingPumpState)
+                if let manualTempBasal = viewModel.manualTempBasal {
+                    // Past its end the temp has run out on the pump, before the next reading says so.
+                    TimelineView(.everyMinute) { context in
+                        if manualTempBasal.endDate > context.date || !viewModel.manualTempBasalSupportEnabled {
+                            stopManualTempBasalRow(manualTempBasal, now: context.date)
+                        } else {
+                            setTempBasalRow
+                        }
+                    }
+                } else if viewModel.manualTempBasalSupportEnabled {
+                    setTempBasalRow
                 }
 
                 if let suspendResumeText = viewModel.suspendResumeText {
@@ -674,6 +681,21 @@ struct TandemKitSettingsView: View {
                     ),
                     secondaryButton: .cancel()
                 )
+            case .stopManualTempBasal:
+                return Alert(
+                    title: Text(String(
+                        format: String(
+                            localized: "Stop the active temp rate of %d%%?",
+                            comment: "Confirmation before stopping the temp basal that runs (the percent of the profile)"
+                        ),
+                        viewModel.manualTempBasal?.percent ?? 0
+                    )),
+                    primaryButton: .destructive(
+                        Text("Stop temp rate", comment: "Button that confirms stopping the running temp basal"),
+                        action: { viewModel.stopManualTempBasal() }
+                    ),
+                    secondaryButton: .cancel()
+                )
             case .suspendDelivery:
                 return Alert(
                     title: Text("Suspend Insulin Delivery", comment: "Title for confirm suspend insulin delivery alert"),
@@ -859,13 +881,43 @@ struct TandemKitSettingsView: View {
                     }
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        if dose.type == .tempBasal {
+                        guard dose.type == .tempBasal else { return }
+                        // The screen is where a temp is stopped; without the flag, the stop it replaced.
+                        if viewModel.manualTempBasalSupportEnabled {
+                            viewModel.openTempBasal()
+                        } else {
                             activeAlert = .stopTempRate
                         }
                     }
                 }
             }
         }
+    }
+
+    private var setTempBasalRow: some View {
+        navigationLink(
+            label: Text("Set temp basal", comment: "Label for the row that opens the temp basal screen"),
+            action: { viewModel.openTempBasal() }
+        )
+        .disabled(viewModel.isDeliverySuspended || viewModel.suspendResumeText == nil || viewModel.isUpdatingPumpState)
+    }
+
+    private func stopManualTempBasalRow(_ manualTempBasal: ManualTempBasalRow, now: Date) -> some View {
+        Button(action: { activeAlert = .stopManualTempBasal }) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Stop manual temp basal", comment: "Label for the row that stops a temp basal set from TandemKit's settings")
+                    Text(TandemKitSettingsViewModel.manualTempBasalSubtext(manualTempBasal, now: now))
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+                if viewModel.isUpdatingPumpState {
+                    ActivityIndicator(isAnimating: .constant(true), style: .medium)
+                }
+            }
+        }
+        .disabled(viewModel.isUpdatingPumpState || viewModel.suspendResumeText == nil)
     }
 
     var stopTempRateMessage: String {

@@ -170,6 +170,67 @@ import XCTest
         )
     }
 
+    // MARK: - A manual temp basal
+
+    private func managerHoldingATemp(automatic: Bool, rememberedAsManual: Bool, bluetooth: StubPumpBluetooth = StubPumpBluetooth()) -> TandemPumpManager {
+        var state = TandemPumpManagerState(rawValue: [:])
+        state.pumpState.pumpSerial = 424_242
+        state.basalRateSchedule = BasalRateSchedule(dailyItems: [RepeatingScheduleValue(startTime: 0, value: 1.0)])!
+        let manager = TandemPumpManager(state: state, bluetooth: bluetooth)
+        manager.state.basalDose = UnfinalizedDose(
+            tempRate: 1.3,
+            duration: .minutes(72),
+            automatic: automatic,
+            insulinType: .novolog,
+            startDate: Date(),
+            tempRateId: 42,
+            tempPercent: 130
+        )
+        if rememberedAsManual {
+            manager.rememberManualTempRate(tempRateId: 42)
+        }
+        return manager
+    }
+
+    func testATempSetFromSettingsOffersTheStopRow() {
+        let viewModel = makeSettingsViewModel(managerHoldingATemp(automatic: false, rememberedAsManual: true))
+
+        XCTAssertEqual(viewModel.manualTempBasal?.percent, 130)
+        XCTAssertEqual(viewModel.manualTempBasal?.unitsPerHour, 1.3)
+    }
+
+    func testTheLoopsTempAndATempSetOnThePumpOfferNoStopRow() {
+        XCTAssertNil(makeSettingsViewModel(managerHoldingATemp(automatic: true, rememberedAsManual: false)).manualTempBasal)
+        XCTAssertNil(makeSettingsViewModel(managerHoldingATemp(automatic: false, rememberedAsManual: false)).manualTempBasal)
+    }
+
+    func testTheStopRowsSubtextGivesThePercentTheRateAndTheTimeLeft() {
+        let now = Date()
+        let temp = ManualTempBasalRow(percent: 130, unitsPerHour: 1.3, endDate: now.addingTimeInterval(.minutes(71) + 30))
+
+        XCTAssertEqual(TandemKitSettingsViewModel.manualTempBasalSubtext(temp, now: now), "130% (1.30U/hr) with 1h 12m remaining")
+    }
+
+    func testTheStopRowStopsTheTempUnderControlIQToo() {
+        let bluetooth = StubPumpBluetooth()
+        bluetooth.stub(CurrentBasalStatusRequest.self, with: CurrentBasalStatusResponse(
+            profileBasalRate: 1000,
+            currentBasalRate: 1300,
+            basalModifiedBitmask: 0x02
+        ))
+        bluetooth.stub(StopTempRateRequest.self, with: StopTempRateResponse(status: 0, tempRateId: 42))
+        let manager = managerHoldingATemp(automatic: false, rememberedAsManual: true, bluetooth: bluetooth)
+        manager.state.useControlIQ = true
+        let viewModel = makeSettingsViewModel(manager)
+
+        viewModel.stopManualTempBasal()
+        drainMainQueue(until: { !viewModel.isUpdatingPumpState })
+
+        XCTAssertEqual(bluetooth.sent(StopTempRateRequest.self).count, 1)
+        XCTAssertNil(viewModel.commandFailure)
+        XCTAssertEqual(manager.state.basalDose.type, .basal)
+    }
+
     private func makeControlIQSwitchViewModel(
         sessionState: CGMStatusV2Response.SessionState,
         hasValues: Bool = true

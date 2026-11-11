@@ -95,13 +95,13 @@ import XCTest
 
     // MARK: - The form
 
-    func testItStartsAtOneHundredPercentForThirtyMinutesAndCannotSetThat() {
+    func testItStartsAtOneHundredPercentForThirtyMinutesAndCanSetThat() {
         let viewModel = makeViewModel()
         viewModel.apply(.success(status()))
 
         XCTAssertEqual(viewModel.percent, 100)
         XCTAssertEqual(viewModel.duration, .minutes(30))
-        XCTAssertFalse(viewModel.canSet)
+        XCTAssertTrue(viewModel.canSet)
 
         viewModel.stepUp()
         XCTAssertEqual(viewModel.percent, 110)

@@ -231,16 +231,13 @@ screen is manual, so the loop's temps and the pump screen's never switch the row
 
 ### 4.4 Existing tap-to-stop in the header
 
-- Tapping the temp rate in the header (`deliveryStatus`, `TandemKitSettingsView.swift:852-857`)
-  opens the "Temp Basal Active" alert. A second "WARNING" alert follows in closed loop
-  (`:638-668`).
-- That tap should push the new screen instead. The header then offers no stop of its own: the loop's
-  temp can't be stopped from TandemKit, and any other temp is stopped from the screen with its one
-  confirmation. The two alerts and `SettingsAlertType.stopTempRate` / `.stopTempRateClosedLoopWarning` go, and
-  nothing replaces the closed-loop warning. Its copy named "the oref algorithm", which read wrong in
-  Loop.
-- `TandemKitSettingsViewModel.stopTempRate()` stays, for the row in §4.2, and the new view model
-  calls the same stop.
+- Tapping the temp rate in the header (`deliveryStatus` in `TandemKitSettingsView.swift`) opened the
+  "Temp Basal Active" alert, and a second "WARNING" alert in closed loop.
+- While Manual Temp Basal Support is on, that tap opens the screen instead, so a stop always comes with
+  the same one confirmation, and nothing offers to stop the loop's own temp. While the flag is off the
+  two alerts stay as they were, so turning the screen off takes nothing away.
+- `TandemKitSettingsViewModel.stopTempRate()` stays for those alerts; the row in §4.2 uses
+  `stopManualTempBasal()`, which calls the settings stop.
 
 ---
 
