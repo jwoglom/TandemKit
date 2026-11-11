@@ -14,9 +14,9 @@ final class ManualTempBasalFormTests: XCTestCase {
         XCTAssertFalse(Form.isValid(251, accepted: 18 ... 250))
     }
 
-    func testOneHundredPercentIsValidButNeverSet() {
+    func testOneHundredPercentCanBeSet() {
         XCTAssertTrue(Form.isValid(100, accepted: 10 ... 250))
-        XCTAssertFalse(Form.canSet(100, accepted: 10 ... 250, duration: .minutes(30)))
+        XCTAssertTrue(Form.canSet(100, accepted: 10 ... 250, duration: .minutes(30)))
         XCTAssertTrue(Form.canSet(110, accepted: 10 ... 250, duration: .minutes(30)))
     }
 

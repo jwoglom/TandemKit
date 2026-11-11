@@ -1352,7 +1352,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
             logger.warning("No basal status after an unanswered SetTempRate; the next reading settles it")
             return (nil, false)
         }
-        guard Self.tempBasalReadbackMatches(status, percent: percent),
+        // Under Control-IQ the rate is Control-IQ's to set; the temp rate the pump reports is the one it took.
+        guard state.useControlIQ || Self.tempBasalReadbackMatches(status, percent: percent),
               let temp = bluetooth.write(TempRateRequest()), temp.active, temp.percentage == percent
         else {
             observeDeliveryState(status.basalType)

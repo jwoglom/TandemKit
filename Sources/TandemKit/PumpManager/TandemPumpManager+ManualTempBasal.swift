@@ -90,16 +90,13 @@ extension TandemPumpManager {
     }
 
     /// A temp set from TandemKit's settings at `percent` of the pump's profile, reported to the host
-    /// as manual so it pauses automatic dosing while the temp runs. The number goes out as confirmed
-    /// or not at all: nothing is clamped or rounded. It replaces the host's own temp, not another.
+    /// as manual so it pauses automatic dosing while the temp runs; at 100% that holds the profile
+    /// rate. The number goes out as confirmed or not at all: nothing is clamped or rounded. It
+    /// replaces the host's own temp, not another.
     public func enactManualTempBasal(percent: Int, duration: TimeInterval, completion: @escaping (PumpManagerError?) -> Void) {
         let completion = watchdogged(timeoutResult: .connection(PumpCommError.pumpNotConnected), completion)
         logger.info("Setting a manual temp basal at \(percent)% for \(duration)s")
 
-        guard percent != 100 else {
-            completion(.configuration(TandemPumpManagerValidationError.manualTempBasalUnchanged))
-            return
-        }
         let isZeroTemp = percent == 0
         let minutes = Int(exactly: duration.minutes.rounded(.down)) ?? Int.max
         if let refusal = tempBasalRefusalBeforeConnecting(.enactManualTempBasal, minutes: minutes, duration: duration, isZeroTemp: isZeroTemp) {
@@ -183,9 +180,20 @@ extension TandemPumpManager {
             }
             self.rememberManualTempRate(tempRateId: response.tempRateId)
 
-            // Under Control-IQ the pump's acceptance is the confirmation: Control-IQ may set the rate
-            // it runs, so a rate read back says nothing about the temp.
-            if !self.state.useControlIQ, let readback = self.bluetooth.write(CurrentBasalStatusRequest()) {
+            if self.state.useControlIQ {
+                // Control-IQ may set the rate the pump runs, but the temp rate it reports is the one it took.
+                if let readback = self.bluetooth.write(TempRateRequest()), !(readback.active && readback.percentage == percent) {
+                    self.rejectUnconfirmedManualTempBasal(
+                        readback,
+                        percent: percent,
+                        profileBasalRate: currentBasal.profileBasalRate,
+                        duration: programmedDuration,
+                        tempRateId: response.tempRateId,
+                        completion: completion
+                    )
+                    return
+                }
+            } else if let readback = self.bluetooth.write(CurrentBasalStatusRequest()) {
                 guard Self.tempBasalReadbackMatches(readback, percent: percent) else {
                     self.rejectMismatchedTempBasal(
                         readback,
@@ -204,6 +212,28 @@ extension TandemPumpManager {
             self.logger.info("Manual temp basal enacted at \(percent)% (\(rate) U/hr) for \(minutes) min")
             completion(nil)
         }
+    }
+
+    /// Under Control-IQ the pump took the temp but reports another or none. The host is told what the
+    /// pump reports, so it counts what goes in, and the set still fails.
+    private func rejectUnconfirmedManualTempBasal(
+        _ readback: TempRateResponse,
+        percent: Int,
+        profileBasalRate: Double,
+        duration: TimeInterval,
+        tempRateId: Int,
+        completion: @escaping (PumpManagerError?) -> Void
+    ) {
+        let running = readback.active ? readback.percentage : nil
+        let reported = running.map { "a \($0)%" } ?? "no"
+        logger.error("The pump reports \(reported) temp rate after taking a manual temp of \(percent)%")
+        if let running {
+            let rate = roundToSupportedBasalRate(unitsPerHour: profileBasalRate * Double(running) / 100)
+            recordTempBasal(rate: rate, percent: running, duration: duration, tempRateId: tempRateId, origin: .settings)
+        } else {
+            startScheduledBasalDose()
+        }
+        completion(.deviceState(TandemPumpManagerValidationError.tempRateReadbackMismatch(sent: percent, running: running)))
     }
 
     /// Stops whatever temp the pump runs, as the host's cancel does but under Control-IQ too: a manual
