@@ -67,6 +67,7 @@
 		16D569BAEA24538E2944538E /* EnterChangeCartridgeModeResponseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 104B14379AA57F77FEA3D5BC /* EnterChangeCartridgeModeResponseTests.swift */; };
 		172C441D638DC7687BE91919 /* ParamChangeReminderHistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 708E0F32282F458D987BCEA3 /* ParamChangeReminderHistoryLogTests.swift */; };
 		17D913394D3865C7B889E1CD /* TandemUICoordinatorOnboardingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 617290D8DD8BCDB5A4B39F83 /* TandemUICoordinatorOnboardingTests.swift */; };
+		18115AD2809926F37BC9D994 /* ManualTempBasalForm.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AC809CEFE99144264D26C1D /* ManualTempBasalForm.swift */; };
 		18BE8C158ADD05B83044E30A /* ExitFillTubingModeResponseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FA249222CB98F020C43BF23 /* ExitFillTubingModeResponseTests.swift */; };
 		1966C29137D8D2BAB0FBC2E7 /* MTUIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50175EC83B3B380FA4BB2FD2 /* MTUIntegrationTests.swift */; };
 		1A02E3EE2F2C949900203519 /* ErrorSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A02E3ED2F2C949900203519 /* ErrorSheet.swift */; };
@@ -160,6 +161,7 @@
 		32A216701528DD74F77F1E51 /* TrioOnboardingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 022558C90E1EECB5840E0FA0 /* TrioOnboardingTests.swift */; };
 		34953922D28A81F80C26AD0E /* IobSnapshotPreBolusHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 128037D62D16A54AEF4133ED /* IobSnapshotPreBolusHistoryLog.swift */; };
 		349A53A7050BFD88718D8AF7 /* ControlIQInfoV2ResponseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31E4E60DEA5A4D79602E18F6 /* ControlIQInfoV2ResponseTests.swift */; };
+		34C209C3F846E0688953B183 /* ManualTempBasalFormTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83A917974DBD7300BE2EA302 /* ManualTempBasalFormTests.swift */; };
 		34D04062A21A9F43C13D8FDE /* CreateIDPRequestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73C4BBB517A47A66EEB9CF09 /* CreateIDPRequestTests.swift */; };
 		351D925B5CBA11BAC2A61EBE /* PumpGlobalsResponseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28DDF9E9C49674C107BB72AD /* PumpGlobalsResponseTests.swift */; };
 		3551C60D490C507110C73FF2 /* CurrentBatteryV2ResponseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8109CC504DE8E84092F9261D /* CurrentBatteryV2ResponseTests.swift */; };
@@ -573,6 +575,7 @@
 		45439712E6B8516F44C04BC9 /* DismissNotificationResponseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1583B2E755D178E7F3FEEFCE /* DismissNotificationResponseTests.swift */; };
 		45544AAD2BD473664D1D5484 /* TrioBolusTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84FAF150F896D35B580FA3FC /* TrioBolusTests.swift */; };
 		459D3D10FAE7CAC9A1DF81B6 /* Jpake2RequestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAE02D9B0F23C1C647C0577C /* Jpake2RequestTests.swift */; };
+		46222B6D2D9705023B81ED0A /* TandemKitTempBasalViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 773FD15924D8266E41042F48 /* TandemKitTempBasalViewModel.swift */; };
 		46D2C1E4A9C35F1F6B4D3DB5 /* GlobalMaxBolusSettingsResponseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C61218802D632774695166F3 /* GlobalMaxBolusSettingsResponseTests.swift */; };
 		46D76E70891D8D0B321780F9 /* PumpTimeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25DE17CAD0CFC969BD3EC42F /* PumpTimeline.swift */; };
 		46D7AB9E444826E68C022221 /* Jpake1bRequestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54F3145C54DDDBF455ADF6B9 /* Jpake1bRequestTests.swift */; };
@@ -818,6 +821,7 @@
 		9FEB1326AADC19FEFFEA7D83 /* AlertAckHistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D44D327EE965B58A6C953125 /* AlertAckHistoryLogTests.swift */; };
 		A043C3A220A1C9F67FE1DD9D /* SwiftECC in Frameworks */ = {isa = PBXBuildFile; productRef = 4C2C6FA4D56B71100B10551F /* SwiftECC */; };
 		A164564C55F5A546E9ECCA34 /* AlarmClearedHistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDF093DB8D0803478C40D8F0 /* AlarmClearedHistoryLogTests.swift */; };
+		A17A55EAD659E9D67860664C /* TandemKitTempBasalViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 708AAB7DDEA44DE7BE14A6D7 /* TandemKitTempBasalViewModelTests.swift */; };
 		A1B2C3D40002CLOCKGATED00 /* TandemClockGatedDecisionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40001CLOCKGATED00 /* TandemClockGatedDecisionTests.swift */; };
 		A1C74BE4BA7AD2A0E1550F0E /* DoseOracleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4D59BA22456DA1063B22102 /* DoseOracleTests.swift */; };
 		A1DB36E1D91B4BFEE8E2008B /* SetG6TransmitterIdResponseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD70F568F0E4DAB4A6BDB987 /* SetG6TransmitterIdResponseTests.swift */; };
@@ -1041,6 +1045,7 @@
 		F5BE1A665CE7CE071002B3FB /* MessageSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 139F3E9873662420781278CD /* MessageSupport.swift */; };
 		F5E8EB7EC0AB6A795F2C534D /* LoopBasalScheduleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B6D12AF27E63B08327DC5C7 /* LoopBasalScheduleTests.swift */; };
 		F6D0DD0695AC7793E106FE5B /* ChargingStoppedHistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CA96EC328A544BC0F6C0403 /* ChargingStoppedHistoryLogTests.swift */; };
+		F72C1F48CFC8BEF851AA1421 /* TandemKitTempBasalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FE8A20A76C039DBFBFADDDB /* TandemKitTempBasalView.swift */; };
 		F765B0CE922422A1CBCB7A17 /* HistoryRequestCountersHistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CB94C5C7B009811E7D1D066 /* HistoryRequestCountersHistoryLogTests.swift */; };
 		F78E5A17C0C5A2EA909F3C2D /* ControlIQAutomatedInsulinHistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE92FC152D5A6D39AB123411 /* ControlIQAutomatedInsulinHistoryLogTests.swift */; };
 		F81C580D1165F5C2FE19A0E0 /* EnterChangeCartridgeModeRequestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC0F4170DF4517C06BEC9C75 /* EnterChangeCartridgeModeRequestTests.swift */; };
@@ -1669,6 +1674,7 @@
 		5F512696F29CC0A7099C21D2 /* CgmAlertClearedDexHistoryLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CgmAlertClearedDexHistoryLogTests.swift; sourceTree = "<group>"; };
 		5F87E6C9EE1E54E3383D3C32 /* VersionsAHistoryLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VersionsAHistoryLogTests.swift; sourceTree = "<group>"; };
 		5FCF43E1E212774C16E62D8F /* CgmStartSessionHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmStartSessionHistoryLog.swift; sourceTree = "<group>"; };
+		5FE8A20A76C039DBFBFADDDB /* TandemKitTempBasalView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TandemKitTempBasalView.swift; sourceTree = "<group>"; };
 		5FFB509583964597A4FE62CF /* TandemKitFeatureFlagsViewModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TandemKitFeatureFlagsViewModelTests.swift; sourceTree = "<group>"; };
 		608CC3E78E8FB90A9E684D42 /* RenameIDPRequestTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RenameIDPRequestTests.swift; sourceTree = "<group>"; };
 		610B8475C18ECCB202C7F720 /* HistoryRequestRangeHistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HistoryRequestRangeHistoryLog.swift; sourceTree = "<group>"; };
@@ -1713,6 +1719,7 @@
 		6F29D40336592447A8EC3385 /* EcJpakePerformanceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EcJpakePerformanceTests.swift; sourceTree = "<group>"; };
 		700AC520E8F3BC89B86D1E73 /* SetDexcomG7PairingCodeResponseTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SetDexcomG7PairingCodeResponseTests.swift; sourceTree = "<group>"; };
 		70735598355AA52F0D4CBACA /* BolusReportLedger.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BolusReportLedger.swift; sourceTree = "<group>"; };
+		708AAB7DDEA44DE7BE14A6D7 /* TandemKitTempBasalViewModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TandemKitTempBasalViewModelTests.swift; sourceTree = "<group>"; };
 		708E0F32282F458D987BCEA3 /* ParamChangeReminderHistoryLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ParamChangeReminderHistoryLogTests.swift; sourceTree = "<group>"; };
 		70E2380154F4F5608EF15B31 /* SetMaxBasalLimitRequestTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SetMaxBasalLimitRequestTests.swift; sourceTree = "<group>"; };
 		71570600000000000000EA02 /* HistoryLogExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryLogExport.swift; sourceTree = "<group>"; };
@@ -1738,6 +1745,7 @@
 		75CC39F875435EC2A981412C /* DismissNotificationResponseHistoryLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DismissNotificationResponseHistoryLogTests.swift; sourceTree = "<group>"; };
 		7690D36D3412C06BEB7C478E /* CgmAlertActivatedDexHistoryLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CgmAlertActivatedDexHistoryLogTests.swift; sourceTree = "<group>"; };
 		76C187F61F31652E4CC712C0 /* PumpBasalHistory.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PumpBasalHistory.swift; sourceTree = "<group>"; };
+		773FD15924D8266E41042F48 /* TandemKitTempBasalViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TandemKitTempBasalViewModel.swift; sourceTree = "<group>"; };
 		775DD74DF544A5601ADA3056 /* CgmInactiveG7HistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CgmInactiveG7HistoryLog.swift; sourceTree = "<group>"; };
 		7766B952062F23C0D088A3FD /* Jpake4KeyConfirmationResponseTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Jpake4KeyConfirmationResponseTests.swift; sourceTree = "<group>"; };
 		7817260C15894BAEEB88E7FD /* CgmStartSensorReqG7HistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CgmStartSensorReqG7HistoryLog.swift; sourceTree = "<group>"; };
@@ -1780,6 +1788,7 @@
 		82724DD1CC0AFC0C96710358 /* FillTubingStateStreamResponseTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FillTubingStateStreamResponseTests.swift; sourceTree = "<group>"; };
 		8301F800A589672C77CE8024 /* CgmStopSessionHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmStopSessionHistoryLog.swift; sourceTree = "<group>"; };
 		83384ED2E7F46DB8F1D38442 /* ControlStreamCountersHistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ControlStreamCountersHistoryLog.swift; sourceTree = "<group>"; };
+		83A917974DBD7300BE2EA302 /* ManualTempBasalFormTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ManualTempBasalFormTests.swift; sourceTree = "<group>"; };
 		83FA3653E49C6C214EFBB2CD /* CgmStateChangeGxHistoryLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CgmStateChangeGxHistoryLogTests.swift; sourceTree = "<group>"; };
 		83FFD3A76EE9B6FFCE9CC60A /* ControlIQGlucoseModelHistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ControlIQGlucoseModelHistoryLog.swift; sourceTree = "<group>"; };
 		8434033482451FAAA42B7381 /* SetModesResponseTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SetModesResponseTests.swift; sourceTree = "<group>"; };
@@ -1843,6 +1852,7 @@
 		9A390F070116FA01DED75C05 /* AaWeightSettingChangeHistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AaWeightSettingChangeHistoryLog.swift; sourceTree = "<group>"; };
 		9A76231FACCA77B34A3F5B50 /* BolusEndDateReportingTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BolusEndDateReportingTests.swift; sourceTree = "<group>"; };
 		9AA7D1750C86EC5EB59F5755 /* HistoryRequestRangeHistoryLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HistoryRequestRangeHistoryLogTests.swift; sourceTree = "<group>"; };
+		9AC809CEFE99144264D26C1D /* ManualTempBasalForm.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ManualTempBasalForm.swift; sourceTree = "<group>"; };
 		9B287275FEC6628DBDE852E4 /* SetMaxBolusLimitResponseTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SetMaxBolusLimitResponseTests.swift; sourceTree = "<group>"; };
 		9B7BF7E0557C8696997FE1FF /* HistoryBackfillCoordinatorTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HistoryBackfillCoordinatorTests.swift; sourceTree = "<group>"; };
 		9BB96CC709A8540557FFE332 /* ReservoirEstimateHistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ReservoirEstimateHistoryLog.swift; sourceTree = "<group>"; };
@@ -2321,6 +2331,7 @@
 				CE3599592EB3A90042024E87 /* HostDoseDates.swift */,
 				043CB6C73A45747063C513F4 /* TandemPumpManager+TempBasalOrigin.swift */,
 				21B382C552E0D4181F8E0605 /* TandemPumpManager+ManualTempBasal.swift */,
+				9AC809CEFE99144264D26C1D /* ManualTempBasalForm.swift */,
 			);
 			path = PumpManager;
 			sourceTree = "<group>";
@@ -2436,6 +2447,7 @@
 				A4B9CED1A9A3B10BBF0E3C65 /* TandemKitPumpProfileViewerView.swift */,
 				259CA266B749FCFC7BF569AE /* TandemKitReconciliationView.swift */,
 				FC49DB781DB08F9E413FD974 /* ControlIQEnablePrompt.swift */,
+				5FE8A20A76C039DBFBFADDDB /* TandemKitTempBasalView.swift */,
 			);
 			path = Settings;
 			sourceTree = "<group>";
@@ -2476,6 +2488,7 @@
 				5498C06FCC1E9BAA13F652AE /* TandemKitFeatureFlagsViewModel.swift */,
 				FD99B410798A4E90F07A8638 /* TandemKitPumpProfileViewerViewModel.swift */,
 				7957A62914331B677F2CB8BE /* TandemKitReconciliationViewModel.swift */,
+				773FD15924D8266E41042F48 /* TandemKitTempBasalViewModel.swift */,
 			);
 			path = Settings;
 			sourceTree = "<group>";
@@ -3462,6 +3475,8 @@
 				179E5316A258470C31F46090 /* HostDoseDatesTests.swift */,
 				5465F1332681CD548F8CF179 /* TempBasalOriginTests.swift */,
 				57E4751C3328A10FB556CF11 /* ManualTempBasalTests.swift */,
+				83A917974DBD7300BE2EA302 /* ManualTempBasalFormTests.swift */,
+				708AAB7DDEA44DE7BE14A6D7 /* TandemKitTempBasalViewModelTests.swift */,
 			);
 			name = TandemKitTests;
 			path = Tests/TandemKitTests;
@@ -4532,6 +4547,9 @@
 				D8633983924FC1B9E5B68A12 /* ControlIQEnablePrompt.swift in Sources */,
 				BD3052392E44FF0C66C754EA /* TandemPumpManager+TempBasalOrigin.swift in Sources */,
 				7AC54391BBD7FC7949134FFA /* TandemPumpManager+ManualTempBasal.swift in Sources */,
+				18115AD2809926F37BC9D994 /* ManualTempBasalForm.swift in Sources */,
+				46222B6D2D9705023B81ED0A /* TandemKitTempBasalViewModel.swift in Sources */,
+				F72C1F48CFC8BEF851AA1421 /* TandemKitTempBasalView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -4972,6 +4990,8 @@
 				1FFD8042BB957CB679924A78 /* HostDoseDatesTests.swift in Sources */,
 				DAA77935181E7BF0E885CCAC /* TempBasalOriginTests.swift in Sources */,
 				8EBA09E426641EF6E7AE86D1 /* ManualTempBasalTests.swift in Sources */,
+				34C209C3F846E0688953B183 /* ManualTempBasalFormTests.swift in Sources */,
+				A17A55EAD659E9D67860664C /* TandemKitTempBasalViewModelTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

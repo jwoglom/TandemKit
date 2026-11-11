@@ -388,6 +388,14 @@ struct TandemKitSettingsView: View {
                     action: { viewModel.openNotifications() }
                 )
 
+                if viewModel.manualTempBasalSupportEnabled {
+                    navigationLink(
+                        label: Text("Set temp basal", comment: "Label for the row that opens the temp basal screen"),
+                        action: { viewModel.openTempBasal() }
+                    )
+                    .disabled(viewModel.isDeliverySuspended || viewModel.suspendResumeText == nil || viewModel.isUpdatingPumpState)
+                }
+
                 if let suspendResumeText = viewModel.suspendResumeText {
                     Button(action: {
                         activeAlert = viewModel.isDeliverySuspended ? .resumeDelivery : .suspendDelivery

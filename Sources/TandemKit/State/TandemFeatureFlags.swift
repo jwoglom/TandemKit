@@ -31,6 +31,10 @@ public struct TandemFeatureFlags: RawRepresentable, Equatable {
         /// told. While off the comparison still runs, with `historyBackfill`, and only logs.
         case basalHistoryReporting
 
+        /// Shows "Set temp basal" in the pump's settings, to set or stop a temp basal by hand. Off
+        /// until the hardware test plan's temp basal checks have run on a pump.
+        case manualTempBasalSupport
+
         public var id: String { rawValue }
 
         public var defaultValue: Bool {
@@ -40,7 +44,8 @@ public struct TandemFeatureFlags: RawRepresentable, Equatable {
                  .historyDoseReporting,
                  .basalHistoryReporting:
                 return true
-            case .controlIQSupport:
+            case .controlIQSupport,
+                 .manualTempBasalSupport:
                 return false
             }
         }
@@ -72,6 +77,11 @@ public struct TandemFeatureFlags: RawRepresentable, Equatable {
                     localized: "History Basal Reporting",
                     comment: "Title of the history basal reporting feature flag"
                 )
+            case .manualTempBasalSupport:
+                return String(
+                    localized: "Manual Temp Basal Support",
+                    comment: "Title of the manual temp basal support feature flag"
+                )
             }
         }
 
@@ -101,6 +111,11 @@ public struct TandemFeatureFlags: RawRepresentable, Equatable {
                 return String(
                     localized: "Checks the basal rates the pump delivered, from its history log, against what the app was told, and reports the difference to the app's insulin history: Control-IQ's basal changes, temp rates the app did not set or lost track of, and a pump profile that differs from the app's schedule. Only has any effect while History Backfill is on.",
                     comment: "Description of the history basal reporting feature flag"
+                )
+            case .manualTempBasalSupport:
+                return String(
+                    localized: "Shows Set temp basal in the pump's settings, to set a temporary basal rate by hand or stop the one running. While a temporary basal rate set there runs, this app's automatic dosing is paused.",
+                    comment: "Description of the manual temp basal support feature flag"
                 )
             }
         }
@@ -191,6 +206,10 @@ public extension TandemFeatureFlags {
 
     var basalHistoryReporting: Bool {
         self[.historyBackfill] && self[.basalHistoryReporting]
+    }
+
+    var manualTempBasalSupport: Bool {
+        self[.manualTempBasalSupport]
     }
 }
 
