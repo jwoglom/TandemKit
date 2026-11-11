@@ -19,6 +19,11 @@ import XCTest
     private var nextTempRateId = 41
     /// Status codes for the next `SetTempRate`s, in order; 0 once they run out.
     private var setTempRateStatuses: [Int] = []
+    /// The pump takes a `SetTempRate` but runs this percent instead, or no temp for 0.
+    private var pumpRunsInstead: Int?
+    /// The rate Control-IQ runs, which the basal status reports in place of the temp's.
+    private var controlIQRate: Double?
+    private var setTempRateAnswerLost = false
 
     override func setUp() {
         super.setUp()
@@ -61,7 +66,8 @@ import XCTest
             let profile = UInt32((self.manager.getScheduledBasalRate() * 1000).rounded())
             return CurrentBasalStatusResponse(
                 profileBasalRate: profile,
-                currentBasalRate: profile * UInt32(self.running?.percent ?? 100) / 100,
+                currentBasalRate: self.controlIQRate.map { UInt32(TandemPumpCapabilities.milliunits($0)) }
+                    ?? profile * UInt32(self.running?.percent ?? 100) / 100,
                 basalModifiedBitmask: self.running == nil ? 0 : 0x02
             )
         }
@@ -70,9 +76,10 @@ import XCTest
             guard status == 0, let request = request as? SetTempRateRequest else {
                 return SetTempRateResponse(status: status, tempRateId: 0)
             }
-            self.running = (request.percent, self.clock.now, UInt32(request.minutes * 60))
+            let runs = self.pumpRunsInstead ?? request.percent
+            self.running = runs == 0 && self.pumpRunsInstead != nil ? nil : (runs, self.clock.now, UInt32(request.minutes * 60))
             defer { self.nextTempRateId += 1 }
-            return SetTempRateResponse(status: 0, tempRateId: self.nextTempRateId)
+            return self.setTempRateAnswerLost ? nil : SetTempRateResponse(status: 0, tempRateId: self.nextTempRateId)
         }
         bluetooth.stub(StopTempRateRequest.self) { [unowned self] _ in
             self.running = nil
@@ -155,12 +162,28 @@ import XCTest
         XCTAssertTrue(manager.isManualTempRate(41))
     }
 
-    func testOneHundredPercentIsRefusedWithNothingSent() {
+    func testOneHundredPercentGoesOutAsAManualTempThatHoldsTheProfileRate() {
         startManager()
 
-        XCTAssertEqual(validationError(enactManual(100)), .manualTempBasalUnchanged)
+        XCTAssertNil(enactManual(100))
+
+        XCTAssertEqual(bluetooth.sent(SetTempRateRequest.self).map(\.percent), [100])
+        let held = manager.state.basalDose
+        XCTAssertEqual(held.type, .tempBasal)
+        XCTAssertEqual(held.tempPercent, 100)
+        XCTAssertEqual(held.value, 1.0)
+        XCTAssertFalse(held.automatic)
+        XCTAssertEqual(reportedTemps.map(\.automatic), [false])
+        XCTAssertTrue(manager.isManualTempRate(41))
+    }
+
+    func testOneHundredPercentOfAProfileUnderThePumpsMinimumIsRefused() {
+        startManager(firstRate: 0.05)
+
+        XCTAssertEqual(validationError(enactManual(100)), .manualTempBasalOutOfRange(percent: 100, accepted: 200 ... 250))
         XCTAssertTrue(bluetooth.sent(SetTempRateRequest.self).isEmpty)
     }
+
 
     func testAPercentOverTheMaxBasalLimitIsRefusedNotClamped() {
         startManager(maxBasalLimit: 2.0)
@@ -256,13 +279,52 @@ import XCTest
 
     // MARK: - Control-IQ
 
-    func testAManualTempIsSentUnderControlIQ() {
+    func testUnderControlIQAManualTempIsConfirmedByTheTempRateWhateverRateControlIQRuns() {
         startManager()
         manager.state.useControlIQ = true
+        controlIQRate = 0.4
 
         XCTAssertNil(enactManual(130))
 
         XCTAssertEqual(bluetooth.sent(SetTempRateRequest.self).map(\.percent), [130])
+        XCTAssertEqual(manager.state.basalDose.tempPercent, 130)
+        XCTAssertEqual(manager.state.basalDose.value, 1.3)
+        XCTAssertFalse(manager.state.basalDose.automatic)
+    }
+
+    func testUnderControlIQATempThePumpTookButRunsAtAnotherPercentFailsAndIsReportedAsItRuns() {
+        startManager()
+        manager.state.useControlIQ = true
+        pumpRunsInstead = 120
+
+        XCTAssertEqual(validationError(enactManual(130)), .tempRateReadbackMismatch(sent: 130, running: 120))
+
+        XCTAssertEqual(manager.state.basalDose.tempPercent, 120)
+        XCTAssertEqual(manager.state.basalDose.value, 1.2)
+        XCTAssertFalse(manager.state.basalDose.automatic)
+    }
+
+    func testUnderControlIQATempThePumpTookButDoesNotRunFails() {
+        startManager()
+        manager.state.useControlIQ = true
+        pumpRunsInstead = 0
+
+        XCTAssertEqual(validationError(enactManual(130)), .tempRateReadbackMismatch(sent: 130, running: nil))
+        XCTAssertEqual(manager.state.basalDose.type, .basal)
+    }
+
+    func testUnderControlIQATempWhoseAnswerWasLostIsAdoptedFromTheTempRateWhateverRateControlIQRuns() {
+        startManager()
+        manager.state.useControlIQ = true
+        controlIQRate = 0.4
+        setTempRateAnswerLost = true
+
+        let error = enactManual(130)
+
+        guard case .communication? = error else {
+            return XCTFail("a lost answer is still a communication error, got \(String(describing: error))")
+        }
+        XCTAssertEqual(manager.state.basalDose.tempPercent, 130)
         XCTAssertFalse(manager.state.basalDose.automatic)
     }
 
