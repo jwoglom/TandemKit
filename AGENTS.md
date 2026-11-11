@@ -216,6 +216,13 @@ host queue, so its state stays behind its lock.
   counter may restart, and a host still holding a row under the id's earlier use would swallow the
   new temp. The part after a segment cut is a dose of its own under
   `HistoryLogSyncIdentifier.tempRatePart`, which a later manager counts alike from history.
+- A temp basal's `automatic` and `setByHost` stay what they were at its first report through every
+  part, continuation and remainder (`tempBasalPart`), or the host sees a manual temp turn automatic
+  partway through. `setByHost` marks the host's own temp, which `automatic` does not: history adopts
+  another app's Bluetooth temp as automatic too, and state saved before the flag reads false. History
+  knows a temp set from TandemKit's settings only by its `tempRateId`, whose `SetTempRateResponse`
+  record reads like the host's, so `manualTempRates` (persisted for `manualTempRateMemory`) keeps it
+  manual in adoption and basal reconciliation. The setup load reports any app's temp as automatic.
 - A suspend or resume read from history is keyed on its record (`HistoryLogSyncIdentifier.logSequence`).
   A `.basal` marker, and a suspend or resume reported at detection with no record to key it on, is
   keyed on its type and its date to the millisecond (#352): of two rows under one `raw`, both hosts
