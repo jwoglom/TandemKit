@@ -167,8 +167,8 @@ import XCTest
     }
 
     func testOtherFailuresGiveTheDriversReason() {
-        let failure = TandemKitTempBasalViewModel.setFailure(.configuration(TandemPumpManagerValidationError.manualTempBasalUnchanged))
+        let failure = TandemKitTempBasalViewModel.setFailure(.deviceState(TandemPumpManagerValidationError.tempRateReadbackMismatch(sent: 130, running: 120)))
 
-        XCTAssertTrue(failure.message.contains("Choose a rate other than 100%."), failure.message)
+        XCTAssertTrue(failure.message.contains("The pump runs a temporary basal rate of 120% instead of 130%"), failure.message)
     }
 }
