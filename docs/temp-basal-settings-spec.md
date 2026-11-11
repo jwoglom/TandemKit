@@ -61,11 +61,13 @@ These came out of writing the first draft. Each one is listed with what was deci
     set and reloads the screen ([§6.9](#69-sending-success-and-failure)).
 - A temp set on the pump's screen or by another app still opens "Active temp rate", with Stop.
 
-**F3. A 100% temp rate changes nothing.**
-- The driver treats 100% as "no change" and sends nothing in the host path
-  (`TandemPumpManager.swift:1202`). Whether the pump accepts an explicit 100% is unconfirmed (CLAUDE.md).
-- The form starts at 100%, as requested, and keeps "Set temp rate" disabled until the value is
-  something else ([§6.4](#64-percent-rate)).
+**F3. A 100% temp rate holds the profile rate.**
+- The driver treats 100% as "no change" in the host path and sends nothing.
+- **Decided (D13):** from TandemKit's settings, 100% goes out as an explicit temp. Reported manual, it
+  keeps Loop or Trio from adjusting basal while it runs, at the rate the pump would run anyway.
+- The pump takes an explicit 100% temp and flags it as a temp in its basal status.
+- The form starts at 100%, as requested, and "Set temp rate" is enabled there
+  ([§6.4](#64-percent-rate)).
 
 **F4. A SwiftUI `Alert` cannot show bold text.**
 - **Decided (D5):** the confirmations are plain `Alert`s, and the bold in the original request is
@@ -349,7 +351,7 @@ Percent tab:
 │ └──────────────────────────────────────┘ │
 │                                          │
 │ ┌──────────────────────────────────────┐ │
-│ │           Set temp rate              │ │  ← disabled at 100%
+│ │           Set temp rate              │ │
 │ └──────────────────────────────────────┘ │
 └──────────────────────────────────────────┘
 ```
@@ -417,8 +419,7 @@ pMax = min( 250,
 - Changing the duration can therefore move the bounds. A value that falls outside them turns red,
   and is not clamped.
 
-**100%** is valid but changes nothing (F3).
-- At 100% the button stays disabled. The value stays in its normal colour, since 100% is valid.
+**100%** holds the profile rate (F3, D13), and can be set like any other value.
 - 100% stays the starting value as requested. It is the user's current rate, so nothing is preset.
 
 ### 6.5 Unit rate
@@ -496,7 +497,7 @@ temp becomes:
 ### 6.8 Set temp rate and its confirmation
 
 "Set temp rate" is the primary button. It is enabled when:
-- the value is in the valid set and is not 100%,
+- the value is in the valid set,
 - the duration is valid, and
 - nothing is in flight.
 
@@ -706,10 +707,10 @@ It differs from `enactTempBasal(unitsPerHour:for:)` where the user, not the host
 | Over the pump's max basal limit | Clamped to the limit (`clampedToPumpMaximumBasalRate`) | **Refused** (manualTempBasalOutOfRange). The user confirmed a number, so no other number goes out. |
 | Under the pump's 0.1 U/hr minimum | Raised to the lowest accepted percent | **Refused**, as above |
 | Within `segmentChangeWindow` of a change | Worked out against the larger rate, reported at the request | Sent as given; reported at `percent × profileBasalRate`, and cut at the change by `splitAtSegmentChanges` as any temp is |
-| 100% | No command; scheduled basal restarted | Refused; the UI never sends it |
+| 100% | No command; scheduled basal restarted | Sent as given (D13): reported manual, it keeps the host from adjusting basal while the profile rate runs |
 | A temp already running | Stopped, then replaced (`restoreStoppedTempBasal` on refusal) | The loop's own temp (§5.1) or the clock-skew temp: stopped, then replaced, with `restoreStoppedTempBasal` on refusal. **Anything else: refused** (tempBasalAlreadyRunning), nothing stopped. |
 | Control-IQ on | Refused (`controlIQModeActive`) | **Allowed** (D11) |
-| Read-back after the set | `tempBasalReadbackMatches`: a temp within one 0.01 U/hr step of the percent | The same without Control-IQ. Under it, `TempRateResponse` active at the percent sent, since Control-IQ may set `currentBasalRate`. |
+| Read-back after the set | `tempBasalReadbackMatches`: a temp within one 0.01 U/hr step of the percent | The same without Control-IQ, 100% included. Under it, `TempRateResponse` active at the percent sent, since Control-IQ may set `currentBasalRate`; a temp the pump took but reports at another percent, or none, fails (`tempRateReadbackMismatch`) and is reported as the pump reports it. |
 | Reported `automatic` | `true` | `false` |
 
 **Shared with the host path, factored out rather than copied**
@@ -833,7 +834,7 @@ and `PumpManager/OmniPumpManager.swift` (lines 2846–2997).
 | **Rate ceiling** | The host-synced max basal rate (`state.maxBasalRateUnitsPerHour`). Above it, the driver only logs. | min(250%, pump's max basal limit ÷ profile) over the duration's segments. Above it, the driver refuses. |
 | **Rate floor** | 0 U/hr; any 0.05 step | 0%, or the lowest % the pump accepts (≥ 0.1 U/hr) |
 | **Duration** | One wheel, 30 min–12 h in 30-min steps (24 choices) | Hours + minutes wheels, 15 min–72 h, 5-minute steps |
-| **Defaults** | 0.00 U/hr for 30 min (a zero temp, one tap from set) | 100% (Set disabled until changed) for 30 min |
+| **Defaults** | 0.00 U/hr for 30 min (a zero temp, one tap from set) | 100% for 30 min |
 | **Closed loop** | No detection. A static footnote: "Your insulin delivery will not be automatically adjusted until the temporary basal rate finishes or is canceled." | Nothing on either screen. The host shows its own pause, and TandemKit's status highlight shows. |
 | **Confirmation to set** | None | "Set a temp rate for 130% of profile basal (currently 1.30 U/hr) for a duration of 1 hour, 30 minutes?" |
 | **Set errors** | Alert "Temporary Basal Failed": "Unable to set a temporary basal rate: …". The sheet stays open. | Error sheet "Could not set temp rate" with the driver's reason. The form keeps its values. |
@@ -986,9 +987,12 @@ Every new test file goes in the `TandemKitTests` target (`scripts/check_xcodepro
   - a manual temp, or one the driver doesn't hold, fails tempBasalAlreadyRunning with no
     `StopTempRate` sent.
 - The read-back mismatch, and a lost answer adopted, as `UnansweredTempBasalTests` does for the host path.
+- 100% goes out, reported manual.
 - Under Control-IQ:
   - the set goes out, and the read-back takes `TempRateResponse` active at the percent, whatever
     `currentBasalRate` says;
+  - a temp the pump took but runs at another percent, or not at all, fails `tempRateReadbackMismatch`;
+  - a lost answer is adopted from `TempRateResponse` alone;
   - a refusal carries the Control-IQ sentence;
   - stopTempBasalFromSettings stops the temp;
   - the host's `enactTempBasal`, cancel included, is still refused.
@@ -1048,4 +1052,5 @@ Rows for [docs/hardware-test-plan.md](hardware-test-plan.md):
 | D8 | "(currently X.XX U/hr)": the temp's rate or the profile's? | **The temp's rate.** |
 | D9 | Warn on "Delete Pump" while a temp runs? | **No.** |
 | D10 | Hide the screen on pumps pumpX2 doesn't mark as supported? | **No**, not gated. |
+| D13 | Allow a manual 100% temp? | **Yes.** It holds the profile rate, and reported manual it keeps Loop or Trio from adjusting basal while it runs. "Set temp rate" is enabled at 100% (§6.4). |
 | D11 | Allow a manual temp rate while Control-IQ runs? | **Yes, with no firmware check.** Some Mobi firmware takes it and some doesn't; the driver sends it and relies on the pump to refuse. The set and the settings stop skip the driver's Control-IQ refusal; the host's temps stay refused. No Control-IQ card (F6). |

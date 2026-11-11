@@ -68,7 +68,8 @@ public enum TandemPumpManagerValidationError: LocalizedError, Equatable {
     case pumpClockUntrusted
     case tempBasalRateMismatch(expected: Double, actual: Double)
     case unsupportedTempBasalDuration(minutes: Int)
-    case manualTempBasalUnchanged
+    /// Under Control-IQ: the pump took a temp at `sent` but reports one at `running`, or none.
+    case tempRateReadbackMismatch(sent: Int, running: Int?)
     /// `accepted` is the non-zero percents the pump takes over the whole duration; nil for none.
     case manualTempBasalOutOfRange(percent: Int, accepted: ClosedRange<Int>?)
     case tempBasalAlreadyRunning
@@ -139,13 +140,22 @@ public enum TandemPumpManagerValidationError: LocalizedError, Equatable {
                 ),
                 minutes
             )
-        case .manualTempBasalUnchanged:
+        case let .tempRateReadbackMismatch(sent, running?):
             return String(
                 format: String(
-                    localized: "A temporary basal rate of %d%% changes nothing",
-                    comment: "Error when a temp basal of 100% of the profile is set from TandemKit's settings (the percent, 100)"
+                    localized: "The pump runs a temporary basal rate of %1$d%% instead of %2$d%%",
+                    comment: "Error when the pump took a temp basal set from TandemKit's settings but reports another (1: the percent it runs, 2: the percent sent)"
                 ),
-                100
+                running,
+                sent
+            )
+        case let .tempRateReadbackMismatch(sent, nil):
+            return String(
+                format: String(
+                    localized: "The pump took a temporary basal rate of %d%% but does not run it",
+                    comment: "Error when the pump took a temp basal set from TandemKit's settings but reports none running (the percent sent)"
+                ),
+                sent
             )
         case let .manualTempBasalOutOfRange(percent, _):
             return String(
@@ -216,13 +226,10 @@ public enum TandemPumpManagerValidationError: LocalizedError, Equatable {
                 localized: "The pump runs a temporary basal rate for 15 minutes to 72 hours. Choose a duration in that range.",
                 comment: "Recovery suggestion when a temp basal is requested for a duration the pump does not accept"
             )
-        case .manualTempBasalUnchanged:
+        case .tempRateReadbackMismatch:
             return String(
-                format: String(
-                    localized: "Choose a rate other than %d%%.",
-                    comment: "Recovery suggestion when a temp basal of 100% is set from TandemKit's settings (the percent, 100)"
-                ),
-                100
+                localized: "Check the temporary basal rate on the pump's screen.",
+                comment: "Recovery suggestion when the pump reports another temp basal than the one it took from TandemKit's settings"
             )
         case let .manualTempBasalOutOfRange(_, accepted):
             guard let accepted else {

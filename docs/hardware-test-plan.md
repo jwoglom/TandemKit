@@ -58,7 +58,7 @@ insulin, stops delivery or changes basal, and some steps deliberately cause erro
 | S3 | Take the phone out of range. *On the pump*, suspend, wait 10 minutes and resume. Wait 5 more minutes, then bring the phone back. | After the first sync, the host holds a 10-minute suspend at the pump's times. The status reads never showed it, so this comes from the pump's history. | conformance F2 |
 | R1 | Edit the host's basal schedule to three segments and save. | The pump's profile matches the schedule, and the "Syncing Basal Profiles" status clears. A schedule with more than 16 entries is refused, with nothing written. | `BasalScheduleSyncIntegrationTests`, `TrioBasalScheduleTests` |
 | K1 | *On the pump*, set its clock 10 minutes ahead. | After the next sync, the "Pump Time Is Off" alert and status appear. Syncing the time from TandemKit's settings clears both, and the pump then reads the phone's time. | conformance D5, `TimeChangeConformanceTests` |
-| K2 | As K1, before syncing the time, with a schedule whose rate changes on the hour. In the 10 minutes after the pump's clock passes the hour, set a temp basal from the host at the pump's new rate. | The host still counts the old rate, so the driver sends the pump an explicit 100% temp. Record whether the pump accepts it. If the pump refuses, the host's command fails. | conformance D5 and H6 |
+| K2 | As K1, before syncing the time, with a schedule whose rate changes on the hour. In the 10 minutes after the pump's clock passes the hour, set a temp basal from the host at the pump's new rate. | The host still counts the old rate, so the driver sends the pump an explicit 100% temp, which the pump takes. | conformance D5 and H6 |
 | W1 | Run TandemKit's cartridge, tubing and cannula wizards. | The host records a cartridge change, a tubing prime and a site change. | `CartridgeProcedureIntegrationTests`, `TrioCartridgeTests`, conformance D14 |
 | W2 | Start filling tubing in the wizard, then force-quit the host app partway through. Reopen it and start a cartridge change. | Record whether the pump refuses to enter change-cartridge mode. If it refuses, TandemKit asks for the pump to be removed and offers to back it out. After that, the change can be completed. | `CartridgeProcedureIntegrationTests` |
 | W3 | Start a cartridge change in the wizard and remove the cartridge. Force-quit the host app, reopen it and start a cartridge change again. Then repeat, cancelling the wizard after the pump is ready instead of force-quitting. | After the force-quit the pump refuses change mode and TandemKit goes straight to the cartridge swap. After the cancel, record what `LoadStatus` reads: if `loadCartridge`, TandemKit offers to fill the tubing. | `TandemKitChangeCartridgeViewModelTests` |
@@ -100,7 +100,6 @@ the run's notes, and correct AGENTS.md if a pump says otherwise.
   is never reached for it.
 - **B2.** Whether `LastBolusStatus` reports a cancelled bolus's delivered volume as soon as the
   cancel is acknowledged, on both pumps.
-- **K2.** Whether firmware accepts an explicit 100% temp.
 - **Q1.** Whether quick bolus can deliver between pairing and onboarding's first read of the
   pump's settings.
 - **W2.** Which open cartridge procedures make the pump refuse change-cartridge mode
