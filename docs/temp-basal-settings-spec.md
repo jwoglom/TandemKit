@@ -163,7 +163,7 @@ suspend/resume row. The new row goes between them. It has two states.
  ┌──────────────────────────────────┐     ┌──────────────────────────────────┐
  │ Pump notifications          (2) ›│     │ Pump notifications          (2) ›│
  ├──────────────────────────────────┤     ├──────────────────────────────────┤
- │ Set temp basal                  ›│     │ Stop manual temp basal           │
+ │ Set temp basal                  ›│     │ Stop manual temp basal          ›│
  ├──────────────────────────────────┤     │ 130% (1.30U/hr) with 1h 12m      │
  │ Suspend Insulin Delivery         │     │ remaining                        │
  └──────────────────────────────────┘     ├──────────────────────────────────┤
@@ -187,7 +187,7 @@ basal with `automatic == false` whose `estimatedEndDate` is still ahead. Only a 
 screen is manual, so the loop's temps and the pump screen's never switch the row.
 
 **What it shows.**
-- The label "Stop manual temp basal", in the accent colour as a button. There is no chevron.
+- The label "Stop manual temp basal", with the same chevron as "Set temp basal".
 - A `.footnote` subtext in the secondary colour: "XX% (X.XXU/hr) with XXh XXm remaining".
   - The percent is the held dose's `tempPercent`.
   - The rate is the held dose's `value`. After a segment change that is the part now running, which
@@ -195,10 +195,15 @@ screen is manual, so the loop's temps and the pump screen's never switch the row
   - The time left is `estimatedEndDate - now`, rounded up to the minute and formatted by
     `DateComponentsFormatter`, `.abbreviated` style, `[.hour, .minute]`: "1h 12m", "45m", "72h".
   - It updates once a minute (`TimelineView(.everyMinute)`, as the connection issue banner does).
-- An `ActivityIndicator` at the trailing edge while the stop is in flight, as the suspend/resume row
-  shows one.
+**Tapping it** opens the temp basal screen, as "Set temp basal" does. The screen reads the pump and
+shows the temp on "Active temp rate" ([§7](#7-active-temp-rate)), where "Stop temp rate" asks to stop
+it. While the screen reads, its title is already "Active temp rate": the held dose is a temp the host
+did not set.
 
-**Tapping it** shows the stop confirmation on the settings screen itself, with no navigation:
+**While Manual Temp Basal Support is off** the row still shows for a manual temp that runs, with no
+chevron, the label in the accent colour as a button, and an `ActivityIndicator` at the trailing edge
+while the stop is in flight. Tapping it shows the stop confirmation on the settings screen itself,
+with no navigation, as the header's tap does ([§4.4](#44-existing-tap-to-stop-in-the-header)):
 
 ```
             ┌────────────────────────────────┐
@@ -213,8 +218,8 @@ screen is manual, so the loop's temps and the pump screen's never switch the row
             └────────────────────────────────┘
 ```
 
-- This is the same confirmation as the active view's ([§7.3](#73-stop-temp-rate)), as a new
-  a new `SettingsAlertType` case, stopManualTempBasal.
+- This is the same confirmation as the active view's ([§7.3](#73-stop-temp-rate)), as the
+  `SettingsAlertType` case stopManualTempBasal.
 - Confirming runs the same stop as the active view, stopTempBasalFromSettings ([§8.3](#83-stop)).
 - On success the row goes back to "Set temp basal" with the status update. On failure the existing
   "Could not stop temp rate" sheet shows.
@@ -227,7 +232,7 @@ screen is manual, so the loop's temps and the pump screen's never switch the row
 | Suspended (`isDeliverySuspended`) | Disabled. The pump stops a temp at a suspend, and whether it accepts one while suspended is unconfirmed. | Not shown: the suspend ended the temp. |
 | Delivery state unknown (`suspendResumeText == nil`) | Disabled, like the "Insulin delivery status unknown" row | Disabled |
 | Control-IQ on (`useControlIQ`) | Enabled (D11). | Enabled. The settings stop is not refused under Control-IQ ([§8.3](#83-stop)). |
-| A pump command in flight (`isUpdatingPumpState`) | Disabled, as the suspend/resume row is | Disabled, with its spinner if the stop is the command |
+| A pump command in flight (`isUpdatingPumpState`) | Disabled, as the suspend/resume row is | Disabled, with its spinner if the stop is the command (flag off) |
 
 ### 4.4 Existing tap-to-stop in the header
 
@@ -236,8 +241,9 @@ screen is manual, so the loop's temps and the pump screen's never switch the row
 - While Manual Temp Basal Support is on, that tap opens the screen instead, so a stop always comes with
   the same one confirmation, and nothing offers to stop the loop's own temp. While the flag is off the
   two alerts stay as they were, so turning the screen off takes nothing away.
-- `TandemKitSettingsViewModel.stopTempRate()` stays for those alerts; the row in §4.2 uses
-  `stopManualTempBasal()`, which calls the settings stop.
+- `TandemKitSettingsViewModel.stopTempRate()` stays for those alerts. The row in §4.2 follows the
+  same rule: with the flag on it opens the screen, and with it off its own confirmation calls
+  `stopManualTempBasal()`, the settings stop.
 
 ---
 
@@ -647,7 +653,7 @@ own temp ([§5.1](#51-deciding-active)).
 ### 7.3 Stop temp rate
 
 "Stop temp rate" is a full-width `ActionButtonStyle(.destructive)` button, which is red. It shows the
-confirmation from [§4.2](#42-stop-manual-temp-basal): "Stop the active temp rate of XX%?" with a red
+confirmation: "Stop the active temp rate of XX%?" with a red
 "Stop temp rate" and "Cancel".
 
 **Confirming**

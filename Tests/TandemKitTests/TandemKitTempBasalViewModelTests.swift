@@ -13,7 +13,7 @@ import XCTest
     }
 
     /// 1 U/hr until 14:00 and 2 U/hr after; nothing here talks to the pump.
-    private func makeViewModel(maxBasalLimit: Double? = nil) -> TandemKitTempBasalViewModel {
+    private func makeViewModel(maxBasalLimit: Double? = nil, holding heldDose: UnfinalizedDose? = nil) -> TandemKitTempBasalViewModel {
         let schedule = BasalRateSchedule(dailyItems: [
             RepeatingScheduleValue(startTime: 0, value: 1.0),
             RepeatingScheduleValue(startTime: .hours(14), value: 2.0)
@@ -21,6 +21,9 @@ import XCTest
         var state = TandemPumpManagerState(basalRateSchedule: schedule)
         state.maxBasalLimitMilliunits = maxBasalLimit.map(TandemPumpCapabilities.milliunits)
         let manager = TandemPumpManager(state: state, bluetooth: StubPumpBluetooth(), clock: clock)
+        if let heldDose {
+            manager.state.basalDose = heldDose
+        }
         return TandemKitTempBasalViewModel(pumpManager: manager)
     }
 
@@ -91,6 +94,23 @@ import XCTest
         viewModel.apply(.success(status()))
 
         XCTAssertEqual(titles, ["Active temp rate", "Set temp basal"])
+    }
+
+    func testWhileReadingAManualTempTheTitleIsTheActiveViews() {
+        let viewModel = makeViewModel(holding: UnfinalizedDose(
+            tempRate: 1.3,
+            duration: .minutes(30),
+            automatic: false,
+            insulinType: .novolog,
+            startDate: clock.now,
+            tempRateId: 42,
+            tempPercent: 130
+        ))
+
+        XCTAssertEqual(viewModel.screen, .loading)
+        XCTAssertEqual(viewModel.title, "Active temp rate")
+        viewModel.apply(.success(status()))
+        XCTAssertEqual(viewModel.title, "Set temp basal")
     }
 
     // MARK: - The form

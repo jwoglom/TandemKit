@@ -902,22 +902,37 @@ struct TandemKitSettingsView: View {
         .disabled(viewModel.isDeliverySuspended || viewModel.suspendResumeText == nil || viewModel.isUpdatingPumpState)
     }
 
-    private func stopManualTempBasalRow(_ manualTempBasal: ManualTempBasalRow, now: Date) -> some View {
-        Button(action: { activeAlert = .stopManualTempBasal }) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Stop manual temp basal", comment: "Label for the row that stops a temp basal set from TandemKit's settings")
-                    Text(TandemKitSettingsViewModel.manualTempBasalSubtext(manualTempBasal, now: now))
-                        .font(.footnote)
-                        .foregroundColor(.secondary)
+    /// The temp basal screen shows the temp and stops it; without the flag, the stop confirmation is here.
+    @ViewBuilder private func stopManualTempBasalRow(_ manualTempBasal: ManualTempBasalRow, now: Date) -> some View {
+        let label = VStack(alignment: .leading, spacing: 2) {
+            Text("Stop manual temp basal", comment: "Label for the row that stops a temp basal set from TandemKit's settings")
+            Text(TandemKitSettingsViewModel.manualTempBasalSubtext(manualTempBasal, now: now))
+                .font(.footnote)
+                .foregroundColor(.secondary)
+        }
+        if viewModel.manualTempBasalSupportEnabled {
+            Button(action: { viewModel.openTempBasal() }) {
+                HStack {
+                    label.foregroundStyle(.primary)
+                    Spacer()
+                    navigationChevron
                 }
-                Spacer()
-                if viewModel.isUpdatingPumpState {
-                    ActivityIndicator(isAnimating: .constant(true), style: .medium)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(viewModel.isUpdatingPumpState || viewModel.suspendResumeText == nil)
+        } else {
+            Button(action: { activeAlert = .stopManualTempBasal }) {
+                HStack {
+                    label
+                    Spacer()
+                    if viewModel.isUpdatingPumpState {
+                        ActivityIndicator(isAnimating: .constant(true), style: .medium)
+                    }
                 }
             }
+            .disabled(viewModel.isUpdatingPumpState || viewModel.suspendResumeText == nil)
         }
-        .disabled(viewModel.isUpdatingPumpState || viewModel.suspendResumeText == nil)
     }
 
     var stopTempRateMessage: String {
@@ -982,14 +997,18 @@ struct TandemKitSettingsView: View {
                 if let value {
                     value()
                 }
-                Image(systemName: "chevron.right")
-                    .font(.system(size: UIFont.systemFontSize, weight: .medium))
-                    .opacity(0.35)
-                    .padding(.leading)
+                navigationChevron
             }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    private var navigationChevron: some View {
+        Image(systemName: "chevron.right")
+            .font(.system(size: UIFont.systemFontSize, weight: .medium))
+            .opacity(0.35)
+            .padding(.leading)
     }
 
     private func reservoirColor(_ reservoirLevel: Double) -> Color {

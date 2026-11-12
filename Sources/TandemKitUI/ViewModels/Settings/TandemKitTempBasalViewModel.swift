@@ -44,10 +44,26 @@ class TandemKitTempBasalViewModel: ObservableObject {
     }
 
     var title: String {
-        if case .active = screen {
-            return String(localized: "Active temp rate", comment: "Title of the temp basal screen while a temp rate runs")
+        let showsActive: Bool
+        switch screen {
+        case .active:
+            showsActive = true
+        case .form, .suspended:
+            showsActive = false
+        case .loading, .unreachable:
+            showsActive = holdsATempTheHostDidNotSet
         }
-        return String(localized: "Set temp basal", comment: "The settings row that opens the temp basal screen, and its title while no temp rate runs")
+        return showsActive
+            ? String(localized: "Active temp rate", comment: "Title of the temp basal screen while a temp rate runs")
+            : String(localized: "Set temp basal", comment: "The settings row that opens the temp basal screen, and its title while no temp rate runs")
+    }
+
+    /// Before the pump answers: the screen opens from "Stop manual temp basal" too, and the read will
+    /// most likely show such a temp as active.
+    private var holdsATempTheHostDidNotSet: Bool {
+        guard let pumpManager else { return false }
+        let held = pumpManager.state.basalDose
+        return held.type == .tempBasal && !held.setByHost && held.estimatedEndDate > pumpManager.now
     }
 
     // MARK: - The form
