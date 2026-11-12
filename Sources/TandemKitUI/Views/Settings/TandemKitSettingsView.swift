@@ -896,7 +896,7 @@ struct TandemKitSettingsView: View {
 
     private var setTempBasalRow: some View {
         navigationLink(
-            label: Text("Set temp basal", comment: "Label for the row that opens the temp basal screen"),
+            label: Text("Set temp basal", comment: "The settings row that opens the temp basal screen, and its title while no temp rate runs"),
             action: { viewModel.openTempBasal() }
         )
         .disabled(viewModel.isDeliverySuspended || viewModel.suspendResumeText == nil || viewModel.isUpdatingPumpState)

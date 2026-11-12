@@ -20,7 +20,7 @@ when to use a temp basal is for the person and their care team.
 3. [What the pump accepts](#3-what-the-pump-accepts)
 4. [Entry point on the settings screen](#4-entry-point-on-the-settings-screen)
 5. [Screen states](#5-screen-states)
-6. [Temp basal (no temp rate running)](#6-temp-basal-no-temp-rate-running)
+6. [Set temp basal (no temp rate running)](#6-set-temp-basal-no-temp-rate-running)
 7. [Active temp rate](#7-active-temp-rate)
 8. [Driver changes](#8-driver-changes)
 9. [How Loop and Trio treat a temp basal](#9-how-loop-and-trio-treat-a-temp-basal)
@@ -270,7 +270,7 @@ on the pump's screen or by another app may not be in the held state yet. The rea
                        or skew temp │          │ skew temp
                                     ▼          ▼
                    ┌────────────────────┐  ┌────────────────────┐
-                   │ Temp basal         │  │ Active temp rate   │
+                   │ Set temp basal     │  │ Active temp rate   │
                    │ (set form, §6)     │  │ (§7)               │
                    └────────────────────┘  └────────────────────┘
                           │ Set ▸ confirm           │ Stop ▸ confirm
@@ -315,7 +315,7 @@ on the pump's screen or by another app may not be in the held state yet. The rea
 
 ---
 
-## 6. Temp basal (no temp rate running)
+## 6. Set temp basal (no temp rate running)
 
 Also shown while the loop's own temp or the clock-skew temp runs ([§5.1](#51-deciding-active)).
 
@@ -327,24 +327,30 @@ Percent tab:
 ┌──────────────────────────────────────────┐
 │ ‹ Tandem Mobi                            │
 │                                          │
-│ Temp basal                               │
+│ Set temp basal                           │
 │                                          │
 │  ┌──────────────────┬─────────────────┐  │
 │  │▐  Percent rate  ▌│    Unit rate    │  │
 │  └──────────────────┴─────────────────┘  │
 │                                          │
-│ RATE                                     │
+│ Rate                                     │
 │ ┌──────────────────────────────────────┐ │
 │ │                                      │ │
 │ │   (−)         100%           (+)     │ │
 │ │                                      │ │
-│ │       of the profile basal rate      │ │
-│ │       (currently 1.00 U/hr)          │ │
+│ │           of profile basal           │ │
 │ └──────────────────────────────────────┘ │
 │                                          │
-│ DURATION                                 │
+│ Duration                                 │
 │ ┌──────────────────────────────────────┐ │
-│ │ Duration                   30 min  ⌄ │ │
+│ │       0 hr              30 min     ⌄ │ │
+│ └──────────────────────────────────────┘ │
+│                                          │
+│ ──────────────────────────────────────── │
+│                                          │
+│ Effective basal rates                    │
+│ ┌──────────────────────────────────────┐ │
+│ │ Now – 2:30 PM              1.00 U/hr │ │
 │ └──────────────────────────────────────┘ │
 │                                          │
 │ ┌──────────────────────────────────────┐ │
@@ -353,7 +359,7 @@ Percent tab:
 └──────────────────────────────────────────┘
 ```
 
-- Navigation title "Temp basal" (large).
+- Navigation title "Set temp basal" (large).
 - The view is a `List` in `InsetGroupedListStyle`, like the settings screen.
 - The primary button sits below the list: `ContinueButton`, which is `ActionButtonStyle(.primary)`
   with a spinner while `loading`.
@@ -380,8 +386,8 @@ The set form shows no warning or notice card, in any loop mode or under Control-
 
 **The value**
 - Large, centred text, "100%".
-- Under it, "of the profile basal rate (currently X.XX U/hr)". The rate is `profileBasalRate` from the
-  read, to two decimals.
+- Under it, "of profile basal". The temp's rate in U/hr is in the effective basal rates
+  ([§6.7](#67-effective-basal-rates)).
 
 **Typing**
 - Tapping the number opens a text field with the number pad.
@@ -446,7 +452,7 @@ pMax = min( 250,
 - **The highest rate** is the highest valid percent of `profileBasalRate`: 250% of the profile, or less if the pump's max
   basal limit is lower.
 - **Segment changes.** A temp crossing one runs at a different rate after it, which
-  [§6.7](#67-profile-changes-during-the-temp) covers.
+  [§6.7](#67-effective-basal-rates) covers.
 
 ### 6.6 Duration
 
@@ -455,9 +461,9 @@ The pump takes whole minutes from 15 minutes to 72 hours. `UIDatePicker`'s count
 Health apps do.
 
 ```
-│ DURATION                                 │
+│ Duration                                 │
 │ ┌──────────────────────────────────────┐ │
-│ │ Duration               1 hr 30 min ⌃ │ │
+│ │       1 hr              30 min     ⌃ │ │
 │ ├──────────────────────────────────────┤ │
 │ │           0   hours      25   min    │ │
 │ │       ▶   1   hours      30   min    │ │
@@ -472,22 +478,33 @@ Health apps do.
   `guidanceColors.critical` and disables "Set temp rate". The wheels are not moved for the user, and
   there is no subtitle under the section.
 - **Default:** 30 minutes (**D4**), as in OmnipodKit's entry view and in the hosts' own temps.
-- **Collapsed row:** the duration formatted with `DateComponentsFormatter`, `.abbreviated` style,
-  `[.hour, .minute]`.
+- **Collapsed row:** the wheels' selected hours and minutes, "X hr" and "Y min", each centred over its
+  wheel and both shown even when zero, with no "Duration" label: the section header says it.
 
-### 6.7 Profile changes during the temp
+### 6.7 Effective basal rates
 
-When a segment change falls inside the chosen duration, a line under the rate section says what the
-temp becomes:
+Under the duration, past a divider, an "Effective basal rates" section lists the rate the temp runs
+at from now to its end, one row per rate:
 
 ```
-│  ⓘ At 2:00 PM your profile changes to    │
-│    0.80 U/hr, and this temp rate will    │
-│    run at 1.04 U/hr (130%).              │
+│ ──────────────────────────────────────── │
+│                                          │
+│ Effective basal rates                    │
+│ ┌──────────────────────────────────────┐ │
+│ │ Now – 2:00 PM              1.30 U/hr │ │
+│ ├──────────────────────────────────────┤ │
+│ │ 2:00 PM – 2:40 PM          1.04 U/hr │ │
+│ └──────────────────────────────────────┘ │
 ```
 
-- The changes come from `pumpSegmentChanges(after:through:)`, on the pump's clock.
-- Show the first change only, plus "and N more" if there are others.
+- The first row starts "Now"; the last ends at now plus the duration.
+- The pump rescales a temp at each profile segment change, so each change inside the duration
+  (`pumpSegmentChanges(after:through:)`, on the pump's clock) starts a row at `percent` of the new
+  profile rate (`ManualTempBasalForm.effectiveRates`). A change that leaves the rate on the pump's
+  0.01 U/hr grid as it was, as every change does at 0%, starts none.
+- A time not on today's date names its day ("Fri 2:00 PM"): a temp can run 72 hours.
+- The form is redrawn each minute (`TimelineView(.everyMinute)`), so "Now" and the end stay current.
+- Hidden while the duration is one the pump refuses.
 - Without it, a user who sets "1.30 U/hr" in the unit tab gets a different rate an hour later
   without being told.
 
@@ -504,9 +521,11 @@ Tapping it shows a confirmation, a plain SwiftUI `Alert` (**D5**).
             ┌────────────────────────────────┐
             │                                │
             │ Set a temp rate for 130% of    │
-            │ profile basal (currently       │
-            │ 1.30 U/hr) for a duration of   │
-            │ 1 hour, 30 minutes?            │
+            │ profile basal for a duration   │
+            │ of 1 hour, 30 minutes?         │
+            │                                │
+            │ Your new effective basal rate  │
+            │ will be 1.30 U/hr.             │
             │                                │
             ├────────────────────────────────┤
             │         Set temp rate          │
@@ -515,11 +534,13 @@ Tapping it shows a confirmation, a plain SwiftUI `Alert` (**D5**).
             └────────────────────────────────┘
 ```
 
-> Set a temp rate for XXX% of profile basal (currently X.XX U/hr) for a duration of N hours M minutes?
+> Set a temp rate for XXX% of profile basal for a duration of N hours M minutes?
+>
+> Your new effective basal rate will be X.XX U/hr.
 
-- **"(currently X.XX U/hr)"** is the temp's own rate, `profileBasalRate × percent / 100` (**D8**): 130%
-  of a 1.00 U/hr profile shows "currently 1.30 U/hr". "Currently" because the rate changes at the next
-  segment change ([§6.7](#67-profile-changes-during-the-temp)).
+- **The effective basal rate** is the temp's own rate now, `profileBasalRate × percent / 100`
+  (**D8**): 130% of a 1.00 U/hr profile shows 1.30 U/hr. The rate after a segment change is not in
+  the sentence; the form lists it ([§6.7](#67-effective-basal-rates)).
 - **The duration** is formatted with `DateComponentsFormatter`, `.full` style, `[.hour, .minute]`:
   - "1 hour, 30 minutes", "2 hours", "45 minutes";
   - not "0 hours 45 minutes" or "2 hours 0 minutes".
@@ -826,14 +847,14 @@ and `PumpManager/OmniPumpManager.swift` (lines 2846–2997).
 | **Row while a manual temp runs** | Becomes "Cancel Manual Basal" (warning icon) plus a separate "Remaining 1 hour, 29 minutes" row. | Becomes "Stop manual temp basal", subtext "130% (1.30U/hr) with 1h 12m remaining". |
 | **Row while another temp runs** | The normal "Set" row; the sheet can replace it. | The normal "Set temp basal" row. For the loop's own temp the screen opens on the set form and Set replaces it; for a pump-screen or other app's temp, on "Active temp rate". |
 | **Row disabled when** | No pod, activating, deactivating or faulted. Not while suspended, bolusing or in closed loop. | Suspended, delivery state unknown, or a command in flight. A running bolus is explained on the screen. |
-| **Title** | "Temporary Basal" (sheet) | "Temp basal" / "Active temp rate" |
+| **Title** | "Temporary Basal" (sheet) | "Set temp basal" / "Active temp rate" |
 | **Rate input** | Absolute U/hr only: one wheel, 0–max basal in 0.05 U/hr steps, 0.00 included. | Percent (default) or U/hr view of a percent. Steppers of 10%, typed entry. 0 or pMin–pMax whole %. |
 | **Rate ceiling** | The host-synced max basal rate (`state.maxBasalRateUnitsPerHour`). Above it, the driver only logs. | min(250%, pump's max basal limit ÷ profile) over the duration's segments. Above it, the driver refuses. |
 | **Rate floor** | 0 U/hr; any 0.05 step | 0%, or the lowest % the pump accepts (≥ 0.1 U/hr) |
 | **Duration** | One wheel, 30 min–12 h in 30-min steps (24 choices) | Hours + minutes wheels, 15 min–72 h, 5-minute steps |
 | **Defaults** | 0.00 U/hr for 30 min (a zero temp, one tap from set) | 100% for 30 min |
 | **Closed loop** | No detection. A static footnote: "Your insulin delivery will not be automatically adjusted until the temporary basal rate finishes or is canceled." | Nothing on either screen. The host shows its own pause, and TandemKit's status highlight shows. |
-| **Confirmation to set** | None | "Set a temp rate for 130% of profile basal (currently 1.30 U/hr) for a duration of 1 hour, 30 minutes?" |
+| **Confirmation to set** | None | "Set a temp rate for 130% of profile basal for a duration of 1 hour, 30 minutes?" then "Your new effective basal rate will be 1.30 U/hr." |
 | **Set errors** | Alert "Temporary Basal Failed": "Unable to set a temporary basal rate: …". The sheet stays open. | Error sheet "Could not set temp rate" with the driver's reason. The form keeps its values. |
 | **Success** | The sheet closes; the settings row turns into Cancel + Remaining. | Reloads into "Active temp rate"; the settings row turns into "Stop manual temp basal". |
 | **Viewing a running temp** | Settings rows only: no rate, no end time. The header shows the U/hr. "Remaining" does not tick. | The settings row (%, U/hr, time left, ticking) for a manual temp, and a dedicated view (%, U/hr now, profile, time left) for any temp but the loop's. |
@@ -850,7 +871,7 @@ and `PumpManager/OmniPumpManager.swift` (lines 2846–2997).
 
 - **Percent.** A Tandem pump takes a percent of its profile, not a rate, and rescales it at segment
   changes. OmnipodKit's U/hr wheel suits Omnipod, which takes an absolute rate. TandemKit's unit tab
-  is a view of a percent, and §6.7's segment note exists because "1.30 U/hr" does not stay 1.30 U/hr
+  is a view of a percent, and §6.7's effective basal rates exist because "1.30 U/hr" does not stay 1.30 U/hr
   on a Tandem pump.
 - **Refuse, don't clamp.** OmnipodKit only logs a rate over max basal, as a workaround for hosts that
   send one. That reasoning is about host commands. For a number a person typed and confirmed, sending
@@ -890,16 +911,18 @@ All strings go in `Localizable.xcstrings` with comments. `<App>` is `HostApp`'s 
 | Settings row, manual temp running | Stop manual temp basal |
 | Settings row subtext | %1$d%% (%2$@U/hr) with %3$@ remaining |
 | Status highlight | Manual Temp Basal |
-| Screen title (no temp) | Temp basal |
+| Screen title (no temp) | Set temp basal |
 | Screen title (temp) | Active temp rate |
 | Set refused under Control-IQ (added to the refusal) | Control-IQ is on, and the pump may not take a temp rate while it runs. |
 | Tabs | Percent rate · Unit rate |
-| Percent caption | of the profile basal rate (currently %@ U/hr) |
+| Percent caption | of profile basal |
 | Unit caption | %d%% of the %@ U/hr profile basal rate |
-| Segment note | At %1$@ your profile changes to %2$@ U/hr, and this temp rate will run at %3$@ U/hr (%4$d%%). |
-| Duration row | Duration |
+| Duration section | Duration |
+| Duration row and wheels | %d hr · %d min |
+| Effective rates section | Effective basal rates |
+| Effective rate rows | Now – %@ · %1$@ – %2$@ · %@ U/hr |
 | Primary button | Set temp rate |
-| Set confirmation | Set a temp rate for %1$d%% of profile basal (currently %2$@ U/hr) for a duration of %3$@? |
+| Set confirmation | Set a temp rate for %1$d%% of profile basal for a duration of %2$@?\n\nYour new effective basal rate will be %3$@ U/hr. |
 | Set confirmation buttons | Set temp rate · Cancel |
 | Set failure title | Could not set temp rate |
 | Temp started meanwhile | A temp rate started while you were on this screen. |
@@ -1045,7 +1068,7 @@ Rows for [docs/hardware-test-plan.md](hardware-test-plan.md):
 | D5 | Bold text in the confirmations? | **No.** Plain `Alert`s. |
 | D6 | A status highlight while a manual temp runs? | **Yes**, "Manual Temp Basal", warning, lowest priority (§8.5). |
 | D7 | Extra details? | **The settings row** turns into "Stop manual temp basal" with "XX% (X.XXU/hr) with XXh XXm remaining" while a manual temp runs, and tapping it asks to stop (§4.2). Manual temps only. No percent on the "Set temp basal" row, and no "Started", "Ends at" or "Set by" on the active view. |
-| D8 | "(currently X.XX U/hr)": the temp's rate or the profile's? | **The temp's rate.** |
+| D8 | The set confirmation's rate: the temp's or the profile's? | **The temp's rate**, as "Your new effective basal rate will be X.XX U/hr." |
 | D9 | Warn on "Delete Pump" while a temp runs? | **No.** |
 | D10 | Hide the screen on pumps pumpX2 doesn't mark as supported? | **No**, not gated. |
 | D13 | Allow a manual 100% temp? | **Yes.** It holds the profile rate, and reported manual it keeps Loop or Trio from adjusting basal while it runs. "Set temp rate" is enabled at 100% (§6.4). |

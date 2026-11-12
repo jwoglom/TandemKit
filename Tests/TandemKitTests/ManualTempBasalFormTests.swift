@@ -77,6 +77,61 @@ final class ManualTempBasalFormTests: XCTestCase {
         XCTAssertEqual(Form.rate(percent: 0, profileBasalRate: 1.0), 0)
     }
 
+    // MARK: - Effective rates
+
+    private static let start = Date(timeIntervalSinceReferenceDate: 700_000_000)
+
+    private func at(minutes: Double) -> Date {
+        Self.start.addingTimeInterval(.minutes(minutes))
+    }
+
+    func testWithNoSegmentChangeTheTempRunsAtOneRateToItsEnd() {
+        XCTAssertEqual(
+            Form.effectiveRates(percent: 130, profileBasalRate: 1.0, segmentChanges: [], from: Self.start, duration: .minutes(90)),
+            [Form.EffectiveRate(start: Self.start, end: at(minutes: 90), rate: 1.3)]
+        )
+    }
+
+    func testEachSegmentChangeInsideTheDurationStartsTheRescaledRate() {
+        let rates = Form.effectiveRates(
+            percent: 130,
+            profileBasalRate: 1.0,
+            segmentChanges: [(at(minutes: 20), 2.0), (at(minutes: 50), 0.5)],
+            from: Self.start,
+            duration: .minutes(90)
+        )
+
+        XCTAssertEqual(rates, [
+            Form.EffectiveRate(start: Self.start, end: at(minutes: 20), rate: 1.3),
+            Form.EffectiveRate(start: at(minutes: 20), end: at(minutes: 50), rate: 2.6),
+            Form.EffectiveRate(start: at(minutes: 50), end: at(minutes: 90), rate: 0.65)
+        ])
+    }
+
+    func testAChangeAtTheTempsEndStartsNothing() {
+        let rates = Form.effectiveRates(
+            percent: 130,
+            profileBasalRate: 1.0,
+            segmentChanges: [(at(minutes: 90), 2.0)],
+            from: Self.start,
+            duration: .minutes(90)
+        )
+
+        XCTAssertEqual(rates, [Form.EffectiveRate(start: Self.start, end: at(minutes: 90), rate: 1.3)])
+    }
+
+    func testAChangeThatLeavesTheTempsRateAsItWasStartsNothing() {
+        let rates = Form.effectiveRates(
+            percent: 0,
+            profileBasalRate: 1.0,
+            segmentChanges: [(at(minutes: 20), 2.0)],
+            from: Self.start,
+            duration: .minutes(90)
+        )
+
+        XCTAssertEqual(rates, [Form.EffectiveRate(start: Self.start, end: at(minutes: 90), rate: 0)])
+    }
+
     func testATypedRateIsTheNearestWholePercent() {
         XCTAssertEqual(Form.percent(forRate: 1.05, profileBasalRate: 0.85), 124)
         XCTAssertEqual(Form.percent(forRate: 1.3, profileBasalRate: 1.0), 130)

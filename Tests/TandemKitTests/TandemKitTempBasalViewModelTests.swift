@@ -90,7 +90,7 @@ import XCTest
         viewModel.apply(.success(status(percent: 130)))
         viewModel.apply(.success(status()))
 
-        XCTAssertEqual(titles, ["Active temp rate", "Temp basal"])
+        XCTAssertEqual(titles, ["Active temp rate", "Set temp basal"])
     }
 
     // MARK: - The form
@@ -122,18 +122,32 @@ import XCTest
         XCTAssertEqual(viewModel.percent, 160, "a value outside the bounds is kept")
     }
 
-    func testAProfileChangeInsideTheDurationIsDescribed() {
-        clock.set(Self.referenceDay.addingTimeInterval(.hours(14) - .minutes(20)))
+    func testTheEffectiveRatesRunFromNowToTheEndAndChangeWithTheProfile() {
+        let now = Self.referenceDay.addingTimeInterval(.hours(14) - .minutes(20))
+        let segmentChange = Self.referenceDay.addingTimeInterval(.hours(14))
+        clock.set(now)
         let viewModel = makeViewModel()
         viewModel.apply(.success(status()))
         viewModel.percent = 130
         // Ends at 13:55, before the 14:00 segment change.
         viewModel.minutes = 15
 
-        XCTAssertNil(viewModel.profileChange)
+        XCTAssertEqual(viewModel.effectiveBasalRates, [
+            ManualTempBasalForm.EffectiveRate(start: now, end: now.addingTimeInterval(.minutes(15)), rate: 1.3)
+        ])
         viewModel.hours = 1
-        XCTAssertEqual(viewModel.profileChange?.date, Self.referenceDay.addingTimeInterval(.hours(14)))
-        XCTAssertEqual(viewModel.profileChange?.tempRate, 2.6)
+        XCTAssertEqual(viewModel.effectiveBasalRates, [
+            ManualTempBasalForm.EffectiveRate(start: now, end: segmentChange, rate: 1.3),
+            ManualTempBasalForm.EffectiveRate(start: segmentChange, end: now.addingTimeInterval(.minutes(75)), rate: 2.6)
+        ])
+    }
+
+    func testADurationThePumpRefusesHasNoEffectiveRates() {
+        let viewModel = makeViewModel()
+        viewModel.apply(.success(status()))
+        viewModel.minutes = 10
+
+        XCTAssertEqual(viewModel.effectiveBasalRates, [])
     }
 
     func testATypedRateBecomesTheNearestPercent() {
@@ -154,7 +168,7 @@ import XCTest
 
         XCTAssertEqual(
             viewModel.setConfirmationMessage,
-            "Set a temp rate for 130% of profile basal (currently 1.30 U/hr) for a duration of 1 hour, 30 minutes?"
+            "Set a temp rate for 130% of profile basal for a duration of 1 hour, 30 minutes?\n\nYour new effective basal rate will be 1.30 U/hr."
         )
         XCTAssertEqual(viewModel.stopConfirmationMessage(percent: 130), "Stop the active temp rate of 130%?")
     }
