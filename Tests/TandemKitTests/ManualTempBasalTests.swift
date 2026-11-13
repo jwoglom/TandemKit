@@ -116,7 +116,7 @@ import XCTest
     }
 
     private func enactHost(_ unitsPerHour: Double, for duration: TimeInterval = .minutes(30)) -> PumpManagerError? {
-        wait { manager.enactTempBasal(unitsPerHour: unitsPerHour, for: duration, completion: $0) }
+        wait { manager.enactTempBasal(decisionId: nil, unitsPerHour: unitsPerHour, for: duration, completion: $0) }
     }
 
     private func stopFromSettings() -> PumpManagerError? {
