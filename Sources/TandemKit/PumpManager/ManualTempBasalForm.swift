@@ -51,6 +51,37 @@ public enum ManualTempBasalForm {
         TandemPumpCapabilities.roundToSupportedBasalRate(profileBasalRate * Double(percent) / 100)
     }
 
+    public struct EffectiveRate: Equatable {
+        public let start: Date
+        public let end: Date
+        public let rate: Double
+    }
+
+    /// The rates a temp at `percent` runs at from `start` for `duration`, as the pump rescales it at
+    /// each of `segmentChanges` (`TandemPumpManager.pumpSegmentChanges`). A change that leaves the
+    /// rate on the pump's grid as it was, as every change does at 0%, starts no new rate.
+    public static func effectiveRates(
+        percent: Int,
+        profileBasalRate: Double,
+        segmentChanges: [(date: Date, rate: Double)],
+        from start: Date,
+        duration: TimeInterval
+    ) -> [EffectiveRate] {
+        let end = start.addingTimeInterval(duration)
+        var rates = [EffectiveRate(start: start, end: end, rate: rate(percent: percent, profileBasalRate: profileBasalRate))]
+        for change in segmentChanges where change.date > start && change.date < end {
+            let current = rates.removeLast()
+            let next = rate(percent: percent, profileBasalRate: change.rate)
+            guard TandemPumpCapabilities.milliunits(next) != TandemPumpCapabilities.milliunits(current.rate) else {
+                rates.append(current)
+                continue
+            }
+            rates.append(EffectiveRate(start: current.start, end: change.date, rate: current.rate))
+            rates.append(EffectiveRate(start: change.date, end: end, rate: next))
+        }
+        return rates
+    }
+
     /// The unit view's typed rate as the whole percent nearest it; nil without a profile rate.
     public static func percent(forRate unitsPerHour: Double, profileBasalRate: Double) -> Int? {
         guard profileBasalRate > 0, unitsPerHour >= 0, unitsPerHour.isFinite else { return nil }

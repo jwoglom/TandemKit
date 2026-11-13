@@ -64,45 +64,47 @@ struct TandemKitTempBasalView: View {
 
     // MARK: - Set
 
+    /// Redrawn each minute: the effective rates and the accepted percents run from now.
     private var form: some View {
-        VStack(spacing: 0) {
-            List {
-                Section {
-                    Picker(String(localized: "Rate", comment: "Label of the temp basal rate kind picker"), selection: $viewModel.rateView) {
-                        Text("Percent rate", comment: "Temp basal screen tab for a rate as a percent of the profile")
-                            .tag(RateView.percent)
-                        Text("Unit rate", comment: "Temp basal screen tab for a rate in units per hour")
-                            .tag(RateView.units)
+        TimelineView(.everyMinute) { _ in
+            VStack(spacing: 0) {
+                List {
+                    Section {
+                        Picker(String(localized: "Rate", comment: "Label of the temp basal rate kind picker"), selection: $viewModel.rateView) {
+                            Text("Percent rate", comment: "Temp basal screen tab for a rate as a percent of the profile")
+                                .tag(RateView.percent)
+                            Text("Unit rate", comment: "Temp basal screen tab for a rate in units per hour")
+                                .tag(RateView.units)
+                        }
+                        .pickerStyle(.segmented)
+                        .disabled(viewModel.isSending)
                     }
-                    .pickerStyle(.segmented)
-                    .disabled(viewModel.isSending)
-                }
 
-                Section(header: SectionHeader(label: String(localized: "Rate", comment: "Header of the temp basal rate section"))) {
-                    rateControl
-                    if let change = viewModel.profileChange {
-                        profileChangeNote(change)
+                    Section(header: SectionHeader(label: String(localized: "Rate", comment: "Header of the temp basal rate section"))) {
+                        rateControl
                     }
-                }
 
-                Section(header: SectionHeader(label: String(localized: "Duration", comment: "Header of the temp basal duration section"))) {
-                    durationRow
-                    if showingDurationPicker {
-                        durationPicker
+                    Section(header: SectionHeader(label: String(localized: "Duration", comment: "Header of the temp basal duration section"))) {
+                        durationRow
+                        if showingDurationPicker {
+                            durationPicker
+                        }
                     }
+
+                    effectiveBasalRates
                 }
+                .listStyle(.insetGrouped)
+
+                ContinueButton(
+                    text: Text("Set temp rate", comment: "Button to set a temp basal from the temp basal screen"),
+                    loading: Binding(get: { viewModel.isSending }, set: { _ in }),
+                    disabled: Binding(get: { !viewModel.canSet }, set: { _ in })
+                ) {
+                    isEditingValue = false
+                    viewModel.showingSetConfirmation = true
+                }
+                .padding()
             }
-            .listStyle(.insetGrouped)
-
-            ContinueButton(
-                text: Text("Set temp rate", comment: "Button to set a temp basal from the temp basal screen"),
-                loading: Binding(get: { viewModel.isSending }, set: { _ in }),
-                disabled: Binding(get: { !viewModel.canSet }, set: { _ in })
-            ) {
-                isEditingValue = false
-                viewModel.showingSetConfirmation = true
-            }
-            .padding()
         }
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
@@ -204,16 +206,9 @@ struct TandemKitTempBasalView: View {
     }
 
     private var rateCaption: String {
-        let profile = TandemKitTempBasalViewModel.rateText(viewModel.profileBasalRate)
         switch viewModel.rateView {
         case .percent:
-            return String(
-                format: String(
-                    localized: "of the profile basal rate (currently %@ U/hr)",
-                    comment: "Caption under a temp basal percent (the profile's rate now)"
-                ),
-                profile
-            )
+            return String(localized: "of profile basal", comment: "Caption under a temp basal percent")
         case .units:
             return String(
                 format: String(
@@ -221,51 +216,25 @@ struct TandemKitTempBasalView: View {
                     comment: "Caption under a temp basal rate in units per hour (1: the percent, 2: the profile's rate now)"
                 ),
                 viewModel.percent,
-                profile
+                TandemKitTempBasalViewModel.rateText(viewModel.profileBasalRate)
             )
         }
     }
 
-    private func profileChangeNote(_ change: TandemKitTempBasalViewModel.ProfileChange) -> some View {
-        var text = String(
-            format: String(
-                localized: "At %1$@ your profile changes to %2$@ U/hr, and this temp rate will run at %3$@ U/hr (%4$d%%).",
-                comment: "Note on the temp basal screen when a profile segment change falls inside the duration (1: time, 2: new profile rate, 3: new temp rate, 4: percent)"
-            ),
-            Self.timeFormatter.string(from: change.date),
-            TandemKitTempBasalViewModel.rateText(change.profileRate),
-            TandemKitTempBasalViewModel.rateText(change.tempRate),
-            viewModel.percent
-        )
-        if change.laterChanges > 0 {
-            text += " " + String(
-                format: String(
-                    localized: "The profile changes %d more times during it.",
-                    comment: "Added to the profile change note when more segment changes fall inside the temp basal's duration (the count)"
-                ),
-                change.laterChanges
-            )
-        }
-        return Label {
-            Text(text)
-        } icon: {
-            Image(systemName: "info.circle")
-        }
-        .font(.footnote)
-        .foregroundColor(.secondary)
-    }
-
+    /// The selected hours and minutes, each over its own wheel.
     private var durationRow: some View {
         Button(action: {
             isEditingValue = false
             withAnimation { showingDurationPicker.toggle() }
         }) {
-            HStack {
-                Text("Duration", comment: "Label of the temp basal duration row")
-                    .foregroundColor(.primary)
-                Spacer()
-                Text(viewModel.collapsedDurationText)
-                    .foregroundColor(viewModel.isDurationValid ? .secondary : guidanceColors.critical)
+            HStack(spacing: 0) {
+                Text(Self.hoursText(viewModel.hours))
+                    .frame(maxWidth: .infinity)
+                Text(Self.minutesText(viewModel.minutes))
+                    .frame(maxWidth: .infinity)
+            }
+            .foregroundColor(viewModel.isDurationValid ? .primary : guidanceColors.critical)
+            .overlay(alignment: .trailing) {
                 Image(systemName: showingDurationPicker ? "chevron.up" : "chevron.down")
                     .font(.footnote.weight(.semibold))
                     .foregroundColor(.secondary)
@@ -280,7 +249,7 @@ struct TandemKitTempBasalView: View {
         HStack(spacing: 0) {
             Picker(String(localized: "Hours", comment: "Label of the temp basal hours wheel"), selection: $viewModel.hours) {
                 ForEach(ManualTempBasalForm.hourChoices, id: \.self) { hours in
-                    Text(String(format: String(localized: "%d hr", comment: "Hours on the temp basal duration wheel"), hours))
+                    Text(Self.hoursText(hours))
                         .tag(hours)
                 }
             }
@@ -291,7 +260,7 @@ struct TandemKitTempBasalView: View {
 
             Picker(String(localized: "Minutes", comment: "Label of the temp basal minutes wheel"), selection: $viewModel.minutes) {
                 ForEach(ManualTempBasalForm.minuteChoices, id: \.self) { minutes in
-                    Text(String(format: String(localized: "%d min", comment: "Minutes on the temp basal duration wheel"), minutes))
+                    Text(Self.minutesText(minutes))
                         .tag(minutes)
                 }
             }
@@ -301,6 +270,62 @@ struct TandemKitTempBasalView: View {
             .clipped()
         }
         .frame(height: 160)
+    }
+
+    private static func hoursText(_ hours: Int) -> String {
+        String(format: String(localized: "%d hr", comment: "Hours on the temp basal duration row and wheel"), hours)
+    }
+
+    private static func minutesText(_ minutes: Int) -> String {
+        String(format: String(localized: "%d min", comment: "Minutes on the temp basal duration row and wheel"), minutes)
+    }
+
+    @ViewBuilder private var effectiveBasalRates: some View {
+        let rates = viewModel.effectiveBasalRates
+        if let start = rates.first?.start {
+            Section(header: VStack(alignment: .leading, spacing: 0) {
+                Divider()
+                    .padding(.vertical, 12)
+                SectionHeader(label: String(localized: "Effective basal rates", comment: "Header of the temp basal screen's list of the rates the temp runs at"))
+            }) {
+                ForEach(rates, id: \.start) { rate in
+                    HStack {
+                        Text(effectiveRateSpan(rate, from: start))
+                        Spacer()
+                        Text(String(
+                            format: String(localized: "%@ U/hr", comment: "A rate in units per hour, to two decimals"),
+                            TandemKitTempBasalViewModel.rateText(rate.rate)
+                        ))
+                        .foregroundColor(.secondary)
+                    }
+                }
+            }
+        }
+    }
+
+    private func effectiveRateSpan(_ rate: ManualTempBasalForm.EffectiveRate, from now: Date) -> String {
+        let end = Self.effectiveRateTime(rate.end, now: now)
+        guard rate.start > now else {
+            return String(
+                format: String(localized: "Now – %@", comment: "The temp basal screen's first effective basal rate, from now to a time"),
+                end
+            )
+        }
+        return String(
+            format: String(
+                localized: "%1$@ – %2$@",
+                comment: "A later effective basal rate on the temp basal screen (1: its start time, 2: its end time)"
+            ),
+            Self.effectiveRateTime(rate.start, now: now),
+            end
+        )
+    }
+
+    /// A temp can run 72 hours, so a time past today names its day.
+    private static func effectiveRateTime(_ date: Date, now: Date) -> String {
+        Calendar.current.isDate(date, inSameDayAs: now)
+            ? timeFormatter.string(from: date)
+            : date.formatted(.dateTime.weekday().hour().minute())
     }
 
     // MARK: - Active

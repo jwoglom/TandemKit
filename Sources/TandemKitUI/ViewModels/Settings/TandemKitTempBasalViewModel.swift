@@ -16,13 +16,6 @@ class TandemKitTempBasalViewModel: ObservableObject {
         case active(TempRateStatus)
     }
 
-    struct ProfileChange: Equatable {
-        let date: Date
-        let profileRate: Double
-        let tempRate: Double
-        let laterChanges: Int
-    }
-
     @Published private(set) var screen: Screen = .loading {
         didSet { onTitleChange?(title) }
     }
@@ -51,10 +44,26 @@ class TandemKitTempBasalViewModel: ObservableObject {
     }
 
     var title: String {
-        if case .active = screen {
-            return String(localized: "Active temp rate", comment: "Title of the temp basal screen while a temp rate runs")
+        let showsActive: Bool
+        switch screen {
+        case .active:
+            showsActive = true
+        case .form, .suspended:
+            showsActive = false
+        case .loading, .unreachable:
+            showsActive = holdsATempTheHostDidNotSet
         }
-        return String(localized: "Temp basal", comment: "Title of the temp basal screen while no temp rate runs")
+        return showsActive
+            ? String(localized: "Active temp rate", comment: "Title of the temp basal screen while a temp rate runs")
+            : String(localized: "Set temp basal", comment: "The settings row that opens the temp basal screen, and its title while no temp rate runs")
+    }
+
+    /// Before the pump answers: the screen opens from "Stop manual temp basal" too, and the read will
+    /// most likely show such a temp as active.
+    private var holdsATempTheHostDidNotSet: Bool {
+        guard let pumpManager else { return false }
+        let held = pumpManager.state.basalDose
+        return held.type == .tempBasal && !held.setByHost && held.estimatedEndDate > pumpManager.now
     }
 
     // MARK: - The form
@@ -110,38 +119,35 @@ class TandemKitTempBasalViewModel: ObservableObject {
         }
     }
 
-    /// The pump rescales a temp at each profile segment change, so the first one inside the duration
-    /// says what the temp becomes.
-    var profileChange: ProfileChange? {
-        guard let pumpManager, isDurationValid else { return nil }
+    /// From now to the end of the duration; empty while the duration is one the pump refuses.
+    var effectiveBasalRates: [ManualTempBasalForm.EffectiveRate] {
+        guard let pumpManager, isDurationValid else { return [] }
         let start = pumpManager.now
-        let changes = pumpManager.pumpSegmentChanges(after: start, through: start.addingTimeInterval(duration))
-        guard let first = changes.first else { return nil }
-        return ProfileChange(
-            date: first.date,
-            profileRate: first.rate,
-            tempRate: ManualTempBasalForm.rate(percent: percent, profileBasalRate: first.rate),
-            laterChanges: changes.count - 1
+        return ManualTempBasalForm.effectiveRates(
+            percent: percent,
+            profileBasalRate: profileBasalRate,
+            segmentChanges: pumpManager.pumpSegmentChanges(after: start, through: start.addingTimeInterval(duration)),
+            from: start,
+            duration: duration
         )
     }
 
     var durationText: String {
-        Self.durationFormatter(.full).string(from: duration) ?? ""
-    }
-
-    var collapsedDurationText: String {
-        Self.durationFormatter(.abbreviated).string(from: duration) ?? ""
+        let formatter = DateComponentsFormatter()
+        formatter.unitsStyle = .full
+        formatter.allowedUnits = [.hour, .minute]
+        return formatter.string(from: duration) ?? ""
     }
 
     var setConfirmationMessage: String {
         String(
             format: String(
-                localized: "Set a temp rate for %1$d%% of profile basal (currently %2$@ U/hr) for a duration of %3$@?",
-                comment: "Confirmation before setting a temp basal (1: percent of the profile, 2: the rate that runs now, 3: the duration)"
+                localized: "Set a temp rate for %1$d%% of profile basal for a duration of %2$@?\n\nYour new effective basal rate will be %3$@ U/hr.",
+                comment: "Confirmation before setting a temp basal (1: percent of the profile, 2: the duration, 3: the rate that runs now)"
             ),
             percent,
-            Self.rateText(rate),
-            durationText
+            durationText,
+            Self.rateText(rate)
         )
     }
 
@@ -157,13 +163,6 @@ class TandemKitTempBasalViewModel: ObservableObject {
 
     static func rateText(_ unitsPerHour: Double) -> String {
         String(format: "%.2f", unitsPerHour)
-    }
-
-    private static func durationFormatter(_ style: DateComponentsFormatter.UnitsStyle) -> DateComponentsFormatter {
-        let formatter = DateComponentsFormatter()
-        formatter.unitsStyle = style
-        formatter.allowedUnits = [.hour, .minute]
-        return formatter
     }
 
     // MARK: - The pump

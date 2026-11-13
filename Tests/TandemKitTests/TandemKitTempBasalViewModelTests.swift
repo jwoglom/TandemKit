@@ -13,7 +13,7 @@ import XCTest
     }
 
     /// 1 U/hr until 14:00 and 2 U/hr after; nothing here talks to the pump.
-    private func makeViewModel(maxBasalLimit: Double? = nil) -> TandemKitTempBasalViewModel {
+    private func makeViewModel(maxBasalLimit: Double? = nil, holding heldDose: UnfinalizedDose? = nil) -> TandemKitTempBasalViewModel {
         let schedule = BasalRateSchedule(dailyItems: [
             RepeatingScheduleValue(startTime: 0, value: 1.0),
             RepeatingScheduleValue(startTime: .hours(14), value: 2.0)
@@ -21,6 +21,9 @@ import XCTest
         var state = TandemPumpManagerState(basalRateSchedule: schedule)
         state.maxBasalLimitMilliunits = maxBasalLimit.map(TandemPumpCapabilities.milliunits)
         let manager = TandemPumpManager(state: state, bluetooth: StubPumpBluetooth(), clock: clock)
+        if let heldDose {
+            manager.state.basalDose = heldDose
+        }
         return TandemKitTempBasalViewModel(pumpManager: manager)
     }
 
@@ -90,7 +93,24 @@ import XCTest
         viewModel.apply(.success(status(percent: 130)))
         viewModel.apply(.success(status()))
 
-        XCTAssertEqual(titles, ["Active temp rate", "Temp basal"])
+        XCTAssertEqual(titles, ["Active temp rate", "Set temp basal"])
+    }
+
+    func testWhileReadingAManualTempTheTitleIsTheActiveViews() {
+        let viewModel = makeViewModel(holding: UnfinalizedDose(
+            tempRate: 1.3,
+            duration: .minutes(30),
+            automatic: false,
+            insulinType: .novolog,
+            startDate: clock.now,
+            tempRateId: 42,
+            tempPercent: 130
+        ))
+
+        XCTAssertEqual(viewModel.screen, .loading)
+        XCTAssertEqual(viewModel.title, "Active temp rate")
+        viewModel.apply(.success(status()))
+        XCTAssertEqual(viewModel.title, "Set temp basal")
     }
 
     // MARK: - The form
@@ -122,18 +142,32 @@ import XCTest
         XCTAssertEqual(viewModel.percent, 160, "a value outside the bounds is kept")
     }
 
-    func testAProfileChangeInsideTheDurationIsDescribed() {
-        clock.set(Self.referenceDay.addingTimeInterval(.hours(14) - .minutes(20)))
+    func testTheEffectiveRatesRunFromNowToTheEndAndChangeWithTheProfile() {
+        let now = Self.referenceDay.addingTimeInterval(.hours(14) - .minutes(20))
+        let segmentChange = Self.referenceDay.addingTimeInterval(.hours(14))
+        clock.set(now)
         let viewModel = makeViewModel()
         viewModel.apply(.success(status()))
         viewModel.percent = 130
         // Ends at 13:55, before the 14:00 segment change.
         viewModel.minutes = 15
 
-        XCTAssertNil(viewModel.profileChange)
+        XCTAssertEqual(viewModel.effectiveBasalRates, [
+            ManualTempBasalForm.EffectiveRate(start: now, end: now.addingTimeInterval(.minutes(15)), rate: 1.3)
+        ])
         viewModel.hours = 1
-        XCTAssertEqual(viewModel.profileChange?.date, Self.referenceDay.addingTimeInterval(.hours(14)))
-        XCTAssertEqual(viewModel.profileChange?.tempRate, 2.6)
+        XCTAssertEqual(viewModel.effectiveBasalRates, [
+            ManualTempBasalForm.EffectiveRate(start: now, end: segmentChange, rate: 1.3),
+            ManualTempBasalForm.EffectiveRate(start: segmentChange, end: now.addingTimeInterval(.minutes(75)), rate: 2.6)
+        ])
+    }
+
+    func testADurationThePumpRefusesHasNoEffectiveRates() {
+        let viewModel = makeViewModel()
+        viewModel.apply(.success(status()))
+        viewModel.minutes = 10
+
+        XCTAssertEqual(viewModel.effectiveBasalRates, [])
     }
 
     func testATypedRateBecomesTheNearestPercent() {
@@ -154,7 +188,7 @@ import XCTest
 
         XCTAssertEqual(
             viewModel.setConfirmationMessage,
-            "Set a temp rate for 130% of profile basal (currently 1.30 U/hr) for a duration of 1 hour, 30 minutes?"
+            "Set a temp rate for 130% of profile basal for a duration of 1 hour, 30 minutes?\n\nYour new effective basal rate will be 1.30 U/hr."
         )
         XCTAssertEqual(viewModel.stopConfirmationMessage(percent: 130), "Stop the active temp rate of 130%?")
     }
