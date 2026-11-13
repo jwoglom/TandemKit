@@ -269,7 +269,7 @@ which `TandemKitTests` compiles because both test targets use it.
 ## Trio in the simulator
 
 `TrioIntegrationTests` run Trio itself, built from `nightscout/Trio` `feat/tandem-closed-beta` (`-next-dev` when the TandemKit branch name contains `next-dev`; on a
-manual run, `trio_ref` on `trio_repository`, whose LoopKit submodule every job then builds against)
+manual run, `trio_ref` on `trio_repository`; every job builds against the LoopKit submodule of either of the last two)
 with this TandemKit as its submodule and `VirtualPump.xcconfig` applied to the whole build, so Trio's
 own `DeviceDataManager` and pump history take the driver's reports instead of `TrioDoseStoreOracle`.
 Nothing in Trio changes for it:
