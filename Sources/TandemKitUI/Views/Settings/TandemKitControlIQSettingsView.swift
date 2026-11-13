@@ -50,16 +50,37 @@ struct TandemKitControlIQSettingsView: View {
                 .padding(.horizontal)
             }
         }
-        .alert(item: Binding(
-            get: { viewModel.saveError.map { ErrorMessage(message: $0) } },
-            set: { _ in viewModel.saveError = nil }
-        )) { error in
-            Alert(
-                title: Text("Error", comment: "Error alert title"),
-                message: Text(error.message),
-                dismissButton: .default(Text("OK", comment: "Button to dismiss an error alert"))
-            )
+        .alert(item: activeAlert) { alert in
+            switch alert {
+            case let .error(message):
+                return Alert(
+                    title: Text("Error", comment: "Error alert title"),
+                    message: Text(message),
+                    dismissButton: .default(Text("OK", comment: "Button to dismiss an error alert"))
+                )
+            case let .enable(prompt):
+                return prompt.alert(
+                    confirm: { viewModel.confirmEnablingControlIQ() },
+                    openCgmSettings: { viewModel.openCgmSettings() },
+                    openControlIQSettings: {}
+                )
+            }
         }
+    }
+
+    private var activeAlert: Binding<ControlIQSettingsAlert?> {
+        Binding(
+            get: {
+                if let prompt = viewModel.enablePrompt {
+                    return .enable(prompt)
+                }
+                return viewModel.saveError.map { .error($0) }
+            },
+            set: { _ in
+                viewModel.enablePrompt = nil
+                viewModel.saveError = nil
+            }
+        )
     }
 
     // MARK: - Control-IQ Settings Section
@@ -337,7 +358,17 @@ struct TandemKitControlIQSettingsView: View {
 
 // MARK: - Helper
 
-private struct ErrorMessage: Identifiable {
-    let id = UUID()
-    let message: String
+/// Save's error and the prompts of a Save that turns Control-IQ on share the view's one alert.
+private enum ControlIQSettingsAlert: Identifiable {
+    case error(String)
+    case enable(ControlIQEnablePrompt)
+
+    var id: String {
+        switch self {
+        case let .error(message):
+            return "error:\(message)"
+        case let .enable(prompt):
+            return prompt.id
+        }
+    }
 }

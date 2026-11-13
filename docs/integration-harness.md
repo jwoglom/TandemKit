@@ -268,10 +268,10 @@ which `TandemKitTests` compiles because both test targets use it.
 
 ## Trio in the simulator
 
-`TrioIntegrationTests` run Trio itself, built from `nightscout/Trio` `feat/tandem-closed-beta` (on a
-manual run, `trio_ref`, whose LoopKit submodule every job then builds against) with this TandemKit
-as its submodule and `VirtualPump.xcconfig` applied to the whole build, so Trio's own
-`DeviceDataManager` and pump history take the driver's reports instead of `TrioDoseStoreOracle`.
+`TrioIntegrationTests` run Trio itself, built from `nightscout/Trio` `feat/tandem-closed-beta` (`-next-dev` when the TandemKit branch name contains `next-dev`; on a
+manual run, `trio_ref` on `trio_repository`, whose LoopKit submodule every job then builds against)
+with this TandemKit as its submodule and `VirtualPump.xcconfig` applied to the whole build, so Trio's
+own `DeviceDataManager` and pump history take the driver's reports instead of `TrioDoseStoreOracle`.
 Nothing in Trio changes for it:
 
 - `scripts/trio-test.sh build` builds Trio (signed ad hoc, since an unsigned simulator build has
@@ -345,7 +345,7 @@ stopping it, since a Trio that stops answering logs nothing about why. The `trio
 ## Loop in the simulator
 
 `LoopIntegrationTests` run Loop the same way, built from `LoopKit/LoopWorkspace`
-`feat/tandem-closed-beta` (on a manual run, `loop_ref`) with this TandemKit as its `TandemKitPlugin`
+`feat/tandem-closed-beta` (`-next-dev` likewise; on a manual run, `loop_ref`) with this TandemKit as its `TandemKitPlugin`
 and `VirtualPump.xcconfig` applied to the whole workspace. They cover what Trio cannot: upstream
 LoopKit, the plugin build, and LoopKit's `DoseStore`, the store `LoopDoseStoreOracle` models, so
 they check the oracle against the real thing as well as the driver against the oracle.

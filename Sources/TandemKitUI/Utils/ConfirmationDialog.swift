@@ -3,7 +3,7 @@ import SwiftUI
 /// The title, message and buttons of a confirmation dialog.
 ///
 /// This mirrors the shape of `ActionSheet` so call sites read the same, but it is
-/// presented through `Alert` instead. `ActionSheet`/`actionSheet(...)` and
+/// presented as an alert instead. `ActionSheet`/`actionSheet(...)` and
 /// `confirmationDialog(...)` are both implemented as a popover-style
 /// `UIAlertController(style: .actionSheet)` under the hood, which needs a source
 /// anchor (`sourceView`/`sourceRect`). When one of these dialogs is attached to a
@@ -18,6 +18,7 @@ struct ConfirmationDialogContent {
     struct Action {
         let title: Text
         let role: ButtonRole?
+        var isPreferred = false
         let action: () -> Void
 
         static func destructive(_ title: Text, action: @escaping () -> Void) -> Action {
@@ -26,6 +27,12 @@ struct ConfirmationDialogContent {
 
         static func standard(_ title: Text, action: @escaping () -> Void) -> Action {
             Action(title: title, role: nil, action: action)
+        }
+
+        /// The alert's preferred action, which iOS emphasizes over the cancel button it would
+        /// otherwise emphasize.
+        static func primary(_ title: Text, action: @escaping () -> Void) -> Action {
+            Action(title: title, role: nil, isPreferred: true, action: action)
         }
 
         /// SwiftUI moves the cancel-role button to the bottom of the dialog regardless
@@ -40,32 +47,25 @@ struct ConfirmationDialogContent {
     let actions: [Action]
 }
 
-private func alertButton(for action: ConfirmationDialogContent.Action) -> Alert.Button {
-    switch action.role {
-    case .destructive:
-        return .destructive(action.title, action: action.action)
-    case .cancel:
-        return .cancel(action.title, action: action.action)
-    default:
-        return .default(action.title, action: action.action)
+@ViewBuilder
+private func alertButton(for action: ConfirmationDialogContent.Action) -> some View {
+    let button = Button(role: action.role, action: action.action) { action.title }
+    // An alert takes its preferred action from the default-action shortcut; `Alert.Button`
+    // has no way to set one, which is why this isn't built on `Alert`.
+    if action.isPreferred {
+        button.keyboardShortcut(.defaultAction)
+    } else {
+        button
     }
 }
 
-private func makeAlert(for dialog: ConfirmationDialogContent) -> Alert {
-    let cancelAction = dialog.actions.first { $0.role == .cancel }
-    let otherActions = dialog.actions.filter { $0.role != .cancel }
-
-    if let cancelAction, let primaryAction = otherActions.first {
-        return Alert(
-            title: dialog.title,
-            message: dialog.message,
-            primaryButton: alertButton(for: primaryAction),
-            secondaryButton: alertButton(for: cancelAction)
-        )
-    } else if let onlyAction = dialog.actions.first {
-        return Alert(title: dialog.title, message: dialog.message, dismissButton: alertButton(for: onlyAction))
-    } else {
-        return Alert(title: dialog.title, message: dialog.message)
+@ViewBuilder
+private func alertButtons(for dialog: ConfirmationDialogContent) -> some View {
+    if let action = dialog.actions.first(where: { $0.role != .cancel }) {
+        alertButton(for: action)
+    }
+    if let cancelAction = dialog.actions.first(where: { $0.role == .cancel }) {
+        alertButton(for: cancelAction)
     }
 }
 
@@ -74,8 +74,14 @@ private struct ItemConfirmationDialog<Item: Identifiable>: ViewModifier {
     let dialog: (Item) -> ConfirmationDialogContent
 
     func body(content base: Content) -> some View {
-        base.alert(item: $item) { item in
-            makeAlert(for: dialog(item))
+        base.alert(
+            item.map { dialog($0).title } ?? Text(verbatim: ""),
+            isPresented: Binding(get: { item != nil }, set: { if !$0 { item = nil } }),
+            presenting: item
+        ) { item in
+            alertButtons(for: dialog(item))
+        } message: { item in
+            dialog(item).message
         }
     }
 }
@@ -85,8 +91,11 @@ private struct BoolConfirmationDialog: ViewModifier {
     let dialog: () -> ConfirmationDialogContent
 
     func body(content base: Content) -> some View {
-        base.alert(isPresented: $isPresented) {
-            makeAlert(for: dialog())
+        let content = dialog()
+        return base.alert(content.title, isPresented: $isPresented) {
+            alertButtons(for: content)
+        } message: {
+            content.message
         }
     }
 }

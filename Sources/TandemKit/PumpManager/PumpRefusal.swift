@@ -10,7 +10,8 @@ enum PumpRefusal {
         to request: SetTempRateRequest,
         pumpBasalRate: Double,
         maximumTempBasalRate: Double?,
-        afterStoppingATemp: Bool
+        afterStoppingATemp: Bool,
+        underControlIQ: Bool
     ) -> PumpCommError {
         let rate = pumpBasalRate * Double(request.percent) / 100
         var sentences = [
@@ -44,6 +45,12 @@ enum PumpRefusal {
                 units(pumpBasalRate),
                 units(rate),
                 units(maximumTempBasalRate)
+            ))
+        }
+        if underControlIQ {
+            sentences.append(String(
+                localized: "Control-IQ is on, and the pump may not take a temporary basal rate while it runs.",
+                comment: "Detail of a refused temp basal when the pump's Control-IQ algorithm is on; some firmware refuses temp rates then"
             ))
         }
         if afterStoppingATemp {

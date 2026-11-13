@@ -27,11 +27,15 @@ on:
         type: boolean
         default: false
       trio_ref:
-        description: "nightscout/Trio branch/tag/SHA for the trio job; every job then builds against its LoopKit submodule (default: feat/tandem-closed-beta, and loopkit-frameworks' pinned LoopKit)"
+        description: "nightscout/Trio branch/tag/SHA for the trio job; every job then builds against its LoopKit submodule (default: feat/tandem-closed-beta, or -next-dev on a TandemKit branch named for next-dev; and loopkit-frameworks' pinned LoopKit)"
+        required: false
+        default: ""
+      trio_repository:
+        description: "Trio fork trio_ref is on, such as one carrying TandemKit (default: nightscout/Trio)"
         required: false
         default: ""
       loop_ref:
-        description: "LoopKit/LoopWorkspace branch/tag/SHA for the loop job (default: feat/tandem-closed-beta)"
+        description: "LoopKit/LoopWorkspace branch/tag/SHA for the loop job (default: feat/tandem-closed-beta, or -next-dev on a TandemKit branch named for next-dev)"
         required: false
         default: ""
 
@@ -72,23 +76,28 @@ jobs:
           workflow: macos
           externals: |
             jwoglom/faketandem ${{ github.head_ref }}
-            nightscout/Trio feat/tandem-closed-beta
-            LoopKit/LoopWorkspace feat/tandem-closed-beta
+            nightscout/Trio ${{ contains(github.head_ref || github.ref_name, 'next-dev') && 'feat/tandem-closed-beta-next-dev' || 'feat/tandem-closed-beta' }}
+            LoopKit/LoopWorkspace ${{ contains(github.head_ref || github.ref_name, 'next-dev') && 'feat/tandem-closed-beta-next-dev' || 'feat/tandem-closed-beta' }}
 
       # Without trio_ref, loopkit-frameworks builds its pinned LoopKit.
       - name: Pick LoopKit from trio_ref's submodule
         id: loopkit
-        if: inputs.trio_ref != ''
+        if: inputs.trio_ref != '' || inputs.trio_repository != ''
         env:
           GH_TOKEN: ${{ github.token }}
           TRIO_REF: ${{ inputs.trio_ref }}
+          TRIO_REPOSITORY: ${{ inputs.trio_repository || 'nightscout/Trio' }}
         run: |
           set -euo pipefail
-          submodule="$(gh api "repos/nightscout/Trio/contents/LoopKit?ref=${TRIO_REF}" \
+          if [[ -z "${TRIO_REF}" ]]; then
+            echo "::error::trio_repository needs trio_ref"
+            exit 1
+          fi
+          submodule="$(gh api "repos/${TRIO_REPOSITORY}/contents/LoopKit?ref=${TRIO_REF}" \
             --jq 'select(.type == "submodule") | "\(.submodule_git_url) \(.sha)"')"
           read -r url revision <<< "${submodule}"
           if [[ -z "${revision:-}" ]]; then
-            echo "::error::nightscout/Trio ${TRIO_REF} has no LoopKit submodule"
+            echo "::error::${TRIO_REPOSITORY} ${TRIO_REF} has no LoopKit submodule"
             exit 1
           fi
           repository="${url#https://github.com/}"
@@ -96,7 +105,7 @@ jobs:
           repository="${repository%.git}"
           echo "repository=${repository}" >> "${GITHUB_OUTPUT}"
           echo "revision=${revision}" >> "${GITHUB_OUTPUT}"
-          echo "### LoopKit: ${repository}@${revision} (nightscout/Trio ${TRIO_REF})" >> "${GITHUB_STEP_SUMMARY}"
+          echo "### LoopKit: ${repository}@${revision} (${TRIO_REPOSITORY} ${TRIO_REF})" >> "${GITHUB_STEP_SUMMARY}"
 
   unit:
     name: unit tests
@@ -342,6 +351,7 @@ jobs:
         id: trio
         uses: ./TandemKit/.github/actions/checkout-trio
         with:
+          repository: ${{ inputs.trio_repository }}
           ref: ${{ inputs.trio_ref }}
           tandemkit-ref: ${{ github.sha }}
 

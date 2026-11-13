@@ -21,3 +21,12 @@ struct ModalInPresentationSetter: UIViewControllerRepresentable {
         }
     }
 }
+
+extension View {
+    /// SwiftUI's modifier alone does not reach a sheet the host presents from UIKit, as Loop's and Trio's
+    /// pump setup sheets are; `ModalInPresentationSetter` sets it on every controller above this view.
+    func preventsSheetDismissal(_ isLocked: Bool = true) -> some View {
+        interactiveDismissDisabled(isLocked)
+            .background(ModalInPresentationSetter(isModalInPresentation: isLocked))
+    }
+}

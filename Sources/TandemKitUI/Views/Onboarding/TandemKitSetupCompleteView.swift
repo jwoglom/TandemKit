@@ -64,6 +64,8 @@ struct TandemKitSetupCompleteView: View {
         .edgesIgnoringSafeArea(.bottom)
         .navigationBarHidden(false)
         .navigationBarBackButtonHidden(true)
+        // A flow dismissed while it still owns the manager runs abandonSetup, dropping the pump link mid-setup.
+        .preventsSheetDismissal(!viewModel.isFinished)
         .onAppear {
             viewModel.start()
         }
