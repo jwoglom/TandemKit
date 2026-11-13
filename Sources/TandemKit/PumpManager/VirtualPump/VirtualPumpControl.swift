@@ -43,7 +43,7 @@ enum VirtualPumpControl {
         }
     }
 
-    /// From `prepareForDeactivation`: the host is letting `manager` go, so no command reaches it
+    /// From `delete()`: the host is letting `manager` go, so no command reaches it
     /// again, whether or not something still holds it.
     static func detach(_ manager: TandemPumpManager) {
         lock.lock()
@@ -144,7 +144,7 @@ enum VirtualPumpControl {
             case recordSiteChange
             /// `setFeatureFlag(_:enabled:)` with `featureFlag` and `enabled`, as the flags screen does.
             case setFeatureFlag
-            /// `prepareForDeactivation`, as the settings screen's remove does: the driver drops its link
+            /// `delete()`, as the settings screen's remove does: the driver drops its link
             /// and the host is told to let the manager go. Nothing sent afterwards reaches it.
             case deletePumpManager
             /// Every batch sent to the delegate after index `after`.
@@ -447,8 +447,11 @@ enum VirtualPumpControl {
 
         private static func deletePumpManager(_ manager: TandemPumpManager) throws {
             let deleted = Completion<Error?>()
-            manager.prepareForDeactivation { deleted.finish($0) }
-            if let error = try deleted.wait("prepareForDeactivation", timeout: 120) {
+            Task {
+                await manager.delete()
+                deleted.finish(nil)
+            }
+            if let error = try deleted.wait("delete", timeout: 120) {
                 throw error
             }
         }

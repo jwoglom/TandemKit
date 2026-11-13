@@ -27,7 +27,7 @@ on:
         type: boolean
         default: false
       trio_ref:
-        description: "nightscout/Trio branch/tag/SHA for the trio job; every job then builds against its LoopKit submodule (default: feat/tandem-closed-beta, or -next-dev on a TandemKit branch named for next-dev; and loopkit-frameworks' pinned LoopKit)"
+        description: "nightscout/Trio branch/tag/SHA for the trio job; every job then builds against its LoopKit submodule (default: feat/tandem-closed-beta with loopkit-frameworks' pinned LoopKit, or -next-dev and its LoopKit on a TandemKit branch named for next-dev)"
         required: false
         default: ""
       trio_repository:
@@ -79,13 +79,14 @@ jobs:
             nightscout/Trio ${{ contains(github.head_ref || github.ref_name, 'next-dev') && 'feat/tandem-closed-beta-next-dev' || 'feat/tandem-closed-beta' }}
             LoopKit/LoopWorkspace ${{ contains(github.head_ref || github.ref_name, 'next-dev') && 'feat/tandem-closed-beta-next-dev' || 'feat/tandem-closed-beta' }}
 
-      # Without trio_ref, loopkit-frameworks builds its pinned LoopKit.
-      - name: Pick LoopKit from trio_ref's submodule
+      # LoopKit next-dev's API is not in loopkit-frameworks' pin, so a next-dev branch builds against
+      # its Trio's LoopKit even without trio_ref. Otherwise loopkit-frameworks builds its pin.
+      - name: Pick LoopKit from Trio's submodule
         id: loopkit
-        if: inputs.trio_ref != '' || inputs.trio_repository != ''
+        if: inputs.trio_ref != '' || inputs.trio_repository != '' || contains(github.head_ref || github.ref_name, 'next-dev')
         env:
           GH_TOKEN: ${{ github.token }}
-          TRIO_REF: ${{ inputs.trio_ref }}
+          TRIO_REF: ${{ inputs.trio_ref || (contains(github.head_ref || github.ref_name, 'next-dev') && 'feat/tandem-closed-beta-next-dev' || '') }}
           TRIO_REPOSITORY: ${{ inputs.trio_repository || 'nightscout/Trio' }}
         run: |
           set -euo pipefail

@@ -2,7 +2,6 @@ import Combine
 import CoreBluetooth
 import Dispatch
 import Foundation
-import LoopAlgorithm
 import LoopKit
 #if canImport(UIKit)
 import UIKit
@@ -2008,8 +2007,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
-    public func prepareForDeactivation(_ completion: @escaping (Error?) -> Void) {
-        logger.debug("Preparing for pump deactivation – tearing down transport")
+    public func delete() async {
+        logger.debug("Deleting pump manager – tearing down transport")
         #if TANDEMKIT_VIRTUAL_PUMP
         VirtualPumpControl.detach(self)
         #endif
@@ -2017,9 +2016,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
         telemetryScheduler.cancelAll()
         finalizeHeldDosesForDeactivation()
 
-        notifyDelegateOfDeactivation {
-            completion(nil)
+        // A turn on the delegate queue, behind the batches above, so the host stores them before deleting.
+        let delegate = await withCheckedContinuation { (continuation: CheckedContinuation<PumpManagerDelegate?, Never>) in
+            pumpDelegate.notify { continuation.resume(returning: $0) }
         }
+        await delegate?.pumpManagerWantsDeletion(self)
     }
 
     /// A setup flow left before the host was handed the manager (#603). Nothing owns it from here, so

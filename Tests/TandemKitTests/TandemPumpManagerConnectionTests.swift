@@ -486,9 +486,12 @@ import XCTest
 
     // MARK: - Teardown
 
-    func testPrepareForDeactivationDeactivatesTransport() {
-        let expectation = expectation(description: "prepareForDeactivation completes")
-        manager.prepareForDeactivation { _ in expectation.fulfill() }
+    func testDeleteDeactivatesTransport() {
+        let expectation = expectation(description: "delete completes")
+        Task {
+            await self.manager.delete()
+            expectation.fulfill()
+        }
 
         wait(for: [expectation], timeout: 5.0)
 

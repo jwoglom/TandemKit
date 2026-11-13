@@ -26,8 +26,8 @@ description: >-
 # TandemKit is one of them. Upstream
 # LoopKit/LoopKit is not interchangeable with Trio's loopandlearn fork:
 # upstream has no `Pluggable`, which TandemPumpManager conforms to. When Trio
-# bumps its LoopKit submodule, bump the revision here to match. A manual macos.yml run with trio_ref
-# passes that Trio's submodule instead.
+# bumps its LoopKit submodule, bump the revision here to match. macos.yml passes Trio's submodule
+# instead on a next-dev branch (feat/tandem-closed-beta-next-dev's) and on a manual run with trio_ref.
 inputs:
   derived-data-path:
     description: xcodebuild -derivedDataPath the frameworks are staged into.

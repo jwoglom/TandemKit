@@ -1,5 +1,4 @@
 import Foundation
-import LoopAlgorithm
 import LoopKit
 @testable import TandemKit
 // Package.swift: on Linux the oracles and MockPumpManagerDelegate are compiled into TandemKitTests.

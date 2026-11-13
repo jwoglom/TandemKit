@@ -113,8 +113,11 @@ import XCTest
     }
 
     private func deactivate() {
-        let done = expectation(description: "prepareForDeactivation")
-        manager.prepareForDeactivation { _ in done.fulfill() }
+        let done = expectation(description: "delete")
+        Task {
+            await manager.delete()
+            done.fulfill()
+        }
         wait(for: [done], timeout: 5)
         delegateQueue.sync {}
     }
@@ -134,7 +137,7 @@ import XCTest
         return Array(delegate.pumpEventBatches.dropFirst(count))
     }
 
-    /// The journal position of the last batch and of `pumpManagerWillDeactivate`.
+    /// The journal position of the last batch and of `pumpManagerWantsDeletion`.
     private func lastBatchAndDeactivation() -> (batch: Int?, willDeactivate: Int?) {
         let journal = delegate.journal
         let batch = journal.last { $0.pumpEventBatch != nil }?.index
