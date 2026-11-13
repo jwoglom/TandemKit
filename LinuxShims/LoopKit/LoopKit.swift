@@ -545,6 +545,77 @@
             self.isMutable = isMutable
             self.wasProgrammedByPumpUI = wasProgrammedByPumpUI
         }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            type = try container.decode(DoseType.self, forKey: .type)
+            startDate = try container.decode(Date.self, forKey: .startDate)
+            endDate = try container.decode(Date.self, forKey: .endDate)
+            value = try container.decode(Double.self, forKey: .value)
+            unit = try container.decode(DoseUnit.self, forKey: .unit)
+            decisionId = try container.decodeIfPresent(UUID.self, forKey: .decisionId)
+            deliveredUnits = try container.decodeIfPresent(Double.self, forKey: .deliveredUnits)
+            description = try container.decodeIfPresent(String.self, forKey: .description)
+            syncIdentifier = try container.decodeIfPresent(String.self, forKey: .syncIdentifier)
+            insulinType = try container.decodeIfPresent(InsulinType.self, forKey: .insulinType)
+            if let scheduledBasalRate = try container.decodeIfPresent(Double.self, forKey: .scheduledBasalRate),
+               let scheduledBasalRateUnit = try container.decodeIfPresent(String.self, forKey: .scheduledBasalRateUnit),
+               let unit = LoopUnit.allCases.first(where: { $0.unitString == scheduledBasalRateUnit })
+            {
+                self.scheduledBasalRate = LoopQuantity(unit: unit, doubleValue: scheduledBasalRate)
+            }
+            automatic = try container.decodeIfPresent(Bool.self, forKey: .automatic)
+            manuallyEntered = try container.decodeIfPresent(Bool.self, forKey: .manuallyEntered) ?? false
+            isMutable = try container.decodeIfPresent(Bool.self, forKey: .isMutable) ?? false
+            wasProgrammedByPumpUI = try container.decodeIfPresent(Bool.self, forKey: .wasProgrammedByPumpUI) ?? false
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(type, forKey: .type)
+            try container.encode(startDate, forKey: .startDate)
+            try container.encode(endDate, forKey: .endDate)
+            try container.encode(value, forKey: .value)
+            try container.encode(unit, forKey: .unit)
+            try container.encodeIfPresent(decisionId, forKey: .decisionId)
+            try container.encodeIfPresent(deliveredUnits, forKey: .deliveredUnits)
+            try container.encodeIfPresent(description, forKey: .description)
+            try container.encodeIfPresent(syncIdentifier, forKey: .syncIdentifier)
+            try container.encodeIfPresent(insulinType, forKey: .insulinType)
+            if let scheduledBasalRate = scheduledBasalRate {
+                try container.encode(scheduledBasalRate.doubleValue(for: .internationalUnitsPerHour), forKey: .scheduledBasalRate)
+                try container.encode(LoopUnit.internationalUnitsPerHour.unitString, forKey: .scheduledBasalRateUnit)
+            }
+            try container.encodeIfPresent(automatic, forKey: .automatic)
+            if manuallyEntered {
+                try container.encode(manuallyEntered, forKey: .manuallyEntered)
+            }
+            if isMutable {
+                try container.encode(isMutable, forKey: .isMutable)
+            }
+            if wasProgrammedByPumpUI {
+                try container.encode(wasProgrammedByPumpUI, forKey: .wasProgrammedByPumpUI)
+            }
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case type
+            case startDate
+            case endDate
+            case value
+            case unit
+            case decisionId
+            case deliveredUnits
+            case description
+            case syncIdentifier
+            case scheduledBasalRate
+            case scheduledBasalRateUnit
+            case insulinType
+            case automatic
+            case manuallyEntered
+            case isMutable
+            case wasProgrammedByPumpUI
+        }
     }
 
     // MARK: - Scheduling & Limits
@@ -578,6 +649,13 @@
     @available(macOS 13.0, iOS 14.0, *) public enum LoopUnit: Sendable, CaseIterable {
         case internationalUnit
         case internationalUnitsPerHour
+
+        public var unitString: String {
+            switch self {
+            case .internationalUnit: "IU"
+            case .internationalUnitsPerHour: "IU/hr"
+            }
+        }
     }
 
     @available(macOS 13.0, iOS 14.0, *) public struct LoopQuantity: Hashable, Equatable, Comparable, Sendable {
