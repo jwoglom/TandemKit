@@ -116,6 +116,7 @@
             case suspending
             case suspended(_ at: Date)
             case resuming
+            case pumpInoperable
 
             public var isSuspended: Bool {
                 if case .suspended = self {
@@ -161,6 +162,14 @@
 
     // MARK: - Pump Manager Delegates
 
+    @available(macOS 13.0, iOS 14.0, *) public enum AutomatedTreatmentState: Equatable {
+        case neutralNoOverride
+        case neutralOverride
+        case increasedInsulin
+        case decreasedInsulin
+        case minimumDelivery
+    }
+
     @available(macOS 13.0, iOS 14.0, *) public protocol PumpManagerStatusObserver: AnyObject {
         func pumpManager(_ pumpManager: PumpManager, didUpdate status: PumpManagerStatus, oldStatus: PumpManagerStatus)
     }
@@ -202,6 +211,7 @@
         func startDateToFilterNewPumpEvents(for manager: PumpManager) -> Date
         var detectedSystemTimeOffset: TimeInterval { get }
         var automaticDosingEnabled: Bool { get }
+        var automatedTreatmentState: AutomatedTreatmentState? { get }
     }
 
     @available(macOS 13.0, iOS 14.0, *) public protocol PumpManagerDosingDecisionDelegate: AnyObject {
@@ -275,12 +285,14 @@
         func estimatedDuration(toBolus units: Double) -> TimeInterval
 
         func enactBolus(
+            decisionId: UUID?,
             units: Double,
             activationType: BolusActivationType,
             completion: @escaping (_ error: PumpManagerError?) -> Void
         )
         func cancelBolus(completion: @escaping (_ result: PumpManagerResult<DoseEntry?>) -> Void)
         func enactTempBasal(
+            decisionId: UUID?,
             unitsPerHour: Double,
             for duration: TimeInterval,
             completion: @escaping (_ error: PumpManagerError?) -> Void
@@ -369,13 +381,14 @@
         // Internal in real LoopKit too — read doses through programmedUnits/unitsPerHour.
         let value: Double
         public let unit: DoseUnit
+        public let decisionId: UUID?
         public let deliveredUnits: Double?
         public let description: String?
         public let insulinType: InsulinType?
         public let automatic: Bool?
         public let manuallyEntered: Bool
         public var syncIdentifier: String?
-        public var scheduledBasalRate: HKQuantity?
+        public var scheduledBasalRate: LoopQuantity?
         public let isMutable: Bool
         public let wasProgrammedByPumpUI: Bool
 
@@ -408,8 +421,12 @@
             return deliveredUnits ?? round(programmedUnits * DoseEntry.minimumMinimedIncrementPerUnit) / DoseEntry.minimumMinimedIncrementPerUnit
         }
 
-        /// LoopKit parity shim of InsulinMath's `trimmed`, which drops `manuallyEntered` there too.
-        public func trimmed(from start: Date? = nil, to end: Date? = nil, syncIdentifier: String? = nil) -> DoseEntry {
+        /// LoopKit parity shim of InsulinMath's `trimmed`.
+        public func trimmed(from start: Date? = nil, to end: Date? = nil, syncIdentifier: String? = nil) -> DoseEntry? {
+            guard startDate < end ?? .distantFuture, endDate > start ?? .distantPast else {
+                return nil
+            }
+
             let originalDuration = endDate.timeIntervalSince(startDate)
             let startDate = max(start ?? .distantPast, self.startDate)
             let endDate = max(startDate, min(end ?? .distantFuture, self.endDate))
@@ -433,12 +450,14 @@
                 endDate: endDate,
                 value: trimmedValue,
                 unit: unit,
+                decisionId: decisionId,
                 deliveredUnits: trimmedDeliveredUnits,
                 description: description,
                 syncIdentifier: syncIdentifier,
                 scheduledBasalRate: scheduledBasalRate,
                 insulinType: insulinType,
                 automatic: automatic,
+                manuallyEntered: manuallyEntered,
                 isMutable: isMutable,
                 wasProgrammedByPumpUI: wasProgrammedByPumpUI
             )
@@ -455,6 +474,7 @@
                 startDate: suspendDate,
                 value: 0,
                 unit: .units,
+                decisionId: nil,
                 deliveredUnits: nil,
                 description: nil,
                 syncIdentifier: nil,
@@ -479,6 +499,7 @@
                 startDate: resumeDate,
                 value: 0,
                 unit: .units,
+                decisionId: nil,
                 deliveredUnits: nil,
                 description: nil,
                 syncIdentifier: nil,
@@ -497,10 +518,11 @@
             endDate: Date? = nil,
             value: Double,
             unit: DoseUnit,
+            decisionId: UUID?,
             deliveredUnits: Double? = nil,
             description: String? = nil,
             syncIdentifier: String? = nil,
-            scheduledBasalRate: HKQuantity? = nil,
+            scheduledBasalRate: LoopQuantity? = nil,
             insulinType: InsulinType? = nil,
             automatic: Bool? = nil,
             manuallyEntered: Bool = false,
@@ -512,6 +534,7 @@
             self.endDate = endDate ?? startDate
             self.value = value
             self.unit = unit
+            self.decisionId = decisionId
             self.deliveredUnits = deliveredUnits
             self.description = description
             self.syncIdentifier = syncIdentifier
@@ -551,11 +574,38 @@
         }
     }
 
-    @available(macOS 13.0, iOS 14.0, *) public struct DeliveryLimits: Equatable {
-        public var maximumBasalRate: HKQuantity?
-        public var maximumBolus: HKQuantity?
+    // Only the units TandemKit uses; real LoopKit's LoopUnit has more, and converts between them.
+    @available(macOS 13.0, iOS 14.0, *) public enum LoopUnit: Sendable, CaseIterable {
+        case internationalUnit
+        case internationalUnitsPerHour
+    }
 
-        public init(maximumBasalRate: HKQuantity?, maximumBolus: HKQuantity?) {
+    @available(macOS 13.0, iOS 14.0, *) public struct LoopQuantity: Hashable, Equatable, Comparable, Sendable {
+        public let unit: LoopUnit
+        private let value: Double
+
+        public init(unit: LoopUnit, doubleValue value: Double) {
+            self.unit = unit
+            self.value = value
+        }
+
+        public func doubleValue(for unit: LoopUnit) -> Double {
+            guard self.unit == unit else {
+                fatalError("Conversion Error: \(self.unit) is not compatible with \(unit).")
+            }
+            return value
+        }
+
+        public static func < (lhs: LoopQuantity, rhs: LoopQuantity) -> Bool {
+            lhs.value < rhs.doubleValue(for: lhs.unit)
+        }
+    }
+
+    @available(macOS 13.0, iOS 14.0, *) public struct DeliveryLimits: Equatable {
+        public var maximumBasalRate: LoopQuantity?
+        public var maximumBolus: LoopQuantity?
+
+        public init(maximumBasalRate: LoopQuantity?, maximumBolus: LoopQuantity?) {
             self.maximumBasalRate = maximumBasalRate
             self.maximumBolus = maximumBolus
         }
@@ -584,6 +634,7 @@
         case suspend
         case resume
         case tempBasal
+        case timeZoneSync(fromSecondsFromGMT: Int, toSecondsFromGMT: Int)
         case replaceComponent(componentType: PumpComponent)
     }
 

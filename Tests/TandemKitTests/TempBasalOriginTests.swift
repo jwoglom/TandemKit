@@ -81,7 +81,7 @@ import XCTest
     private func enactTempBasal(unitsPerHour: Double, for duration: TimeInterval = .minutes(30)) -> PumpManagerError? {
         let done = expectation(description: "temp basal completion")
         var error: PumpManagerError?
-        manager.enactTempBasal(unitsPerHour: unitsPerHour, for: duration) {
+        manager.enactTempBasal(decisionId: nil, unitsPerHour: unitsPerHour, for: duration) {
             error = $0
             done.fulfill()
         }
