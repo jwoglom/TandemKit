@@ -223,8 +223,10 @@
     }
 
     @available(macOS 13.0, iOS 14.0, *) public protocol AlertIssuer: AnyObject {
-        func issueAlert(_ alert: Alert)
-        func retractAlert(identifier: Alert.Identifier)
+        @MainActor
+        func issueAlert(_ alert: Alert) async
+        @MainActor
+        func retractAlert(identifier: Alert.Identifier) async
     }
 
     // MARK: - Pump Manager Protocol
@@ -850,7 +852,12 @@
     }
 
     @available(macOS 13.0, iOS 14.0, *) public protocol AlertResponder: AnyObject {
-        func acknowledgeAlert(alertIdentifier: Alert.AlertIdentifier, completion: @escaping (Error?) -> Void)
+        func acknowledgeAlert(alertIdentifier: Alert.AlertIdentifier) async throws
+        func handleAlertAction(actionIdentifier: String, from alert: Alert) async throws
+    }
+
+    @available(macOS 13.0, iOS 14.0, *) extension AlertResponder {
+        public func handleAlertAction(actionIdentifier: String, from alert: Alert) async throws {}
     }
 
     @available(macOS 13.0, iOS 14.0, *) public protocol AlertSoundVendor {
