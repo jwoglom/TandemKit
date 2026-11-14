@@ -49,13 +49,14 @@ struct ConfirmationDialogContent {
 
 @ViewBuilder
 private func alertButton(for action: ConfirmationDialogContent.Action) -> some View {
-    let button = Button(role: action.role, action: action.action) { action.title }
     // An alert takes its preferred action from the default-action shortcut; `Alert.Button`
     // has no way to set one, which is why this isn't built on `Alert`.
     if action.isPreferred {
-        button.keyboardShortcut(.defaultAction)
+        // Unset, the label took the app tint, unreadable on the preferred button's blue fill.
+        Button(role: action.role, action: action.action) { action.title.foregroundStyle(.white) }
+            .keyboardShortcut(.defaultAction)
     } else {
-        button
+        Button(role: action.role, action: action.action) { action.title }
     }
 }
 
