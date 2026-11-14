@@ -18,7 +18,6 @@ struct ConfirmationDialogContent {
     struct Action {
         let title: Text
         let role: ButtonRole?
-        var isPreferred = false
         let action: () -> Void
 
         static func destructive(_ title: Text, action: @escaping () -> Void) -> Action {
@@ -27,12 +26,6 @@ struct ConfirmationDialogContent {
 
         static func standard(_ title: Text, action: @escaping () -> Void) -> Action {
             Action(title: title, role: nil, action: action)
-        }
-
-        /// The alert's preferred action, which iOS emphasizes over the cancel button it would
-        /// otherwise emphasize.
-        static func primary(_ title: Text, action: @escaping () -> Void) -> Action {
-            Action(title: title, role: nil, isPreferred: true, action: action)
         }
 
         /// SwiftUI moves the cancel-role button to the bottom of the dialog regardless
@@ -47,16 +40,8 @@ struct ConfirmationDialogContent {
     let actions: [Action]
 }
 
-@ViewBuilder
 private func alertButton(for action: ConfirmationDialogContent.Action) -> some View {
-    let button = Button(role: action.role, action: action.action) { action.title }
-    // An alert takes its preferred action from the default-action shortcut; `Alert.Button`
-    // has no way to set one, which is why this isn't built on `Alert`.
-    if action.isPreferred {
-        button.keyboardShortcut(.defaultAction)
-    } else {
-        button
-    }
+    Button(role: action.role, action: action.action) { action.title }
 }
 
 @ViewBuilder
