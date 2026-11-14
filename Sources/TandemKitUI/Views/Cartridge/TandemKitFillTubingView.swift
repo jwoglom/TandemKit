@@ -530,7 +530,7 @@ struct TandemKitFillTubingView: View {
                 comment: "Confirmation dialog message"
             ),
             actions: [
-                .standard(Text("Resume delivery", comment: "Confirm button")) {
+                .primary(Text("Resume delivery", comment: "Confirm button")) {
                     viewModel.resumeDelivery()
                 },
                 // Leaves delivery suspended, as closing the wizard from this step already does.
