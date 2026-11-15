@@ -41,7 +41,13 @@ import XCTest
         waitPastTheQueueGrace()
 
         XCTAssertTrue(manager.canNotifyDelegate)
-        XCTAssertTrue(manager.delegateQueue === DispatchQueue.main)
+        // Not `=== DispatchQueue.main`: on Linux each read of `.main` is a new wrapper.
+        let ranOnMain = expectation(description: "a block on the delegate queue runs on the main thread")
+        manager.delegateQueue.async {
+            XCTAssertTrue(Thread.isMainThread)
+            ranOnMain.fulfill()
+        }
+        wait(for: [ranOnMain], timeout: 5)
         XCTAssertEqual(bluetooth.adoptedCount, 1)
         withExtendedLifetime(delegate) {}
     }
