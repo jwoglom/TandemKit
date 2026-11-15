@@ -4692,7 +4692,7 @@
         }
       }
     },
-    "Shows Control-IQ Settings and allows switching the pump's algorithm to Control-IQ. Switching to Control-IQ turns off this app's closed loop." : {
+    "Shows Control-IQ Settings and Mobi CGM settings, and allows switching the pump's algorithm to Control-IQ. Switching to Control-IQ turns off this app's closed loop." : {
 
     },
     "Shows Set temp basal in the pump's settings, to set a temporary basal rate by hand or stop the one running. While a temporary basal rate set there runs, this app's automatic dosing is paused." : {

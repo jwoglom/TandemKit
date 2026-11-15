@@ -89,7 +89,7 @@ public struct TandemFeatureFlags: RawRepresentable, Equatable {
             switch self {
             case .controlIQSupport:
                 return String(
-                    localized: "Shows Control-IQ Settings and allows switching the pump's algorithm to Control-IQ. Switching to Control-IQ turns off this app's closed loop.",
+                    localized: "Shows Control-IQ Settings and Mobi CGM settings, and allows switching the pump's algorithm to Control-IQ. Switching to Control-IQ turns off this app's closed loop.",
                     comment: "Description of the Control-IQ support feature flag"
                 )
             case .quickBolusButtonSupport:
