@@ -168,6 +168,23 @@ import XCTest
         XCTAssertFalse(bluetooth.didSend(ChangeTimeDateRequest.self))
     }
 
+    func testSetupIsNotCalledCompleteWhileItWaitsOnTheControlIQPrompt() {
+        let (viewModel, _) = pairedViewModel(controlIQOn: true)
+
+        viewModel.start()
+        drainMainQueue()
+
+        XCTAssertEqual(viewModel.step, .checkingPump)
+        XCTAssertFalse(viewModel.isFinished)
+        XCTAssertNotEqual(ViewModel.title(for: viewModel.step), ViewModel.title(for: .finished))
+
+        viewModel.turnOffControlIQ()
+        drainMainQueue()
+
+        XCTAssertNotEqual(viewModel.step, .checkingPump)
+        XCTAssertGreaterThan(viewModel.progress, 0)
+    }
+
     func testStartingTwiceAsksOnce() {
         let (viewModel, bluetooth) = pairedViewModel(controlIQOn: true)
 
@@ -202,8 +219,10 @@ import XCTest
 
         viewModel.loadHistory()
 
-        XCTAssertTrue(viewModel.isLoadingHistory)
+        XCTAssertEqual(viewModel.step, .loadingHistory)
+        XCTAssertEqual(viewModel.progress, 0.2, accuracy: 0.001, "the steps before the load fill a fifth of the bar")
         waitUntil { viewModel.isShowingLoadFailedAlert }
+        let progressAtFailure = viewModel.progress
         XCTAssertEqual(viewModel.loadFailedMessage, SetupHistoryLoadError.historyUnreadable.localizedDescription)
         XCTAssertEqual(handedToHost, 0)
         XCTAssertFalse(viewModel.isFinished)
@@ -212,9 +231,10 @@ import XCTest
         viewModel.isShowingLoadFailedAlert = false // as the alert does when Try Again is tapped
         viewModel.loadHistory()
 
+        XCTAssertGreaterThanOrEqual(viewModel.progress, progressAtFailure)
         waitUntil { viewModel.isShowingLoadSummary }
         XCTAssertEqual(viewModel.progress, 1)
-        XCTAssertFalse(viewModel.isLoadingHistory)
+        XCTAssertEqual(viewModel.step, .loadingHistory, "the full bar stays behind the summary")
         XCTAssertEqual(viewModel.loadSummaryMessage, ViewModel.message(for: SetupHistoryLoadSummary(
             pumpBolusRecords: 0,
             pumpBasalRecords: 0,
