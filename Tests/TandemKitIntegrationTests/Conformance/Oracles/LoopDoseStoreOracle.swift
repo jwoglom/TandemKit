@@ -225,9 +225,8 @@ final class LoopDoseStoreOracle: DoseOracle {
     /// the schedule's rate in each gap before a basal, temp basal or suspend and after the last one, each
     /// piece keyed on its start, the piece reaching `end` left mutable.
     ///
-    /// next-dev IM:333-335 also stretches a suspend that is the last basal dose to `end`, meant for one
-    /// still open, but applies it to one its resume closed too (LoopKit/LoopKit#688). This models the
-    /// intended rule, so Loop's stored suspend differs until LoopKit is fixed.
+    /// A suspend that is the last basal dose is stretched to `end` only while no resume has closed it, as
+    /// LoopKit has had since `0cff7afa` (LoopKit/LoopKit#688).
     static func overlaying(_ doses: [DoseEntry], with schedule: BasalRateSchedule, from start: Date, to end: Date) -> [DoseEntry] {
         let timeline = scheduledRates(schedule, from: start, to: end)
             .map { (start: max($0.start, start), end: min($0.end, end), rate: $0.rate) }
