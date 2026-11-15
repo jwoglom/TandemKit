@@ -465,35 +465,30 @@ import XCTest
         XCTAssertEqual(viewModel.currentStep, .physicalChange)
     }
 
-    // MARK: - Detection stream
+    // MARK: - Cartridge inserted
 
-    func testDetectionProgressFollowsThePumpWhenItReportsAny() {
-        let viewModel = makeViewModel()
-        viewModel.currentStep = .physicalChange
-        viewModel.cartridgeInserted()
-
-        manager.detectingCartridgeStateStream.send(DetectingCartridgeStateStreamResponse(percentComplete: 40))
-        drainMainQueue()
-
-        XCTAssertEqual(viewModel.detectingProgress, 40)
-        XCTAssertTrue(viewModel.isDetecting)
-    }
-
-    func testDetectionCompletesOnceAndRecordsTheCartridgeChange() {
+    func testInsertingTheCartridgeRecordsTheChangeAndExitsChangeModeOnce() {
         bluetooth.stub(ExitChangeCartridgeModeRequest.self, with: ExitChangeCartridgeModeResponse(status: 0))
 
         let viewModel = makeViewModel()
         viewModel.currentStep = .physicalChange
         viewModel.cartridgeInserted()
-
-        manager.detectingCartridgeStateStream.send(DetectingCartridgeStateStreamResponse(percentComplete: 100))
-        // A duplicate completion must not drive a second exit request.
-        manager.detectingCartridgeStateStream.send(DetectingCartridgeStateStreamResponse(percentComplete: 100))
         drainMainQueue()
 
-        XCTAssertFalse(viewModel.isDetecting)
         XCTAssertNotNil(manager.state.lastCartridgeChangeDate)
         XCTAssertEqual(bluetooth.sent(ExitChangeCartridgeModeRequest.self).count, 1)
         XCTAssertEqual(viewModel.currentStep, .done)
+    }
+
+    func testARefusedExitStaysOnTheCompletingStepForRetry() {
+        bluetooth.stub(ExitChangeCartridgeModeRequest.self, with: ExitChangeCartridgeModeResponse(status: 1))
+
+        let viewModel = makeViewModel()
+        viewModel.currentStep = .physicalChange
+        viewModel.cartridgeInserted()
+        drainMainQueue()
+
+        XCTAssertEqual(viewModel.currentStep, .completing)
+        XCTAssertTrue(viewModel.failedExitMode)
     }
 }

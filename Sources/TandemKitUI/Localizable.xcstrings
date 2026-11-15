@@ -1799,28 +1799,6 @@
         }
       }
     },
-    "Detecting insulin in cartridge..." : {
-      "comment" : "Status text",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Detecting insulin in cartridge..."
-          }
-        }
-      }
-    },
-    "Detection" : {
-      "comment" : "Step header",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Detection"
-          }
-        }
-      }
-    },
     "Dexcom G6 Setup" : {
       "comment" : "Title for G6 setup wizard",
       "localizations" : {
@@ -5365,17 +5343,6 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "The pump did not start the bolus (status %1$d, type %2$d)."
-          }
-        }
-      }
-    },
-    "The pump is detecting insulin in the cartridge" : {
-      "comment" : "Step description",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The pump is detecting insulin in the cartridge"
           }
         }
       }
