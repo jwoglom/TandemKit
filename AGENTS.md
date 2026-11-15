@@ -409,13 +409,22 @@ host queue, so its state stays behind its lock.
   differences went uncorrected (#563).
 - `enactTempBasal` decides whether a bolus is running by `bolusIsStillRunning`, not the progress
   reporter's elapsed-time estimate: a pump slower than the estimate is still delivering when it runs
-  out, and no reporter survives a relaunch (#347).
+  out (#347).
 - `enactBolus` refuses with `bolusIsRunning` while a bolus it started has not been seen to end
   (`isBolusInFlight`), and checks again inside its command job: a host's SMB enacted while a manual
   bolus was being initiated queued behind it and ran right after its `InitiateBolus`, and only the
   pump's permission nack stopped it (#504). Past the bolus's estimated end and its 30 s grace
   (`shouldDeferBolusSync`) it reads `CurrentBolusStatus` first, so a bolus that finished out of
   contact does not block the next; no answer still refuses.
+- An accepted bolus is `.initiating` until a `CurrentBolusStatus` read finds the pump delivering it,
+  which is when Loop shows its progress and cancel and Trio leaves its Initiating state. The pump
+  answers `requesting` for about `bolusInitiationDelay` first, and the read its `.bolusChange` asks
+  for queued behind a sync for 28 s, so `enactBolus`'s job, once the host has its answer, reads it
+  about once a second (`followBolusToDeliveryStart`) and gives way to a cancel. Only that bolus
+  delivering moves it on: whether the pump answers no bolus before starting one is unconfirmed.
+- The progress reporter is rebuilt from the saved bolus at launch, counting from its delivery start:
+  Loop asks for one only when it first reads `.inProgress`, which after a relaunch comes before any
+  read of the pump. An unconfirmed bolus still gets none until the pump is seen delivering it.
 - A zero temp basal is always allowed, whatever the profile, sync or update state, since 0% of any
   profile is 0. Control-IQ, a running bolus and a duration the pump refuses still refuse it.
 - `enactTempBasal` refuses a temp outside 15 minutes to 72 hours before connecting: the pump

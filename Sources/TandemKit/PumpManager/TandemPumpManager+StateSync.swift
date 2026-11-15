@@ -283,7 +283,7 @@ extension TandemPumpManager {
         return true
     }
 
-    private func applyBolusStatus(_ response: CurrentBolusStatusResponse) {
+    func applyBolusStatus(_ response: CurrentBolusStatusResponse) {
         noteUntrackedBolus(response)
 
         if let dose = state.bolusDose, dose.isUnconfirmed, let bolusId = dose.bolusId,

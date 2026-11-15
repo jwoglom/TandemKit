@@ -177,6 +177,25 @@ public class TandemPumpManager: PumpManager, Pluggable {
             bolusProgressReportLock.unlock()
         }
     }
+
+    // Taken before a cancel's job is queued, so a job holding the queue can step aside for it.
+    private let pendingBolusCancelsLock = NSLock()
+    private var _pendingBolusCancels = 0
+    private var isBolusCancelPending: Bool {
+        pendingBolusCancelsLock.lock()
+        defer { pendingBolusCancelsLock.unlock() }
+        return _pendingBolusCancels > 0
+    }
+
+    private func adjustPendingBolusCancels(by delta: Int) {
+        pendingBolusCancelsLock.lock()
+        _pendingBolusCancels += delta
+        pendingBolusCancelsLock.unlock()
+    }
+
+    var bolusStartPollInterval: TimeInterval = 1
+    /// Reads, a `bolusStartPollInterval` apart: twice the pump's usual `bolusInitiationDelay`.
+    static let bolusStartPollLimit = 30
     private let silentToneManager = TandemSilentToneManager()
     var notificationBundle = NotificationBundle()
     var unreportedInsulinOnBoard = UnreportedInsulinOnBoardMonitor()
@@ -303,6 +322,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         self.clock = clock
         bluetooth.pumpManager = self
         logInitialization()
+        restoreBolusProgressReporter()
         #if TANDEMKIT_VIRTUAL_PUMP
         VirtualPumpControl.attach(self)
         #endif
@@ -876,13 +896,17 @@ public class TandemPumpManager: PumpManager, Pluggable {
             )
             let sentAt = self.now
             guard let initiateResponse = self.bluetooth.write(bolusRequest) else {
-                completion(self.settleUnansweredBolus(
+                let result = self.settleUnansweredBolus(
                     decisionId: decisionId,
                     units: units,
                     activationType: activationType,
                     bolusId: permissionResponse.bolusId,
                     sentAt: sentAt
-                ))
+                )
+                completion(result)
+                if result == nil {
+                    self.followBolusToDeliveryStart(bolusId: permissionResponse.bolusId)
+                }
                 return
             }
 
@@ -902,6 +926,48 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 isUnconfirmed: false
             )
             completion(nil)
+            self.followBolusToDeliveryStart(bolusId: permissionResponse.bolusId)
+        }
+    }
+
+    /// The pump answers `requesting` for about `bolusInitiationDelay`, and its bolusChange read queues behind
+    /// any sync, which held Loop on "Starting Bolus", with no cancel, for 28 s after the pump had started.
+    private func followBolusToDeliveryStart(bolusId: Int) {
+        for poll in 0..<Self.bolusStartPollLimit {
+            guard state.bolusState == .initiating, state.bolusDose?.bolusId == bolusId, !isBolusCancelPending else {
+                return
+            }
+            if poll > 0 {
+                Thread.sleep(forTimeInterval: bolusStartPollInterval)
+            }
+            guard let response = bluetooth.write(CurrentBolusStatusRequest()), response.bolusId == bolusId else {
+                return
+            }
+            if response.status == .delivering {
+                applyBolusStatus(response)
+                return
+            }
+        }
+        logger.warning("Bolus \(bolusId) still requesting after \(Self.bolusStartPollLimit) reads; leaving it to the pump's bolusChange")
+    }
+
+    /// Loop asks for the reporter once, when it first reads `.inProgress`, which after a relaunch is
+    /// before any read of the pump.
+    private func restoreBolusProgressReporter() {
+        guard let dose = state.bolusDose, !dose.isUnconfirmed else {
+            return
+        }
+        bolusProgressReport = TandemDoseProgressReporter(
+            pumpManager: self,
+            dose: dose.toDoseEntry(isMutable: true),
+            activationType: dose.automatic ? .automatic : .manualNoRecommendation,
+            eventRaw: dose.eventRaw,
+            deliveringSince: dose.deliveryStartDate
+        )
+        if dose.deliveryStartDate != nil {
+            telemetryScheduler.schedule(kind: .bolus, interval: .seconds(1), leeway: .milliseconds(100)) {
+                self.bolusProgressReport?.notify()
+            }
         }
     }
 
@@ -1020,7 +1086,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
             return
         }
 
+        adjustPendingBolusCancels(by: 1)
         bluetooth.ensureConnected { error in
+            self.adjustPendingBolusCancels(by: -1)
             if let error {
                 self.logger.error("Failed to connect for cancel bolus: \(error.localizedDescription)")
                 completion(.failure(.communication(PumpCommError.pumpNotConnected)))
