@@ -21,28 +21,32 @@ struct TandemKitControlIQSettingsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            nativeAlgorithmOnlyWarningCard
-                .padding([.horizontal, .top])
-
-            if viewModel.isFetching {
-                HStack {
-                    Spacer()
-                    ProgressView()
-                        .padding()
-                    Text("Loading settings...", comment: "Loading Control-IQ settings")
-                        .foregroundColor(.secondary)
-                    Spacer()
+            List {
+                Section {
+                    nativeAlgorithmOnlyWarningCard
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
                 }
-                Spacer()
-            } else {
-                List {
+
+                if viewModel.isFetching {
+                    Section {
+                        HStack {
+                            Spacer()
+                            ProgressView()
+                                .padding()
+                            Text("Loading settings...", comment: "Loading Control-IQ settings")
+                                .foregroundColor(.secondary)
+                            Spacer()
+                        }
+                    }
+                } else {
                     controlIQSection
                     sleepScheduleSection
                 }
-                .listStyle(InsetGroupedListStyle())
+            }
+            .listStyle(InsetGroupedListStyle())
 
-                Spacer()
-
+            if !viewModel.isFetching {
                 ContinueButton(
                     text: Text("Save", comment: "Save action"),
                     loading: $viewModel.isLoading,
