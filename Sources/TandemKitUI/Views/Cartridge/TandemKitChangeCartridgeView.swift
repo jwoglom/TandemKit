@@ -73,8 +73,8 @@ struct TandemKitChangeCartridgeView: View {
             waitingForReadyStepContent
         case .physicalChange:
             physicalChangeStepContent
-        case .detecting:
-            detectingStepContent
+        case .completing:
+            completingStepContent
         case .done:
             doneStepContent
         }
@@ -118,7 +118,7 @@ struct TandemKitChangeCartridgeView: View {
             }
             .disabled(viewModel.hasActiveNotifications)
             .buttonStyle(ActionButtonStyle())
-        case .detecting:
+        case .completing:
             if viewModel.failedExitMode {
                 ContinueButton(
                     text: Text("Retry", comment: "Retry button"),
@@ -432,35 +432,13 @@ struct TandemKitChangeCartridgeView: View {
         }
     }
 
-    private var detectingStepContent: some View {
+    private var completingStepContent: some View {
         VStack(alignment: .leading, spacing: 20) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Detection", comment: "Step header")
-                    .font(.title2)
-                    .fontWeight(.bold)
-                Text("The pump is detecting insulin in the cartridge", comment: "Step description")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-            }
-
             if viewModel.loadingExitMode {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 12) {
-                        ActivityIndicator(isAnimating: .constant(true), style: .medium)
-                        Text("Completing cartridge change...", comment: "Status text")
-                            .font(.headline)
-                    }
-                }
-                .wizardCard(background: Color.blue.opacity(0.1))
-            } else {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Detecting insulin in cartridge...", comment: "Status text")
+                HStack(spacing: 12) {
+                    ActivityIndicator(isAnimating: .constant(true), style: .medium)
+                    Text("Completing cartridge change...", comment: "Status text")
                         .font(.headline)
-                    ProgressView(value: Double(viewModel.detectingProgress) / 100.0)
-                        .progressViewStyle(LinearProgressViewStyle())
-                    Text("\(viewModel.detectingProgress)%")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
                 }
                 .wizardCard(background: Color.blue.opacity(0.1))
             }
@@ -644,12 +622,11 @@ private extension TandemKitChangeCartridgeViewModel {
         }
     }
 
-    static var previewDetecting: TandemKitChangeCartridgeViewModel {
-        preview(step: .detecting) {
+    static var previewCompleting: TandemKitChangeCartridgeViewModel {
+        preview(step: .completing) {
             $0.isSuspended = true
             $0.isProcessing = true
-            $0.isDetecting = true
-            $0.detectingProgress = 45
+            $0.loadingExitMode = true
         }
     }
 
@@ -689,9 +666,9 @@ private extension TandemKitChangeCartridgeViewModel {
     .environment(\.guidanceColors, GuidanceColors())
 }
 
-#Preview("Step 5 – Detecting") {
+#Preview("Step 5 – Completing") {
     NavigationView {
-        TandemKitChangeCartridgeView(viewModel: .previewDetecting)
+        TandemKitChangeCartridgeView(viewModel: .previewCompleting)
     }
     .environment(\.guidanceColors, GuidanceColors())
 }

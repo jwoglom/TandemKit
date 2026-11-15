@@ -19,7 +19,10 @@ struct TandemKitCGMSettingsView: View {
     @State private var activeAlert: CGMAlertType?
 
     var body: some View {
-        VStack(alignment: .leading) {
+        VStack(alignment: .leading, spacing: 0) {
+            controlIQOnlyWarningCard
+                .padding([.horizontal, .top])
+
             if viewModel.isFetching {
                 HStack {
                     Spacer()
@@ -85,6 +88,20 @@ struct TandemKitCGMSettingsView: View {
                 viewModel.commandError = nil
             }
         }
+    }
+
+    private var controlIQOnlyWarningCard: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundColor(guidanceColors.warning)
+                .font(.title2)
+            Text(
+                "These CGM options are used only by the Mobi pump when Control-IQ is active.",
+                comment: "Warning at the top of the Mobi CGM settings screen"
+            )
+            .font(.subheadline)
+        }
+        .wizardCard(background: guidanceColors.warning.opacity(0.1))
     }
 
     // MARK: - CGM Status Section
