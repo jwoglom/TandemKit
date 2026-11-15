@@ -117,8 +117,7 @@ final class AnotherClientIntegrationTests: FaketandemIntegrationTestCase {
     func testAStreamPacketDuringFillTubingIsNotTheControlAnswer() throws {
         let driver = makeDriver(via: proxy.endpoint)
         try harness.pair(driver)
-        try harness.client.setState(["workflow_mode": "none", "suspended": true])
-        defer { _ = try? harness?.client.setState(["workflow_mode": "none", "suspended": false]) }
+        try harness.client.setState(["suspended": true])
         let buttonStates = ResultBox<[Int]>()
         buttonStates.set([])
         let observation = driver.manager.fillTubingStateStream.sink { event in
