@@ -257,9 +257,7 @@ struct TandemKitSettingsView: View {
                 HStack(alignment: viewModel.isDeliverySuspended ? .top : .firstTextBaseline) {
                     deliveryStatus
 
-                    if viewModel.isDeliverySuspended {
-                        Spacer()
-                    } else {
+                    if viewModel.showsAlgorithmStatus {
                         algorithmStatus
                             .frame(maxWidth: .infinity)
                             .contentShape(Rectangle())
@@ -275,12 +273,14 @@ struct TandemKitSettingsView: View {
                             .onLongPressGesture(minimumDuration: 0.5) {
                                 if viewModel.useControlIQ {
                                     activeAlert = .switchToDIY
-                                } else if viewModel.controlIQSupportEnabled {
+                                } else {
                                     // Switching to Control-IQ requires a CGM connected to the pump;
                                     // verify one is configured before offering the confirmation.
                                     viewModel.attemptSwitchToControlIQ()
                                 }
                             }
+                    } else {
+                        Spacer()
                     }
 
                     reservoirStatus
@@ -802,11 +802,11 @@ struct TandemKitSettingsView: View {
         }
     }
 
-    // With the algorithm column hidden while suspended, the two columns sit at the card's edges, so
-    // their headers align to those edges rather than centering over values of a different width,
-    // and the level fills the taller suspended block's height so it centers on the pause icon.
+    // With the algorithm column hidden, the two columns sit at the card's edges, so their headers
+    // align to those edges rather than centering over values of a different width, and while
+    // suspended the level fills the taller block's height so it centers on the pause icon.
     var reservoirStatus: some View {
-        VStack(alignment: viewModel.isDeliverySuspended ? .trailing : .center, spacing: 5) {
+        VStack(alignment: viewModel.showsAlgorithmStatus ? .center : .trailing, spacing: 5) {
             Text("Cartridge", comment: "Header for insulin remaining")
                 .foregroundColor(Color(UIColor.secondaryLabel))
 
@@ -850,7 +850,7 @@ struct TandemKitSettingsView: View {
     }
 
     var deliveryStatus: some View {
-        VStack(alignment: viewModel.isDeliverySuspended ? .leading : .center, spacing: 5) {
+        VStack(alignment: viewModel.showsAlgorithmStatus ? .center : .leading, spacing: 5) {
             Text(deliverySectionTitle)
                 .foregroundColor(Color(UIColor.secondaryLabel))
                 .lineLimit(1)
