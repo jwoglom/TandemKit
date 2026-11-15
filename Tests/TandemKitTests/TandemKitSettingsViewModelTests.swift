@@ -116,7 +116,7 @@ import XCTest
         XCTAssertTrue(viewModel.quickBolusButtonSupportEnabled)
     }
 
-    func testSettingsViewModelHidesTheControlIQRowByDefaultAndShowsTheQuickBolusRow() {
+    func testSettingsViewModelHidesTheControlIQAndCGMRowsByDefaultAndShowsTheQuickBolusRow() {
         let manager = TandemPumpManager(
             state: TandemPumpManagerState(rawValue: [:]),
             bluetooth: StubPumpBluetooth()
