@@ -11,16 +11,6 @@ final class CartridgeProcedureIntegrationTests: FaketandemIntegrationTestCase {
         "EnterFillTubingModeRequest", "ExitFillTubingModeRequest"
     ]
 
-    override func setUpWithError() throws {
-        try super.setUpWithError()
-        try harness.client.setState(["workflow_mode": "none"])
-    }
-
-    override func tearDownWithError() throws {
-        _ = try? harness?.client.setState(["workflow_mode": "none", "suspended": false])
-        try super.tearDownWithError()
-    }
-
     private func pairedSuspendedDriver() throws -> FaketandemHarness.Driver {
         let driver = makeDriver()
         try harness.pair(driver)

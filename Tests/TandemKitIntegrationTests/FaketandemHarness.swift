@@ -110,8 +110,13 @@ final class FaketandemHarness {
         }
         // Tests stage the rate in force, and a profile write sets it too. An earlier test's bolus
         // is dated on that test's clock, which may be ahead of this one's, and would count in full.
-        // A standing alarm would reach the next driver as an `.alarm` event.
-        try client.setState(["closed_loop_enabled": false, "basal_rate": Self.defaultBasalRate, "iob": 0, "clear_alerts": true])
+        // A standing alarm would reach the next driver as an `.alarm` event. An earlier test's
+        // ExitChangeCartridgeMode leaves a new cartridge waiting for its tubing fill, which refuses
+        // change cartridge mode.
+        try client.setState([
+            "closed_loop_enabled": false, "basal_rate": Self.defaultBasalRate, "iob": 0, "clear_alerts": true,
+            "workflow_mode": "none", "cartridge_loaded": false
+        ])
         if let globals = Self.launchPumpGlobals {
             try client.setSettingsConfig(globals, for: "PumpGlobalsRequest")
         } else {

@@ -108,7 +108,8 @@ it simply reports skips.
 
 - `FaketandemHarness` reads the environment, holds the clients, resets the emulator
   before each test (`reset()`: drop any attached central, set the pairing code and clear
-  the long-term key, real clock, no faults, `PairStep2`, empty request log), builds a
+  the long-term key, real clock, no faults, `PairStep2`, no cartridge procedure open or new
+  cartridge waiting for its tubing fill, empty request log), builds a
   `Driver`, and offers the flows the onboarding UI uses (`discover`, `pair`, `sync`).
 - The virtual `CBCentralManager` reports a link faketandem drops as CoreBluetooth would: a
   `disconnect` with reason `radio_off` (the `radioOff` fault), or a socket that closes with no
