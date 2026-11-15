@@ -9,10 +9,10 @@ public enum HostApp {
         guard let bundleId = Bundle.main.bundleIdentifier?.lowercased() else {
             return .unknown
         }
-        if bundleId.hasSuffix(".trio") {
+        if bundleId.contains(".trio") {
             return .trio
         }
-        if bundleId.hasSuffix(".loopkit") {
+        if bundleId.contains(".loopkit") {
             return .loop
         }
         return .unknown
