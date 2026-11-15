@@ -170,16 +170,7 @@ extension TandemPumpManager {
         guard start < interrupted.estimatedEndDate else { return nil }
         let running = splitAtSegmentChanges(interrupted, through: start).running
         logger.warning("The pump resumed the temp basal its stop interrupted; reporting it from \(start) to \(interrupted.estimatedEndDate)")
-        return UnfinalizedDose(
-            tempRate: running.value,
-            duration: interrupted.estimatedEndDate.timeIntervalSince(start),
-            automatic: interrupted.automatic,
-            insulinType: interrupted.insulinType,
-            startDate: start,
-            tempRateId: interrupted.tempRateId,
-            tempPercent: interrupted.tempPercent,
-            decisionId: interrupted.decisionId
-        )
+        return interrupted.tempBasalPart(rate: running.value, from: start, until: interrupted.estimatedEndDate)
     }
 
     /// The temp that replaced `pending.prior` from its start, at its percent of the pump's rate:
@@ -595,7 +586,8 @@ extension TandemPumpManager {
                     detectedAt: pending.detectedAt,
                     start: dates.phoneDate(of: activation),
                     duration: TimeInterval(activation.durationMilliseconds) / 1000,
-                    automatic: stored.contains { ($0 as? SetTempRateResponseHistoryLog)?.tempRateId == activation.tempRateId },
+                    automatic: stored.contains { ($0 as? SetTempRateResponseHistoryLog)?.tempRateId == activation.tempRateId }
+                        && !isManualTempRate(activation.tempRateId),
                     tempRateId: activation.tempRateId
                 )
                 return AdoptedTemp(dose: dose, end: tempRateEnd(of: dose, in: stored, dates: dates))

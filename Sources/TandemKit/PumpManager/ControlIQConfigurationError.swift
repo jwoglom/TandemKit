@@ -29,6 +29,14 @@ public enum ControlIQConfigurationError: Error, Equatable {
     }
 }
 
+/// What stands in the way of switching to Control-IQ, found before anything is sent to the pump.
+enum ControlIQEnableBlocker: Equatable {
+    /// No weight or total daily insulin to send; the driver refuses the enable without them (#223).
+    case valuesRequired
+    /// No CGM sensor session on the pump, so Control-IQ would run open-loop with the app's own algorithm off.
+    case cgmRequired
+}
+
 extension ControlIQConfigurationError: LocalizedError {
     public var errorDescription: String? {
         switch self {
@@ -84,7 +92,7 @@ extension ControlIQConfigurationError: LocalizedError {
             )
         case .pumpRejected:
             return String(
-                localized: "Review the values and try again. Control-IQ can also be turned on from the pump itself.",
+                localized: "Review the values and try again.",
                 comment: "Recovery suggestion when the pump rejects a Control-IQ change"
             )
         case .noResponse:

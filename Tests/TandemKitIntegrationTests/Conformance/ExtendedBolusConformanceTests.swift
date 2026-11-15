@@ -310,7 +310,7 @@ final class ExtendedBolusConformanceTests: ConformanceTestCase {
     // MARK: - J5
 
     /// Deleting the pump manager while the extended part runs: the one replacing batch before
-    /// `pumpManagerWillDeactivate` finalizes it at the deletion, at its share of the programmed
+    /// `pumpManagerWantsDeletion` finalizes it at the deletion, at its share of the programmed
     /// amount, and reports the rest, which the pump goes on delivering, as a finalized dose of its own
     /// to the programmed end. Loop stores the first at once and the rest once it has ended; neither
     /// host holds anything mutable.

@@ -27,6 +27,8 @@ class TandemKitControlIQSettingsViewModel: ObservableObject {
     @Published var saveError: String?
     /// Why saving is blocked, shown inline under the fields. nil when it is not.
     @Published var validationMessage: String?
+    /// What a Save that turns Control-IQ on is waiting on: the confirmation, or what blocked it.
+    @Published var enablePrompt: ControlIQEnablePrompt?
 
     private var originalEnabled: Bool = false
     private var originalWeightLbs: Int?
@@ -34,9 +36,11 @@ class TandemKitControlIQSettingsViewModel: ObservableObject {
     private var originalSleepSchedules: [SleepScheduleSlot] = []
 
     private let pumpManager: TandemPumpManager?
+    let openCgmSettings: () -> Void
 
-    init(pumpManager: TandemPumpManager?) {
+    init(pumpManager: TandemPumpManager?, openCgmSettings: @escaping () -> Void = {}) {
         self.pumpManager = pumpManager
+        self.openCgmSettings = openCgmSettings
 
         if let state = pumpManager?.state {
             controlIQEnabled = state.useControlIQ
@@ -99,6 +103,27 @@ class TandemKitControlIQSettingsViewModel: ObservableObject {
             return
         }
 
+        guard controlIQEnabled, !originalEnabled else {
+            sendControlIQSettings()
+            return
+        }
+
+        // Whatever else changed with it, turning Control-IQ on takes the same check and confirmation
+        // as the settings screen's Algorithm row.
+        isLoading = true
+        pumpManager?.checkControlIQCanBeEnabled(weightLbs: weightLbs, totalDailyInsulin: totalDailyInsulin) { blocker in
+            DispatchQueue.main.async {
+                self.isLoading = false
+                self.enablePrompt = ControlIQEnablePrompt(blocker)
+            }
+        }
+    }
+
+    func confirmEnablingControlIQ() {
+        sendControlIQSettings()
+    }
+
+    private func sendControlIQSettings() {
         isLoading = true
 
         var changedFields: ControlIQSettingsFields = []

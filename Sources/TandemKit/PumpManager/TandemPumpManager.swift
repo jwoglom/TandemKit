@@ -2,7 +2,6 @@ import Combine
 import CoreBluetooth
 import Dispatch
 import Foundation
-import LoopAlgorithm
 import LoopKit
 #if canImport(UIKit)
 import UIKit
@@ -832,7 +831,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
 
         if shouldDeferBolusSync() {
-            refuseWhileABolusRuns(.enactBolus, completion)
+            completion(bolusIsRunningRefusal(.enactBolus))
             return
         }
 
@@ -845,7 +844,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
             // Again here: a second enact queues behind the first's job and runs right after its InitiateBolus.
             guard !self.bolusIsStillRunning() else {
-                self.refuseWhileABolusRuns(.enactBolus, completion)
+                completion(self.bolusIsRunningRefusal(.enactBolus))
                 return
             }
 
@@ -1000,14 +999,16 @@ public class TandemPumpManager: PumpManager, Pluggable {
         return isBolusInFlight
     }
 
-    private enum DosingCommand: String {
+    enum DosingCommand: String {
         case enactBolus
         case enactTempBasal
+        case enactManualTempBasal
+        case stopTempBasalFromSettings
     }
 
-    private func refuseWhileABolusRuns(_ command: DosingCommand, _ completion: (PumpManagerError?) -> Void) {
+    func bolusIsRunningRefusal(_ command: DosingCommand) -> PumpManagerError {
         logger.warning("[\(command.rawValue)] Blocked: bolus \(state.bolusDose?.bolusId ?? -1) is still running")
-        completion(.deviceState(TandemPumpManagerValidationError.bolusIsRunning))
+        return .deviceState(TandemPumpManagerValidationError.bolusIsRunning)
     }
 
     public func cancelBolus(completion: @escaping (_ result: PumpManagerResult<DoseEntry?>) -> Void) {
@@ -1118,36 +1119,20 @@ public class TandemPumpManager: PumpManager, Pluggable {
             return
         }
 
-        if shouldDeferBolusSync() {
-            refuseWhileABolusRuns(.enactTempBasal, completion)
+        guard duration > 0 else {
+            cancelTempBasal(.enactTempBasal, completion: completion)
             return
         }
 
-        let isCancel = duration <= 0
         // 0% of any profile is 0, so a zero temp is safe whatever the pump holds, and always allowed.
-        let isZeroTemp = !isCancel && unitsPerHour == 0
-
-        guard isCancel || isZeroTemp || !state.isPumpClockUntrusted else {
-            logger.warning("[enactTempBasal] Blocked: the pump's clock is \(Int(state.pumpClockOffset)) s off the phone's")
-            completion(.deviceState(TandemPumpManagerValidationError.pumpClockUntrusted))
-            return
-        }
-
-        // Refused before anything is sent: the pump would refuse it after the running temp was stopped.
+        let isZeroTemp = unitsPerHour == 0
         let minutes = Int(exactly: duration.minutes.rounded(.down)) ?? Int.max
-        guard isCancel || Self.supportedTempBasalMinutes.contains(minutes) else {
-            logger.error("[enactTempBasal] Blocked: the pump does not accept a temp basal of \(duration.minutes) min")
-            completion(.configuration(TandemPumpManagerValidationError.unsupportedTempBasalDuration(minutes: minutes)))
+        if let refusal = tempBasalRefusalBeforeConnecting(.enactTempBasal, minutes: minutes, duration: duration, isZeroTemp: isZeroTemp) {
+            completion(refusal)
             return
         }
         // The pump takes whole minutes, so the temp is reported for what it was sent.
         let programmedDuration = TimeInterval.minutes(Double(minutes))
-
-        guard isZeroTemp || getScheduledBasalRate() > 0 else {
-            logger.error("No scheduled basal rate present or is 0, cannot enact temp basal")
-            completion(.deviceState(PumpCommError.invalidScheduledBasalRate))
-            return
-        }
 
         bluetooth.ensureConnected { error in
             if let error {
@@ -1156,49 +1141,27 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            guard !self.bolusIsStillRunning() else {
-                self.refuseWhileABolusRuns(.enactTempBasal, completion)
+            if let refusal = self.tempBasalRefusalOnceConnected(.enactTempBasal, isCancel: false, isZeroTemp: isZeroTemp) {
+                completion(refusal)
                 return
             }
 
-            // A cancel still goes through: it returns the pump to its own profile, whatever that holds.
-            if !isCancel, !isZeroTemp {
-                self.adoptMatchingPumpProfile()
-                guard !self.state.basalProfileUpdateFailed else {
-                    self.logger.warning("[enactTempBasal] Blocked: the pump's basal profile could not be updated to match the schedule")
-                    completion(.configuration(TandemPumpManagerValidationError.failedUpdatePumpProfile))
-                    return
-                }
-                guard self.state.hasSyncedBasalRateSchedule else {
-                    self.logger.warning("[enactTempBasal] Blocked: the basal schedule has never been synced to the pump")
-                    completion(.configuration(TandemPumpManagerValidationError.basalScheduleNotSynced))
-                    return
-                }
-            }
-
-            guard let currentBasal = self.bluetooth.write(CurrentBasalStatusRequest()) else {
-                self.logger.error("Failed to fetch current temp rate")
-                completion(.communication(PumpCommError.noResponse))
+            let currentBasal: CurrentBasalStatusResponse
+            switch self.readBasalStatusForTempBasal(.enactTempBasal, isNonZeroTemp: !isZeroTemp) {
+            case let .failure(error):
+                completion(error)
                 return
-            }
-            self.observeDeliveryState(currentBasal.basalType)
-
-            if !isCancel, !isZeroTemp, currentBasal.profileBasalRate == 0 {
-                self.logger.error("[enactTempBasal] Blocked: the pump's profile basal rate is 0 U/hr")
-                completion(.deviceState(TandemPumpManagerValidationError.pumpProfileBasalRateIsZero))
-                return
+            case let .success(status):
+                currentBasal = status
             }
 
             // Everything the pump could refuse is settled before the running temp is stopped: a
             // refusal after the stop leaves the pump on its profile until the next cycle.
             let baseline = self.tempBasalBaseline(pumpRate: currentBasal.profileBasalRate)
-            let requestedRate = isCancel ? 0 : self.clampedToPumpMaximumBasalRate(unitsPerHour)
-            let (percent, absoluteRate) = isCancel ? (100, 0) : self.tempBasalPercentAndRate(
-                requestedRate: requestedRate,
-                baseline: baseline
-            )
+            let requestedRate = self.clampedToPumpMaximumBasalRate(unitsPerHour)
+            let (percent, absoluteRate) = self.tempBasalPercentAndRate(requestedRate: requestedRate, baseline: baseline)
 
-            if !isCancel, Self.tempBasalExceedsCeiling(requestedRate: requestedRate, baseline: baseline) {
+            if Self.tempBasalExceedsCeiling(requestedRate: requestedRate, baseline: baseline) {
                 self.logger.warning(
                     "Clamped temp basal \(requestedRate) → \(absoluteRate) U/hr (\(percent)% of \(baseline) U/hr profile)"
                 )
@@ -1206,33 +1169,17 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
             let tempWasRunning = currentBasal.basalType == .tempBasal
             let stoppedTemp = tempWasRunning && self.state.basalDose.type == .tempBasal ? self.state.basalDose : nil
-            if tempWasRunning {
-                let stopRequest = StopTempRateRequest()
-                guard let stopCurrentRate = self.bluetooth.write(stopRequest) else {
-                    self.logger.error("Failed to stop temp rate")
-                    completion(.communication(PumpCommError.noResponse))
-                    return
-                }
-
-                guard stopCurrentRate.isStatusOK else {
-                    self.logger.error("Failed to stop temp rate - Status: \(stopCurrentRate.status)")
-                    completion(.deviceState(PumpRefusal.stopTempBasal(stopCurrentRate, to: stopRequest, replacing: !isCancel)))
-                    return
-                }
-
-                self.logger.info("Current temp basal cancelled!")
-                self.skewCompensationTemp = nil
+            if let refusal = self.stopRunningTempBasal(currentBasal, replacing: true) {
+                completion(refusal)
+                return
             }
 
             // Skewed, the host counts its own schedule rather than the pump's rate when no temp runs.
             let hostCountsThePumpsRate = !self.state.isPumpClockSkewed
                 || TandemPumpCapabilities.milliunits(absoluteRate) == TandemPumpCapabilities.milliunits(self.getScheduledBasalRate())
-            if percent == 100, isCancel || hostCountsThePumpsRate {
+            if percent == 100, hostCountsThePumpsRate {
                 self.logger.info("Enact completed! (no basal rate change)")
-                self.startScheduledBasalDose(reading: currentBasal)
-                if self.state.isPumpClockSkewed, let status = self.bluetooth.write(CurrentBasalStatusRequest()) {
-                    self.maintainPumpClockSkewCompensation(status)
-                }
+                self.restartScheduledBasal(reading: currentBasal)
                 completion(nil)
                 return
             }
@@ -1240,7 +1187,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             let request = SetTempRateRequest(minutes: minutes, percent: percent)
             guard let response = self.bluetooth.write(request) else {
                 self.logger.error("Failed to set temp rate")
-                let outcome = self.adoptUnansweredTempBasal(rate: absoluteRate, percent: percent, duration: programmedDuration, decisionId: decisionId)
+                let outcome = self.adoptUnansweredTempBasal(rate: absoluteRate, percent: percent, duration: programmedDuration, origin: .host, decisionId: decisionId)
                 if !outcome.adopted, outcome.status?.basalType == .basal {
                     self.restoreStoppedTempBasal(stoppedTemp)
                 }
@@ -1259,7 +1206,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     to: request,
                     pumpBasalRate: currentBasal.profileBasalRate,
                     maximumTempBasalRate: self.state.settings.maxTempBasalRate,
-                    afterStoppingATemp: tempWasRunning
+                    afterStoppingATemp: tempWasRunning,
+                    underControlIQ: self.state.useControlIQ
                 )))
                 return
             }
@@ -1272,6 +1220,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                         percent: percent,
                         duration: programmedDuration,
                         tempRateId: response.tempRateId,
+                        origin: .host,
                         decisionId: decisionId,
                         completion: completion
                     )
@@ -1281,39 +1230,173 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 self.logger.warning("No basal status after setting the temp basal; reporting it as commanded")
             }
 
-            self.recordTempBasal(rate: absoluteRate, percent: percent, duration: programmedDuration, tempRateId: response.tempRateId, decisionId: decisionId)
+            self.recordTempBasal(rate: absoluteRate, percent: percent, duration: programmedDuration, tempRateId: response.tempRateId, origin: .host, decisionId: decisionId)
             self.logger.info("Temp basal enacted!")
             completion(nil)
         }
     }
 
+    /// Stops any temp the pump runs and puts it back on its profile. The host's cancel comes through
+    /// `enactTempBasal`, which refuses it under Control-IQ first.
+    func cancelTempBasal(_ command: DosingCommand, completion: @escaping (PumpManagerError?) -> Void) {
+        if let refusal = tempBasalRefusalBeforeConnecting(command, minutes: nil, duration: 0, isZeroTemp: false) {
+            completion(refusal)
+            return
+        }
+
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect for temp basal: \(error.localizedDescription)")
+                completion(.connection(PumpCommError.pumpNotConnected))
+                return
+            }
+
+            if let refusal = self.tempBasalRefusalOnceConnected(command, isCancel: true, isZeroTemp: false) {
+                completion(refusal)
+                return
+            }
+
+            let currentBasal: CurrentBasalStatusResponse
+            switch self.readBasalStatusForTempBasal(command, isNonZeroTemp: false) {
+            case let .failure(error):
+                completion(error)
+                return
+            case let .success(status):
+                currentBasal = status
+            }
+
+            if let refusal = self.stopRunningTempBasal(currentBasal, replacing: false) {
+                completion(refusal)
+                return
+            }
+
+            self.logger.info("Enact completed! (no basal rate change)")
+            self.restartScheduledBasal(reading: currentBasal)
+            completion(nil)
+        }
+    }
+
+    /// Refused before connecting, in this order. `minutes` is nil for a cancel.
+    func tempBasalRefusalBeforeConnecting(
+        _ command: DosingCommand,
+        minutes: Int?,
+        duration: TimeInterval,
+        isZeroTemp: Bool
+    ) -> PumpManagerError? {
+        if shouldDeferBolusSync() {
+            return bolusIsRunningRefusal(command)
+        }
+
+        let isCancel = minutes == nil
+        guard isCancel || isZeroTemp || !state.isPumpClockUntrusted else {
+            logger.warning("[\(command.rawValue)] Blocked: the pump's clock is \(Int(state.pumpClockOffset)) s off the phone's")
+            return .deviceState(TandemPumpManagerValidationError.pumpClockUntrusted)
+        }
+
+        // Refused before anything is sent: the pump would refuse it after the running temp was stopped.
+        if let minutes, !Self.supportedTempBasalMinutes.contains(minutes) {
+            logger.error("[\(command.rawValue)] Blocked: the pump does not accept a temp basal of \(duration.minutes) min")
+            return .configuration(TandemPumpManagerValidationError.unsupportedTempBasalDuration(minutes: minutes))
+        }
+
+        guard isZeroTemp || getScheduledBasalRate() > 0 else {
+            logger.error("No scheduled basal rate present or is 0, cannot enact temp basal")
+            return .deviceState(PumpCommError.invalidScheduledBasalRate)
+        }
+        return nil
+    }
+
+    /// A cancel still goes through: it returns the pump to its own profile, whatever that holds.
+    func tempBasalRefusalOnceConnected(_ command: DosingCommand, isCancel: Bool, isZeroTemp: Bool) -> PumpManagerError? {
+        guard !bolusIsStillRunning() else {
+            return bolusIsRunningRefusal(command)
+        }
+        guard !isCancel, !isZeroTemp else { return nil }
+
+        adoptMatchingPumpProfile()
+        guard !state.basalProfileUpdateFailed else {
+            logger.warning("[\(command.rawValue)] Blocked: the pump's basal profile could not be updated to match the schedule")
+            return .configuration(TandemPumpManagerValidationError.failedUpdatePumpProfile)
+        }
+        guard state.hasSyncedBasalRateSchedule else {
+            logger.warning("[\(command.rawValue)] Blocked: the basal schedule has never been synced to the pump")
+            return .configuration(TandemPumpManagerValidationError.basalScheduleNotSynced)
+        }
+        return nil
+    }
+
+    func readBasalStatusForTempBasal(
+        _ command: DosingCommand,
+        isNonZeroTemp: Bool
+    ) -> Result<CurrentBasalStatusResponse, PumpManagerError> {
+        guard let status = bluetooth.write(CurrentBasalStatusRequest()) else {
+            logger.error("Failed to fetch current temp rate")
+            return .failure(.communication(PumpCommError.noResponse))
+        }
+        observeDeliveryState(status.basalType)
+
+        if isNonZeroTemp, status.profileBasalRate == 0 {
+            logger.error("[\(command.rawValue)] Blocked: the pump's profile basal rate is 0 U/hr")
+            return .failure(.deviceState(TandemPumpManagerValidationError.pumpProfileBasalRateIsZero))
+        }
+        return .success(status)
+    }
+
+    /// Stops the temp `status` shows running, if any: the pump refuses a `SetTempRate` while one runs.
+    func stopRunningTempBasal(_ status: CurrentBasalStatusResponse, replacing: Bool) -> PumpManagerError? {
+        guard status.basalType == .tempBasal else { return nil }
+
+        let stopRequest = StopTempRateRequest()
+        guard let stop = bluetooth.write(stopRequest) else {
+            logger.error("Failed to stop temp rate")
+            return .communication(PumpCommError.noResponse)
+        }
+        guard stop.isStatusOK else {
+            logger.error("Failed to stop temp rate - Status: \(stop.status)")
+            return .deviceState(PumpRefusal.stopTempBasal(stop, to: stopRequest, replacing: replacing))
+        }
+
+        logger.info("Current temp basal cancelled!")
+        skewCompensationTemp = nil
+        return nil
+    }
+
+    func restartScheduledBasal(reading status: CurrentBasalStatusResponse) {
+        startScheduledBasalDose(reading: status)
+        if state.isPumpClockSkewed, let status = bluetooth.write(CurrentBasalStatusRequest()) {
+            maintainPumpClockSkewCompensation(status)
+        }
+    }
+
     /// A `SetTempRate` whose answer was lost may still have reached the pump, after the stop of the
     /// temp it replaces did.
-    private func adoptUnansweredTempBasal(
+    func adoptUnansweredTempBasal(
         rate: Double,
         percent: Int,
         duration: TimeInterval,
+        origin: TempBasalOrigin,
         decisionId: UUID?
     ) -> (status: CurrentBasalStatusResponse?, adopted: Bool) {
         guard let status = bluetooth.write(CurrentBasalStatusRequest()) else {
             logger.warning("No basal status after an unanswered SetTempRate; the next reading settles it")
             return (nil, false)
         }
-        guard Self.tempBasalReadbackMatches(status, percent: percent),
+        // Under Control-IQ the rate is Control-IQ's to set; the temp rate the pump reports is the one it took.
+        guard state.useControlIQ || Self.tempBasalReadbackMatches(status, percent: percent),
               let temp = bluetooth.write(TempRateRequest()), temp.active, temp.percentage == percent
         else {
             observeDeliveryState(status.basalType)
             return (status, false)
         }
         logger.warning("The pump runs the \(percent)% temp basal whose SetTempRate answer was lost; reporting it")
-        recordTempBasal(rate: rate, percent: percent, duration: duration, tempRateId: nil, decisionId: decisionId)
+        recordTempBasal(rate: rate, percent: percent, duration: duration, tempRateId: nil, origin: origin, decisionId: decisionId)
         return (status, true)
     }
 
     /// The temp a refused replacement was stopped for is set again for what remained of it, so the
     /// pump runs its profile only when that fails too. The host counts the temp it was told of, and
     /// a profile above it over-delivers until the next cycle; a zero temp most of all.
-    private func restoreStoppedTempBasal(_ stopped: UnfinalizedDose?) {
+    func restoreStoppedTempBasal(_ stopped: UnfinalizedDose?) {
         guard let stopped, let percent = stopped.tempPercent else { return }
         let minutes = Int(stopped.estimatedEndDate.timeIntervalSince(now).minutes.rounded(.down))
         guard Self.supportedTempBasalMinutes.contains(minutes) else {
@@ -1325,32 +1408,44 @@ public class TandemPumpManager: PumpManager, Pluggable {
             return
         }
         logger.warning("Restored the stopped \(percent)% temp basal for the \(minutes) min left of it")
-        recordTempBasal(rate: stopped.value, percent: percent, duration: .minutes(Double(minutes)), tempRateId: response.tempRateId, decisionId: stopped.decisionId)
+        recordTempBasal(
+            rate: stopped.value,
+            percent: percent,
+            duration: .minutes(Double(minutes)),
+            tempRateId: response.tempRateId,
+            origin: TempBasalOrigin(of: stopped),
+            decisionId: stopped.decisionId
+        )
     }
 
     /// The pump refuses a temp above its max basal rate limit, so a request above it is made the
     /// limit, the most the pump will run, rather than refused after the running temp was stopped.
-    /// The limit read from the pump is what it enforces; the one the host synced stands in until
-    /// the daily settings read.
     func clampedToPumpMaximumBasalRate(_ unitsPerHour: Double) -> Double {
-        let limit: Double? = if let milliunits = state.maxBasalLimitMilliunits, milliunits > 0 {
-            Double(milliunits) / 1000
-        } else {
-            state.settings.maxTempBasalRate
-        }
-        guard let limit, TandemPumpCapabilities.milliunits(unitsPerHour) > TandemPumpCapabilities.milliunits(limit) else {
+        guard let limit = pumpMaximumBasalRate,
+              TandemPumpCapabilities.milliunits(unitsPerHour) > TandemPumpCapabilities.milliunits(limit)
+        else {
             return unitsPerHour
         }
         logger.warning("Clamped temp basal \(unitsPerHour) → \(limit) U/hr, the pump's maximum basal rate limit")
         return limit
     }
 
-    private func recordTempBasal(rate: Double, percent: Int, duration: TimeInterval, tempRateId: Int?, decisionId: UUID?) {
+    /// The limit read from the pump is what it enforces; the one the host synced stands in until the
+    /// daily settings read.
+    var pumpMaximumBasalRate: Double? {
+        if let milliunits = state.maxBasalLimitMilliunits, milliunits > 0 {
+            return Double(milliunits) / 1000
+        }
+        return state.settings.maxTempBasalRate
+    }
+
+    func recordTempBasal(rate: Double, percent: Int, duration: TimeInterval, tempRateId: Int?, origin: TempBasalOrigin, decisionId: UUID?) {
         settleDeliveryTransition()
         let dose = UnfinalizedDose(
             tempRate: rate,
             duration: duration,
-            automatic: true,
+            automatic: origin.automatic,
+            setByHost: origin.setByHost,
             insulinType: state.insulinType,
             startDate: now,
             tempRateId: tempRateId,
@@ -1434,12 +1529,13 @@ public class TandemPumpManager: PumpManager, Pluggable {
     /// at the pump's rate, so the host counts what goes in: stopping it would put the pump on its
     /// profile, which over-delivers whenever the temp was below it. The command still fails, since
     /// the host did not get the rate it asked for.
-    private func rejectMismatchedTempBasal(
+    func rejectMismatchedTempBasal(
         _ readback: CurrentBasalStatusResponse,
         expectedRate: Double,
         percent: Int,
         duration: TimeInterval,
         tempRateId: Int,
+        origin: TempBasalOrigin,
         decisionId: UUID?,
         completion: @escaping (PumpManagerError?) -> Void
     ) {
@@ -1453,7 +1549,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
         switch readback.basalType {
         case .tempBasal:
-            recordTempBasal(rate: readback.currentBasalRate, percent: percent, duration: duration, tempRateId: tempRateId, decisionId: decisionId)
+            recordTempBasal(rate: readback.currentBasalRate, percent: percent, duration: duration, tempRateId: tempRateId, origin: origin, decisionId: decisionId)
         case .suspend:
             observeDeliveryState(.suspend)
         default:
@@ -1941,8 +2037,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
-    public func prepareForDeactivation(_ completion: @escaping (Error?) -> Void) {
-        logger.debug("Preparing for pump deactivation – tearing down transport")
+    public func delete() async {
+        logger.debug("Deleting pump manager – tearing down transport")
         #if TANDEMKIT_VIRTUAL_PUMP
         VirtualPumpControl.detach(self)
         #endif
@@ -1950,9 +2046,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
         telemetryScheduler.cancelAll()
         finalizeHeldDosesForDeactivation()
 
-        notifyDelegateOfDeactivation {
-            completion(nil)
+        // A turn on the delegate queue, behind the batches above, so the host stores them before deleting.
+        let delegate = await withCheckedContinuation { (continuation: CheckedContinuation<PumpManagerDelegate?, Never>) in
+            pumpDelegate.notify { continuation.resume(returning: $0) }
         }
+        await delegate?.pumpManagerWantsDeletion(self)
     }
 
     /// A setup flow left before the host was handed the manager (#603). Nothing owns it from here, so
@@ -1999,16 +2097,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 }
                 // One dose at its highest rate (the host can only over-count), keyed as the part a later load reports:
                 // a part from a future segment change would start ahead of Trio's clock, which stores it at its own.
-                let remainder = UnfinalizedDose(
-                    tempRate: laterRates.reduce(running.value, max),
-                    duration: end.timeIntervalSince(cut),
-                    automatic: running.automatic,
-                    insulinType: running.insulinType,
-                    startDate: cut,
-                    tempRateId: running.tempRateId,
-                    tempPercent: running.tempPercent,
-                    eventRaw: rescaled ? running.eventRaw.flatMap(HistoryLogSyncIdentifier.nextTempRatePart(after:)) : nil,
-                    decisionId: running.decisionId
+                let remainder = running.tempBasalPart(
+                    rate: laterRates.reduce(running.value, max),
+                    from: cut,
+                    until: end,
+                    eventRaw: rescaled ? running.eventRaw.flatMap(HistoryLogSyncIdentifier.nextTempRatePart(after:)) : nil
                 )
                 events.append(NewPumpEvent.tempBasal(dose: remainder.toDoseEntry(isMutable: false, endDate: end, now: now), of: remainder))
             }
@@ -2538,6 +2631,22 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
+    /// What blocks switching to Control-IQ with these values, nil if nothing; every screen asks this.
+    /// An unanswered CGM read blocks: a switch made blind may leave the pump open-loop.
+    func checkControlIQCanBeEnabled(
+        weightLbs: Int?,
+        totalDailyInsulin: Int?,
+        completion: @escaping (ControlIQEnableBlocker?) -> Void
+    ) {
+        guard weightLbs != nil, totalDailyInsulin != nil else {
+            completion(.valuesRequired)
+            return
+        }
+        getCGMStatus { response in
+            completion(response?.isSensorSessionConfigured == true ? nil : .cgmRequired)
+        }
+    }
+
     func stopCGMSensor(completion: @escaping (Bool) -> Void) {
         logger.info("Stopping CGM Session")
 
@@ -3042,17 +3151,7 @@ extension TandemPumpManager {
             let entry = running.toDoseEntry(isMutable: false, endDate: change.date, now: now)
             finished.append(NewPumpEvent.tempBasal(dose: entry, of: running))
             part = part.flatMap(HistoryLogSyncIdentifier.nextTempRatePart(after:))
-            running = UnfinalizedDose(
-                tempRate: rate,
-                duration: dose.estimatedEndDate.timeIntervalSince(change.date),
-                automatic: dose.automatic,
-                insulinType: dose.insulinType,
-                startDate: change.date,
-                tempRateId: dose.tempRateId,
-                tempPercent: percent,
-                eventRaw: part,
-                decisionId: dose.decisionId
-            )
+            running = dose.tempBasalPart(rate: rate, from: change.date, until: dose.estimatedEndDate, eventRaw: part)
         }
         if !finished.isEmpty {
             logger.info("Temp basal at \(percent)% crossed \(finished.count) pump segment change(s); now \(running.value) U/hr")

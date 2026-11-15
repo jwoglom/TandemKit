@@ -57,6 +57,7 @@ final class UnfinalizedDoseEqualityTests: XCTestCase {
             ("deliveredUnits", { $0["deliveredUnits"] = 1.2 }),
             ("insulinType", { $0["insulinType"] = InsulinType.humalog.rawValue }),
             ("automatic", { $0["automatic"] = false }),
+            ("setByHost", { $0["setByHost"] = true }),
             ("isUnconfirmed", { $0["isUnconfirmed"] = true })
         ]
     }

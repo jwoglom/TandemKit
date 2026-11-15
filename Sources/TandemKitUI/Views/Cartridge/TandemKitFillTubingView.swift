@@ -530,10 +530,13 @@ struct TandemKitFillTubingView: View {
                 comment: "Confirmation dialog message"
             ),
             actions: [
-                .standard(Text("Yes, Resume delivery", comment: "Confirm button")) {
+                .primary(Text("Resume delivery", comment: "Confirm button")) {
                     viewModel.resumeDelivery()
                 },
-                .cancel(Text("No, Go back", comment: "Cancel button"))
+                // Leaves delivery suspended, as closing the wizard from this step already does.
+                .cancel(Text("Done", comment: "Button that closes the tubing fill without resuming insulin delivery")) {
+                    viewModel.done()
+                }
             ]
         )
     }

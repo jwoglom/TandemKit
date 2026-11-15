@@ -91,7 +91,12 @@ import XCTest
         ]
     }
 
-    private func stubPump(serving logs: [HistoryLog]) {
+    /// `isStreamed` picks what a `HistoryLogRequest` streams back; the rest the pump holds but never sends.
+    private func stubPump(
+        serving logs: [HistoryLog],
+        isStreamed: @escaping (HistoryLog) -> Bool = { _ in true },
+        didStream: @escaping () -> Void = {}
+    ) {
         let bySequence = Dictionary(uniqueKeysWithValues: logs.map { ($0.sequenceNum, $0) })
         let sequences = logs.map(\.sequenceNum)
         bluetooth.stub(HistoryLogStatusRequest.self, with: HistoryLogStatusResponse(
@@ -104,13 +109,14 @@ import XCTest
             guard let self, let request = message as? HistoryLogRequest else { return }
             let top = request.startLog
             let bottom = top >= UInt32(max(request.numberOfLogs, 1)) ? top - UInt32(max(request.numberOfLogs, 1)) + 1 : 0
-            let streamed = stride(from: top, through: bottom, by: -1).compactMap { bySequence[$0] }
+            let streamed = stride(from: top, through: bottom, by: -1).compactMap { bySequence[$0] }.filter(isStreamed)
             guard !streamed.isEmpty else { return }
             self.manager.historyLogStream.send(HistoryLogStreamResponse(
                 numberOfHistoryLogs: streamed.count,
                 streamId: 7,
                 historyLogStreamBytes: streamed.map(\.cargo)
             ))
+            didStream()
         }
     }
 
@@ -301,6 +307,37 @@ import XCTest
         defer { lock.unlock() }
         XCTAssertEqual(values.last, 1)
         XCTAssertTrue(values.allSatisfy { (0 ... 1).contains($0) })
+    }
+
+    func testTheProgressFollowsTheEntriesOfASliceStillStreamingIn() {
+        let logs = pumpBolus(bolusId: 74, units: 1.0, firstSequenceNum: 1, secondsAgo: 5 * 3600)
+            + pumpBolus(bolusId: 75, units: 1.0, firstSequenceNum: 4, secondsAgo: 3 * 3600)
+            + pumpBolus(bolusId: 76, units: 1.0, firstSequenceNum: 7, secondsAgo: 3600)
+        let oldest = logs.filter { $0.sequenceNum <= 3 }
+        let newestStreamed = expectation(description: "the pump streams the newest entries of the slice")
+        newestStreamed.assertForOverFulfill = false
+        stubPump(serving: logs, isStreamed: { $0.sequenceNum > 3 }, didStream: { newestStreamed.fulfill() })
+
+        let loaded = expectation(description: "history load completes")
+        var result: Error?
+        manager.loadHistoryForSetup(progress: { _ in }, completion: { outcome in
+            if case let .failure(error) = outcome { result = error }
+            loaded.fulfill()
+        })
+
+        wait(for: [newestStreamed], timeout: 30.0)
+        let since = manager.now.addingTimeInterval(-TandemPumpManager.setupHistoryLoadWindow)
+        // 2 h and a minute of the window's 6 h have arrived.
+        XCTAssertEqual(manager.setupHistoryLoadProgress(since: since), (2 * 3600 + 60) / (6 * 3600), accuracy: 0.01)
+
+        manager.historyLogStream.send(HistoryLogStreamResponse(
+            numberOfHistoryLogs: oldest.count,
+            streamId: 7,
+            historyLogStreamBytes: oldest.map(\.cargo)
+        ))
+        wait(for: [loaded], timeout: 90.0)
+
+        XCTAssertNil(result)
     }
 
     func testAnEmptyLogIsLoadedAtOnce() {

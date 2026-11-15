@@ -1,0 +1,208 @@
+import LoopKit
+@testable import TandemKit
+import XCTest
+
+@available(macOS 13.0, iOS 14.0, *) final class TandemKitTempBasalViewModelTests: XCTestCase {
+    private static let referenceDay = Calendar.current.startOfDay(for: Date(timeIntervalSinceReferenceDate: 700_000_000))
+
+    private var clock: ManualClock!
+
+    override func setUp() {
+        super.setUp()
+        clock = ManualClock(Self.referenceDay.addingTimeInterval(.hours(10)))
+    }
+
+    /// 1 U/hr until 14:00 and 2 U/hr after; nothing here talks to the pump.
+    private func makeViewModel(maxBasalLimit: Double? = nil, holding heldDose: UnfinalizedDose? = nil) -> TandemKitTempBasalViewModel {
+        let schedule = BasalRateSchedule(dailyItems: [
+            RepeatingScheduleValue(startTime: 0, value: 1.0),
+            RepeatingScheduleValue(startTime: .hours(14), value: 2.0)
+        ])!
+        var state = TandemPumpManagerState(basalRateSchedule: schedule)
+        state.maxBasalLimitMilliunits = maxBasalLimit.map(TandemPumpCapabilities.milliunits)
+        let manager = TandemPumpManager(state: state, bluetooth: StubPumpBluetooth(), clock: clock)
+        if let heldDose {
+            manager.state.basalDose = heldDose
+        }
+        return TandemKitTempBasalViewModel(pumpManager: manager)
+    }
+
+    private func status(
+        percent: Int? = nil,
+        isSuspended: Bool = false,
+        isLoopTemp: Bool = false,
+        isClockSkewCompensation: Bool = false
+    ) -> TempRateStatus {
+        TempRateStatus(
+            percent: percent,
+            endDate: percent.map { _ in clock.now.addingTimeInterval(.minutes(30)) },
+            profileBasalRate: 1.0,
+            currentBasalRate: Double(percent ?? 100) / 100,
+            isSuspended: isSuspended,
+            isLoopTemp: isLoopTemp,
+            isClockSkewCompensation: isClockSkewCompensation
+        )
+    }
+
+    // MARK: - Which screen
+
+    func testWithNoTempTheFormShows() {
+        let viewModel = makeViewModel()
+
+        viewModel.apply(.success(status()))
+
+        XCTAssertEqual(viewModel.screen, .form)
+        XCTAssertEqual(viewModel.profileBasalRate, 1.0)
+    }
+
+    func testTheLoopsOwnTempAndTheClockSkewTempShowTheForm() {
+        let viewModel = makeViewModel()
+
+        viewModel.apply(.success(status(percent: 150, isLoopTemp: true)))
+        XCTAssertEqual(viewModel.screen, .form)
+
+        viewModel.apply(.success(status(percent: 90, isClockSkewCompensation: true)))
+        XCTAssertEqual(viewModel.screen, .form)
+    }
+
+    func testAnyOtherTempShowsTheActiveView() {
+        let viewModel = makeViewModel()
+        let running = status(percent: 130)
+
+        viewModel.apply(.success(running))
+
+        XCTAssertEqual(viewModel.screen, .active(running))
+        XCTAssertEqual(viewModel.title, "Active temp rate")
+    }
+
+    func testASuspendedPumpAndNoAnswerHaveScreensOfTheirOwn() {
+        let viewModel = makeViewModel()
+
+        viewModel.apply(.success(status(isSuspended: true)))
+        XCTAssertEqual(viewModel.screen, .suspended)
+
+        viewModel.apply(.failure(.communication(PumpCommError.noResponse)))
+        XCTAssertEqual(viewModel.screen, .unreachable)
+    }
+
+    func testTheTitleFollowsTheScreen() {
+        let viewModel = makeViewModel()
+        var titles: [String] = []
+        viewModel.onTitleChange = { titles.append($0) }
+
+        viewModel.apply(.success(status(percent: 130)))
+        viewModel.apply(.success(status()))
+
+        XCTAssertEqual(titles, ["Active temp rate", "Set temp basal"])
+    }
+
+    func testWhileReadingAManualTempTheTitleIsTheActiveViews() {
+        let viewModel = makeViewModel(holding: UnfinalizedDose(
+            tempRate: 1.3,
+            duration: .minutes(30),
+            automatic: false,
+            insulinType: .novolog,
+            startDate: clock.now,
+            tempRateId: 42,
+            tempPercent: 130
+        ))
+
+        XCTAssertEqual(viewModel.screen, .loading)
+        XCTAssertEqual(viewModel.title, "Active temp rate")
+        viewModel.apply(.success(status()))
+        XCTAssertEqual(viewModel.title, "Set temp basal")
+    }
+
+    // MARK: - The form
+
+    func testItStartsAtOneHundredPercentForThirtyMinutesAndCanSetThat() {
+        let viewModel = makeViewModel()
+        viewModel.apply(.success(status()))
+
+        XCTAssertEqual(viewModel.percent, 100)
+        XCTAssertEqual(viewModel.duration, .minutes(30))
+        XCTAssertTrue(viewModel.canSet)
+
+        viewModel.stepUp()
+        XCTAssertEqual(viewModel.percent, 110)
+        XCTAssertTrue(viewModel.canSet)
+    }
+
+    func testTheBoundsFollowTheDuration() {
+        clock.set(Self.referenceDay.addingTimeInterval(.hours(14) - .minutes(20)))
+        let viewModel = makeViewModel(maxBasalLimit: 3.0)
+        viewModel.apply(.success(status()))
+        viewModel.percent = 160
+        // Ends at 13:55, before the 14:00 segment change.
+        viewModel.minutes = 15
+
+        XCTAssertTrue(viewModel.isPercentValid)
+        viewModel.hours = 1
+        XCTAssertFalse(viewModel.isPercentValid, "160% of 2 U/hr is over the 3 U/hr limit after 14:00")
+        XCTAssertEqual(viewModel.percent, 160, "a value outside the bounds is kept")
+    }
+
+    func testTheEffectiveRatesRunFromNowToTheEndAndChangeWithTheProfile() {
+        let now = Self.referenceDay.addingTimeInterval(.hours(14) - .minutes(20))
+        let segmentChange = Self.referenceDay.addingTimeInterval(.hours(14))
+        clock.set(now)
+        let viewModel = makeViewModel()
+        viewModel.apply(.success(status()))
+        viewModel.percent = 130
+        // Ends at 13:55, before the 14:00 segment change.
+        viewModel.minutes = 15
+
+        XCTAssertEqual(viewModel.effectiveBasalRates, [
+            ManualTempBasalForm.EffectiveRate(start: now, end: now.addingTimeInterval(.minutes(15)), rate: 1.3)
+        ])
+        viewModel.hours = 1
+        XCTAssertEqual(viewModel.effectiveBasalRates, [
+            ManualTempBasalForm.EffectiveRate(start: now, end: segmentChange, rate: 1.3),
+            ManualTempBasalForm.EffectiveRate(start: segmentChange, end: now.addingTimeInterval(.minutes(75)), rate: 2.6)
+        ])
+    }
+
+    func testADurationThePumpRefusesHasNoEffectiveRates() {
+        let viewModel = makeViewModel()
+        viewModel.apply(.success(status()))
+        viewModel.minutes = 10
+
+        XCTAssertEqual(viewModel.effectiveBasalRates, [])
+    }
+
+    func testATypedRateBecomesTheNearestPercent() {
+        let viewModel = makeViewModel()
+        viewModel.apply(.success(status()))
+
+        viewModel.setRate(1.234)
+
+        XCTAssertEqual(viewModel.percent, 123)
+        XCTAssertEqual(viewModel.rate, 1.23)
+    }
+
+    func testTheConfirmationGivesThePercentTheRateAndTheDuration() {
+        let viewModel = makeViewModel()
+        viewModel.apply(.success(status()))
+        viewModel.percent = 130
+        viewModel.hours = 1
+
+        XCTAssertEqual(
+            viewModel.setConfirmationMessage,
+            "Set a temp rate for 130% of profile basal for a duration of 1 hour, 30 minutes?\n\nYour new effective basal rate will be 1.30 U/hr."
+        )
+        XCTAssertEqual(viewModel.stopConfirmationMessage(percent: 130), "Stop the active temp rate of 130%?")
+    }
+
+    func testATempStartedSinceTheScreenLoadedIsSaidSo() {
+        let failure = TandemKitTempBasalViewModel.setFailure(.deviceState(TandemPumpManagerValidationError.tempBasalAlreadyRunning))
+
+        XCTAssertEqual(failure.title, "Could not set temp rate")
+        XCTAssertEqual(failure.message, "A temp rate started while you were on this screen.")
+    }
+
+    func testOtherFailuresGiveTheDriversReason() {
+        let failure = TandemKitTempBasalViewModel.setFailure(.deviceState(TandemPumpManagerValidationError.tempRateReadbackMismatch(sent: 130, running: 120)))
+
+        XCTAssertTrue(failure.message.contains("The pump runs a temporary basal rate of 120% instead of 130%"), failure.message)
+    }
+}

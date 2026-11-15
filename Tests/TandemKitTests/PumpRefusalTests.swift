@@ -1,4 +1,3 @@
-import LoopAlgorithm
 import LoopKit
 @testable import TandemKit
 import XCTest
@@ -75,7 +74,8 @@ import XCTest
             to: request,
             pumpBasalRate: 0.58,
             maximumTempBasalRate: nil,
-            afterStoppingATemp: true
+            afterStoppingATemp: true,
+            underControlIQ: false
         )
 
         XCTAssertEqual(
@@ -105,12 +105,31 @@ import XCTest
             to: request,
             pumpBasalRate: 1.0,
             maximumTempBasalRate: 1.2,
-            afterStoppingATemp: false
+            afterStoppingATemp: false,
+            underControlIQ: false
         )
 
         XCTAssertEqual(
             context(of: error),
             "The pump refused the 150% temporary basal rate (status 1). 150% of its 1.000 U/hr basal rate is 1.500 U/hr, above the pump's maximum basal rate limit of 1.200 U/hr."
+        )
+    }
+
+    /// Some Mobi firmware takes a temp rate while Control-IQ runs and some doesn't, and the refusal
+    /// gives only a status code.
+    func testATempBasalRefusedUnderControlIQSaysControlIQIsOn() {
+        let error = PumpRefusal.tempBasal(
+            SetTempRateResponse(status: 1, tempRateId: 0),
+            to: SetTempRateRequest(minutes: 30, percent: 150),
+            pumpBasalRate: 1.0,
+            maximumTempBasalRate: nil,
+            afterStoppingATemp: false,
+            underControlIQ: true
+        )
+
+        XCTAssertEqual(
+            context(of: error),
+            "The pump refused the 150% temporary basal rate (status 1). Control-IQ is on, and the pump may not take a temporary basal rate while it runs."
         )
     }
 

@@ -359,27 +359,15 @@ extension TandemPumpManager {
             return false
         }
         let (finished, running) = splitAtSegmentChanges(held, through: start)
-        func part(_ rate: Double, from start: Date, to end: Date) -> UnfinalizedDose {
-            UnfinalizedDose(
-                tempRate: rate,
-                duration: end.timeIntervalSince(start),
-                automatic: held.automatic,
-                insulinType: held.insulinType,
-                startDate: start,
-                tempRateId: held.tempRateId,
-                tempPercent: held.tempPercent,
-                decisionId: held.decisionId
-            )
-        }
         var events = finished + [NewPumpEvent.tempBasal(dose: running.toDoseEntry(isMutable: false, endDate: start, now: pass.now), of: running)]
         let continuation: UnfinalizedDose
         if let resumed = recordResuming(running, after: chunk, pass: pass), start < resumed, resumed < held.estimatedEndDate {
-            let atPumpRate = part(chunk.unitsPerHour, from: start, to: resumed)
+            let atPumpRate = held.tempBasalPart(rate: chunk.unitsPerHour, from: start, until: resumed)
             events.append(NewPumpEvent.tempBasal(dose: atPumpRate.toDoseEntry(isMutable: false, endDate: resumed, now: pass.now), of: atPumpRate))
-            continuation = part(running.value, from: resumed, to: held.estimatedEndDate)
+            continuation = held.tempBasalPart(rate: running.value, from: resumed, until: held.estimatedEndDate)
             logger.info("Pump history runs the temp basal from \(held.startDate) at \(chunk.unitsPerHour) U/hr from \(start) to \(resumed)")
         } else {
-            continuation = part(chunk.unitsPerHour, from: start, to: held.estimatedEndDate)
+            continuation = held.tempBasalPart(rate: chunk.unitsPerHour, from: start, until: held.estimatedEndDate)
             logger.info("Pump history runs the temp basal from \(held.startDate) at \(chunk.unitsPerHour) U/hr from \(start)")
         }
         state.basalDose = continuation
@@ -482,7 +470,7 @@ extension TandemPumpManager {
             description: "Basal from pump record \(chunk.sequenceNum)",
             syncIdentifier: raw.hexadecimalString,
             insulinType: state.insulinType,
-            automatic: isAlgorithm || (chunk.kind == .temp && setByTheApp),
+            automatic: isAlgorithm || (chunk.kind == .temp && setByTheApp && !(chunk.tempRateId.map(isManualTempRate) ?? false)),
             isMutable: false,
             wasProgrammedByPumpUI: isAlgorithm || (chunk.kind == .temp && !setByTheApp)
         )

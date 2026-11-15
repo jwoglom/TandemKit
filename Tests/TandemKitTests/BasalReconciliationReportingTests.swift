@@ -247,6 +247,35 @@ import XCTest
         XCTAssertTrue(events.allSatisfy { $0.dose?.type == .tempBasal && HistoryLogSyncIdentifier.decode($0.raw)?.scheme == .logSequence })
     }
 
+    /// The cycles of a temp set over Bluetooth that the host was never told of.
+    private func cyclesOfAnUnreportedAppTemp() -> PumpBasalHistory {
+        enableReporting()
+        var log = PumpBasalHistory()
+        log.tempSet(300, id: 7)
+        log.tempStarted(300, percent: 150, minutes: 30, id: 7)
+        for cycle in 0 ..< 3 {
+            log.delivery(310 + cycle * 300, source: 2, rate: 1500)
+        }
+        return log
+    }
+
+    func testCorrectionsOfAnAppsTempAreAutomatic() {
+        pass(cyclesOfAnUnreportedAppTemp())
+
+        XCTAssertFalse(events.isEmpty)
+        XCTAssertTrue(events.allSatisfy { $0.dose?.automatic == true })
+    }
+
+    func testCorrectionsOfATempSetFromSettingsAreManual() {
+        let log = cyclesOfAnUnreportedAppTemp()
+        manager.rememberManualTempRate(tempRateId: 7)
+
+        pass(log)
+
+        XCTAssertFalse(events.isEmpty)
+        XCTAssertTrue(events.allSatisfy { $0.dose?.automatic == false })
+    }
+
     func testAnAppsTempFromBeforePairingIsNotReportedWithoutTheLoad() {
         enableReporting()
         manager.state.reportedBasal = ReportedBasalLedger(trackingSince: clock.now)

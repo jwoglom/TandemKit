@@ -6,13 +6,23 @@ import LoopKit
 enum CommandFailure: Int, Identifiable {
     case resume
     case suspend
-    case controlIQ
+    case enableControlIQ
+    case disableControlIQ
+    case enableControlIQUnanswered
+    case disableControlIQUnanswered
     case exerciseMode
     case sleepMode
     case stopTempRate
     case playSound
 
     var id: Int { rawValue }
+}
+
+/// A temp basal set from TandemKit's settings, which the settings row offers to stop.
+struct ManualTempBasalRow: Equatable {
+    let percent: Int
+    let unitsPerHour: Double
+    let endDate: Date
 }
 
 class TandemKitSettingsViewModel: ObservableObject {
@@ -30,6 +40,7 @@ class TandemKitSettingsViewModel: ObservableObject {
     let openControlIQSettings: () -> Void
     let openQuickBolus: () -> Void
     let openAlertSettings: () -> Void
+    let openTempBasal: () -> Void
     let openDebug: () -> Void
     let openTroubleshootConnection: () -> Void
     let allowDebugFeatures: Bool
@@ -89,6 +100,8 @@ class TandemKitSettingsViewModel: ObservableObject {
     /// DIY algorithm is never gated, so a pump already running Control-IQ stays recoverable.
     @Published var controlIQSupportEnabled: Bool = false
     @Published var quickBolusButtonSupportEnabled: Bool = false
+    @Published var manualTempBasalSupportEnabled: Bool = false
+    @Published var manualTempBasal: ManualTempBasalRow?
 
     /// Whether to warn that Control-IQ is running open-loop for want of a CGM. Only a pump we know
     /// has no sensor session earns the warning; an unknown session state does not.
@@ -123,6 +136,7 @@ class TandemKitSettingsViewModel: ObservableObject {
         openControlIQSettings: @escaping () -> Void,
         openQuickBolus: @escaping () -> Void,
         openAlertSettings: @escaping () -> Void,
+        openTempBasal: @escaping () -> Void = {},
         openDebug: @escaping () -> Void = {},
         openTroubleshootConnection: @escaping () -> Void = {},
         allowDebugFeatures: Bool = false
@@ -140,12 +154,15 @@ class TandemKitSettingsViewModel: ObservableObject {
         self.openControlIQSettings = openControlIQSettings
         self.openQuickBolus = openQuickBolus
         self.openAlertSettings = openAlertSettings
+        self.openTempBasal = openTempBasal
         self.openDebug = openDebug
         self.openTroubleshootConnection = openTroubleshootConnection
         self.allowDebugFeatures = allowDebugFeatures
         useControlIQ = pumpManager?.state.useControlIQ ?? false
         controlIQSupportEnabled = pumpManager?.state.featureFlags.controlIQSupport ?? false
         quickBolusButtonSupportEnabled = pumpManager?.state.featureFlags.quickBolusButtonSupport ?? false
+        manualTempBasalSupportEnabled = pumpManager?.state.featureFlags.manualTempBasalSupport ?? false
+        manualTempBasal = pumpManager.flatMap(Self.manualTempBasal(in:))
         isCGMActiveOnPump = pumpManager?.state.isCGMSensorSessionConfigured
         reservoirValue = pumpManager?.reservoirLevel
         connectionIssue = pumpManager?.connectionIssue
@@ -225,9 +242,9 @@ class TandemKitSettingsViewModel: ObservableObject {
     ///
     /// Control-IQ can only close the loop when a CGM is connected to the pump; without one the
     /// pump silently runs Control-IQ in open-loop while our DIY algorithm is disabled — a strictly
-    /// worse state for the user. To prevent that, first confirm a CGM sensor session is configured
-    /// on the pump. Only when one is present do we surface the switch confirmation; otherwise we
-    /// show a blocking prompt directing the user to connect a CGM and leave the algorithm unchanged.
+    /// worse state for the user. So the pump is checked first (`checkControlIQCanBeEnabled`, which
+    /// the Control-IQ screen's Save runs too), and only a switch nothing blocks gets the confirmation.
+    /// Otherwise a prompt says what is missing, and the algorithm is left unchanged.
     func attemptSwitchToControlIQ() {
         guard let pumpManager else { return }
         guard !isCheckingCGMForCIQ else { return }
@@ -237,24 +254,20 @@ class TandemKitSettingsViewModel: ObservableObject {
             return
         }
 
-        // Control-IQ doses from body weight and total daily insulin, and a pump that has never run
-        // it has neither, so the driver refuses the enable. Open the screen where they can be
-        // entered instead of attempting a request that cannot succeed (#223).
-        guard pumpManager.state.controlIQWeightLbs != nil,
-              pumpManager.state.controlIQTotalDailyInsulin != nil
-        else {
-            showControlIQValuesRequired = true
-            return
-        }
-
         isCheckingCGMForCIQ = true
-        pumpManager.getCGMStatus { response in
+        pumpManager.checkControlIQCanBeEnabled(
+            weightLbs: pumpManager.state.controlIQWeightLbs,
+            totalDailyInsulin: pumpManager.state.controlIQTotalDailyInsulin
+        ) { blocker in
             DispatchQueue.main.async {
                 self.isCheckingCGMForCIQ = false
-                if response?.isSensorSessionConfigured == true {
+                switch ControlIQEnablePrompt(blocker) {
+                case .confirm:
                     self.showSwitchToCIQConfirm = true
-                } else {
+                case .cgmRequired:
                     self.showCGMRequiredForCIQ = true
+                case .valuesRequired:
+                    self.showControlIQValuesRequired = true
                 }
             }
         }
@@ -288,13 +301,19 @@ class TandemKitSettingsViewModel: ObservableObject {
                         self.showNoCGMWarning = true
                     }
                 }
-            case .failure:
+            case let .failure(error):
                 DispatchQueue.main.async {
                     self.isUpdatingPumpState = false
-                    self.commandFailure = .controlIQ
+                    self.commandFailure = Self.isUnanswered(error) ? .enableControlIQUnanswered : .enableControlIQ
                 }
             }
         }
+    }
+
+    /// A request that never connected or that nothing answered, as opposed to one the pump or the driver refused.
+    static func isUnanswered(_ error: Error) -> Bool {
+        guard let error = error as? ControlIQConfigurationError else { return true }
+        return error == .noResponse
     }
 
     func switchAlgorithmToDIY() {
@@ -314,8 +333,8 @@ class TandemKitSettingsViewModel: ObservableObject {
                 case .success:
                     self.useControlIQ = false
                     self.showReenableClosedLoopPrompt = true
-                case .failure:
-                    self.commandFailure = .controlIQ
+                case let .failure(error):
+                    self.commandFailure = Self.isUnanswered(error) ? .disableControlIQUnanswered : .disableControlIQ
                 }
             }
         }
@@ -385,6 +404,49 @@ class TandemKitSettingsViewModel: ObservableObject {
         }
     }
 
+    /// Not a temp the loop or the pump's screen set: only one set from TandemKit's settings is
+    /// remembered by its `tempRateId`.
+    static func manualTempBasal(in pumpManager: TandemPumpManager) -> ManualTempBasalRow? {
+        let held = pumpManager.state.basalDose
+        guard held.type == .tempBasal, !held.automatic, held.estimatedEndDate > pumpManager.now,
+              let percent = held.tempPercent, let tempRateId = held.tempRateId, pumpManager.isManualTempRate(tempRateId)
+        else {
+            return nil
+        }
+        return ManualTempBasalRow(percent: percent, unitsPerHour: held.value, endDate: held.estimatedEndDate)
+    }
+
+    /// Rounded up, so a temp with seconds left still reads "1m".
+    static func manualTempBasalSubtext(_ temp: ManualTempBasalRow, now: Date) -> String {
+        let formatter = DateComponentsFormatter()
+        formatter.unitsStyle = .abbreviated
+        formatter.allowedUnits = [.hour, .minute]
+        let minutes = (max(0, temp.endDate.timeIntervalSince(now)) / 60).rounded(.up)
+        return String(
+            format: String(
+                localized: "%1$d%% (%2$@U/hr) with %3$@ remaining",
+                comment: "Subtext of the settings row that stops a manual temp basal (1: percent, 2: rate, 3: time left)"
+            ),
+            temp.percent,
+            String(format: "%.2f", temp.unitsPerHour),
+            formatter.string(from: minutes * 60) ?? ""
+        )
+    }
+
+    /// The settings stop, which Control-IQ does not refuse: a temp set under it can be stopped here.
+    func stopManualTempBasal() {
+        guard let pumpManager else { return }
+        isUpdatingPumpState = true
+        pumpManager.stopTempBasalFromSettings { error in
+            DispatchQueue.main.async {
+                self.isUpdatingPumpState = false
+                if error != nil {
+                    self.commandFailure = .stopTempRate
+                }
+            }
+        }
+    }
+
     func syncPumpTime() {
         guard let pumpManager = pumpManager else {
             return
@@ -413,7 +475,7 @@ class TandemKitSettingsViewModel: ObservableObject {
     }
 
     func removePump() {
-        // Advance the flow. The coordinator's stepFinished runs prepareForDeactivation, which tears
+        // Advance the flow. The coordinator's stepFinished runs delete(), which tears
         // down the BLE transport (stopping auto-reconnect) and notifies the delegate — both required
         // for the pump to actually be removed rather than reconnect and re-persist its state.
         nextStep()
@@ -444,6 +506,8 @@ extension TandemKitSettingsViewModel: PumpManagerStatusObserver {
             self.useControlIQ = pumpManager.state.useControlIQ
             self.controlIQSupportEnabled = pumpManager.state.featureFlags.controlIQSupport
             self.quickBolusButtonSupportEnabled = pumpManager.state.featureFlags.quickBolusButtonSupport
+            self.manualTempBasalSupportEnabled = pumpManager.state.featureFlags.manualTempBasalSupport
+            self.manualTempBasal = Self.manualTempBasal(in: pumpManager)
             self.isCGMActiveOnPump = pumpManager.state.isCGMSensorSessionConfigured
             self.scheduledBasal = pumpManager.scheduledBasalRateInForce()
             self.pumpState = pumpManager.state.pumpState

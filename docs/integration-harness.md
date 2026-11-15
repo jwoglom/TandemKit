@@ -251,7 +251,7 @@ and a few seconds per pairing.
 4. Assert on `driver.delegate` / `driver.manager.state` and on
    `harness.client.snapshot()` / `harness.requestsSeen()`.
    `shutDownDriver()` ends a driver as the app going away does, for a relaunch: the host is told
-   nothing. `deactivateDriver()` is the host deleting the pump manager (`prepareForDeactivation`),
+   nothing. `deactivateDriver()` is the host deleting the pump manager (`delete()`),
    which finalizes every dose the host holds as mutable, so it is no relaunch. A setup flow's manager
    is made with `attachDelegate: false` and handed to the host with `Driver.adoptByHost()`, after
    `ConformanceTestCase.loadHistoryForSetup()` if the scenario loads the pump's history.
@@ -268,9 +268,10 @@ which `TandemKitTests` compiles because both test targets use it.
 
 ## Trio in the simulator
 
-`TrioIntegrationTests` run Trio itself, built from `nightscout/Trio` `feat/tandem-closed-beta` with
-this TandemKit as its submodule and `VirtualPump.xcconfig` applied to the whole build, so Trio's own
-`DeviceDataManager` and pump history take the driver's reports instead of `TrioDoseStoreOracle`.
+`TrioIntegrationTests` run Trio itself, built from `nightscout/Trio` `feat/tandem-closed-beta` (`-next-dev` when the TandemKit branch name contains `next-dev`; on a
+manual run, `trio_ref` on `trio_repository`; every job builds against the LoopKit submodule of either of the last two)
+with this TandemKit as its submodule and `VirtualPump.xcconfig` applied to the whole build, so Trio's
+own `DeviceDataManager` and pump history take the driver's reports instead of `TrioDoseStoreOracle`.
 Nothing in Trio changes for it:
 
 - `scripts/trio-test.sh build` builds Trio (signed ad hoc, since an unsigned simulator build has
@@ -300,7 +301,7 @@ Nothing in Trio changes for it:
   one through the whole JPAKE exchange), `applyOnboardingSettings`, `bolus`, `cancelBolus`,
   `syncBasalSchedule`, `syncPumpTime`, `tempBasal` (a duration of 0 cancels), `suspend`, `resume`,
   `recordCartridgeChange`, `recordSiteChange`, `setFeatureFlag`, `deletePumpManager`
-  (`prepareForDeactivation`, as the pump settings screen's remove does; nothing reaches the manager
+  (`delete()`, as the pump settings screen's remove does; nothing reaches the manager
   afterwards), `sync`, `status`, and `pumpEventBatches`, every batch handed to Trio with Trio's
   completion. Trio completes a batch once it has saved it, so a completed log is all in the store.
   What the pump does on its own (a suspend, a bolus from its screen, a dropped link) goes through
@@ -344,10 +345,10 @@ stopping it, since a Trio that stops answering logs nothing about why. The `trio
 ## Loop in the simulator
 
 `LoopIntegrationTests` run Loop the same way, built from `LoopKit/LoopWorkspace`
-`feat/tandem-closed-beta` with this TandemKit as its `TandemKitPlugin` and `VirtualPump.xcconfig`
-applied to the whole workspace. They cover what Trio cannot: upstream LoopKit, the plugin build, and
-LoopKit's `DoseStore`, the store `LoopDoseStoreOracle` models, so they check the oracle against the
-real thing as well as the driver against the oracle.
+`feat/tandem-closed-beta` (`-next-dev` likewise; on a manual run, `loop_ref`) with this TandemKit as its `TandemKitPlugin`
+and `VirtualPump.xcconfig` applied to the whole workspace. They cover what Trio cannot: upstream
+LoopKit, the plugin build, and LoopKit's `DoseStore`, the store `LoopDoseStoreOracle` models, so
+they check the oracle against the real thing as well as the driver against the oracle.
 
 - `scripts/loop-test.sh build` builds the `LoopWorkspace` scheme signed ad hoc with no team, as Trio
   is. Loop derives its bundle id and app group from the team, so the script sets

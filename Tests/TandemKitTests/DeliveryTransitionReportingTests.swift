@@ -464,7 +464,25 @@ import XCTest
         XCTAssertFalse(batch.events.contains { $0.dose?.type == .basal })
         XCTAssertEqual(manager.state.basalDose.tempRateId, 8)
         XCTAssertEqual(manager.state.basalDose.tempPercent, 120)
+        XCTAssertFalse(manager.state.basalDose.setByHost, "another app's")
         XCTAssertNil(manager.state.deliveryTransitions.pending)
+    }
+
+    func testATempSetFromSettingsInPlaceOfTheHeldOneIsAdoptedAsManual() {
+        runningTempBasal(1.5, percent: 150)
+        manager.rememberManualTempRate(tempRateId: 8)
+        advance(to: minutes(12))
+        observeTemp(percent: 120, from: minutes(5))
+
+        pass([
+            tempRateCompleted(7, at: minutes(5), timeLeft: 25 * 60),
+            tempRateActivated(8, at: minutes(5), percent: 120),
+            setOverBluetooth(8, at: minutes(5))
+        ])
+
+        XCTAssertEqual(events(.tempBasal).last?.dose?.automatic, false)
+        XCTAssertFalse(manager.state.basalDose.automatic)
+        XCTAssertFalse(manager.state.basalDose.setByHost)
     }
 
     func testATempSetOnThePumpInPlaceOfTheHeldOneIsNotAutomatic() {
