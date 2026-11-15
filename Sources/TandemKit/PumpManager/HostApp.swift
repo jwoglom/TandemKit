@@ -12,7 +12,7 @@ public enum HostApp {
         if bundleId.contains(".trio") {
             return .trio
         }
-        if bundleId.contains(".loopkit") {
+        if bundleId.contains(".loop") {
             return .loop
         }
         return .unknown
