@@ -93,6 +93,22 @@ class LoopTestCase: FaketandemIntegrationTestCase {
         try restorePumpDelivery()
         loop = try LoopApp.launchNew(name: name, files: seededFiles(), groupDefaults: groupDefaults(), arguments: launchArguments)
         control = try loop.connectControl()
+        try waitForLoopToTakeReports()
+    }
+
+    /// The control channel listens from the manager's init, and Loop attaches itself later in its
+    /// launch. Holding the delegate is not enough: Loop next-dev sets no delegate queue.
+    @discardableResult
+    func waitForLoopToTakeReports(timeout: TimeInterval = 60) throws -> VirtualPumpControl.Status {
+        var last: VirtualPumpControl.Status?
+        do {
+            return try IntegrationWait.value("Loop to adopt the driver", timeout: timeout) { () -> VirtualPumpControl.Status? in
+                last = try self.control.send(.init(command: .status)).status
+                return last.flatMap { $0.reportsToDelegate ? $0 : nil }
+            }
+        } catch is IntegrationWaitTimeout {
+            throw VirtualPumpControl.ControlError("Loop never adopted the driver: \(last?.hostCannotBeReportedTo ?? "no status")")
+        }
     }
 
     override func tearDownWithError() throws {
@@ -157,6 +173,7 @@ class LoopTestCase: FaketandemIntegrationTestCase {
         let paired = try control.send(request)
         XCTAssertEqual(paired.status?.onboarded, true)
         XCTAssertEqual(paired.status?.delegateAttached, true, "Loop's DeviceDataManager must be the driver's delegate")
+        XCTAssertNil(paired.status?.hostCannotBeReportedTo)
         if thenSync {
             try control.send(.init(command: .sync))
         }
@@ -183,6 +200,7 @@ class LoopTestCase: FaketandemIntegrationTestCase {
         control.close()
         loop = try loop.relaunched()
         control = try loop.connectControl()
+        try waitForLoopToTakeReports()
     }
 
     /// Deletes the pump manager as Loop's pump settings screen does, and waits for Loop to have let
@@ -201,13 +219,7 @@ class LoopTestCase: FaketandemIntegrationTestCase {
         control.close()
         loop = try loop.relaunched(files: ["Documents/PumpManagerState.plist": Self.pumpManagerPlist(Self.setupState())])
         control = try loop.connectControl()
-        // The channel listens from the manager's init; the host attaches itself later in its launch.
-        let status = try IntegrationWait.value("Loop to adopt the new manager", timeout: 60) { () -> VirtualPumpControl.Status? in
-            guard let status = try self.control.send(.init(command: .status)).status, status.delegateAttached else {
-                return nil
-            }
-            return status
-        }
+        let status = try waitForLoopToTakeReports()
         XCTAssertFalse(status.onboarded, "the new manager has not paired yet")
     }
 
@@ -231,7 +243,18 @@ class LoopTestCase: FaketandemIntegrationTestCase {
             return condition(batches.flatMap(\.pumpEvents)) && batches.allSatisfy(\.completed) ? batches : nil
         }
         XCTAssertEqual(batches.compactMap(\.delegateError), [], "Loop failed to store a batch")
+        assertDeliveredOnTheMainThread(batches)
         return batches
+    }
+
+    /// Loop next-dev sets no pump delegate queue, and its delegate methods assert main or hop to it.
+    func assertDeliveredOnTheMainThread(
+        _ batches: [VirtualPumpControl.Batch],
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        let elsewhere = batches.filter { !$0.deliveredOnMainThread }.map(\.index)
+        XCTAssertEqual(elsewhere, [], "batches Loop was given off the main thread", file: file, line: line)
     }
 
     /// The driver dates a resume at least a second after its suspend, ahead of Loop's clock inside that
@@ -261,6 +284,7 @@ class LoopTestCase: FaketandemIntegrationTestCase {
             return try self.allBatches() == before ? (before, events, doses) : nil
         }
         XCTAssertEqual(batches.compactMap(\.delegateError), [], "Loop failed to store a batch", file: file, line: line)
+        assertDeliveredOnTheMainThread(batches, file: file, line: line)
 
         let oracle = LoopDoseStoreOracle(basalSchedule: Self.basalSchedule)
         for batch in batches {
@@ -284,8 +308,13 @@ class LoopTestCase: FaketandemIntegrationTestCase {
         return (events.sorted(by: Self.rowOrder), doses.sorted { $0.startDate < $1.startDate }, oracle)
     }
 
+    /// Throws at once, rather than at the caller's timeout, when the driver cannot report to Loop.
     private func allBatches() throws -> [VirtualPumpControl.Batch] {
-        try earlierLaunchesBatches + XCTUnwrap(control.send(.init(command: .pumpEventBatches)).batches)
+        let response = try control.send(.init(command: .pumpEventBatches))
+        if let reason = response.status?.hostCannotBeReportedTo {
+            throw VirtualPumpControl.ControlError("nothing the driver reports reaches Loop: \(reason)")
+        }
+        return try earlierLaunchesBatches + XCTUnwrap(response.batches)
     }
 
     /// Core Data numbers rows saved together, such as a site change and its prime, in no fixed order.

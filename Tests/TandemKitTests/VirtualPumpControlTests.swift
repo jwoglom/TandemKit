@@ -41,7 +41,38 @@ final class VirtualPumpControlTests: XCTestCase {
     func testStatusReportsAnUnpairedManagerWithItsDelegate() throws {
         let status = try client.send(.init(command: .status)).status
 
-        XCTAssertEqual(status, VirtualPumpControl.Status(onboarded: false, connected: false, delegateAttached: true))
+        XCTAssertEqual(
+            status,
+            VirtualPumpControl.Status(onboarded: false, connected: false, delegateAttached: true, reportsToDelegate: true, heldPumpEventBatches: 0)
+        )
+    }
+
+    func testStatusTellsAHostThatHoldsTheDelegateButIsNotReportedTo() throws {
+        let held = TandemPumpManager(state: TandemPumpManagerState(rawValue: [:]), bluetooth: StubPumpBluetooth())
+        held.reportReconciliationBoundary()
+        // Loop next-dev's attachment: a delegate and no queue, read inside the grace before main is adopted.
+        held.pumpManagerDelegate = delegate
+        let server = try VirtualPumpControl.Server { held }
+        let client = try VirtualPumpControl.Client(port: server.port)
+        defer {
+            client.close()
+            server.stop()
+        }
+
+        let status = try XCTUnwrap(client.send(.init(command: .status)).status)
+
+        XCTAssertTrue(status.delegateAttached)
+        XCTAssertFalse(status.reportsToDelegate)
+        XCTAssertEqual(status.heldPumpEventBatches, 1)
+    }
+
+    func testABatchReadsBackWhetherTheHostWasCalledOnTheMainThread() throws {
+        manager.reportReconciliationBoundary()
+        delegateQueue.sync {}
+
+        let batches = try XCTUnwrap(client.send(.init(command: .pumpEventBatches)).batches)
+
+        XCTAssertEqual(batches.last?.deliveredOnMainThread, false, "the test sets its own queue")
     }
 
     func testABatchSentToTheDelegateReadsBackWithItsCompletion() throws {
@@ -201,6 +232,7 @@ final class VirtualPumpControlTests: XCTestCase {
             lastReconciliation: start.addingTimeInterval(899),
             replacePendingEvents: true,
             events: events.map(VirtualPumpControl.Event.init),
+            deliveredOnMainThread: true,
             completed: true,
             delegateError: nil
         )

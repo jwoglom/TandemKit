@@ -74,6 +74,7 @@ enum VirtualPumpControl {
             lastReconciliation: lastReconciliation,
             replacePendingEvents: replacePendingEvents,
             events: events.map(Event.init),
+            deliveredOnMainThread: Thread.isMainThread,
             completed: false,
             delegateError: nil
         )
@@ -178,6 +179,23 @@ enum VirtualPumpControl {
         var onboarded: Bool
         var connected: Bool
         var delegateAttached: Bool
+        /// `canNotifyDelegate`: a host can hold the delegate and still get nothing, as Loop next-dev did
+        /// while it set no delegate queue.
+        var reportsToDelegate: Bool
+        /// Batches the driver holds for a host it cannot yet report to.
+        var heldPumpEventBatches: Int
+
+        /// Why nothing the driver reports reaches the host, or nil if it does.
+        var hostCannotBeReportedTo: String? {
+            guard !reportsToDelegate else {
+                return nil
+            }
+            guard delegateAttached else {
+                return "the host has not set itself as the driver's delegate"
+            }
+            return "the host is the driver's delegate but has no delegate queue the driver can report on, " +
+                "holding \(heldPumpEventBatches) batch(es) while the host doses without counting them"
+        }
     }
 
     struct Batch: Codable, Equatable {
@@ -187,6 +205,8 @@ enum VirtualPumpControl {
         var lastReconciliation: Date?
         var replacePendingEvents: Bool
         var events: [Event]
+        /// Where the host was called: Loop next-dev sets no delegate queue and takes its calls on main.
+        var deliveredOnMainThread: Bool
         /// The host called the completion; until then it may still be storing the batch.
         var completed: Bool
         var delegateError: String?
@@ -197,6 +217,7 @@ enum VirtualPumpControl {
             lastReconciliation: Date?,
             replacePendingEvents: Bool,
             events: [Event],
+            deliveredOnMainThread: Bool,
             completed: Bool,
             delegateError: String?
         ) {
@@ -205,6 +226,7 @@ enum VirtualPumpControl {
             self.lastReconciliation = lastReconciliation
             self.replacePendingEvents = replacePendingEvents
             self.events = events
+            self.deliveredOnMainThread = deliveredOnMainThread
             self.completed = completed
             self.delegateError = delegateError
         }
@@ -367,7 +389,9 @@ enum VirtualPumpControl {
             response.status = Status(
                 onboarded: manager.isOnboarded,
                 connected: manager.state.isConnected,
-                delegateAttached: manager.pumpManagerDelegate != nil
+                delegateAttached: manager.pumpManagerDelegate != nil,
+                reportsToDelegate: manager.canNotifyDelegate,
+                heldPumpEventBatches: manager.heldPumpEventBatchCount
             )
             return response
         }

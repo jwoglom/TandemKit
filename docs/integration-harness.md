@@ -269,7 +269,7 @@ which `TandemKitTests` compiles because both test targets use it.
 
 ## Trio in the simulator
 
-`TrioIntegrationTests` run Trio itself, built from `nightscout/Trio` `feat/tandem-closed-beta` (`-next-dev` when the TandemKit branch name contains `next-dev`; on a
+`TrioIntegrationTests` run Trio itself, built from `nightscout/Trio` `feat/tandem-closed-beta` (`-next-dev` when the TandemKit branch, or the branch a pull request targets, names `next-dev`; on a
 manual run, `trio_ref` on `trio_repository`; every job builds against the LoopKit submodule of either of the last two)
 with this TandemKit as its submodule and `VirtualPump.xcconfig` applied to the whole build, so Trio's
 own `DeviceDataManager` and pump history take the driver's reports instead of `TrioDoseStoreOracle`.
@@ -392,6 +392,16 @@ suspend, ahead of Loop's clock inside that second, and `DoseStore` caches no fin
 ends ahead of its clock, so a suspend resumed sooner stays open in `CachedInsulinDeliveryObject`
 until the next batch that is not empty. The other waits in Trio's scenarios are for its own
 same-second ordering, which Loop does not have.
+
+Every scenario first waits for the driver to report to Loop, not only for Loop to hold it as its
+delegate: Loop next-dev set its delegate and no delegate queue, and the driver held every report
+while doses still reached the pump (#637), which `delegateAttached` alone never showed.
+`reportsToDelegate` and `heldPumpEventBatches` in the channel's status say so, a wait for Loop's
+store fails on them at once rather than at its timeout, and every batch Loop was given must have
+reached it on the main thread, where Loop next-dev takes its pump calls. `LoopReportingTests` pin the
+contract on its own: reports from launch, and a running bolus in Loop's store well inside a loop
+cycle. `TrioIntegrationTests` wait for adoption the same way, without the main-thread check, since
+Trio sets its own queue.
 
 `LoopPumpDeletionTests` are `TrioPumpDeletionTests`' twins: deleting the pump manager, connected and
 after a refused code, then pairing a new one Loop restores from a seeded `PumpManagerState.plist` at

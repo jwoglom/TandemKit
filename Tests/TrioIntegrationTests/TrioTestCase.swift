@@ -73,6 +73,22 @@ class TrioTestCase: FaketandemIntegrationTestCase {
         try beforeLaunch()
         trio = try TrioApp.launchNew(name: name, files: seededFiles(), arguments: launchArguments)
         control = try trio.connectControl()
+        try waitForTrioToTakeReports()
+    }
+
+    /// The control channel listens from the manager's init, and Trio attaches itself later in its
+    /// launch, setting its delegate queue right after the delegate.
+    @discardableResult
+    func waitForTrioToTakeReports(timeout: TimeInterval = 60) throws -> VirtualPumpControl.Status {
+        var last: VirtualPumpControl.Status?
+        do {
+            return try IntegrationWait.value("Trio to adopt the driver", timeout: timeout) { () -> VirtualPumpControl.Status? in
+                last = try self.control.send(.init(command: .status)).status
+                return last.flatMap { $0.reportsToDelegate ? $0 : nil }
+            }
+        } catch is IntegrationWaitTimeout {
+            throw VirtualPumpControl.ControlError("Trio never adopted the driver: \(last?.hostCannotBeReportedTo ?? "no status")")
+        }
     }
 
     override func tearDownWithError() throws {
@@ -132,6 +148,7 @@ class TrioTestCase: FaketandemIntegrationTestCase {
         let paired = try control.send(request)
         XCTAssertEqual(paired.status?.onboarded, true)
         XCTAssertEqual(paired.status?.delegateAttached, true, "Trio's DeviceDataManager must be the driver's delegate")
+        XCTAssertNil(paired.status?.hostCannotBeReportedTo)
         if thenSync {
             try control.send(.init(command: .sync))
         }
@@ -168,6 +185,7 @@ class TrioTestCase: FaketandemIntegrationTestCase {
         control.close()
         trio = try trio.relaunched()
         control = try trio.connectControl()
+        try waitForTrioToTakeReports()
     }
 
     /// Deletes the pump manager as Trio's pump settings screen does, and waits for Trio to have let
@@ -186,13 +204,7 @@ class TrioTestCase: FaketandemIntegrationTestCase {
         control.close()
         trio = try trio.relaunched(files: ["Documents/PumpManagerState.plist": Self.pumpManagerPlist(Self.setupState())])
         control = try trio.connectControl()
-        // The channel listens from the manager's init; the host attaches itself later in its launch.
-        let status = try IntegrationWait.value("Trio to adopt the new manager", timeout: 60) { () -> VirtualPumpControl.Status? in
-            guard let status = try self.control.send(.init(command: .status)).status, status.delegateAttached else {
-                return nil
-            }
-            return status
-        }
+        let status = try waitForTrioToTakeReports()
         XCTAssertFalse(status.onboarded, "the new manager has not paired yet")
     }
 
@@ -261,8 +273,13 @@ class TrioTestCase: FaketandemIntegrationTestCase {
         return (stored, oracle)
     }
 
+    /// Throws at once, rather than at the caller's timeout, when the driver cannot report to Trio.
     private func allBatches() throws -> [VirtualPumpControl.Batch] {
-        try earlierLaunchesBatches + XCTUnwrap(control.send(.init(command: .pumpEventBatches)).batches)
+        let response = try control.send(.init(command: .pumpEventBatches))
+        if let reason = response.status?.hostCannotBeReportedTo {
+            throw VirtualPumpControl.ControlError("nothing the driver reports reaches Trio: \(reason)")
+        }
+        return try earlierLaunchesBatches + XCTUnwrap(response.batches)
     }
 
     /// Trio fetches rows at one timestamp, such as a site change and its prime, in no fixed order.
