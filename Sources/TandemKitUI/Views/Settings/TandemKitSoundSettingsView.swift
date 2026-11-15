@@ -10,15 +10,12 @@ struct TandemKitSoundSettingsView: View {
     @State var isEditingAlarmAnnun: Bool = false
     @State var isEditingAlertAnnun: Bool = false
 
-    private let soundValueRange = [0, 1, 2, 3]
+    private let soundValueRange = [2, 3]
     private func soundSettingFormatter(_ value: Int) -> String {
         switch value {
-        case 0:
-            return String(localized: "Beep (high)", comment: "sound setting audioHigh")
-        case 1:
-            return String(localized: "Beep (medium)", comment: "sound setting audioMedium")
-        case 2:
-            return String(localized: "Beep (low)", comment: "sound setting audioLow")
+        // A pump set to a louder beep on its own screen keeps that level until another is picked here.
+        case 0, 1, 2:
+            return String(localized: "Beep", comment: "sound setting audioLow")
         case 3:
             return String(localized: "Vibrate", comment: "sound setting vibrate")
         default:
