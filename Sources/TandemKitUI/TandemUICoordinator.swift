@@ -298,7 +298,7 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
             let viewModel = TandemKitCGMSettingsViewModel(pumpManager: pumpManager)
             return hostingController(
                 rootView: TandemKitCGMSettingsView(viewModel: viewModel),
-                title: String(localized: "CGM Settings", comment: "Label for CGM settings")
+                title: String(localized: "Mobi CGM settings", comment: "Title for Mobi CGM settings screen")
             )
 
         case .controlIQSettings:

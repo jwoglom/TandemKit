@@ -60,11 +60,11 @@ enum ControlIQEnablePrompt: String, Identifiable {
                     comment: "Title for alert blocking the switch to Control-IQ when no CGM is connected"
                 ),
                 message: Text(
-                    "Control-IQ needs a CGM connected to your pump to work. No active CGM sensor session was found on your pump, so switching to Control-IQ has been blocked.\n\nStart a CGM sensor from CGM Settings, then try switching again.",
+                    "Control-IQ needs a CGM connected to your pump to work. No active CGM sensor session was found on your pump, so switching to Control-IQ has been blocked.\n\nStart a CGM sensor from Mobi CGM settings, then try switching again.",
                     comment: "Message for alert blocking the switch to Control-IQ when no CGM is connected"
                 ),
                 primaryButton: .default(
-                    Text("CGM Settings", comment: "Button to open CGM settings from the no-CGM Control-IQ alert"),
+                    Text("Mobi CGM settings", comment: "Button to open Mobi CGM settings from the no-CGM Control-IQ alert"),
                     action: openCgmSettings
                 ),
                 secondaryButton: .cancel(Text("OK", comment: "Button to dismiss an alert"))

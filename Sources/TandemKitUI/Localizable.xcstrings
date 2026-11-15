@@ -1151,13 +1151,13 @@
         }
       }
     },
-    "CGM Settings" : {
-      "comment" : "Label for CGM settings",
+    "Mobi CGM settings" : {
+      "comment" : "Label for Mobi CGM settings",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "CGM Settings"
+            "value" : "Mobi CGM settings"
           }
         }
       }
@@ -1438,7 +1438,7 @@
         }
       }
     },
-    "Control-IQ needs a CGM connected to your pump to work. No active CGM sensor session was found on your pump, so switching to Control-IQ has been blocked.\n\nStart a CGM sensor from CGM Settings, then try switching again." : {
+    "Control-IQ needs a CGM connected to your pump to work. No active CGM sensor session was found on your pump, so switching to Control-IQ has been blocked.\n\nStart a CGM sensor from Mobi CGM settings, then try switching again." : {
 
     },
     "Control-IQ needs a total daily insulin of at least %@ units." : {
@@ -1519,13 +1519,13 @@
     "Control-IQ uses your weight and total daily insulin to dose. Your care team can help you confirm these values." : {
 
     },
-    "Control-IQ was enabled but no CGM is connected to the pump.\n\nUntil a CGM sensor is connected, your configured profile rates will be used. To connect a sensor, go to CGM Settings below." : {
+    "Control-IQ was enabled but no CGM is connected to the pump.\n\nUntil a CGM sensor is connected, your configured profile rates will be used. To connect a sensor, go to Mobi CGM settings below." : {
       "comment" : "Message for no CGM connected warning after enabling Control-IQ",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Control-IQ was enabled but no CGM is connected to the pump.\n\nUntil a CGM sensor is connected, your configured profile rates will be used. To connect a sensor, go to CGM Settings below."
+            "value" : "Control-IQ was enabled but no CGM is connected to the pump.\n\nUntil a CGM sensor is connected, your configured profile rates will be used. To connect a sensor, go to Mobi CGM settings below."
           }
         }
       }
@@ -2079,6 +2079,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Enter pairing code"
+          }
+        }
+      }
+    },
+    "These CGM options are used only by the Mobi pump when Control-IQ is active." : {
+      "comment" : "Warning at the top of the Mobi CGM settings screen",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "These CGM options are used only by the Mobi pump when Control-IQ is active."
           }
         }
       }
