@@ -17,7 +17,9 @@ import XCTest
 /// `CachedInsulinDeliveryObject+CoreDataClass.swift` (CIDO), `HKQuantitySample+InsulinKit.swift` (HKQS),
 /// `InsulinMath.swift` (IM), `LoopKit/LoopKit/Persistence/Model.xcdatamodeld/Model.xcdatamodel/contents`
 /// (Model) and `PersistenceController.swift` (PC), in the Trio workspace's `LoopKit` submodule when
-/// written. Upstream LoopKit, which Loop builds, has the same code in each.
+/// written. Upstream LoopKit, which Loop builds, has the same code in each. The save to the IDS
+/// follows LoopKit `next-dev` (`b6db6e18`), which Loop `next-dev` builds and Trio's fork now tracks;
+/// its references are marked `next-dev`.
 ///
 /// What is deliberately not modelled, and why:
 /// - The basal-schedule overlay (DS:992-999), unless `basalSchedule` is given. For a pump that does
@@ -127,9 +129,11 @@ final class LoopDoseStoreOracle: DoseOracle {
         self.lastReconciliation = lastReconciliation
         reconciliationHistory.append(lastReconciliation)
 
-        // DS:682-685 — an empty batch changes nothing else. (The guide's §8 says an empty call
-        // re-resolves the InsulinDeliveryStore; the fork's code returns here before it does.)
-        guard !events.isEmpty else { return }
+        // next-dev DS:626-629 — an empty batch stores no rows but still re-saves to the IDS.
+        guard !events.isEmpty else {
+            syncPumpEventsToInsulinDeliveryStore(now: now)
+            return
+        }
 
         // DS:704-706 — replacePendingEvents purges every mutable PumpEvent row first.
         if replacePendingEvents {
@@ -186,11 +190,15 @@ final class LoopDoseStoreOracle: DoseOracle {
     /// Every non-empty `addPumpEvents`, from whichever pump manager, runs it, as does `addDoses`
     /// (DS:857); a test calls it directly for the host's next one.
     func syncPumpEventsToInsulinDeliveryStore(now: Date) {
-        // DS:912-917 — start at the IDS's last immutable basal end date, but no earlier than 24 h ago.
-        let start = max(lastImmutableBasalEndDate, now.addingTimeInterval(-cacheLength))
+        // next-dev DS:840-855 — start at the IDS's last immutable basal end date, or with none at the
+        // oldest pump event, but no earlier than a day ago.
+        let firstEvent = pumpEvents.min { $0.date < $1.date }.map { $0.dose?.startDate ?? $0.date }
+        guard let since = lastImmutableBasalEndDate ?? firstEvent else { return }
+        let start = max(since, now.addingTimeInterval(-cacheLength))
 
-        // DS:968 — nothing is saved without a reconciliation boundary after `start`.
-        guard let endingAt = lastReconciliation, endingAt > start else { return }
+        // next-dev DS:888-894 — nothing is saved without a reconciliation boundary; one before `start`
+        // is only logged.
+        guard let endingAt = lastReconciliation else { return }
 
         // DS:1128-1136 — every basal-type dose since start (minus the reconciliation window, which
         // only matters for the un-modelled reconcile) plus every bolus in the cache window.
@@ -206,47 +214,79 @@ final class LoopDoseStoreOracle: DoseOracle {
             .filter { $0.endDate <= now || $0.isMutable }
             .filter { $0.startDate >= start || $0.type == .bolus }
 
-        // DS:935 — guard doses.count > 0.
-        guard !doses.isEmpty else { return }
-
-        // DS:992-999, then DS:944 —
-        let overlaid = basalSchedule.map { Self.overlaying(doses, with: $0, startingAt: start) } ?? doses
+        // next-dev DS:903-906, then DS:867-870: the overlay can save schedule pieces with no dose.
+        let overlaid = basalSchedule.map { Self.overlaying(doses, with: $0, from: start, to: endingAt) } ?? doses
+        guard !overlaid.isEmpty else { return }
         addDoseEntries(overlaid, resolveMutable: true, now: now)
     }
 
-    /// IM:888-951 `overlayBasalSchedule(_:startingAt:insertingBasalEntries: true)`: the schedule's rate in
-    /// each gap before a basal, temp basal or suspend, from `start`, each piece keyed on its own dates.
-    static func overlaying(_ doses: [DoseEntry], with schedule: BasalRateSchedule, startingAt start: Date) -> [DoseEntry] {
+    /// next-dev IM:273-352 `overlayBasal(_:endDate: end, lastPumpEventsReconciliation: end)` over the
+    /// schedule's rates from `start` to `end` (SettingsStore.getBasalHistory truncates them to the save):
+    /// the schedule's rate in each gap before a basal, temp basal or suspend and after the last one, each
+    /// piece keyed on its start, the piece reaching `end` left mutable.
+    ///
+    /// A suspend that is the last basal dose is stretched to `end` only while no resume has closed it, as
+    /// LoopKit has had since `0cff7afa` (LoopKit/LoopKit#688).
+    static func overlaying(_ doses: [DoseEntry], with schedule: BasalRateSchedule, from start: Date, to end: Date) -> [DoseEntry] {
+        let timeline = scheduledRates(schedule, from: start, to: end)
+            .map { (start: max($0.start, start), end: min($0.end, end), rate: $0.rate) }
+            .filter { $0.end > $0.start }
+        guard let first = timeline.first else { return doses }
+
         let formatter = ISO8601DateFormatter()
         var entries: [DoseEntry] = []
-        var lastBasal = DoseEntry(resumeDate: start, automatic: true)
-        for dose in doses {
-            switch dose.type {
-            case .basal, .tempBasal, .suspend:
-                for scheduled in scheduledRates(schedule, from: lastBasal.endDate, to: dose.startDate) {
-                    let pieceStart = max(lastBasal.endDate, scheduled.start)
-                    let pieceEnd = min(dose.startDate, scheduled.end)
-                    guard pieceEnd.timeIntervalSince(pieceStart) > .ulpOfOne else { continue }
+        var index = timeline.startIndex
+        var lastDate = first.start
+
+        func addBasals(from pieceStart: Date, to pieceEnd: Date) {
+            while lastDate < pieceEnd {
+                let entryEnd: Date
+                let rate = timeline[index].rate
+                if index + 1 < timeline.endIndex, timeline[index + 1].start < pieceEnd {
+                    entryEnd = max(pieceStart, timeline[index + 1].start)
+                    index += 1
+                } else {
+                    entryEnd = pieceEnd
+                }
+                if lastDate != entryEnd {
                     entries.append(DoseEntry(
                         type: .basal,
-                        startDate: pieceStart,
-                        endDate: pieceEnd,
-                        value: scheduled.rate,
+                        startDate: lastDate,
+                        endDate: entryEnd,
+                        value: rate,
                         unit: .unitsPerHour,
                         decisionId: nil,
-                        syncIdentifier: "BasalRateSchedule \(formatter.string(from: pieceStart)) \(formatter.string(from: pieceEnd))",
-                        scheduledBasalRate: LoopQuantity(unit: .internationalUnitsPerHour, doubleValue: scheduled.rate),
-                        insulinType: lastBasal.insulinType,
-                        automatic: lastBasal.automatic
+                        syncIdentifier: "BasalRateSchedule \(formatter.string(from: lastDate))",
+                        scheduledBasalRate: LoopQuantity(unit: .internationalUnitsPerHour, doubleValue: rate),
+                        automatic: nil,
+                        isMutable: entryEnd >= end
                     ))
+                    lastDate = entryEnd
                 }
-                lastBasal = dose
-                entries.append(dose)
+            }
+        }
+
+        for (position, dose) in doses.enumerated() {
+            switch dose.type {
+            case .basal, .tempBasal, .suspend:
+                if dose.startDate > lastDate {
+                    addBasals(from: lastDate, to: dose.startDate)
+                }
+                var placed = dose
+                placed.startDate = lastDate
+                if dose.type == .suspend, dose.isMutable, position + 1 == doses.count, dose.endDate < end {
+                    placed.endDate = end
+                }
+                entries.append(placed)
+                lastDate = placed.endDate
             case .bolus:
                 entries.append(dose)
             case .resume:
                 break
             }
+        }
+        if end > lastDate {
+            addBasals(from: lastDate, to: end)
         }
         return entries
     }
@@ -458,12 +498,12 @@ final class LoopDoseStoreOracle: DoseOracle {
     }
 
     /// `InsulinDeliveryStore.lastImmutableBasalEndDate` (IDS:373-396): the newest end date among live,
-    /// immutable, basal-reason (non-bolus, CIDO:220) doses of LoopKit origin; `.distantPast` if none.
-    private var lastImmutableBasalEndDate: Date {
+    /// immutable, basal-reason (non-bolus, CIDO:220) doses of LoopKit origin; nil if none.
+    private var lastImmutableBasalEndDate: Date? {
         doses
             .filter { !$0.isMutable && $0.dose.type != .bolus }
             .map(\.dose.endDate)
-            .max() ?? .distantPast
+            .max()
     }
 
     // MARK: - InsulinDeliveryStore.addDoseEntries(resolveMutable:) (IDS:412-507)

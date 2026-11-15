@@ -75,10 +75,10 @@ import XCTest
         }
     }
 
-    private func enactTempBasal(unitsPerHour: Double, for duration: TimeInterval = .minutes(30)) -> PumpManagerError? {
+    private func enactTempBasal(unitsPerHour: Double, for duration: TimeInterval = .minutes(30), decisionId: UUID? = nil) -> PumpManagerError? {
         let done = expectation(description: "temp basal completion")
         var error: PumpManagerError?
-        manager.enactTempBasal(decisionId: nil, unitsPerHour: unitsPerHour, for: duration) {
+        manager.enactTempBasal(decisionId: decisionId, unitsPerHour: unitsPerHour, for: duration) {
             error = $0
             done.fulfill()
         }
@@ -122,6 +122,33 @@ import XCTest
         let events = tempBasalEvents
         XCTAssertEqual(events.map(\.dose?.isMutable), [true, false, true])
         XCTAssertEqual(events.map(\.raw), [tempRate(41), tempRate(41), tempRate(42)])
+    }
+
+    func testATempBasalAndItsReplacementEachCarryTheirOwnDecision() {
+        startManager()
+        let first = UUID()
+        let second = UUID()
+        XCTAssertNil(enactTempBasal(unitsPerHour: 1.5, decisionId: first))
+        clock.advance(by: .minutes(7))
+
+        XCTAssertNil(enactTempBasal(unitsPerHour: 1.2, decisionId: second))
+
+        XCTAssertEqual(tempBasalEvents.map(\.dose?.decisionId), [first, first, second])
+    }
+
+    func testEveryPartOfATempBasalCutAtASegmentChangeCarriesItsDecision() {
+        clock.set(at(.hours(14) - .minutes(20)))
+        startManager()
+        let decisionId = UUID()
+        XCTAssertNil(enactTempBasal(unitsPerHour: 1.5, decisionId: decisionId))
+        clock.set(at(.hours(14) + .minutes(3)))
+        manager.fetchBasalStatus()
+        clock.set(at(.hours(14) + .minutes(6)))
+
+        cancelTempBasal()
+
+        XCTAssertEqual(tempBasalEvents.count, 4)
+        XCTAssertEqual(Set(tempBasalEvents.map(\.dose?.decisionId)), [decisionId])
     }
 
     func testWithoutTheSerialATempBasalIsKeyedOnWhatWasProgrammedAndKeepsThatKey() {

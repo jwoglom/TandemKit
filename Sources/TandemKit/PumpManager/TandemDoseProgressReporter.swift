@@ -59,6 +59,7 @@ class TandemDoseProgressReporter: DoseProgressReporter {
                 duration: 0, // Ignored if endDate is available
                 activationType: activationType,
                 insulinType: dose.insulinType,
+                decisionId: dose.decisionId,
                 startDate: deliveryStartDate ?? dose.startDate,
                 endDate: endDate
             ),

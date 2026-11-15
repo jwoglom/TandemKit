@@ -76,7 +76,9 @@ a direct call from a driver queue crashes it, as a backfill tick reading
 `delete()` first takes a turn on the queue, so it follows every batch sent before it.
 
 Nothing goes out until the host has set both the delegate and its queue (`canNotifyDelegate`):
-`pumpDelegate.queue` reads `.main` until then, and Trio sets the delegate first.
+`pumpDelegate.queue` reads `.main` until then, and Trio sets the delegate first. Loop next-dev
+sets no queue and takes its pump calls on `.main`, so a delegate still without a queue
+`unsetDelegateQueueGrace` later is reported to on `.main`.
 `deliverStateMissedByTheDelegate` replays what was held once the second one lands, with the status
 but not `pumpManagerDidUpdateState`: Loop and Trio save `rawValue` on the main thread right after
 attaching, and a second save from their delegate queue races it (Trio's launch hung in a Thread
@@ -269,8 +271,9 @@ host queue, so its state stays behind its lock.
   part, which the pump runs on to its programmed end, is cut at the deletion as a temp basal is: the
   share of its programmed amount up to then under its own `raw`, and the rest a finalized dose of its
   own to its programmed end under a new `raw`.
-- Still open: Loop leaves the remainder out of IOB from a boundary past its end that came with no
-  save (the next pump manager's empty batch) until that manager's next non-empty batch. Across a
+- Still open: Loop next-dev saves on every batch, empty ones included, so the remainder is stored to its
+  programmed end once that passes, before the next manager's history reports how the pump ran it, and
+  a report from that history starting before then is not stored (conformance K5). Across a
   segment change the remainder over-counts wherever the pump runs it below its highest rate; across two
   or more, a later manager's load reports the parts past the first again, which both hosts count too.
 

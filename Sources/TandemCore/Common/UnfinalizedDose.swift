@@ -13,6 +13,8 @@ public class UnfinalizedDose: Equatable {
     public var tempPercent: Int?
     /// The `raw` minted from the pump's `bolusId` or `tempRateId` when the app commanded the dose.
     public var eventRaw: Data?
+    /// A host overwrites its stored dose's decision with each report's, so every report carries this.
+    public var decisionId: UUID?
     public let type: DoseType
     /// When the driver programmed the dose. This is the dose's identity — the date every
     /// `NewPumpEvent` for it carries, which hosts dedupe on — so it never moves.
@@ -35,6 +37,7 @@ public class UnfinalizedDose: Equatable {
             lhs.tempRateId == rhs.tempRateId &&
             lhs.tempPercent == rhs.tempPercent &&
             lhs.eventRaw == rhs.eventRaw &&
+            lhs.decisionId == rhs.decisionId &&
             lhs.type == rhs.type &&
             lhs.startDate == rhs.startDate &&
             lhs.deliveryStartDate == rhs.deliveryStartDate &&
@@ -53,6 +56,7 @@ public class UnfinalizedDose: Equatable {
         activationType: BolusActivationType,
         insulinType: InsulinType?,
         bolusId: Int,
+        decisionId: UUID? = nil,
         now: Date = Date.now
     ) {
         type = .bolus
@@ -63,6 +67,7 @@ public class UnfinalizedDose: Equatable {
         automatic = activationType.isAutomatic
         setByHost = false
         self.bolusId = bolusId
+        self.decisionId = decisionId
     }
 
     public init(basalRate: Double, insulinType: InsulinType?, startDate: Date = Date.now) {
@@ -84,7 +89,8 @@ public class UnfinalizedDose: Equatable {
         startDate: Date = Date.now,
         tempRateId: Int? = nil,
         tempPercent: Int? = nil,
-        eventRaw: Data? = nil
+        eventRaw: Data? = nil,
+        decisionId: UUID? = nil
     ) {
         type = .tempBasal
         value = tempRate
@@ -96,6 +102,7 @@ public class UnfinalizedDose: Equatable {
         self.tempRateId = tempRateId
         self.tempPercent = tempPercent
         self.eventRaw = eventRaw
+        self.decisionId = decisionId
     }
 
     public init(suspendStartTime: Date) {
@@ -197,6 +204,7 @@ public class UnfinalizedDose: Equatable {
         tempRateId = rawValue["tempRateId"] as? Int
         tempPercent = rawValue["tempPercent"] as? Int
         eventRaw = rawValue["eventRaw"] as? Data
+        decisionId = (rawValue["decisionId"] as? String).flatMap(UUID.init(uuidString:))
         isUnconfirmed = rawValue["isUnconfirmed"] as? Bool ?? false
     }
 
@@ -216,6 +224,7 @@ public class UnfinalizedDose: Equatable {
         raw["tempRateId"] = tempRateId
         raw["tempPercent"] = tempPercent
         raw["eventRaw"] = eventRaw
+        raw["decisionId"] = decisionId?.uuidString
         raw["isUnconfirmed"] = isUnconfirmed
 
         return raw
@@ -242,7 +251,7 @@ public class UnfinalizedDose: Equatable {
                 endDate: endDate,
                 value: value,
                 unit: .units,
-                decisionId: nil,
+                decisionId: decisionId,
                 deliveredUnits: isMutable ? nil : deliveredUnits,
                 insulinType: insulinType,
                 automatic: automatic,
@@ -273,7 +282,7 @@ public class UnfinalizedDose: Equatable {
                 endDate: actualEndDate,
                 value: value,
                 unit: .unitsPerHour,
-                decisionId: nil,
+                decisionId: decisionId,
                 deliveredUnits: isMutable ? nil : TandemPumpCapabilities.roundToReportingResolution(value * (duration / .hours(1))),
                 insulinType: insulinType,
                 automatic: automatic,
@@ -307,7 +316,8 @@ public class UnfinalizedDose: Equatable {
             startDate: start,
             tempRateId: tempRateId,
             tempPercent: tempPercent,
-            eventRaw: eventRaw
+            eventRaw: eventRaw,
+            decisionId: decisionId
         )
     }
 
@@ -366,6 +376,7 @@ extension UnfinalizedDose: CustomDebugStringConvertible {
         if let tempRateId { parts.append("tempRateId \(tempRateId)") }
         if let tempPercent { parts.append("tempPercent \(tempPercent)%") }
         if let eventRaw { parts.append("eventRaw \(eventRaw.hexadecimalString)") }
+        if let decisionId { parts.append("decision \(decisionId)") }
         if isUnconfirmed { parts.append("unconfirmed") }
         return parts.joined(separator: ", ")
     }

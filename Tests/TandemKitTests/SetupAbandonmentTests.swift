@@ -30,4 +30,62 @@ import XCTest
         XCTAssertEqual(bluetooth.adoptedCount, 1, "the transport is told, since Bluetooth may have come on first")
         withExtendedLifetime(delegate) {}
     }
+
+    func testAHostThatSetsNoQueueIsReportedToOnTheMainQueue() {
+        let bluetooth = StubPumpBluetooth()
+        let manager = TandemPumpManager(state: TandemPumpManagerState(rawValue: [:]), bluetooth: bluetooth)
+        let delegate = MockPumpManagerDelegate()
+
+        // Loop next-dev's order: a delegate, and no queue.
+        manager.pumpManagerDelegate = delegate
+        waitPastTheQueueGrace()
+
+        XCTAssertTrue(manager.canNotifyDelegate)
+        // Not `=== DispatchQueue.main`: on Linux each read of `.main` is a new wrapper.
+        let ranOnMain = expectation(description: "a block on the delegate queue runs on the main thread")
+        manager.delegateQueue.async {
+            XCTAssertTrue(Thread.isMainThread)
+            ranOnMain.fulfill()
+        }
+        wait(for: [ranOnMain], timeout: 5)
+        XCTAssertEqual(bluetooth.adoptedCount, 1)
+        withExtendedLifetime(delegate) {}
+    }
+
+    func testAQueueSetRightAfterTheDelegateIsKept() {
+        let bluetooth = StubPumpBluetooth()
+        let manager = TandemPumpManager(state: TandemPumpManagerState(rawValue: [:]), bluetooth: bluetooth)
+        let delegate = MockPumpManagerDelegate()
+        let queue = DispatchQueue(label: "setup-abandonment-test")
+
+        manager.pumpManagerDelegate = delegate
+        manager.delegateQueue = queue
+        waitPastTheQueueGrace()
+
+        XCTAssertTrue(manager.delegateQueue === queue)
+        XCTAssertEqual(bluetooth.adoptedCount, 1, "adopted once, when the queue was set")
+        withExtendedLifetime(delegate) {}
+    }
+
+    func testAManagerWhoseDelegateWasClearedIsNotAdoptedOnTheMainQueue() {
+        let bluetooth = StubPumpBluetooth()
+        let manager = TandemPumpManager(state: TandemPumpManagerState(rawValue: [:]), bluetooth: bluetooth)
+        let delegate = MockPumpManagerDelegate()
+
+        manager.pumpManagerDelegate = delegate
+        manager.pumpManagerDelegate = nil
+        waitPastTheQueueGrace()
+
+        XCTAssertFalse(manager.canNotifyDelegate)
+        XCTAssertEqual(bluetooth.adoptedCount, 0)
+        withExtendedLifetime(delegate) {}
+    }
+
+    private func waitPastTheQueueGrace() {
+        let waited = expectation(description: "past the unset delegate queue grace")
+        DispatchQueue.main.asyncAfter(deadline: .now() + TandemPumpManager.unsetDelegateQueueGrace + 0.2) {
+            waited.fulfill()
+        }
+        wait(for: [waited], timeout: TandemPumpManager.unsetDelegateQueueGrace + 5)
+    }
 }

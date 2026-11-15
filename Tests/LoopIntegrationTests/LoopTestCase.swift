@@ -274,7 +274,13 @@ class LoopTestCase: FaketandemIntegrationTestCase {
         assertSamePumpEvents(events, oracle.pumpEvents.map(LoopStoredPumpEvent.init), file: file, line: line)
         let predicted = oracle.cachedDoses.map(LoopCachedDose.init)
         assertSameDoses(doses.filter { !$0.isScheduleFill }, predicted.filter { !$0.isScheduleFill }, file: file, line: line)
-        assertSameScheduleFill(in: doses, predicted.filter(\.isScheduleFill), file: file, line: line)
+        assertSameScheduleFill(
+            in: doses,
+            predicted.filter(\.isScheduleFill),
+            scheduleChanges: try store.basalScheduleChangeDates(),
+            file: file,
+            line: line
+        )
         return (events.sorted(by: Self.rowOrder), doses.sorted { $0.startDate < $1.startDate }, oracle)
     }
 
@@ -341,25 +347,41 @@ class LoopTestCase: FaketandemIntegrationTestCase {
         }
     }
 
-    /// The first piece starts a day before the save, on Loop's clock where the oracle has the driver's,
-    /// so it is compared to a minute. Loop counts a piece at its schedule's rate over whatever it covers.
+    /// Piece for piece in date order. Each starts at the end of the last immutable basal or the first pump
+    /// event, and ends at a dose or the reconciliation boundary, all dates the driver gave, so they agree to
+    /// Core Data's rounding. Loop counts a piece at its schedule's rate over whatever it covers.
+    ///
+    /// Loop also splits its fill wherever its stored basal schedule changed (`getBasalHistory`), which
+    /// the oracle doesn't model. In these tests the only change is the time zone Loop gives its schedules
+    /// at the pump's first status (`setScheduleTimeZone`), at a moment that races the pump's first event
+    /// by milliseconds. A split there is joined back into one piece before comparing. When the change
+    /// falls in the second the piece began, both halves share a key and the later one overwrites the
+    /// earlier, so the piece starts at the change instead.
     private func assertSameScheduleFill(
         in doses: [LoopCachedDose],
         _ predicted: [LoopCachedDose],
+        scheduleChanges: [Date],
         file: StaticString,
         line: UInt
     ) {
-        let stored = doses.filter(\.isScheduleFill).sorted { $0.startDate < $1.startDate }
-        let fill = Self.withoutRepeatsOfTheFirstPiece(stored)
+        let fill = Self.joinedAtScheduleChanges(
+            doses.filter(\.isScheduleFill).sorted { $0.startDate < $1.startDate },
+            scheduleChanges
+        )
         let predicted = predicted.sorted { $0.startDate < $1.startDate }
-        let report = "Loop's schedule fill:\n\(stored.map { "  \($0)" }.joined(separator: "\n"))\noracle predicted:\n\(predicted.map { "  \($0)" }.joined(separator: "\n"))"
+        let report = "Loop's schedule fill:\n\(fill.map { "  \($0)" }.joined(separator: "\n"))\noracle predicted:\n\(predicted.map { "  \($0)" }.joined(separator: "\n"))"
         guard fill.count == predicted.count else {
             return XCTFail("schedule fill counts differ\n\(report)", file: file, line: line)
         }
-        for (index, (actual, expected)) in zip(fill, predicted).enumerated() {
-            XCTAssertEqual(actual.startDate.timeIntervalSince(expected.startDate), 0, accuracy: index == 0 ? 60 : 1e-3, report, file: file, line: line)
+        for (actual, expected) in zip(fill, predicted) {
+            let startsAtAScheduleChange = actual.syncIdentifier == expected.syncIdentifier &&
+                actual.startDate > expected.startDate &&
+                scheduleChanges.contains { abs($0.timeIntervalSince(actual.startDate)) < 1e-3 }
+            if !startsAtAScheduleChange {
+                XCTAssertEqual(actual.startDate.timeIntervalSince(expected.startDate), 0, accuracy: 1e-3, report, file: file, line: line)
+            }
             XCTAssertEqual(actual.endDate.timeIntervalSince(expected.endDate), 0, accuracy: 1e-3, report, file: file, line: line)
-            XCTAssertEqual(actual.isMutable, false, report, file: file, line: line)
+            XCTAssertEqual(actual.isMutable, expected.isMutable, report, file: file, line: line)
             XCTAssertEqual(actual.isDeleted, expected.isDeleted, report, file: file, line: line)
         }
         let reported = doses.filter { !$0.isScheduleFill && !$0.isBolus && !$0.isDeleted }
@@ -370,13 +392,22 @@ class LoopTestCase: FaketandemIntegrationTestCase {
         }
     }
 
-    /// DoseStore overlays a save before InsulinDeliveryStore has stored the last one's, so saves either
-    /// side of a second each write the first piece, keyed on its own day-ago start.
-    private static func withoutRepeatsOfTheFirstPiece(_ fill: [LoopCachedDose]) -> [LoopCachedDose] {
-        guard let first = fill.first else { return fill }
-        return [first] + fill.dropFirst().filter {
-            abs($0.endDate.timeIntervalSince(first.endDate)) > 1e-3 || $0.startDate.timeIntervalSince(first.startDate) > 60
+    /// Joins each live, finished fill piece to the next where both meet at a schedule change.
+    private static func joinedAtScheduleChanges(_ fill: [LoopCachedDose], _ changes: [Date]) -> [LoopCachedDose] {
+        var joined: [LoopCachedDose] = []
+        for piece in fill {
+            if var last = joined.last, !last.isDeleted, !last.isMutable, !piece.isDeleted,
+               abs(last.endDate.timeIntervalSince(piece.startDate)) < 1e-3,
+               changes.contains(where: { abs($0.timeIntervalSince(piece.startDate)) < 1e-3 }) {
+                last.endDate = piece.endDate
+                last.value += piece.value
+                last.isMutable = piece.isMutable
+                joined[joined.count - 1] = last
+            } else {
+                joined.append(piece)
+            }
         }
+        return joined
     }
 
     static func milliunits(_ units: Double) -> Int {
