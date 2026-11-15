@@ -2083,13 +2083,13 @@
         }
       }
     },
-    "Enter Pairing code" : {
-      "comment" : "Enter Pairing code instruction",
+    "Enter device PIN" : {
+      "comment" : "Title of the pump pairing PIN entry screen",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Enter Pairing code"
+            "value" : "Enter device PIN"
           }
         }
       }

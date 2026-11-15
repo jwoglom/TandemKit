@@ -259,7 +259,7 @@ private struct PairingCodePrompt: View {
                 }
             }
             .padding()
-            .navigationTitle(String(localized: "Enter Pairing code", comment: "Enter Pairing code instruction"))
+            .navigationTitle(String(localized: "Enter device PIN", comment: "Title of the pump pairing PIN entry screen"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
