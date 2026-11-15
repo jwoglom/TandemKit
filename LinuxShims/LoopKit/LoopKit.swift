@@ -378,7 +378,7 @@
 
     @available(macOS 13.0, iOS 14.0, *) public struct DoseEntry: TimelineValue, Equatable, Codable {
         public let type: DoseType
-        public let startDate: Date
+        public var startDate: Date
         public var endDate: Date
         // Internal in real LoopKit too — read doses through programmedUnits/unitsPerHour.
         let value: Double
