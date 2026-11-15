@@ -2061,6 +2061,17 @@
         }
       }
     },
+    "These options are only used when the pump's native Control-IQ algorithm is enabled, and separate from %@'s Closed Loop settings." : {
+      "comment" : "Warning at the top of the Control-IQ settings screen, parameter is app name",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "These options are only used when the pump's native Control-IQ algorithm is enabled, and separate from %@'s Closed Loop settings."
+          }
+        }
+      }
+    },
     "Enter device PIN" : {
       "comment" : "Title of the pump pairing PIN entry screen",
       "localizations" : {
