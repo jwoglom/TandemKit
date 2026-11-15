@@ -11,7 +11,7 @@ public class UnfinalizedDose: Equatable {
     public var tempRateId: Int?
     /// The percent of the pump's profile a temp rate the app set runs at.
     public var tempPercent: Int?
-    /// A temp basal's `raw` from the pump's `tempRateId`, minted when it started. See `tempBasalRaw`.
+    /// The `raw` minted from the pump's `bolusId` or `tempRateId` when the app commanded the dose.
     public var eventRaw: Data?
     public let type: DoseType
     /// When the driver programmed the dose. This is the dose's identity — the date every
@@ -24,6 +24,9 @@ public class UnfinalizedDose: Equatable {
     public var deliveredUnits: Double = 0
     public let insulinType: InsulinType?
     public let automatic: Bool
+    /// A temp basal the host set through `enactTempBasal`, as opposed to one set from TandemKit's
+    /// settings or adopted from pump history, which `automatic` alone does not tell apart.
+    public let setByHost: Bool
     /// A bolus whose `InitiateBolus` went unanswered, until the pump says whether it started it.
     public var isUnconfirmed = false
 
@@ -40,6 +43,7 @@ public class UnfinalizedDose: Equatable {
             lhs.deliveredUnits == rhs.deliveredUnits &&
             lhs.insulinType == rhs.insulinType &&
             lhs.automatic == rhs.automatic &&
+            lhs.setByHost == rhs.setByHost &&
             lhs.isUnconfirmed == rhs.isUnconfirmed
     }
 
@@ -57,6 +61,7 @@ public class UnfinalizedDose: Equatable {
         estimatedEndDate = now.addingTimeInterval(duration)
         self.insulinType = insulinType
         automatic = activationType.isAutomatic
+        setByHost = false
         self.bolusId = bolusId
     }
 
@@ -67,12 +72,14 @@ public class UnfinalizedDose: Equatable {
         estimatedEndDate = startDate
         self.insulinType = insulinType
         automatic = false
+        setByHost = false
     }
 
     public init(
         tempRate: Double,
         duration: TimeInterval,
         automatic: Bool,
+        setByHost: Bool = false,
         insulinType: InsulinType?,
         startDate: Date = Date.now,
         tempRateId: Int? = nil,
@@ -85,6 +92,7 @@ public class UnfinalizedDose: Equatable {
         self.insulinType = insulinType
         estimatedEndDate = startDate.addingTimeInterval(duration)
         self.automatic = automatic
+        self.setByHost = setByHost
         self.tempRateId = tempRateId
         self.tempPercent = tempPercent
         self.eventRaw = eventRaw
@@ -96,6 +104,7 @@ public class UnfinalizedDose: Equatable {
         startDate = suspendStartTime
         estimatedEndDate = startDate
         automatic = false // OSAID does not use suspend function
+        setByHost = false
         insulinType = nil
     }
 
@@ -106,6 +115,7 @@ public class UnfinalizedDose: Equatable {
         estimatedEndDate = startDate
         self.insulinType = insulinType
         automatic = false // OSAID does not use resume function
+        setByHost = false
     }
 
     /// The start of insulin delivery: the pump's own if we saw it, else when we programmed the
@@ -173,6 +183,9 @@ public class UnfinalizedDose: Equatable {
             return nil
         }
 
+        // Saved before the flag existed reads as not the host's: a temp taken for the host's may be
+        // replaced without asking.
+        setByHost = rawValue["setByHost"] as? Bool ?? false
         deliveryStartDate = rawValue["deliveryStartDate"] as? Date
 
         if let bolusIdRaw = rawValue["bolusId"] as? Int {
@@ -198,6 +211,7 @@ public class UnfinalizedDose: Equatable {
         raw["deliveredUnits"] = deliveredUnits
         raw["insulinType"] = insulinType?.rawValue
         raw["automatic"] = automatic
+        raw["setByHost"] = setByHost
         raw["bolusId"] = bolusId
         raw["tempRateId"] = tempRateId
         raw["tempPercent"] = tempPercent
@@ -228,6 +242,7 @@ public class UnfinalizedDose: Equatable {
                 endDate: endDate,
                 value: value,
                 unit: .units,
+                decisionId: nil,
                 deliveredUnits: isMutable ? nil : deliveredUnits,
                 insulinType: insulinType,
                 automatic: automatic,
@@ -240,6 +255,7 @@ public class UnfinalizedDose: Equatable {
                 startDate: startDate,
                 value: roundBasalRate(value),
                 unit: .unitsPerHour,
+                decisionId: nil,
                 insulinType: insulinType
             )
 
@@ -257,6 +273,7 @@ public class UnfinalizedDose: Equatable {
                 endDate: actualEndDate,
                 value: value,
                 unit: .unitsPerHour,
+                decisionId: nil,
                 deliveredUnits: isMutable ? nil : TandemPumpCapabilities.roundToReportingResolution(value * (duration / .hours(1))),
                 insulinType: insulinType,
                 automatic: automatic,
@@ -278,6 +295,22 @@ public class UnfinalizedDose: Equatable {
         }
     }
 
+    /// This temp basal at `rate` from `start` to `end`: a part after a segment change, a continuation
+    /// or a remainder. Every re-statement goes through here, so each part keeps the temp's flags.
+    public func tempBasalPart(rate: Double, from start: Date, until end: Date, eventRaw: Data? = nil) -> UnfinalizedDose {
+        UnfinalizedDose(
+            tempRate: rate,
+            duration: end.timeIntervalSince(start),
+            automatic: automatic,
+            setByHost: setByHost,
+            insulinType: insulinType,
+            startDate: start,
+            tempRateId: tempRateId,
+            tempPercent: tempPercent,
+            eventRaw: eventRaw
+        )
+    }
+
     /// The `raw` every report of this temp basal carries, however it ends: hosts key the dose on
     /// it, so finishing it early must not change it.
     public var tempBasalRaw: Data {
@@ -291,7 +324,7 @@ public class UnfinalizedDose: Equatable {
     }
 
     private func roundBasalRate(_ rate: Double) -> Double {
-        TandemPumpCapabilities.supportedBasalRates.last(where: { $0 <= rate }) ?? 0
+        TandemPumpCapabilities.roundToSupportedBasalRate(rate)
     }
 
     public static func defaultBasalDose(
@@ -299,8 +332,9 @@ public class UnfinalizedDose: Equatable {
         insulineType: InsulinType?,
         now: Date = Date()
     ) -> UnfinalizedDose {
-        let startOfDay = Calendar.current.startOfDay(for: now)
-        let nowTimeInterval = now.timeIntervalSince(startOfDay)
+        // The wall clock's time of day, which the time since midnight is not on a DST change's day.
+        let local = now.timeIntervalSince1970 + TimeInterval(TimeZone.current.secondsFromGMT(for: now))
+        let nowTimeInterval = local - (local / 86400).rounded(.down) * 86400
 
         let currentRate = basalSchedule.items.last(where: { $0.startTime < nowTimeInterval })?.value ?? 0
         return UnfinalizedDose(
@@ -308,5 +342,31 @@ public class UnfinalizedDose: Equatable {
             insulinType: insulineType,
             startDate: now
         )
+    }
+}
+
+extension UnfinalizedDose: CustomDebugStringConvertible {
+    public var debugDescription: String {
+        var parts: [String]
+        switch type {
+        case .bolus:
+            parts = ["bolus \(value) U, delivered \(deliveredUnits) U"]
+        case .basal,
+             .tempBasal:
+            parts = ["\(type) \(value) U/hr"]
+        case .resume,
+             .suspend:
+            parts = ["\(type)"]
+        }
+        parts.append(estimatedEndDate == startDate ? "at \(startDate)" : "\(startDate) to \(estimatedEndDate)")
+        if let deliveryStartDate { parts.append("delivery started \(deliveryStartDate)") }
+        if automatic { parts.append("automatic") }
+        if setByHost { parts.append("set by host") }
+        if let bolusId { parts.append("bolusId \(bolusId)") }
+        if let tempRateId { parts.append("tempRateId \(tempRateId)") }
+        if let tempPercent { parts.append("tempPercent \(tempPercent)%") }
+        if let eventRaw { parts.append("eventRaw \(eventRaw.hexadecimalString)") }
+        if isUnconfirmed { parts.append("unconfirmed") }
+        return parts.joined(separator: ", ")
     }
 }

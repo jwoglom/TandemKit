@@ -80,7 +80,7 @@ import XCTest
     private func enactTempBasal(unitsPerHour: Double, for duration: TimeInterval = DeliveryChangeEventIdentityTests.tempDuration) {
         let done = expectation(description: "temp basal completion")
         var error: PumpManagerError?
-        manager.enactTempBasal(unitsPerHour: unitsPerHour, for: duration) {
+        manager.enactTempBasal(decisionId: nil, unitsPerHour: unitsPerHour, for: duration) {
             error = $0
             done.fulfill()
         }
@@ -116,7 +116,7 @@ import XCTest
     }
 
     private static func marker(at date: Date) -> NewPumpEvent {
-        NewPumpEvent.basal(dose: DoseEntry(type: .basal, startDate: date, endDate: date, value: 1, unit: .unitsPerHour, insulinType: .novolog), date: date)
+        NewPumpEvent.basal(dose: DoseEntry(type: .basal, startDate: date, endDate: date, value: 1, unit: .unitsPerHour, decisionId: nil, insulinType: .novolog), date: date)
     }
 
     private static func suspend(at date: Date) -> NewPumpEvent {

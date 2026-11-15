@@ -2,7 +2,7 @@ import Foundation
 import HealthKit
 import LoopKit
 
-public struct TandemPumpManagerState: RawRepresentable, Equatable {
+public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugStringConvertible {
     public typealias RawValue = [String: Any]
 
     public struct BatteryReading: Equatable {
@@ -69,6 +69,11 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
     public var reportedBasal = ReportedBasalLedger(trackingSince: Date())
     /// The last temp basal `raw` minted from the pump's `tempRateId`; see `tempBasalEventRaw`.
     public var lastTempRateEventRaw: Data?
+    /// The last bolus `raw` minted from the pump's `bolusId`; see `bolusEventRaw`.
+    public var lastBolusEventRaw: Data?
+    /// `HistoryLogSyncIdentifier.tempRate` of each temp set from TandemKit's settings, and when; see
+    /// `rememberManualTempRate`.
+    public var manualTempRates: [Data: Date] = [:]
     public var deliveryTransitions = DeliveryTransitionLedger()
     public var bolusState: PumpManagerStatus.BolusState = .noBolus
     public var insulinType: InsulinType?
@@ -91,6 +96,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
     public var lastPumpTimeCheckDate: Date?
     /// The phone's UTC offset in seconds when `currentPumpTime` was decoded.
     public var pumpTimeCheckUTCOffset: Int?
+    /// The last time a clock read found the pump's clock set since the read before it.
+    public var lastPumpClockStep: PumpClockStep?
 
     // Pump global settings
     /// In memory only, not saved with the state, so a relaunch re-reads the pump's settings at its first sync.
@@ -211,6 +218,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
               lhs.bolusReportLedger == rhs.bolusReportLedger,
               lhs.reportedBasal == rhs.reportedBasal,
               lhs.lastTempRateEventRaw == rhs.lastTempRateEventRaw,
+              lhs.lastBolusEventRaw == rhs.lastBolusEventRaw,
+              lhs.manualTempRates == rhs.manualTempRates,
               lhs.deliveryTransitions == rhs.deliveryTransitions,
               lhs.bolusState == rhs.bolusState,
               lhs.insulinType == rhs.insulinType,
@@ -224,6 +233,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
               lhs.currentPumpTime == rhs.currentPumpTime,
               lhs.lastPumpTimeCheckDate == rhs.lastPumpTimeCheckDate,
               lhs.pumpTimeCheckUTCOffset == rhs.pumpTimeCheckUTCOffset,
+              lhs.lastPumpClockStep == rhs.lastPumpClockStep,
               lhs.lastSettingsCheckedAt == rhs.lastSettingsCheckedAt,
               lhs.quickBolusAnnun == rhs.quickBolusAnnun,
               lhs.reminderAnnun == rhs.reminderAnnun,
@@ -318,6 +328,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         currentPumpTime = rawValue["currentPumpTime"] as? Date
         lastPumpTimeCheckDate = rawValue["lastPumpTimeCheckDate"] as? Date
         pumpTimeCheckUTCOffset = rawValue["pumpTimeCheckUTCOffset"] as? Int
+        lastPumpClockStep = (rawValue["lastPumpClockStep"] as? PumpClockStep.RawValue).flatMap(PumpClockStep.init(rawValue:))
 
         if let pumpStateRaw = rawValue["pumpState"] as? PumpState.RawValue {
             pumpState = PumpState(rawValue: pumpStateRaw)
@@ -385,6 +396,12 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
             reportedBasal = ledger
         }
         lastTempRateEventRaw = rawValue["lastTempRateEventRaw"] as? Data
+        lastBolusEventRaw = rawValue["lastBolusEventRaw"] as? Data
+        for entry in rawValue["manualTempRates"] as? [[String: Any]] ?? [] {
+            if let raw = entry["raw"] as? Data, let setAt = entry["setAt"] as? Date {
+                manualTempRates[raw] = setAt
+            }
+        }
 
         if let ledgerRaw = rawValue["deliveryTransitions"] as? DeliveryTransitionLedger.RawValue,
            let ledger = DeliveryTransitionLedger(rawValue: ledgerRaw)
@@ -527,6 +544,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         raw["currentPumpTime"] = currentPumpTime
         raw["lastPumpTimeCheckDate"] = lastPumpTimeCheckDate
         raw["pumpTimeCheckUTCOffset"] = pumpTimeCheckUTCOffset
+        raw["lastPumpClockStep"] = lastPumpClockStep?.rawValue
         raw["quickBolusAnnun"] = quickBolusAnnun?.rawValue
         raw["reminderAnnun"] = reminderAnnun?.rawValue
         raw["alertAnnun"] = alertAnnun?.rawValue
@@ -606,6 +624,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         raw["bolusReportLedger"] = bolusReportLedger.rawValue
         raw["reportedBasal"] = reportedBasal.rawValue
         raw["lastTempRateEventRaw"] = lastTempRateEventRaw
+        raw["lastBolusEventRaw"] = lastBolusEventRaw
+        raw["manualTempRates"] = manualTempRates.map { ["raw": $0.key, "setAt": $0.value] }
         raw["deliveryTransitions"] = deliveryTransitions.rawValue
 
         if let encodedBolusState = TandemPumpManagerState.encodeBolusState(bolusState) {
@@ -634,12 +654,24 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         return currentPumpTime.timeIntervalSince(lastPumpTimeCheckDate) + TimeInterval(zoneChange)
     }
 
+    /// Seconds from a phone instant's Unix time to the pump's wall clock read as UTC. The pump's
+    /// clock observes no DST, so this moves only when the pump's clock is set.
+    public var pumpWallClockShift: TimeInterval {
+        pumpClockOffset + TimeInterval(TimeZone.current.secondsFromGMT())
+    }
+
+    /// Past this the settings screen shows its time-change notice; nothing else acts on it.
+    public static let pumpClockSmallSkewThreshold: TimeInterval = .minutes(1)
+
     /// Past this the pump's segments sit a host loop cycle or more from the host's, so temp basals
     /// are worked out against the pump's own and the user is told to sync its clock.
     public static let pumpClockSkewThreshold: TimeInterval = .minutes(5)
 
     /// Past this the clocks differ by more than any time zone or DST change can explain.
     public static let pumpClockOffsetTrustLimit: TimeInterval = .hours(24)
+
+    /// A move of the pump's clock smaller than this between two reads is the reads' own noise.
+    public static let pumpClockStepThreshold: TimeInterval = .minutes(1)
 
     public static func trustsPumpClockOffset(_ offset: TimeInterval) -> Bool {
         abs(offset) <= pumpClockOffsetTrustLimit
@@ -668,73 +700,102 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
     }
 
     public var showPumpTimeSyncWarning: Bool {
-        // Allow 10s time drift
-        abs(pumpClockOffset) > .seconds(10)
+        abs(pumpClockOffset) > Self.pumpClockSmallSkewThreshold
     }
 
     public var debugDescription: String {
-        [
-            "### TandemPumpManagerState",
-            "* onboarded: \(onboarded)",
-            "* pumpState: \(String(describing: pumpState.debugDescription))",
-            "* lastReconciliation: \(String(describing: lastReconciliation))",
-            "* settings: \(settings)",
+        var lines = ["### TandemPumpManagerState", "* onboarded: \(onboarded)"]
+        lines += debugSection("pumpState", pumpState.debugFields)
+        lines += [
+            "* isConnected: \(isConnected)",
+            "* lastReconciliation: \(debugValue(lastReconciliation))"
+        ]
+        lines += debugSection("settings", [
+            "* maxBolus: \(debugValue(settings.maxBolus.map { "\($0) U" }))",
+            "* maxTempBasalRate: \(debugValue(settings.maxTempBasalRate.map { "\($0) U/hr" }))",
+            "* maxBasalScheduleEntry: \(debugValue(settings.maxBasalScheduleEntry.map { "\($0) U/hr" }))"
+        ])
+        lines += [
             "* featureFlags: \(featureFlags)",
-            "* latestInsulinOnBoard: \(String(describing: latestInsulinOnBoard))",
-            "* pumpInsulinDuration: \(String(describing: pumpInsulinDuration))",
-            "* lastReservoirReading: \(String(describing: lastReservoirReading))",
+            "* latestInsulinOnBoard: \(debugValue(latestInsulinOnBoard.map { "\($0) U" }))",
+            "* pumpInsulinDuration: \(debugValue(pumpInsulinDuration.map(\.debugDescription)))",
+            "* lastReservoirReading: \(debugValue(lastReservoirReading.map { "\($0.unitVolume) U at \($0.startDate)" }))",
             "* lastReservoirReadingNeedsReport: \(lastReservoirReadingNeedsReport)",
-            "* lastBatteryReading: \(String(describing: lastBatteryReading))",
-            "* lastBasalStatusDate: \(String(describing: lastBasalStatusDate))",
-            "* historyBackfill: \(String(describing: historyBackfill))",
-            "* bolusReportLedger: \(bolusReportLedger)",
-            "* reportedBasal: \(reportedBasal.rows.count) row(s) since \(reportedBasal.trackingSince)",
-            "* lastTempRateEventRaw: \(lastTempRateEventRaw?.hexadecimalString ?? "nil")",
-            "* deliveryTransitions: \(deliveryTransitions)",
+            "* lastBatteryReading: \(debugValue(lastBatteryReading.map(\.debugDescription)))",
+            "* lastBasalStatusDate: \(debugValue(lastBasalStatusDate))",
+            "* basalRateMismatchDetectedAt: \(debugValue(basalRateMismatchDetectedAt))",
+            "* basalProfileUpdateFailed: \(basalProfileUpdateFailed)"
+        ]
+        if let historyBackfill {
+            lines += debugSection("historyBackfill", [
+                "* pumpSerial: \(historyBackfill.pumpSerial)",
+                "* watermark: \(debugValue(historyBackfill.watermark))",
+                "* firstSeenFloor: \(debugValue(historyBackfill.firstSeenFloor))"
+            ])
+        } else {
+            lines.append("* historyBackfill: nil")
+        }
+        lines += debugSection("bolusReportLedger", bolusReportLedger.debugFields)
+        lines += debugSection("reportedBasal", reportedBasal.debugFields)
+        lines.append("* lastTempRateEventRaw: \(lastTempRateEventRaw?.hexadecimalString ?? "nil")")
+        lines.append("* lastBolusEventRaw: \(lastBolusEventRaw?.hexadecimalString ?? "nil")")
+        lines.append("* manualTempRates: \(manualTempRates.map { "\($0.key.hexadecimalString) at \($0.value)" }.sorted())")
+        lines += debugSection("deliveryTransitions", deliveryTransitions.debugFields)
+        lines += [
             "* bolusState: \(bolusState)",
-            "* basalRateSchedule: \(String(describing: basalRateSchedule))",
+            "* insulinType: \(debugValue(insulinType))",
+            "* bolusDose: \(debugValue(bolusDose?.debugDescription))",
+            "* pendingBolusFinalization: \(debugValue(pendingBolusFinalization?.debugDescription))",
+            "* basalDose: \(basalDose.debugDescription)",
+            "* basalRateSchedule: \(basalRateScheduleDebugSummary)",
+            "* hasSyncedBasalRateSchedule: \(hasSyncedBasalRateSchedule)",
             "* autoAcknowledgeBasalAlerts: \(autoAcknowledgeBasalAlerts)",
             "* useSilentTones: \(useSilentTones)",
-            "* currentPumpTime: \(String(describing: currentPumpTime))",
-            "* lastPumpTimeCheckDate: \(String(describing: lastPumpTimeCheckDate))",
-            "* pumpTimeCheckUTCOffset: \(String(describing: pumpTimeCheckUTCOffset))",
-            "* quickBolusAnnun: \(String(describing: quickBolusAnnun))",
-            "* reminderAnnun: \(String(describing: reminderAnnun))",
-            "* alertAnnun: \(String(describing: alertAnnun))",
-            "* alarmAnnun: \(String(describing: alarmAnnun))",
-            "* generalAnnun: \(String(describing: generalAnnun))",
+            "* currentPumpTime: \(debugValue(currentPumpTime))",
+            "* lastPumpTimeCheckDate: \(debugValue(lastPumpTimeCheckDate))",
+            "* pumpTimeCheckUTCOffset: \(debugValue(pumpTimeCheckUTCOffset.map { "\($0) s" }))",
+            "* lastPumpClockStep: \(debugValue(lastPumpClockStep.map { "\($0.by) s, found \($0.foundAt)" }))",
+            "* lastSettingsCheckedAt: \(debugValue(lastSettingsCheckedAt))",
+            "* quickBolusAnnun: \(debugValue(quickBolusAnnun))",
+            "* reminderAnnun: \(debugValue(reminderAnnun))",
+            "* alertAnnun: \(debugValue(alertAnnun))",
+            "* alarmAnnun: \(debugValue(alarmAnnun))",
+            "* generalAnnun: \(debugValue(generalAnnun))",
             "* pumpSoundsAwaitingWrite: \(pumpSoundsAwaitingWrite)",
+            "* quickBolusEnabled: \(debugValue(quickBolusEnabled))",
+            "* quickBolusEntryType: \(debugValue(quickBolusEntryType))",
+            "* quickBolusIncrementUnits: \(debugValue(quickBolusIncrementUnits))",
+            "* quickBolusIncrementCarbs: \(debugValue(quickBolusIncrementCarbs))",
+            "* quickBolusStatus: \(debugValue(quickBolusStatus))",
+            "* maxBasalLimitMilliunits: \(debugValue(maxBasalLimitMilliunits))",
+            "* maxBasalLimitDefaultMilliunits: \(debugValue(maxBasalLimitDefaultMilliunits))",
+            "* maxBolusLimitMilliunits: \(debugValue(maxBolusLimitMilliunits))",
+            "* maxBolusLimitDefaultMilliunits: \(debugValue(maxBolusLimitDefaultMilliunits))",
             "* useControlIQ: \(useControlIQ)",
-            "* controlIQEndedAt: \(String(describing: controlIQEndedAt))",
-            "* hasSyncedBasalRateSchedule: \(hasSyncedBasalRateSchedule)",
-            "* basalRateMismatchDetectedAt: \(String(describing: basalRateMismatchDetectedAt))",
-            "* basalProfileUpdateFailed: \(basalProfileUpdateFailed)",
+            "* controlIQEndedAt: \(debugValue(controlIQEndedAt))",
             "* pendingEnableClosedLoop: \(pendingEnableClosedLoop)",
-            "* controlIQEnabled: \(String(describing: controlIQEnabled))",
-            "* controlIQUserMode: \(String(describing: controlIQUserMode))",
-            "* controlIQWeightLbs: \(String(describing: controlIQWeightLbs))",
-            "* controlIQWeightUnit: \(String(describing: controlIQWeightUnit))",
-            "* controlIQTotalDailyInsulin: \(String(describing: controlIQTotalDailyInsulin))",
-            "* lastControlIQUpdate: \(String(describing: lastControlIQUpdate))",
-            "* cgmSessionState: \(String(describing: cgmSessionState))",
-            "* lastCGMStatusUpdate: \(String(describing: lastCGMStatusUpdate))",
-            "* notificationCount: \(String(describing: notificationCount))",
-            "* lastNotificationUpdate: \(String(describing: lastNotificationUpdate))",
+            "* controlIQEnabled: \(debugValue(controlIQEnabled))",
+            "* controlIQUserMode: \(debugValue(controlIQUserMode))",
+            "* controlIQWeightLbs: \(debugValue(controlIQWeightLbs))",
+            "* controlIQWeightUnit: \(debugValue(controlIQWeightUnit))",
+            "* controlIQTotalDailyInsulin: \(debugValue(controlIQTotalDailyInsulin))",
+            "* lastControlIQUpdate: \(debugValue(lastControlIQUpdate))",
+            "* cgmSessionState: \(debugValue(cgmSessionState))",
+            "* lastCGMStatusUpdate: \(debugValue(lastCGMStatusUpdate))",
+            "* alertSnoozeEnabled: \(alertSnoozeEnabled)",
+            "* alertSnoozeDuration: \(alertSnoozeDuration) s",
+            "* notificationCount: \(debugValue(notificationCount))",
+            "* lastNotificationUpdate: \(debugValue(lastNotificationUpdate))",
             "* issuedAlertIdentifiers: \(issuedAlertIdentifiers.sorted())",
             "* pumpClockSkewAlertIssued: \(pumpClockSkewAlertIssued)",
             "* reportedPumpAlarmIdentifiers: \(reportedPumpAlarmIdentifiers.sorted())",
             "* forwardCGMAlerts: \(forwardCGMAlerts)",
-            "* lastSiteChangeDate: \(String(describing: lastSiteChangeDate))",
-            "* lastCartridgeChangeDate: \(String(describing: lastCartridgeChangeDate))",
-            "* lastCannulaFillAmount: \(String(describing: lastCannulaFillAmount))",
-            "* lastPumpSerial: \(String(describing: lastPumpSerial))",
-            "* quickBolusEnabled: \(String(describing: quickBolusEnabled))",
-            "* quickBolusEntryType: \(String(describing: quickBolusEntryType))",
-            "* quickBolusIncrementUnits: \(String(describing: quickBolusIncrementUnits))",
-            "* quickBolusIncrementCarbs: \(String(describing: quickBolusIncrementCarbs))",
-            "* maxBasalLimitMilliunits: \(String(describing: maxBasalLimitMilliunits))",
-            "* maxBolusLimitMilliunits: \(String(describing: maxBolusLimitMilliunits))"
-        ].joined(separator: "\n")
+            "* lastSiteChangeDate: \(debugValue(lastSiteChangeDate))",
+            "* lastCartridgeChangeDate: \(debugValue(lastCartridgeChangeDate))",
+            "* lastCannulaFillAmount: \(debugValue(lastCannulaFillAmount.map { "\($0) U" }))",
+            "* lastPumpSerial: \(debugValue(lastPumpSerial))"
+        ]
+        return lines.joined(separator: "\n")
     }
 
     public var basalDeliveryState: PumpManagerStatus.BasalDeliveryState {
@@ -831,6 +892,8 @@ private extension TandemPumpManagerState {
             raw["date"] = date.timeIntervalSinceReferenceDate
         case .resuming:
             raw["case"] = "resuming"
+        case .pumpInoperable:
+            raw["case"] = "pumpInoperable"
         }
 
         return raw
@@ -864,6 +927,8 @@ private extension TandemPumpManagerState {
             }
         case "resuming":
             return .resuming
+        case "pumpInoperable":
+            return .pumpInoperable
         default:
             return nil
         }
@@ -953,5 +1018,149 @@ private extension TandemPumpManagerState {
 
         let timeZone = TimeZone(identifier: timeZoneIdentifier) ?? .current
         return BasalRateSchedule(dailyItems: items, timeZone: timeZone)
+    }
+}
+
+// MARK: - Debug description
+
+/// `String(describing:)` without the `Optional(...)` around a value that is present.
+func debugValue<T>(_ value: T?) -> String {
+    value.map { String(describing: $0) } ?? "nil"
+}
+
+func debugSection(_ name: String, _ fields: [String]) -> [String] {
+    ["* \(name):"] + fields.map { "  " + $0 }
+}
+
+/// Ledgers keep a day or more of rows, so a description lists only the latest and the open ones.
+private let debugRecentRowCount = 5
+
+private func debugRecentAndOpen<T>(_ rows: [T], isOpen: (T) -> Bool) -> [T] {
+    rows.enumerated().filter { $0.offset >= rows.count - debugRecentRowCount || isOpen($0.element) }.map { $0.element }
+}
+
+extension TandemPumpManagerState.BatteryReading: CustomDebugStringConvertible {
+    public var debugDescription: String {
+        "\(Int((chargeRemaining * 100).rounded()))% at \(date)\(isCharging ? ", charging" : "")"
+    }
+}
+
+extension PumpInsulinDuration: CustomDebugStringConvertible {
+    public var debugDescription: String {
+        var description = "\(current / 3600) h"
+        if let replaced, let replacedAt {
+            description += ", replaced \(replaced / 3600) h at \(replacedAt)"
+        }
+        return description
+    }
+}
+
+extension TandemPumpManagerState {
+    fileprivate var basalRateScheduleDebugSummary: String {
+        let items = basalRateSchedule.items.map { item in
+            let minutes = Int(item.startTime / 60)
+            return String(format: "%02d:%02d", minutes / 60, minutes % 60) + " \(item.value) U/hr"
+        }
+        return items.joined(separator: ", ") + " (\(basalRateSchedule.timeZone.identifier))"
+    }
+}
+
+extension BolusReportLedger {
+    var debugFields: [String] {
+        let unfinalizedCount = entries.filter { !$0.isFinalized }.count
+        var fields = [
+            "* trackingSince: \(trackingSince)",
+            entries.isEmpty
+                ? "* entries: none"
+                : "* entries: \(entries.count), \(unfinalizedCount) unfinalized; the last \(debugRecentRowCount) and any unfinalized:"
+        ]
+        fields += debugRecentAndOpen(entries) { !$0.isFinalized }.map { entry in
+            var line = "  * bolusId \(entry.bolusId): \(entry.units.map { "\($0) U" } ?? "amount unknown") at \(entry.eventDate)"
+            line += ", \(entry.origin) \(entry.part)"
+            if entry.automatic { line += ", automatic" }
+            if let programmedEndDate = entry.programmedEndDate { line += ", programmed end \(programmedEndDate)" }
+            return line + (entry.isFinalized ? ", finalized" : ", unfinalized")
+        }
+        fields.append(unreported.isEmpty ? "* unreported: none" : "* unreported:")
+        fields += unreported.map {
+            "  * bolusId \($0.bolusId) started \($0.startDate), holds the boundary at \($0.holdsBoundaryAt)"
+        }
+        return fields
+    }
+}
+
+extension ReportedBasalLedger {
+    var debugFields: [String] {
+        let mutableCount = rows.filter(\.isMutable).count
+        var fields = [
+            "* trackingSince: \(trackingSince)",
+            "* pumpSerial: \(debugValue(pumpSerial))",
+            "* reconciledThrough: \(debugValue(reconciledThrough))",
+            rows.isEmpty
+                ? "* rows: none"
+                : "* rows: \(rows.count), \(mutableCount) mutable; the last \(debugRecentRowCount) and any mutable:"
+        ]
+        fields += debugRecentAndOpen(rows) { $0.isMutable }.map { row in
+            var line = "  * \(row.kind)"
+            if row.kind == .tempBasal || row.kind == .basal { line += " \(row.rate) U/hr" }
+            line += row.end == row.date ? " at \(row.date)" : " \(row.date) to \(row.end)"
+            if let tempRateId = row.tempRateId { line += ", tempRateId \(tempRateId)" }
+            return line + (row.isMutable ? ", mutable" : "")
+        }
+        return fields
+    }
+}
+
+extension DeliveryTransitionLedger {
+    var debugFields: [String] {
+        var fields = [
+            "* pumpSerial: \(debugValue(pumpSerial))",
+            "* trackedAfter: \(debugValue(trackedAfter))",
+            entries.isEmpty ? "* entries: none" : "* entries:"
+        ]
+        fields += entries.map { entry in
+            var line = "  * \(entry.kind) at \(entry.date), pump record between \(entry.earliest) and \(entry.latest)"
+            if let sequenceNum = entry.sequenceNum { line += ", sequenceNum \(sequenceNum)" }
+            return line + (entry.isReported ? "" : ", not reported")
+        }
+        if let pending {
+            var line = "* pending: \(pending.observed) detected at \(pending.detectedAt), last confirmed \(pending.lastConfirmed)"
+            if let replacement = pending.replacement {
+                line += ", replaced by a \(replacement.percent)% temp (\(replacement.rate) U/hr) from \(replacement.start)"
+            }
+            fields += [line, "  * prior: \(pending.prior.debugDescription)"]
+        } else {
+            fields.append("* pending: nil")
+        }
+        fields += [
+            "* lastConfirmedObservation: \(debugValue(lastConfirmedObservation))",
+            "* interruptedTemp: \(debugValue(interruptedTemp?.debugDescription))"
+        ]
+        return fields
+    }
+}
+
+/// The pump's clock set by `by` seconds (negative when set back), as found by the clock read at
+/// `foundAt`. A status reading stamps what it reports on the clock in force when it began.
+public struct PumpClockStep: Equatable, RawRepresentable {
+    public typealias RawValue = [String: Any]
+
+    public let foundAt: Date
+    public let by: TimeInterval
+
+    public init(foundAt: Date, by: TimeInterval) {
+        self.foundAt = foundAt
+        self.by = by
+    }
+
+    public init?(rawValue: RawValue) {
+        guard let foundAt = rawValue["foundAt"] as? Date, let by = rawValue["by"] as? TimeInterval else {
+            return nil
+        }
+        self.init(foundAt: foundAt, by: by)
+    }
+
+    public var rawValue: RawValue {
+        ["foundAt": foundAt, "by": by]
     }
 }

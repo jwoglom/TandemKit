@@ -15,7 +15,8 @@ import XCTest
 /// still reach the host at the instant the pump delivered it.
 ///
 /// Fixed-offset zones, so no DST transition lands inside a run; the driver reads only the phone's
-/// current offset, which is all a DST transition changes.
+/// current offset, which is all a DST transition changes. G6 alone runs on a zone's own rules, on
+/// the day of its last change before the present, whose offset the driver's decode then agrees with.
 final class TimeChangeConformanceTests: ConformanceTestCase {
     private static let profileRate = 1.0
     private static let eastern = "Etc/GMT+4"
@@ -42,6 +43,13 @@ final class TimeChangeConformanceTests: ConformanceTestCase {
                 XCTFail("restoring the pump's delivery state failed: \(error)")
             }
         }
+        if let harness {
+            do {
+                try harness.client.setState(["basal_cycle_enabled": false])
+            } catch {
+                XCTFail("stopping the pump's basal cycle failed: \(error)")
+            }
+        }
         try super.tearDownWithError()
         phone?.restore()
         phone = nil
@@ -50,21 +58,31 @@ final class TimeChangeConformanceTests: ConformanceTestCase {
     // MARK: - Staging
 
     /// Phone and pump on local time in `zone`, both history flags on, paired, synced and with the
-    /// first backfill read finished.
+    /// first backfill read finished. `schedule` is the host's and the pump's profile.
     @discardableResult
-    private func stageDriver(zone: String) throws -> FaketandemHarness.Driver {
+    private func stageDriver(
+        zone: String,
+        at start: Date? = nil,
+        schedule: [RepeatingScheduleValue<Double>] = [RepeatingScheduleValue(startTime: 0, value: profileRate)]
+    ) throws -> FaketandemHarness.Driver {
         phone.set(zone)
         // Once the zone is named, an earlier scenario's records decode hours later (#482), later still
         // past any TimeChanged it left, and a fresh driver reports those that land in this scenario.
         try eraseHistory()
-        try clock.start(at: clock.now, timezone: zone)
-        try harness.client.setState(["basal_rate": Self.profileRate])
+        try clock.start(at: start ?? clock.now, timezone: zone)
+        if schedule.count > 1 {
+            try harness.client.setIDPProfiles([FaketandemIDPProfile(id: 1, segments: schedule.map {
+                .init(startTime: Int($0.startTime.minutes), basalRate: Int(($0.value * 1000).rounded()))
+            })])
+        }
+        let hostSchedule = try XCTUnwrap(BasalRateSchedule(dailyItems: schedule))
+        try harness.client.setState(["basal_rate": HostBasalSchedule(hostSchedule).rate(at: clock.now)])
         var state = TandemPumpManagerState(rawValue: [:])
         state.featureFlags[.historyBackfill] = true
         state.featureFlags[.historyDoseReporting] = true
         state.bolusReportLedger = BolusReportLedger(trackingSince: clock.now)
         state.insulinType = .novolog
-        state.basalRateSchedule = try XCTUnwrap(BasalRateSchedule(dailyItems: [RepeatingScheduleValue(startTime: 0, value: Self.profileRate)]))
+        state.basalRateSchedule = hostSchedule
         let driver = startDriver(state: state)
         try harness.pair(driver)
         _ = try sync()
@@ -163,6 +181,16 @@ final class TimeChangeConformanceTests: ConformanceTestCase {
     }
 
     private static let untrackedBolusId = 4242
+
+    /// Nothing reaches the host that ends before it starts, which crashed Trio's Apple Health upload,
+    /// or starts ahead of the phone.
+    private func assertEveryDoseIsInOrder(since count: Int, file: StaticString = #filePath, line: UInt = #line) {
+        for event in eventsSince(count) {
+            guard let dose = event.dose else { continue }
+            XCTAssertGreaterThanOrEqual(dose.endDate, dose.startDate, "ends before it starts: \(event)", file: file, line: line)
+            XCTAssertLessThanOrEqual(dose.startDate, clock.now.addingTimeInterval(1), "starts ahead of the phone: \(event)", file: file, line: line)
+        }
+    }
 
     // MARK: - G1
 
@@ -361,4 +389,111 @@ final class TimeChangeConformanceTests: ConformanceTestCase {
         XCTAssertTrue(boluses.isEmpty, "a bolus from before the driver tracked the pump was reported after the offset change: \(boluses)")
         try assertHostsMatchThePump()
     }
+
+    // MARK: - G5
+
+    /// The field report: an app temp basal runs as the phone falls back an hour, the pump keeps
+    /// daylight time, and the app sets the pump's clock back. The temp the pump runs began on the
+    /// clock before the change, and is still the one the host holds.
+    func testG5_thePhoneFallsBackAndTheAppSetsThePumpsClockWhileATempRuns() throws {
+        let driver = try stageDriver(zone: Self.eastern)
+        let batchesBefore = allPumpEventBatches.count
+
+        XCTAssertNil(try enactTempBasal(unitsPerHour: 0.84, duration: .minutes(30)))
+        let first = try XCTUnwrap(eventsSince(batchesBefore).first { $0.dose?.type == .tempBasal }?.dose)
+        try clock.advanceBoth(seconds: .minutes(2), ticks: 2)
+
+        phone.set(Self.easternStandard)
+        _ = try sync()
+        XCTAssertEqual(driver.manager.state.pumpClockOffset, .hours(1), accuracy: 2, "the pump reads daylight time")
+        XCTAssertNil(driver.manager.state.lastPumpClockStep, "the phone moved, not the pump")
+
+        try clock.advanceBoth(seconds: .minutes(1), ticks: 1)
+        XCTAssertNoThrow(try syncPumpTime().get())
+        XCTAssertEqual(try pumpRecords("TimeChanged").count, 1)
+        XCTAssertEqual(driver.manager.state.pumpClockOffset, 0, accuracy: 2)
+        XCTAssertEqual(try XCTUnwrap(driver.manager.state.lastPumpClockStep).by, -.hours(1), accuracy: 5)
+        XCTAssertNil(driver.manager.state.deliveryTransitions.pending, "the temp the pump runs is the one the host holds")
+        XCTAssertEqual(driver.manager.state.basalDose.startDate, first.startDate)
+
+        // The loop's next temp, three minutes on as Trio's was.
+        try clock.advanceBoth(seconds: .minutes(3), ticks: 3)
+        let replacedAt = clock.now
+        XCTAssertNil(try enactTempBasal(unitsPerHour: 0.18, duration: .minutes(30)))
+        try clock.advanceBoth(seconds: .minutes(5), ticks: 5)
+        _ = try sync()
+        try waitForBackfill(driver)
+
+        let finished = try XCTUnwrap(eventsSince(batchesBefore).last {
+            $0.dose?.type == .tempBasal && $0.dose?.startDate == first.startDate && $0.dose?.isMutable == false
+        }?.dose, "the first temp is finished")
+        XCTAssertEqual(finished.endDate.timeIntervalSince(replacedAt), 0, accuracy: 2, "ended by the loop's next temp")
+        assertEveryDoseIsInOrder(since: batchesBefore)
+        try assertHostsMatchThePump()
+    }
+
+    // MARK: - G6
+
+    /// The most recent change of `zone` before the present, which every pump timestamp in a scenario
+    /// on its day after the change decodes with.
+    private static func lastChange(of zone: TimeZone, before now: Date = Date()) throws -> Date {
+        var last: Date?
+        var cursor = now.addingTimeInterval(-.days(400))
+        while let next = zone.nextDaylightSavingTimeTransition(after: cursor), next <= now {
+            last = next
+            cursor = next
+        }
+        return try XCTUnwrap(last, "\(zone.identifier) has no DST change in the last 400 days")
+    }
+
+    /// The day the phone's clock changes (US Eastern's last change, back or forward), with the pump
+    /// set to local time after it: an hour of that day lies between midnight and the wall clock, so a
+    /// schedule read by the time since midnight runs an hour off both the host's and the pump's. The
+    /// pump's profile changes at 06:00 under a temp basal that runs across it.
+    func testG6_onTheDayThePhonesClockChangesTheScheduleFollowsItsWallClock() throws {
+        let zone = try XCTUnwrap(TimeZone(identifier: Self.dstZone))
+        let change = try Self.lastChange(of: zone)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = zone
+        let day = calendar.dateComponents([.year, .month, .day], from: change)
+        let start = try XCTUnwrap(calendar.date(from: DateComponents(year: day.year, month: day.month, day: day.day, hour: 5, minute: 40)))
+        let segmentChange = try XCTUnwrap(calendar.date(from: DateComponents(year: day.year, month: day.month, day: day.day, hour: 6)))
+        let driver = try stageDriver(zone: Self.dstZone, at: start, schedule: [
+            RepeatingScheduleValue(startTime: 0, value: Self.profileRate),
+            RepeatingScheduleValue(startTime: .hours(6), value: Self.morningRate)
+        ])
+        try harness.client.setState(["basal_cycle_enabled": true])
+        let batchesBefore = allPumpEventBatches.count
+
+        XCTAssertEqual(driver.manager.state.pumpClockOffset, 0, accuracy: 2, "the pump reads the phone's local time")
+        XCTAssertEqual(driver.manager.getScheduledBasalRate(at: start), Self.profileRate)
+        XCTAssertNil(driver.manager.state.basalRateMismatchDetectedAt, "the pump runs the segment the phone's clock reads")
+
+        try clock.advanceBoth(seconds: .minutes(10), ticks: 10)
+        XCTAssertNil(try enactTempBasal(unitsPerHour: 2 * Self.profileRate, duration: .minutes(30)))
+        let temp = try XCTUnwrap(eventsSince(batchesBefore).first { $0.dose?.type == .tempBasal }?.dose)
+
+        try clock.advanceBoth(seconds: segmentChange.addingTimeInterval(.minutes(5)).timeIntervalSince(clock.now), ticks: 15)
+        _ = try sync()
+        try waitForBackfill(driver)
+        XCTAssertEqual(try harness.client.snapshot().basal.profileRate, Self.morningRate, accuracy: 0.001, "the pump moved to its 06:00 segment")
+        XCTAssertNil(driver.manager.state.basalRateMismatchDetectedAt, "the 06:00 segment is the schedule's")
+        XCTAssertTrue(driver.manager.state.hasSyncedBasalRateSchedule)
+
+        let parts = eventsSince(batchesBefore).compactMap(\.dose).filter { $0.type == .tempBasal && $0.startDate >= temp.startDate }
+        let cut = try XCTUnwrap(parts.last { $0.startDate == temp.startDate && !$0.isMutable }, "the temp is cut at the segment change")
+        XCTAssertEqual(cut.endDate, segmentChange, "cut at 06:00 on the phone's clock")
+        XCTAssertEqual(cut.unitsPerHour, 2 * Self.profileRate, accuracy: 0.001)
+        let after = try XCTUnwrap(parts.last { $0.startDate == segmentChange }, "the part after the change")
+        XCTAssertEqual(after.unitsPerHour, 2 * Self.morningRate, accuracy: 0.001, "the pump rescales the temp to the new segment")
+
+        assertEveryDoseIsInOrder(since: batchesBefore)
+        // PumpTimeline holds a temp as one rate to its end, so it cannot follow the cut.
+        let (loop, trio) = feedOracles()
+        loop.assertNoDuplicates()
+        trio.assertNoDuplicates()
+    }
+
+    private static let dstZone = "America/New_York"
+    private static let morningRate = 1.5
 }

@@ -47,6 +47,7 @@ import XCTest
         state.hasSyncedBasalRateSchedule = true
         state.insulinType = .novolog
         state.pumpState.pumpSerial = Self.pumpSerial
+        state.lastPumpSerial = Self.pumpSerial
         state.basalDose = UnfinalizedDose(basalRate: 1.0, insulinType: .novolog, startDate: clock.now)
         manager = TandemPumpManager(state: state, bluetooth: bluetooth, clock: clock)
         delegate = MockPumpManagerDelegate()
@@ -82,7 +83,7 @@ import XCTest
 
     private func enactTempBasal(unitsPerHour: Double, for duration: TimeInterval = .minutes(30)) -> Data? {
         let done = expectation(description: "temp basal completion")
-        manager.enactTempBasal(unitsPerHour: unitsPerHour, for: duration) { error in
+        manager.enactTempBasal(decisionId: nil, unitsPerHour: unitsPerHour, for: duration) { error in
             XCTAssertNil(error)
             done.fulfill()
         }
@@ -92,7 +93,7 @@ import XCTest
 
     private func enactBolus() -> Data? {
         let done = expectation(description: "enactBolus")
-        manager.enactBolus(units: Self.bolusUnits, activationType: .manualNoRecommendation) { error in
+        manager.enactBolus(decisionId: nil, units: Self.bolusUnits, activationType: .manualNoRecommendation) { error in
             XCTAssertNil(error)
             done.fulfill()
         }
@@ -112,8 +113,11 @@ import XCTest
     }
 
     private func deactivate() {
-        let done = expectation(description: "prepareForDeactivation")
-        manager.prepareForDeactivation { _ in done.fulfill() }
+        let done = expectation(description: "delete")
+        Task {
+            await manager.delete()
+            done.fulfill()
+        }
         wait(for: [done], timeout: 5)
         delegateQueue.sync {}
     }
@@ -133,7 +137,7 @@ import XCTest
         return Array(delegate.pumpEventBatches.dropFirst(count))
     }
 
-    /// The journal position of the last batch and of `pumpManagerWillDeactivate`.
+    /// The journal position of the last batch and of `pumpManagerWantsDeletion`.
     private func lastBatchAndDeactivation() -> (batch: Int?, willDeactivate: Int?) {
         let journal = delegate.journal
         let batch = journal.last { $0.pumpEventBatch != nil }?.index
@@ -186,6 +190,7 @@ import XCTest
         XCTAssertEqual(bolus.endDate, deactivatedAt, "Loop stores a finalized dose only once it has ended")
 
         XCTAssertFalse(final.events.contains { $0.type == .suspend || $0.type == .basal }, "\(final.events)")
+        XCTAssertEqual(final.events.filter { $0.type == .replaceComponent(componentType: .pump) }.map(\.date), [deactivatedAt], "the removal rides the same batch")
         XCTAssertNil(manager.state.bolusDose)
         XCTAssertEqual(manager.state.bolusState, .noBolus)
         XCTAssertEqual(manager.state.basalDose.type, .basal)
@@ -211,7 +216,7 @@ import XCTest
         )
     }
 
-    func testATempBasalIsCutWhereThePumpRescalesItAtASegmentChange() throws {
+    func testATempRescaledUpAfterTheDeletionLeavesOneRemainderAtItsHigherRate() throws {
         clock.set(at(.hours(13) + .minutes(45)))
         startManager()
         let tempRaw = try XCTUnwrap(enactTempBasal(unitsPerHour: 1.5))
@@ -223,12 +228,35 @@ import XCTest
         let temps = try XCTUnwrap(batches(since: before).last).events.filter { $0.dose?.type == .tempBasal }
         XCTAssertEqual(temps.first?.raw, tempRaw)
         let doses = temps.compactMap(\.dose)
-        XCTAssertEqual(doses.map(\.isMutable), [false, false, false])
-        XCTAssertEqual(doses.map(\.startDate), [at(.hours(13) + .minutes(45)), at(.hours(13) + .minutes(50)), at(.hours(14))])
-        XCTAssertEqual(doses.map(\.endDate), [at(.hours(13) + .minutes(50)), at(.hours(14)), at(.hours(14) + .minutes(15))])
-        XCTAssertEqual(doses.map(\.unitsPerHour), [1.5, 1.5, 3.0])
-        XCTAssertEqual(doses.compactMap(\.deliveredUnits), [0.125, 0.25, 0.75])
+        XCTAssertEqual(doses.map(\.isMutable), [false, false])
+        XCTAssertEqual(doses.map(\.startDate), [at(.hours(13) + .minutes(45)), at(.hours(13) + .minutes(50))])
+        XCTAssertEqual(doses.map(\.endDate), [at(.hours(13) + .minutes(50)), at(.hours(14) + .minutes(15))])
+        XCTAssertEqual(doses.map(\.unitsPerHour), [1.5, 3.0])
+        XCTAssertEqual(doses.compactMap(\.deliveredUnits), [0.125, 1.25])
         XCTAssertEqual(manager.state.basalDose.value, 2.0)
+        let serial = try XCTUnwrap(HistoryLogSyncIdentifier.PumpSerial(Self.pumpSerial))
+        XCTAssertEqual(temps.last?.raw, HistoryLogSyncIdentifier.tempRatePart(pumpSerial: serial, tempRateId: 41, part: 1), "as a later pump manager counts the temp's parts from history")
+    }
+
+    func testARemainderCrossingTwoSegmentChangesIsOneDoseAtTheHighestRateUnderTheTempsFirstPart() throws {
+        clock.set(at(.hours(13) + .minutes(45)))
+        startManager()
+        let tempRaw = try XCTUnwrap(enactTempBasal(unitsPerHour: 1.5, for: .hours(11)))
+        clock.advance(by: .minutes(5))
+        let before = batchCount
+
+        deactivate()
+
+        let temps = try XCTUnwrap(batches(since: before).last).events.filter { $0.dose?.type == .tempBasal }
+        XCTAssertEqual(temps.first?.raw, tempRaw)
+        let remainder = try XCTUnwrap(temps.last?.dose)
+        XCTAssertEqual(temps.count, 2, "\(temps)")
+        XCTAssertEqual(remainder.startDate, at(.hours(13) + .minutes(50)))
+        XCTAssertEqual(remainder.endDate, at(.hours(24) + .minutes(45)))
+        XCTAssertEqual(remainder.unitsPerHour, 3.0, "the pump runs it at 3.0 U/hr from 14:00 and at 1.5 U/hr from midnight")
+        let serial = try XCTUnwrap(HistoryLogSyncIdentifier.PumpSerial(Self.pumpSerial))
+        XCTAssertEqual(temps.last?.raw, HistoryLogSyncIdentifier.tempRatePart(pumpSerial: serial, tempRateId: 41, part: 1))
+        XCTAssertEqual(manager.state.basalDose.value, 1.0)
     }
 
     func testATempBasalStartedThisSecondIsCutASecondOn() throws {
@@ -313,8 +341,27 @@ import XCTest
 
     // MARK: - Nothing held
 
-    func testWithNothingHeldTheHostIsOnlyToldOfTheDeactivation() {
+    func testWithNothingHeldTheHostIsToldOnlyThatThePumpWasRemoved() throws {
         startManager()
+        clock.advance(by: .minutes(3))
+        let before = batchCount
+
+        deactivate()
+
+        let batch = try XCTUnwrap(batches(since: before).first)
+        XCTAssertEqual(batches(since: before).count, 1)
+        XCTAssertFalse(batch.replacePendingEvents, "an empty replacing batch would purge what Trio holds as mutable")
+        XCTAssertEqual(batch.events.map(\.type), [.replaceComponent(componentType: .pump)])
+        XCTAssertEqual(batch.events.first?.title, "Pump Removed")
+        XCTAssertEqual(batch.events.first?.date, clock.now)
+        let order = lastBatchAndDeactivation()
+        XCTAssertLessThan(try XCTUnwrap(order.batch), try XCTUnwrap(order.willDeactivate))
+        XCTAssertEqual(delegate.willDeactivateCount, 1)
+    }
+
+    func testAManagerThatNeverReadAPumpReportsNoneRemoved() {
+        startManager()
+        manager.state.lastPumpSerial = nil
 
         deactivate()
 

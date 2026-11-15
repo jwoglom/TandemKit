@@ -1,5 +1,4 @@
 import Foundation
-import HealthKit
 import LoopKit
 @testable import TandemKit
 import XCTest
@@ -219,7 +218,6 @@ final class LoopDoseStoreOracle: DoseOracle {
     /// each gap before a basal, temp basal or suspend, from `start`, each piece keyed on its own dates.
     static func overlaying(_ doses: [DoseEntry], with schedule: BasalRateSchedule, startingAt start: Date) -> [DoseEntry] {
         let formatter = ISO8601DateFormatter()
-        let unitsPerHour = HKUnit.internationalUnit().unitDivided(by: .hour())
         var entries: [DoseEntry] = []
         var lastBasal = DoseEntry(resumeDate: start, automatic: true)
         for dose in doses {
@@ -235,8 +233,9 @@ final class LoopDoseStoreOracle: DoseOracle {
                         endDate: pieceEnd,
                         value: scheduled.rate,
                         unit: .unitsPerHour,
+                        decisionId: nil,
                         syncIdentifier: "BasalRateSchedule \(formatter.string(from: pieceStart)) \(formatter.string(from: pieceEnd))",
-                        scheduledBasalRate: HKQuantity(unit: unitsPerHour, doubleValue: scheduled.rate),
+                        scheduledBasalRate: LoopQuantity(unit: .internationalUnitsPerHour, doubleValue: scheduled.rate),
                         insulinType: lastBasal.insulinType,
                         automatic: lastBasal.automatic
                     ))
@@ -321,8 +320,8 @@ final class LoopDoseStoreOracle: DoseOracle {
             case .basal, .tempBasal:
                 if lastSuspend == nil, let last = lastBasal {
                     let endDate = min(last.endDate, dose.startDate)
-                    if endDate > last.startDate {
-                        reconciled.append(last.trimmed(from: nil, to: endDate, syncIdentifier: last.syncIdentifier))
+                    if endDate > last.startDate, let trimmed = last.trimmed(from: nil, to: endDate, syncIdentifier: last.syncIdentifier) {
+                        reconciled.append(trimmed)
                     }
                 } else if let suspend = lastSuspend, dose.type == .tempBasal {
                     reconciled.append(Self.closing(suspend, at: dose.startDate))
@@ -341,6 +340,7 @@ final class LoopDoseStoreOracle: DoseOracle {
                                 endDate: last.endDate,
                                 value: Self.programmedValue(last),
                                 unit: last.unit,
+                                decisionId: nil,
                                 description: last.description,
                                 syncIdentifier: dose.syncIdentifier,
                                 insulinType: last.insulinType,
@@ -361,6 +361,7 @@ final class LoopDoseStoreOracle: DoseOracle {
                         endDate: min(last.endDate, dose.startDate),
                         value: Self.programmedValue(last),
                         unit: last.unit,
+                        decisionId: nil,
                         description: last.description,
                         syncIdentifier: last.syncIdentifier,
                         insulinType: last.insulinType,
@@ -383,6 +384,7 @@ final class LoopDoseStoreOracle: DoseOracle {
                 endDate: nil,
                 value: Self.programmedValue(suspend),
                 unit: suspend.unit,
+                decisionId: nil,
                 description: suspend.description,
                 syncIdentifier: suspend.syncIdentifier,
                 insulinType: suspend.insulinType,
@@ -414,6 +416,7 @@ final class LoopDoseStoreOracle: DoseOracle {
             endDate: end,
             value: Self.programmedValue(suspend),
             unit: suspend.unit,
+            decisionId: nil,
             description: suspend.description,
             syncIdentifier: suspend.syncIdentifier,
             insulinType: suspend.insulinType,
@@ -442,6 +445,7 @@ final class LoopDoseStoreOracle: DoseOracle {
             endDate: dose.endDate,
             value: Self.programmedValue(dose),
             unit: dose.unit,
+            decisionId: nil,
             deliveredUnits: resolvedUnits,
             description: dose.description,
             syncIdentifier: dose.syncIdentifier,

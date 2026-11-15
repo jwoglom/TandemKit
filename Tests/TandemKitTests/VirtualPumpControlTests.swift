@@ -98,6 +98,20 @@ final class VirtualPumpControlTests: XCTestCase {
         }
     }
 
+    func testSyncPumpTimeSetsThePumpsClockAsTheSettingsScreenDoes() throws {
+        bluetooth.stub(ChangeTimeDateRequest.self, with: ChangeTimeDateResponse(status: 0))
+
+        _ = try client.send(.init(command: .syncPumpTime))
+
+        XCTAssertEqual(bluetooth.sent(ChangeTimeDateRequest.self).count, 1)
+    }
+
+    func testSyncPumpTimeAnswersWithThePumpsRefusal() {
+        bluetooth.stub(ChangeTimeDateRequest.self, with: ChangeTimeDateResponse(status: 1))
+
+        XCTAssertThrowsError(try client.send(.init(command: .syncPumpTime)))
+    }
+
     func testAFeatureFlagIsSetAsTheFlagsScreenSetsIt() throws {
         XCTAssertTrue(manager.state.featureFlags[.historyDoseReporting])
 
@@ -153,6 +167,7 @@ final class VirtualPumpControlTests: XCTestCase {
                     endDate: start.addingTimeInterval(40),
                     value: 1.25,
                     unit: .units,
+                    decisionId: nil,
                     deliveredUnits: 1.2,
                     automatic: false
                 ),
@@ -167,6 +182,7 @@ final class VirtualPumpControlTests: XCTestCase {
                     endDate: start.addingTimeInterval(2100),
                     value: 0.45,
                     unit: .unitsPerHour,
+                    decisionId: nil,
                     automatic: true,
                     isMutable: true
                 ),

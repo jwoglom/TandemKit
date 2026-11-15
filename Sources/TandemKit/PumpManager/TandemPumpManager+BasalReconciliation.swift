@@ -47,6 +47,52 @@ extension TandemPumpManager {
         state.controlIQEndedAt.map { now.timeIntervalSince($0) < BolusReportLedger.reportingHorizon } ?? false
     }
 
+    /// Temps an app set before this manager watched the pump, under the identities it reported them
+    /// under: the host keeps the rows it holds, and their cycles are not corrected a second time.
+    private func appTempBasalsBeforePairing(
+        in logs: [HistoryLog],
+        dates: HistoryRecordDates,
+        serial: HistoryLogSyncIdentifier.PumpSerial,
+        floor: Date,
+        now: Date
+    ) -> [NewPumpEvent] {
+        guard state.featureFlags.basalHistoryReporting, let since = state.deliveryTransitions.historySince,
+              let trackedAfter = state.deliveryTransitions.trackedAfter
+        else {
+            return []
+        }
+        let setOverBluetooth = Set(logs.compactMap { ($0 as? SetTempRateResponseHistoryLog)?.tempRateId })
+        var events: [NewPumpEvent] = []
+        for case let activated as TempRateActivatedHistoryLog in logs
+            where activated.sequenceNum <= trackedAfter && setOverBluetooth.contains(activated.tempRateId)
+        {
+            let raw = HistoryLogSyncIdentifier.tempRate(pumpSerial: serial, tempRateId: activated.tempRateId)
+            let start = dates.phoneDate(of: activated)
+            guard start >= floor, !state.reportedBasal.rows.contains(where: { $0.raw == raw }) else { continue }
+            let percent = Int(activated.percent.rounded())
+            let temp = UnfinalizedDose(
+                tempRate: roundToSupportedBasalRate(unitsPerHour: pumpScheduledBasalRate(at: start) * Double(percent) / 100),
+                duration: TimeInterval(activated.durationMilliseconds) / 1000,
+                automatic: true,
+                insulinType: state.insulinType,
+                startDate: start,
+                tempRateId: activated.tempRateId,
+                tempPercent: percent,
+                eventRaw: raw
+            )
+            // Still running: to its programmed end, as a deleted manager left it.
+            let end = tempRateEnd(of: temp, in: logs, dates: dates) ?? temp.estimatedEndDate
+            guard end > since else { continue }
+            let (finished, last) = splitAtSegmentChanges(temp, through: end)
+            events += finished
+            events.append(NewPumpEvent.tempBasal(dose: last.toDoseEntry(isMutable: false, endDate: max(end, last.startDate), now: now), of: last))
+        }
+        if !events.isEmpty {
+            logger.info("Reporting \(events.count) temp basal row(s) an app set before pairing from pump history")
+        }
+        return events
+    }
+
     func reconcileBasalHistory(
         after outcome: HistoryBackfillCoordinator.TickOutcome,
         pumpSerial serial: HistoryLogSyncIdentifier.PumpSerial,
@@ -114,6 +160,7 @@ extension TandemPumpManager {
         }
         let stop = [waitingGap?.lowerBound, blockingOpen.first?.sequenceNum].compactMap { $0 }.min()
 
+        batch.events += appTempBasalsBeforePairing(in: logs, dates: dates, serial: serial, floor: floor, now: now)
         var pass = BasalReportingPass(
             ledger: state.reportedBasal,
             logs: logs,
@@ -312,26 +359,15 @@ extension TandemPumpManager {
             return false
         }
         let (finished, running) = splitAtSegmentChanges(held, through: start)
-        func part(_ rate: Double, from start: Date, to end: Date) -> UnfinalizedDose {
-            UnfinalizedDose(
-                tempRate: rate,
-                duration: end.timeIntervalSince(start),
-                automatic: held.automatic,
-                insulinType: held.insulinType,
-                startDate: start,
-                tempRateId: held.tempRateId,
-                tempPercent: held.tempPercent
-            )
-        }
         var events = finished + [NewPumpEvent.tempBasal(dose: running.toDoseEntry(isMutable: false, endDate: start, now: pass.now), of: running)]
         let continuation: UnfinalizedDose
         if let resumed = recordResuming(running, after: chunk, pass: pass), start < resumed, resumed < held.estimatedEndDate {
-            let atPumpRate = part(chunk.unitsPerHour, from: start, to: resumed)
+            let atPumpRate = held.tempBasalPart(rate: chunk.unitsPerHour, from: start, until: resumed)
             events.append(NewPumpEvent.tempBasal(dose: atPumpRate.toDoseEntry(isMutable: false, endDate: resumed, now: pass.now), of: atPumpRate))
-            continuation = part(running.value, from: resumed, to: held.estimatedEndDate)
+            continuation = held.tempBasalPart(rate: running.value, from: resumed, until: held.estimatedEndDate)
             logger.info("Pump history runs the temp basal from \(held.startDate) at \(chunk.unitsPerHour) U/hr from \(start) to \(resumed)")
         } else {
-            continuation = part(chunk.unitsPerHour, from: start, to: held.estimatedEndDate)
+            continuation = held.tempBasalPart(rate: chunk.unitsPerHour, from: start, until: held.estimatedEndDate)
             logger.info("Pump history runs the temp basal from \(held.startDate) at \(chunk.unitsPerHour) U/hr from \(start)")
         }
         state.basalDose = continuation
@@ -429,11 +465,12 @@ extension TandemPumpManager {
             endDate: end,
             value: chunk.unitsPerHour,
             unit: .unitsPerHour,
+            decisionId: nil,
             deliveredUnits: TandemPumpCapabilities.roundToReportingResolution(chunk.unitsPerHour * end.timeIntervalSince(start) / .hours(1)),
             description: "Basal from pump record \(chunk.sequenceNum)",
             syncIdentifier: raw.hexadecimalString,
             insulinType: state.insulinType,
-            automatic: isAlgorithm || (chunk.kind == .temp && setByTheApp),
+            automatic: isAlgorithm || (chunk.kind == .temp && setByTheApp && !(chunk.tempRateId.map(isManualTempRate) ?? false)),
             isMutable: false,
             wasProgrammedByPumpUI: isAlgorithm || (chunk.kind == .temp && !setByTheApp)
         )

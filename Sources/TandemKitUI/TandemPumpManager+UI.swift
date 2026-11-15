@@ -74,7 +74,7 @@ extension TandemPumpManager: PumpManagerUI {
         )
     }
 
-    public var pumpStatusHighlight: DeviceStatusHighlight? {
+    public var pumpStatusHighlight: PumpStatusHighlight? {
         buildPumpStatusHighlight()
     }
 
@@ -107,7 +107,7 @@ extension TandemPumpManager {
         }
     }
 
-    private func buildPumpStatusHighlight() -> DeviceStatusHighlight? {
+    private func buildPumpStatusHighlight() -> PumpStatusHighlight? {
         // Ahead of the therapy highlights below: those are all read from a pump we have stopped
         // hearing from, and reconnecting is the prerequisite for acting on any of them.
         if let issue = sustainedConnectionIssue {
@@ -195,6 +195,19 @@ extension TandemPumpManager {
                 localizedMessage: String(
                     localized: "Control-IQ On",
                     comment: "Status highlight that the pump's Control-IQ algorithm is controlling delivery."
+                ),
+                imageName: "exclamationmark.circle.fill",
+                state: .warning
+            )
+        }
+
+        // A manual temp pauses the host's automatic dosing, and from TandemKit's settings it can run
+        // for 72 hours: the host's status is where the user sees that.
+        if state.basalDose.type == .tempBasal, !state.basalDose.automatic, state.basalDose.estimatedEndDate > now {
+            return PumpStatusHighlight(
+                localizedMessage: String(
+                    localized: "Manual Temp Basal",
+                    comment: "Status highlight that a manual temp basal is running, which pauses the app's automatic dosing."
                 ),
                 imageName: "exclamationmark.circle.fill",
                 state: .warning

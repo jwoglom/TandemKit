@@ -80,7 +80,7 @@ import XCTest
         bluetooth.stub(InitiateBolusRequest.self, with: InitiateBolusResponse(status: 0, bolusId: Self.bolusId, statusTypeId: 0))
         let before = batches.count
         let done = expectation(description: "enactBolus")
-        manager.enactBolus(units: Self.bolusUnits, activationType: .manualNoRecommendation) { error in
+        manager.enactBolus(decisionId: nil, units: Self.bolusUnits, activationType: .manualNoRecommendation) { error in
             XCTAssertNil(error)
             done.fulfill()
         }
@@ -94,7 +94,7 @@ import XCTest
     private func startTempBasal(unitsPerHour: Double = 1.5) throws -> Data {
         let before = batches.count
         let done = expectation(description: "enactTempBasal")
-        manager.enactTempBasal(unitsPerHour: unitsPerHour, for: .minutes(30)) { error in
+        manager.enactTempBasal(decisionId: nil, unitsPerHour: unitsPerHour, for: .minutes(30)) { error in
             XCTAssertNil(error)
             done.fulfill()
         }

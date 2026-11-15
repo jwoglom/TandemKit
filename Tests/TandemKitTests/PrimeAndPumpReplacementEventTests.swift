@@ -2,8 +2,8 @@ import LoopKit
 @testable import TandemKit
 import XCTest
 
-/// The fill wizards report a `.prime`, and pairing a pump with another serial reports a
-/// `.replaceComponent(.pump)` (#349). Neither carries a dose or purges pending ones.
+/// The fill wizards report a `.prime`, and a new manager's first pump, or one with another serial,
+/// a `.replaceComponent(.pump)` (#349). None carries a dose or purges pending ones.
 @available(macOS 13.0, iOS 14.0, *) final class PrimeAndPumpReplacementEventTests: XCTestCase {
     private static let t0 = Date(timeIntervalSinceReferenceDate: 800_000_000)
     private static let firstSerial: UInt32 = 1_111_111
@@ -42,6 +42,7 @@ import XCTest
     }
 
     private func reported(_ body: () -> Void) -> [MockPumpManagerDelegate.PumpEventBatch] {
+        delegateQueue.sync {}
         let before = delegate.pumpEventBatches.count
         body()
         delegateQueue.sync {}
@@ -112,14 +113,29 @@ import XCTest
 
     // MARK: - Pump replacement
 
-    func testTheFirstPumpReadIsNotAReplacement() {
+    func testTheFirstPumpANewManagerReadsIsReportedAddedButNotReplaced() throws {
         stubPump(serial: Self.firstSerial)
 
         let batches = reported { manager.fetchPumpInformation() }
 
-        XCTAssertEqual(batches.flatMap(\.events), [])
+        let event = try XCTUnwrap(batches.first?.events.first)
+        XCTAssertEqual(batches.flatMap(\.events).count, 1)
+        XCTAssertEqual(batches.first?.replacePendingEvents, false)
+        XCTAssertEqual(event.type, .replaceComponent(componentType: .pump))
+        XCTAssertEqual(event.title, "Pump Added")
+        XCTAssertNil(event.dose)
+        XCTAssertEqual(event.date, Self.t0)
         XCTAssertEqual(delegate.pumpWasReplacedCount, 0)
         XCTAssertEqual(manager.state.lastPumpSerial, Self.firstSerial)
+    }
+
+    func testAManagerThatHasReadItsPumpBeforeReportsNothingOnItsNextRead() {
+        var state = TandemPumpManagerState(rawValue: [:])
+        state.lastPumpSerial = Self.firstSerial
+        manager = makeManager(state: state)
+        stubPump(serial: Self.firstSerial)
+
+        XCTAssertEqual(reported { manager.fetchPumpInformation() }.flatMap(\.events), [])
     }
 
     func testTheSamePumpReadAgainIsNotAReplacement() {
@@ -143,6 +159,7 @@ import XCTest
         XCTAssertEqual(batches.flatMap(\.events).count, 1)
         XCTAssertEqual(batches.first?.replacePendingEvents, false)
         XCTAssertEqual(event.type, .replaceComponent(componentType: .pump))
+        XCTAssertEqual(event.title, "Pump Replaced")
         XCTAssertNil(event.dose)
         XCTAssertEqual(event.date, Self.t0.addingTimeInterval(.minutes(10)))
         XCTAssertEqual(delegate.pumpWasReplacedCount, 1)

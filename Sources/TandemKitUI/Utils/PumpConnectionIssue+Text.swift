@@ -36,56 +36,130 @@ extension PumpConnectionIssue {
         }
     }
 
-    /// What it means and what to do, for the screens with room for a sentence or two.
-    func detail(appName: String, lastKnownDelivery: LastKnownBasalDelivery? = nil, now: Date = Date()) -> String {
+    /// What it means and what to do, for the screens with room for a sentence or two. `lastSync` is
+    /// the last time the app connected to the pump, which each detail gives when it is known.
+    func detail(
+        appName: String,
+        lastKnownDelivery: LastKnownBasalDelivery? = nil,
+        lastSync: Date? = nil,
+        now: Date = Date()
+    ) -> String {
+        let since = lastSync.map { LastKnownBasalDelivery.timeText($0, now: now) }
+        let ago = lastSync.map { LastKnownBasalDelivery.elapsedDescription(now.timeIntervalSince($0)) }
+
         switch self {
         case .bluetoothOff:
+            guard let since, let ago else {
+                return String(
+                    format: String(
+                        localized: "%@ cannot reach your pump while Bluetooth is off. Your pump keeps delivering insulin from its own settings. Turn Bluetooth on in your phone's Settings app.",
+                        comment: "detail for the Bluetooth off notice"
+                    ),
+                    appName
+                )
+            }
             return String(
                 format: String(
-                    localized: "%@ cannot reach your pump while Bluetooth is off. Your pump keeps delivering insulin from its own settings. Turn Bluetooth on in your phone's Settings app.",
-                    comment: "detail for the Bluetooth off notice"
+                    localized: "%1$@ cannot reach your pump while Bluetooth is off, and has not connected to it since %2$@ (%3$@). Your pump keeps delivering insulin from its own settings. Turn Bluetooth on in your phone's Settings app.",
+                    comment: "detail for the Bluetooth off notice; the placeholders are the app's name, the time of the last connection and how long ago that was"
                 ),
-                appName
+                appName,
+                since,
+                ago
             )
         case .bluetoothUnauthorized:
+            guard let since, let ago else {
+                return String(
+                    format: String(
+                        localized: "%@ does not have permission to use Bluetooth, so it cannot reach your pump. Your pump keeps delivering insulin from its own settings. Allow Bluetooth for the app in your phone's Settings app.",
+                        comment: "detail for the Bluetooth permission notice"
+                    ),
+                    appName
+                )
+            }
             return String(
                 format: String(
-                    localized: "%@ does not have permission to use Bluetooth, so it cannot reach your pump. Your pump keeps delivering insulin from its own settings. Allow Bluetooth for the app in your phone's Settings app.",
-                    comment: "detail for the Bluetooth permission notice"
+                    localized: "%1$@ does not have permission to use Bluetooth, so it cannot reach your pump and has not connected to it since %2$@ (%3$@). Your pump keeps delivering insulin from its own settings. Allow Bluetooth for the app in your phone's Settings app.",
+                    comment: "detail for the Bluetooth permission notice; the placeholders are the app's name, the time of the last connection and how long ago that was"
                 ),
-                appName
+                appName,
+                since,
+                ago
             )
         case .bluetoothUnavailable:
+            guard let since, let ago else {
+                return String(
+                    localized: "Your phone's Bluetooth is not usable right now, so your pump cannot be reached. Your pump keeps delivering insulin from its own settings.",
+                    comment: "detail for the Bluetooth unavailable notice"
+                )
+            }
             return String(
-                localized: "Your phone's Bluetooth is not usable right now, so your pump cannot be reached. Your pump keeps delivering insulin from its own settings.",
-                comment: "detail for the Bluetooth unavailable notice"
+                format: String(
+                    localized: "Your phone's Bluetooth is not usable right now, so your pump cannot be reached and has not connected since %1$@ (%2$@). Your pump keeps delivering insulin from its own settings.",
+                    comment: "detail for the Bluetooth unavailable notice; the placeholders are the time of the last connection and how long ago that was"
+                ),
+                since,
+                ago
             )
         case .pumpUnreachable:
             if let lastKnownDelivery {
                 return lastKnownDelivery.localizedDescription(appName: appName, now: now)
             }
+            guard let since, let ago else {
+                return String(
+                    format: String(
+                        localized: "%@ is not connected to your pump, so it cannot read from it or send it anything. Your pump keeps delivering insulin from its own settings. Keep the pump nearby and powered on — reconnection is automatic.",
+                        comment: "detail for the pump disconnected notice"
+                    ),
+                    appName
+                )
+            }
             return String(
                 format: String(
-                    localized: "%@ is not connected to your pump, so it cannot read from it or send it anything. Your pump keeps delivering insulin from its own settings. Keep the pump nearby and powered on — reconnection is automatic.",
-                    comment: "detail for the pump disconnected notice"
+                    localized: "%1$@ has not connected to your pump since %2$@ (%3$@), so it cannot read from it or send it anything. Your pump keeps delivering insulin from its own settings. Keep the pump nearby and powered on — reconnection is automatic.",
+                    comment: "detail for the pump disconnected notice; the placeholders are the app's name, the time of the last connection and how long ago that was"
                 ),
-                appName
+                appName,
+                since,
+                ago
             )
         case .handshakeFailing:
+            guard let since, let ago else {
+                return String(
+                    format: String(
+                        localized: "Your pump is rejecting connections from this device. This may be caused by a Bluetooth connection problem, pairing the pump to a different device, or running multiple apps that control the pump on the same device. Please disconnect the pump from all apps and re-pair to resume %@ controlling insulin delivery. Your pump's profile settings are used until this is resolved.",
+                        comment: "detail for the pump pairing problem notice; the placeholder is the app's name"
+                    ),
+                    appName
+                )
+            }
             return String(
                 format: String(
-                    localized: "Your pump is rejecting connections from this device. This may be caused by a Bluetooth connection problem, pairing the pump to a different device, or running multiple apps that control the pump on the same device. Please disconnect the pump from all apps and re-pair to resume %@ controlling insulin delivery. Your pump's profile settings are used until this is resolved.",
-                    comment: "detail for the pump pairing problem notice; the placeholder is the app's name"
+                    localized: "Your pump is rejecting connections from this device since %1$@ (%2$@). This may be caused by a Bluetooth connection problem, pairing the pump to a different device, or running multiple apps that control the pump on the same device. Please disconnect the pump from all apps and re-pair to resume %3$@ controlling insulin delivery. Your pump's profile settings are used until this is resolved.",
+                    comment: "detail for the pump pairing problem notice; the placeholders are the time of the last connection, how long ago that was, and the app's name"
                 ),
+                since,
+                ago,
                 appName
             )
         case .noRecentSync:
+            guard let since, let ago else {
+                return String(
+                    format: String(
+                        localized: "Your pump has not sent %@ an update recently, so the values shown may be out of date. Your pump keeps delivering insulin from its own settings.",
+                        comment: "detail for the stale pump data notice"
+                    ),
+                    appName
+                )
+            }
             return String(
                 format: String(
-                    localized: "Your pump has not sent %@ an update recently, so the values shown may be out of date. Your pump keeps delivering insulin from its own settings.",
-                    comment: "detail for the stale pump data notice"
+                    localized: "Your pump has not sent %1$@ an update since %2$@ (%3$@), so the values shown may be out of date. Your pump keeps delivering insulin from its own settings.",
+                    comment: "detail for the stale pump data notice; the placeholders are the app's name, the time of the last update and how long ago that was"
                 ),
-                appName
+                appName,
+                since,
+                ago
             )
         }
     }

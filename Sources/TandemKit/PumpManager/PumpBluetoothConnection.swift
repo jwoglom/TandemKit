@@ -25,6 +25,10 @@ protocol PumpBluetoothConnection: AnyObject {
 
     func stopScan()
 
+    /// Names of the pumps iOS already holds a connection to, which another app or the system's
+    /// Bluetooth settings made. A pump connected that way never advertises, so a scan cannot find it.
+    func connectedPumpNames() -> [String]
+
     /// Connects to the peripheral the user picked during pairing, as a serialized command job:
     /// `completion` runs on the command queue once the session is up, or with an error.
     func connect(_ peripheral: CBPeripheral, completion: @escaping (Error?) -> Void)
@@ -38,6 +42,10 @@ protocol PumpBluetoothConnection: AnyObject {
     /// True once the pump has ended the secure handshake several times in a row. The driver has
     /// then stopped reconnecting on its own; a successful handshake clears it.
     var isJpakeFailureLimitReached: Bool { get }
+
+    /// The host has set its delegate and its queue. Only an adopted manager connects on its own, and
+    /// Bluetooth may have come on before the host got this far, as on a relaunch.
+    func pumpManagerWasAdopted()
 
     /// Responses the pump has actually returned. Compared before and after a sequence of reads to
     /// tell a pump that answered something from one that answered nothing.

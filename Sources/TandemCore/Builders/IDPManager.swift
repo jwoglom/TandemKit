@@ -126,24 +126,16 @@ public class IDPManager {
             )
         }
 
-        /// Generate a request to create a new segment in this profile.
-        ///
-        /// - Parameters:
-        ///   - profileStartTime: Start time in minutes from midnight (e.g., 480 for 8:00 AM)
-        ///   - profileBasalRate: Basal rate in milliunits (e.g., 800 for 0.8 U/hr)
-        ///   - profileCarbRatio: Carb ratio as UInt32 (e.g., 10000 for 1:10)
-        ///   - profileTargetBG: Target BG in mg/dL
-        ///   - profileISF: Insulin sensitivity factor (e.g., 50 for 1:50)
-        /// - Returns: Request to send to the pump
+        /// Copies `template`'s carb ratio, target BG and correction factor, and flags only those it
+        /// holds. A Mobi refused a create flagging all five with the target BG and correction factor
+        /// of 0 that a profile holding neither reads back; a create flagging fewer is unconfirmed.
         public func createSegmentMessage(
             profileStartTime: Int,
             profileBasalRate: Int,
-            profileCarbRatio: UInt32,
-            profileTargetBG: Int,
-            profileISF: Int
+            copyingSettingsOf template: IDPSegmentResponse
         ) -> SetIDPSegmentRequest {
-            // Per pumpX2 IDPManager.createSegmentMessage: must include all 5 fields
-            let statusMask = IDPSegmentResponse.IDPSegmentStatus.allFieldsMask()
+            let settings: Set<IDPSegmentResponse.IDPSegmentStatus> = [.CARB_RATIO, .TARGET_BG, .CORRECTION_FACTOR]
+            let fields = template.idpStatus.intersection(settings).union([.START_TIME, .BASAL_RATE])
 
             return SetIDPSegmentRequest(
                 idpId: idpId,
@@ -152,10 +144,10 @@ public class IDPManager {
                 operation: .createSegment,
                 profileStartTime: profileStartTime,
                 profileBasalRate: profileBasalRate,
-                profileCarbRatio: profileCarbRatio,
-                profileTargetBG: profileTargetBG,
-                profileISF: profileISF,
-                idpStatusId: statusMask
+                profileCarbRatio: template.profileCarbRatio,
+                profileTargetBG: template.profileTargetBG,
+                profileISF: template.profileISF,
+                idpStatusId: fields.reduce(0) { $0 | $1.rawValue }
             )
         }
 
@@ -163,17 +155,13 @@ public class IDPManager {
         public func createSegmentMessage(
             profileStartTimeMinutes: Int,
             profileBasalRateUnits: Double,
-            profileCarbRatio: UInt32,
-            profileTargetBG: Int,
-            profileISF: Int
+            copyingSettingsOf template: IDPSegmentResponse
         ) -> SetIDPSegmentRequest {
             let basalMilliunits = Int((profileBasalRateUnits * 1000.0).rounded())
             return createSegmentMessage(
                 profileStartTime: profileStartTimeMinutes,
                 profileBasalRate: basalMilliunits,
-                profileCarbRatio: profileCarbRatio,
-                profileTargetBG: profileTargetBG,
-                profileISF: profileISF
+                copyingSettingsOf: template
             )
         }
 
@@ -386,10 +374,6 @@ public class IDPManager {
 // MARK: - IDPSegmentStatus Extension
 
 public extension IDPSegmentResponse.IDPSegmentStatus {
-    /// Returns a bitmask with all 5 status flags set (value: 31).
-    ///
-    /// Per pumpX2 IDPManager: all segment operations (create, modify, delete)
-    /// must include all 5 fields even if some values are 0.
     static func allFieldsMask() -> Int {
         let all: Set<IDPSegmentResponse.IDPSegmentStatus> = [
             .BASAL_RATE,

@@ -86,7 +86,7 @@ extension TandemPumpManager {
                     reports.append(report)
                     finalizesHeldDose = finalizesHeldDose || held != nil
                 }
-            case .tempRate, .logSequence:
+            case .tempRate, .tempRatePart, .logSequence:
                 continue
             }
         }
@@ -215,6 +215,7 @@ extension TandemPumpManager {
                 endDate: end,
                 value: rest,
                 unit: .units,
+                decisionId: nil,
                 deliveredUnits: rest,
                 description: "Extended bolus #\(entry.bolusId)",
                 insulinType: state.insulinType,
@@ -236,6 +237,7 @@ extension TandemPumpManager {
             endDate: end,
             value: entry.units ?? 0,
             unit: .units,
+            decisionId: nil,
             deliveredUnits: deliveredUnits,
             description: "Extended bolus #\(entry.bolusId)",
             syncIdentifier: entry.raw.hexadecimalString,
@@ -271,6 +273,7 @@ extension TandemPumpManager {
             endDate: dose.endDate,
             value: dose.programmedUnits,
             unit: .units,
+            decisionId: nil,
             deliveredUnits: dose.deliveredUnits,
             description: dose.description,
             syncIdentifier: entry.raw.hexadecimalString,

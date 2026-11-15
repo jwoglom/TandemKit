@@ -73,8 +73,10 @@ public struct DeliveryTransitionLedger: Equatable {
     /// The pump whose sequence numbers `trackedAfter` and the entries refer to.
     public private(set) var pumpSerial: UInt32?
     /// The pump's last record when the driver started watching it. Records up to it may have
-    /// been reported live without an entry, so they are never reported.
+    /// been reported live without an entry, so they are never reported, unless dated from `historySince`.
     public private(set) var trackedAfter: UInt32?
+    /// Setup's history load: the user has said no host already counts the pump's history from here on.
+    public private(set) var historySince: Date?
     public private(set) var entries: [Entry]
     public var pending: PendingTransition?
     /// The last reading that saw the pump in the state the host holds, or will once `pending` is
@@ -88,6 +90,7 @@ public struct DeliveryTransitionLedger: Equatable {
     public init(
         pumpSerial: UInt32? = nil,
         trackedAfter: UInt32? = nil,
+        historySince: Date? = nil,
         entries: [Entry] = [],
         pending: PendingTransition? = nil,
         lastConfirmedObservation: Date? = nil,
@@ -95,6 +98,7 @@ public struct DeliveryTransitionLedger: Equatable {
     ) {
         self.pumpSerial = pumpSerial
         self.trackedAfter = trackedAfter
+        self.historySince = historySince
         self.entries = entries
         self.pending = pending
         self.lastConfirmedObservation = lastConfirmedObservation
@@ -104,6 +108,9 @@ public struct DeliveryTransitionLedger: Equatable {
     /// Starts tracking `pumpSerial` after `lastSequenceNum`: on first sight, a replacement pump, or
     /// a log the pump erased. What the host was told stays; which record accounts for it does not.
     public mutating func track(pumpSerial: UInt32, after lastSequenceNum: UInt32) {
+        if self.pumpSerial.map({ $0 != pumpSerial }) == true {
+            historySince = nil
+        }
         self.pumpSerial = pumpSerial
         trackedAfter = lastSequenceNum
         entries = entries.filter(\.isReported).map { entry in
@@ -116,6 +123,17 @@ public struct DeliveryTransitionLedger: Equatable {
     public func isTracking(pumpSerial: UInt32, lastSequenceNum: UInt32) -> Bool {
         guard self.pumpSerial == pumpSerial, let trackedAfter else { return false }
         return lastSequenceNum >= trackedAfter
+    }
+
+    /// Whether a pump record, dated on the phone's clock, may be reported.
+    public func isTracked(sequenceNum: UInt32, date: Date) -> Bool {
+        guard let trackedAfter else { return false }
+        return sequenceNum > trackedAfter || historySince.map { date >= $0 } == true
+    }
+
+    /// Reports the pump's suspends and resumes from `date` on, as setup's history load does.
+    public mutating func reportHistory(since date: Date) {
+        historySince = min(historySince ?? date, date)
     }
 
     public mutating func record(_ entry: Entry) {
@@ -156,6 +174,7 @@ extension DeliveryTransitionLedger: RawRepresentable {
         self.init(
             pumpSerial: rawValue["pumpSerial"] as? UInt32,
             trackedAfter: rawValue["trackedAfter"] as? UInt32,
+            historySince: (rawValue["historySince"] as? TimeInterval).map(Date.init(timeIntervalSinceReferenceDate:)),
             entries: (rawValue["entries"] as? [[String: Any]] ?? []).compactMap(Entry.init(rawValue:)),
             pending: (rawValue["pending"] as? [String: Any]).flatMap(PendingTransition.init(rawValue:)),
             lastConfirmedObservation: (rawValue["lastConfirmedObservation"] as? TimeInterval)
@@ -168,6 +187,7 @@ extension DeliveryTransitionLedger: RawRepresentable {
         var raw: RawValue = ["entries": entries.map(\.rawValue)]
         raw["pumpSerial"] = pumpSerial
         raw["trackedAfter"] = trackedAfter
+        raw["historySince"] = historySince?.timeIntervalSinceReferenceDate
         raw["pending"] = pending?.rawValue
         raw["lastConfirmedObservation"] = lastConfirmedObservation?.timeIntervalSinceReferenceDate
         raw["interruptedTemp"] = interruptedTemp?.rawValue

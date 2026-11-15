@@ -81,6 +81,51 @@ import XCTest
         }
         withExtendedLifetime(unpaired) {}
     }
+
+    /// Pairing's connect waits out a lost link on purpose, so a setup flow that goes away mid-connect
+    /// ends it through `deactivate` instead (#603).
+    func testDeactivationEndsAPairingConnectStillPending() {
+        let realBluetooth = TandemBluetoothManager()
+        let unpaired = TandemPumpManager(state: TandemPumpManagerState(rawValue: [:]), bluetooth: realBluetooth)
+        realBluetooth.manager?.state = .poweredOn
+        realBluetooth.pairingTimeout = .seconds(30)
+        let started = Date()
+        let ended = expectation(description: "the pairing connect ends")
+        var result: Error?
+        realBluetooth.connect(peripheral) { error in
+            result = error
+            ended.fulfill()
+        }
+
+        realBluetooth.deactivate()
+        wait(for: [ended], timeout: 10)
+
+        XCTAssertLessThan(Date().timeIntervalSince(started), 5, "the connect waited out its timeout")
+        guard let result, case PumpCommError.pumpNotConnected = result else {
+            return XCTFail("expected pumpNotConnected, got \(String(describing: result))")
+        }
+        withExtendedLifetime(unpaired) {}
+    }
+
+    func testADeactivatedManagerRefusesPairingsConnect() {
+        let realBluetooth = TandemBluetoothManager()
+        let unpaired = TandemPumpManager(state: TandemPumpManagerState(rawValue: [:]), bluetooth: realBluetooth)
+        realBluetooth.manager?.state = .poweredOn
+        realBluetooth.deactivate()
+        let ended = expectation(description: "the pairing connect ends")
+        var result: Error?
+
+        realBluetooth.connect(peripheral) { error in
+            result = error
+            ended.fulfill()
+        }
+        wait(for: [ended], timeout: 5)
+
+        guard let result, case PumpCommError.pumpNotConnected = result else {
+            return XCTFail("expected pumpNotConnected, got \(String(describing: result))")
+        }
+        withExtendedLifetime(unpaired) {}
+    }
 }
 
 #endif

@@ -172,6 +172,14 @@ final class FaketandemHarness {
             delegateQueue.sync {}
         }
 
+        /// The host takes a manager made with `attachDelegate: false`, as a setup flow hands it over:
+        /// delegate, then queue, Trio's order.
+        func adoptByHost() {
+            manager.pumpManagerDelegate = delegate
+            manager.delegateQueue = delegateQueue
+            drainDelegate()
+        }
+
         var bolusEvents: [NewPumpEvent] {
             drainDelegate()
             return delegate.pumpEvents.filter { $0.dose?.type == .bolus }
@@ -248,10 +256,13 @@ final class FaketandemHarness {
         }
     }
 
-    /// The host deletes the pump manager: `prepareForDeactivation`, as Loop and Trio call it.
+    /// The host deletes the pump manager: `delete()`, as Loop and Trio call it.
     func deactivate(_ driver: Driver, timeout: TimeInterval = 40) throws {
         try tearDown(timeout: timeout) { done in
-            driver.manager.prepareForDeactivation { _ in done() }
+            Task {
+                await driver.manager.delete()
+                done()
+            }
         }
     }
 

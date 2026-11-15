@@ -7,6 +7,13 @@ struct IntegrationWaitTimeout: Error, CustomStringConvertible {
     var description: String { "timed out after \(timeout)s waiting for \(what)" }
 }
 
+struct IntegrationWaitBroken: Error, CustomStringConvertible {
+    let what: String
+    let duration: TimeInterval
+
+    var description: String { "\(what) stopped holding within \(duration)s" }
+}
+
 /// Polling waits for the integration tests. Pumps the current run loop while waiting, because
 /// parts of the driver (HistoryLogFetcher) complete on the main queue and a blocked main thread
 /// would deadlock them.
@@ -38,6 +45,28 @@ enum IntegrationWait {
             return found != nil
         }
         return found!
+    }
+
+    /// Throws if `condition` stops holding within `duration`, checked every `interval`.
+    static func holds(
+        _ what: String,
+        for duration: TimeInterval,
+        every interval: TimeInterval = 0.5,
+        _ condition: () throws -> Bool
+    ) throws {
+        let deadline = Date().addingTimeInterval(duration)
+        while true {
+            guard try condition() else {
+                throw IntegrationWaitBroken(what: what, duration: duration)
+            }
+            guard Date() < deadline else {
+                return
+            }
+            let next = min(Date().addingTimeInterval(interval), deadline)
+            while Date() < next {
+                pump()
+            }
+        }
     }
 
     static func pump() {

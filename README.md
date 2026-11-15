@@ -1,9 +1,14 @@
 # TandemKit
 
-A LoopKit `PumpManager` for Tandem insulin pumps, ported from
+A LoopKit `PumpManager` for Tandem Mobi, building on
 [pumpX2](https://github.com/jwoglom/pumpX2).
 
-TandemKit is under development and for EXPERIMENTAL USE ONLY.
+
+> There is NO WARRANTY IMPLIED OR EXPRESSED DUE TO USE OF THIS SOFTWARE.\
+> YOU ASSUME ALL RISK FOR ANY MALFUNCTIONS, BUGS, OR INSULIN DELIVERY ACTIONS.\
+> \
+> TandemKit is NOT AFFILIATED WITH OR SUPPORTED by Tandem Diabetes or any other manufacturer.\
+> **It has not been officially approved for use by any regulatory body and is provided as a RESEARCH TOOL ONLY.**
 
 ## Setup
 ### Trio
@@ -75,14 +80,7 @@ Upstream `LoopKit/LoopKit` has no `Pluggable`, which `TandemPumpManager`
 conforms to.
 
 Everything else comes from SwiftPM, resolved by `TandemKit.xcodeproj` and pinned
-in its `Package.resolved`:
-
-| Product | Minimum | Used for |
-| --- | --- | --- |
-| `SwiftECC` | 5.5.0 | elliptic-curve math behind `EcJpake` |
-| `BigInt` | 1.22.0 | arbitrary-precision integers under SwiftECC |
-| `ASN1` | 2.7.0 | SwiftECC key encoding |
-| `Digest` | 1.13.0 | hashing in the JPAKE rounds |
+in its `Package.resolved`: `SwiftECC`, `BigInt`, `ASN1` and `Digest`.
 
 `Package.swift` describes the source layout and resolves these, but cannot
 compile the targets; see the comment at the top of the manifest. The Xcode
@@ -108,6 +106,6 @@ Termination Reason: DYLD 1 Library missing
 ```
 
 Trio hits this, because `loopandlearn/AccuChekKit` links `leif-ibsen/ASN1` too.
-The fix is step 3 in the Trio instructions below, and it is correct whether Xcode ends up building the
+The fix is step 3 in the Trio instructions above, and it is correct whether Xcode ends up building the
 product statically or dynamically. Re-check it whenever the set of products
 TandemKit links changes, or a new framework starts linking one of them.

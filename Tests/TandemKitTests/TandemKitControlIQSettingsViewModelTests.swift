@@ -65,6 +65,104 @@ import XCTest
         XCTAssertNil(ViewModel.validationMessage(enabled: true, weightLbs: 1, totalDailyInsulin: 10))
     }
 
+    // MARK: - Turning Control-IQ on
+
+    /// Saving a change that turns Control-IQ on takes the check and confirmation the settings screen's
+    /// Algorithm row makes; a save that leaves it on or turns it off goes straight to the pump.
+    private func makeViewModel(
+        controlIQOn: Bool,
+        sessionState: CGMStatusV2Response.SessionState
+    ) -> (viewModel: ViewModel, bluetooth: StubPumpBluetooth) {
+        let bluetooth = StubPumpBluetooth()
+        var state = TandemPumpManagerState(rawValue: [:])
+        state.useControlIQ = controlIQOn
+        state.controlIQWeightLbs = 154
+        state.controlIQTotalDailyInsulin = 42
+        let manager = TandemPumpManager(state: state, bluetooth: bluetooth)
+        bluetooth.stub(CGMStatusV2Request.self, with: CGMStatusV2Response(
+            sessionStateId: sessionState.rawValue,
+            lastCalibrationTimestamp: 0,
+            sensorStartedTimestamp: 100,
+            transmitterBatteryStatusId: CGMStatusV2Response.TransmitterBatteryStatus.unavailable.rawValue,
+            sessionDurationSeconds: 3600,
+            sessionTimeRemainingSeconds: 3600,
+            cgmSensorTypeId: CGMStatusV2Response.CGMSensorType.dexcomG7.rawValue,
+            gracePeriod: false
+        ))
+        bluetooth.stub(ChangeControlIQSettingsRequest.self, with: ChangeControlIQSettingsResponse(status: 0))
+        return (ViewModel(pumpManager: manager), bluetooth)
+    }
+
+    private func drainMainQueue(until condition: () -> Bool) {
+        let deadline = Date().addingTimeInterval(5)
+        while !condition(), Date() < deadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.01))
+        }
+    }
+
+    func testTurningControlIQOnWithoutASensorSessionAsksForACGMAndSendsNothing() {
+        let (viewModel, bluetooth) = makeViewModel(controlIQOn: false, sessionState: .stopped)
+        viewModel.controlIQEnabled = true
+
+        viewModel.saveControlIQSettings()
+        drainMainQueue(until: { viewModel.enablePrompt != nil })
+
+        XCTAssertEqual(viewModel.enablePrompt, .cgmRequired)
+        XCTAssertFalse(viewModel.isLoading)
+        XCTAssertFalse(bluetooth.didSend(ChangeControlIQSettingsRequest.self))
+    }
+
+    func testTurningControlIQOnIsCheckedWhateverElseChangedWithIt() {
+        let (viewModel, bluetooth) = makeViewModel(controlIQOn: false, sessionState: .stopped)
+        viewModel.controlIQEnabled = true
+        viewModel.weightLbs = 160
+        viewModel.totalDailyInsulin = 45
+
+        viewModel.saveControlIQSettings()
+        drainMainQueue(until: { viewModel.enablePrompt != nil })
+
+        XCTAssertEqual(viewModel.enablePrompt, .cgmRequired)
+        XCTAssertFalse(bluetooth.didSend(ChangeControlIQSettingsRequest.self))
+    }
+
+    func testTurningControlIQOnWithASensorSessionSendsOnlyOnceConfirmed() {
+        let (viewModel, bluetooth) = makeViewModel(controlIQOn: false, sessionState: .active)
+        viewModel.controlIQEnabled = true
+
+        viewModel.saveControlIQSettings()
+        drainMainQueue(until: { viewModel.enablePrompt != nil })
+
+        XCTAssertEqual(viewModel.enablePrompt, .confirm)
+        XCTAssertFalse(bluetooth.didSend(ChangeControlIQSettingsRequest.self))
+
+        viewModel.confirmEnablingControlIQ()
+        drainMainQueue(until: { !viewModel.isLoading })
+
+        XCTAssertEqual(bluetooth.sent(ChangeControlIQSettingsRequest.self).map(\.enabled), [true])
+    }
+
+    func testChangingTheValuesOfControlIQThatIsAlreadyOnSavesWithoutAsking() {
+        let (viewModel, bluetooth) = makeViewModel(controlIQOn: true, sessionState: .stopped)
+        viewModel.weightLbs = 160
+
+        viewModel.saveControlIQSettings()
+        drainMainQueue(until: { !viewModel.isLoading })
+
+        XCTAssertNil(viewModel.enablePrompt)
+        XCTAssertEqual(bluetooth.sent(ChangeControlIQSettingsRequest.self).map(\.enabled), [true])
+    }
+
+    func testTurningControlIQOffSavesWithoutAsking() {
+        let (viewModel, bluetooth) = makeViewModel(controlIQOn: true, sessionState: .stopped)
+        viewModel.controlIQEnabled = false
+
+        viewModel.saveControlIQSettings()
+        drainMainQueue(until: { !viewModel.isLoading })
+
+        XCTAssertNil(viewModel.enablePrompt)
+        XCTAssertEqual(bluetooth.sent(ChangeControlIQSettingsRequest.self).map(\.enabled), [false])
+    }
+
     // MARK: - Sleep schedule slots
 
     /// Every slot was built without an index before, so all four shared `id: 0` and were not
@@ -88,8 +186,8 @@ import XCTest
     func testActiveDaysRoundTripThroughTheBitmask() {
         var slot = SleepScheduleSlot(id: 0)
 
-        slot.setActive(day: 0, true) // Sunday
-        slot.setActive(day: 6, true) // Saturday
+        slot.setActive(day: 0, true) // Monday
+        slot.setActive(day: 6, true) // Sunday
         XCTAssertEqual(slot.activeDays, 0b100_0001)
         XCTAssertTrue(slot.isActive(day: 0))
         XCTAssertTrue(slot.isActive(day: 6))
@@ -98,6 +196,17 @@ import XCTest
         slot.setActive(day: 0, false)
         XCTAssertEqual(slot.activeDays, 0b100_0000)
         XCTAssertFalse(slot.isActive(day: 0))
+    }
+
+    func testDaysAreInThePumpsOrderMondayFirst() {
+        var slot = SleepScheduleSlot(id: 0)
+        slot.setActive(day: 0, true)
+        slot.setActive(day: 6, true)
+
+        XCTAssertEqual(MultiDay.fromBitmask(slot.activeDays), [.monday, .sunday])
+        XCTAssertEqual(SleepScheduleSlot.dayLetters.count, 7)
+        XCTAssertEqual(SleepScheduleSlot.dayLetters[0], Calendar.current.veryShortWeekdaySymbols[1])
+        XCTAssertEqual(SleepScheduleSlot.dayLetters[6], Calendar.current.veryShortWeekdaySymbols[0])
     }
 
     func testEditsSurviveTheRoundTripToTheWireFormat() {

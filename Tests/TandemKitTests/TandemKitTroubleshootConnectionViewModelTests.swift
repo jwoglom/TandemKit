@@ -22,6 +22,12 @@ import XCTest
         super.tearDown()
     }
 
+    private func time(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+
     // MARK: - What the screen shows
 
     func testAnUnpairedPumpThatHasNeverConnectedShowsNothingSaved() {
@@ -139,7 +145,7 @@ import XCTest
                 lastKnownDelivery: viewModel.lastKnownBasalDelivery,
                 now: lastContact.addingTimeInterval(.minutes(5))
             ),
-            "Trio last connected to your pump 5 minutes ago. At that time, the pump was delivering basal at the profile basal rate of 0.80 U/hr and will continue to deliver basal as programmed until reconnected."
+            "Trio has not connected to your pump since \(time(lastContact)) (5 minutes ago). At that time, the pump was delivering basal at the profile basal rate of 0.80 U/hr and will continue to deliver basal as programmed until reconnected."
         )
     }
 
@@ -150,6 +156,77 @@ import XCTest
         XCTAssertTrue(
             PumpConnectionIssue.pumpUnreachable.detail(appName: "Trio", lastKnownDelivery: nil)
                 .hasPrefix("Trio is not connected to your pump")
+        )
+    }
+
+    // MARK: - When the pump was last connected to
+
+    private static let allIssues: [PumpConnectionIssue] = [
+        .bluetoothOff, .bluetoothUnauthorized, .bluetoothUnavailable, .pumpUnreachable, .handshakeFailing, .noRecentSync
+    ]
+    private static let lastSync = Date(timeIntervalSinceReferenceDate: 700_000_000)
+
+    func testEveryNoticeSaysSinceWhenThePumpWasLastConnectedTo() {
+        let now = Self.lastSync.addingTimeInterval(.minutes(12))
+
+        for issue in Self.allIssues {
+            let detail = issue.detail(appName: "Trio", lastSync: Self.lastSync, now: now)
+
+            XCTAssertTrue(detail.contains("since \(time(Self.lastSync)) (12 minutes ago)"), "\(issue): \(detail)")
+        }
+    }
+
+    func testAHandshakeThePumpKeepsEndingSaysSinceWhenThePumpWasLastConnectedTo() {
+        let detail = PumpConnectionIssue.handshakeFailing.detail(
+            appName: "Trio",
+            lastSync: Self.lastSync,
+            now: Self.lastSync.addingTimeInterval(.minutes(12))
+        )
+
+        XCTAssertTrue(
+            detail.hasPrefix("Your pump is rejecting connections from this device since \(time(Self.lastSync)) (12 minutes ago). This may be caused by"),
+            detail
+        )
+        XCTAssertTrue(detail.contains("re-pair to resume Trio controlling insulin delivery."), detail)
+    }
+
+    func testADroppedLinkWithNothingKnownOfTheDeliverySaysSinceWhenThePumpWasLastConnectedTo() {
+        let detail = PumpConnectionIssue.pumpUnreachable.detail(
+            appName: "Trio",
+            lastKnownDelivery: nil,
+            lastSync: Self.lastSync,
+            now: Self.lastSync.addingTimeInterval(.minutes(12))
+        )
+
+        XCTAssertTrue(
+            detail.hasPrefix("Trio has not connected to your pump since \(time(Self.lastSync)) (12 minutes ago), so it cannot read from it"),
+            detail
+        )
+    }
+
+    func testAPumpThatHasNeverConnectedGivesNoTimeInAnyNotice() {
+        for issue in Self.allIssues {
+            let detail = issue.detail(appName: "Trio", lastSync: nil, now: Self.lastSync)
+
+            XCTAssertFalse(detail.contains(" ago)"), "\(issue): \(detail)")
+        }
+        XCTAssertTrue(
+            PumpConnectionIssue.handshakeFailing.detail(appName: "Trio")
+                .hasPrefix("Your pump is rejecting connections from this device. This may be caused by")
+        )
+    }
+
+    func testALastConnectionMoreThanHalfADayAgoCarriesItsDate() {
+        let now = Self.lastSync.addingTimeInterval(.hours(20))
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+
+        let detail = PumpConnectionIssue.handshakeFailing.detail(appName: "Trio", lastSync: Self.lastSync, now: now)
+
+        XCTAssertTrue(
+            detail.hasPrefix("Your pump is rejecting connections from this device since \(formatter.string(from: Self.lastSync)) (20 hours ago)."),
+            detail
         )
     }
 

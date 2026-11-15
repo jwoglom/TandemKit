@@ -4,16 +4,10 @@ import LoopKit
 import XCTest
 
 final class LoopOnboardingTests: LoopTestCase {
-    /// The manager Loop's pump setup screen builds from Loop's limits and basal schedule. Loop holds it
-    /// from launch here, as when re-pairing, since the test cannot drive the screen.
+    /// Loop holds the setup screen's manager from launch here, as when re-pairing.
     override func seededFiles() throws -> [String: String] {
-        let setup = TandemPumpManagerState(
-            basalRateSchedule: BasalRateSchedule(dailyItems: [RepeatingScheduleValue(startTime: 0, value: Self.scheduledBasalRate)])!,
-            maxBasalRateUnitsPerHour: Self.maxBasal,
-            maxBolusUnits: Self.maxBolus
-        )
         var files = try super.seededFiles()
-        files["Documents/PumpManagerState.plist"] = try Self.plist(["managerIdentifier": "TandemPumpManager", "state": setup.rawValue])
+        files["Documents/PumpManagerState.plist"] = try Self.pumpManagerPlist(Self.setupState())
         return files
     }
 

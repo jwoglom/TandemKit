@@ -26,7 +26,7 @@ final class LoopCartridgeTests: LoopTestCase {
         let basal = [PumpEventType.basal, .tempBasal].map(\.rawValue)
         XCTAssertEqual(
             events.compactMap(\.type).filter { !basal.contains($0) },
-            [PumpEventType.suspend, .rewind, .prime, .replaceComponent(componentType: .infusionSet), .resume].map(\.rawValue),
+            [PumpEventType.replaceComponent(componentType: .pump), .suspend, .rewind, .prime, .replaceComponent(componentType: .infusionSet), .resume].map(\.rawValue),
             "\(events)"
         )
     }

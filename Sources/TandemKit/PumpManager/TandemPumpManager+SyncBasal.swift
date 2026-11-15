@@ -222,13 +222,10 @@ extension TandemPumpManager {
                     requests.append(activeProfile.modifySegmentMessage(segment: segment, changedFields: changedFields))
                     occupiedStartTimes[segment.segmentIndex] = write.startTime
                 } else {
-                    let firstSegment = currentSegments.first!
                     requests.append(activeProfile.createSegmentMessage(
                         profileStartTime: write.startTime,
                         profileBasalRate: write.basalRate,
-                        profileCarbRatio: firstSegment.profileCarbRatio,
-                        profileTargetBG: Int(firstSegment.profileTargetBG),
-                        profileISF: firstSegment.profileISF
+                        copyingSettingsOf: currentSegments.first!
                     ))
                     occupiedStartTimes[nextCreatedSegmentKey] = write.startTime
                     nextCreatedSegmentKey -= 1
@@ -280,11 +277,10 @@ extension TandemPumpManager {
     /// The pump's rate in force before a write. Its own profile, not the schedule: an update writes
     /// the schedule the driver already holds over a profile that differs from it.
     func profileRateInForce(_ segments: [IDPSegmentResponse]) -> Double {
-        let pumpNow = now.addingTimeInterval(state.pumpClockOffset)
-        let minuteOfDay = Int(pumpNow.timeIntervalSince(Calendar.current.startOfDay(for: pumpNow)) / 60)
+        let minuteOfDay = Int(pumpBasalSchedule.secondsSinceMidnight(at: now) / 60)
         let sorted = segments.sorted { $0.profileStartTime < $1.profileStartTime }
         guard let segment = sorted.last(where: { $0.profileStartTime <= minuteOfDay }) ?? sorted.first else {
-            return getScheduledBasalRate(at: pumpNow)
+            return pumpScheduledBasalRate(at: now)
         }
         return Double(segment.profileBasalRate) / 1000
     }
@@ -322,7 +318,7 @@ extension TandemPumpManager {
     /// A temp basal is a percent of the profile rate, so a profile change rescales it (on hardware
     /// a 184% temp fell from 1.38 to 0.92 U/hr). Stopped, as OmnipodKit cancels delivery first.
     func restartBasalDoseAfterScheduleChange(previousRate: Double) {
-        let newRate = getScheduledBasalRate(at: now.addingTimeInterval(state.pumpClockOffset))
+        let newRate = pumpScheduledBasalRate(at: now)
         guard !state.useControlIQ, Int((newRate * 1000).rounded()) != Int((previousRate * 1000).rounded()) else {
             return
         }

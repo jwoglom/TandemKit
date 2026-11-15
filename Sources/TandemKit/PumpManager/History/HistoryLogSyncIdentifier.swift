@@ -21,9 +21,10 @@ import Foundation
 /// * **Everything else** — the pump assigns no id, so the log's own `sequenceNum` is the only
 ///   stable handle. Use `logSequence` only for events that are reported once, already final: a
 ///   sequence number is not knowable before the pump writes the record, so it cannot bridge an
-///   optimistic report to its confirmation. Its one use is a basal correction, keyed on the
-///   `BasalDeliveryHistoryLog` (279) whose cycle it reports, so there is at most one per
-///   BasalDelivery record.
+///   optimistic report to its confirmation. A basal correction is keyed on the
+///   `BasalDeliveryHistoryLog` whose cycle it reports, so there is at most one per BasalDelivery
+///   record, and a suspend or resume, the app's own included, on its `PumpingSuspended` or
+///   `PumpingResumed` record.
 ///
 /// `bolusId` and `tempRateId` are small pump-assigned counters that are eventually reused, so the
 /// pump serial is part of every identifier, and callers must not treat an id as unique across the
@@ -40,8 +41,9 @@ import Foundation
 /// ```
 ///
 /// **This encoding is frozen**: hosts persist it, so any change re-reports doses under new
-/// identities. The live path keys a temp basal the app set on its `tempRateId`; a bolus it keys on
-/// its own `raw`, which `BolusReportLedger` bridges to this one.
+/// identities. The live path keys a temp basal the app set on its `tempRateId` and a bolus on its
+/// `bolusId`, minted at the command; without the serial then, on its own `raw`, which
+/// `BolusReportLedger` bridges to this one.
 public enum HistoryLogSyncIdentifier {
     /// Which pump-assigned counter the identifier is built from. Values are persisted indirectly by
     /// the host app; never renumber them.
@@ -55,6 +57,9 @@ public enum HistoryLogSyncIdentifier {
         case logSequence = 3
         /// `bolusId` of the extended part (`BolexActivated`/`BolexCompleted`) of a bolus.
         case extendedBolus = 4
+        /// `tempRateId` in the low 16 bits, and in the high 16 which part of the temp rate it is,
+        /// counting from 1 the segment changes the pump rescaled it at.
+        case tempRatePart = 5
     }
 
     /// A pump serial known to be real, which is the only kind that may enter an identifier.
@@ -111,6 +116,26 @@ public enum HistoryLogSyncIdentifier {
     /// Identity of a temp rate, from the pump-assigned `tempRateId`.
     public static func tempRate(pumpSerial: PumpSerial, tempRateId: Int) -> Data {
         data(scheme: .tempRate, pumpSerial: pumpSerial, identifier: UInt32(clamping: tempRateId))
+    }
+
+    /// Identity of the part of a temp rate after its `part`th rescaling at a segment change.
+    public static func tempRatePart(pumpSerial: PumpSerial, tempRateId: Int, part: Int) -> Data {
+        let identifier = UInt32(UInt16(truncatingIfNeeded: tempRateId)) | UInt32(UInt16(clamping: part)) << 16
+        return data(scheme: .tempRatePart, pumpSerial: pumpSerial, identifier: identifier)
+    }
+
+    /// The part after `raw`'s next segment change, for a temp rate or a part of one; nil for any
+    /// other identity. Every pump manager counts the parts of one temp rate alike.
+    public static func nextTempRatePart(after raw: Data) -> Data? {
+        guard let decoded = decode(raw) else { return nil }
+        switch decoded.scheme {
+        case .tempRate:
+            return tempRatePart(pumpSerial: decoded.pumpSerial, tempRateId: Int(decoded.identifier), part: 1)
+        case .tempRatePart:
+            return tempRatePart(pumpSerial: decoded.pumpSerial, tempRateId: Int(decoded.identifier & 0xFFFF), part: Int(decoded.identifier >> 16) + 1)
+        case .bolus, .logSequence, .extendedBolus:
+            return nil
+        }
     }
 
     /// Identity of an event the pump assigns no id to, from the history log's sequence number.

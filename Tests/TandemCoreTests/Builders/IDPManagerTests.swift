@@ -188,18 +188,26 @@ final class IDPManagerTests: XCTestCase {
 
     // MARK: - Create Segment Tests
 
-    func testCreateSegmentMessageIncludesAllFields() throws {
+    func testCreateSegmentMessageCopiesAFullTemplateAndFlagsAllFields() throws {
         let manager = IDPManager()
         setupCompleteManager(manager)
 
         let profile = try XCTUnwrap(manager.getActiveProfile())
+        let template = IDPSegmentResponse(
+            idpId: 10,
+            segmentIndex: 0,
+            profileStartTime: 0,
+            profileBasalRate: 1000,
+            profileCarbRatio: 12000,
+            profileTargetBG: 120,
+            profileISF: 40,
+            idpStatusId: 15 // as a pump reports a full segment: no START_TIME
+        )
 
         let request = profile.createSegmentMessage(
             profileStartTime: 720, // 12:00 PM
             profileBasalRate: 1300,
-            profileCarbRatio: 12000,
-            profileTargetBG: 120,
-            profileISF: 40
+            copyingSettingsOf: template
         )
 
         XCTAssertEqual(request.idpId, profile.idpId)
@@ -209,7 +217,30 @@ final class IDPManagerTests: XCTestCase {
         XCTAssertEqual(request.profileCarbRatio, 12000)
         XCTAssertEqual(request.profileTargetBG, 120)
         XCTAssertEqual(request.profileISF, 40)
-        XCTAssertEqual(request.idpStatusId, 31, "Must include all 5 fields")
+        XCTAssertEqual(request.idpStatusId, 31)
+    }
+
+    func testCreateSegmentMessageLeavesSettingsTheTemplateLacksUnflagged() throws {
+        let manager = IDPManager()
+        setupCompleteManager(manager)
+
+        let profile = try XCTUnwrap(manager.getActiveProfile())
+        // The segment 0 a Mobi read back for a profile given only a basal rate and carb ratio.
+        let template = IDPSegmentResponse(
+            idpId: 10,
+            segmentIndex: 0,
+            profileStartTime: 0,
+            profileBasalRate: 1000,
+            profileCarbRatio: 30000,
+            profileTargetBG: 0,
+            profileISF: 0,
+            idpStatusId: 3
+        )
+
+        let request = profile.createSegmentMessage(profileStartTime: 480, profileBasalRate: 1200, copyingSettingsOf: template)
+
+        XCTAssertEqual(request.idpStatus, [.START_TIME, .BASAL_RATE, .CARB_RATIO])
+        XCTAssertEqual(request.profileCarbRatio, 30000)
     }
 
     func testCreateSegmentMessageWithFloatingPointBasal() throws {
@@ -217,13 +248,12 @@ final class IDPManagerTests: XCTestCase {
         setupCompleteManager(manager)
 
         let profile = try XCTUnwrap(manager.getActiveProfile())
+        let template = try XCTUnwrap(profile.getSegments().first)
 
         let request = profile.createSegmentMessage(
             profileStartTimeMinutes: 720,
             profileBasalRateUnits: 1.25,
-            profileCarbRatio: 12000,
-            profileTargetBG: 120,
-            profileISF: 40
+            copyingSettingsOf: template
         )
 
         XCTAssertEqual(request.profileBasalRate, 1250) // 1.25 * 1000

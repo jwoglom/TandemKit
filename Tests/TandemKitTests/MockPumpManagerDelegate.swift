@@ -10,7 +10,7 @@ import XCTest
 /// Two views of the same traffic: the per-kind arrays (`pumpEvents`, `statusUpdates`, ...) the unit
 /// tests read, and `journal`, an ordered record of every call with its position, wall time and the
 /// injected clock's time, which the conformance tests replay into a `DoseOracle` with `feed(_:)`.
-final class MockPumpManagerDelegate: PumpManagerDelegate {
+nonisolated final class MockPumpManagerDelegate: PumpManagerDelegate {
     struct StatusUpdate {
         let newStatus: PumpManagerStatus
         let oldStatus: PumpManagerStatus
@@ -27,6 +27,12 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
         let events: [NewPumpEvent]
         let lastReconciliation: Date?
         let replacePendingEvents: Bool
+    }
+
+    struct DeviceLogEntry {
+        let deviceIdentifier: String?
+        let type: DeviceLogEntryType
+        let message: String
     }
 
     /// One delegate call in the order it arrived.
@@ -78,6 +84,7 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
     private var _willDeactivateCount = 0
     private var _pumpWasReplacedCount = 0
     private var _clockAdjustments: [TimeInterval] = []
+    private var _deviceLogEntries: [DeviceLogEntry] = []
     private var _journal: [JournalEntry] = []
 
     private func synchronized<T>(_ body: () -> T) -> T {
@@ -97,6 +104,7 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
     var willDeactivateCount: Int { synchronized { _willDeactivateCount } }
     var pumpWasReplacedCount: Int { synchronized { _pumpWasReplacedCount } }
     var clockAdjustments: [TimeInterval] { synchronized { _clockAdjustments } }
+    var deviceLogEntries: [DeviceLogEntry] { synchronized { _deviceLogEntries } }
     var journal: [JournalEntry] { synchronized { _journal } }
 
     /// When set, every journal entry also carries this clock's `now`. Give it the driver's clock.
@@ -116,6 +124,7 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
 
     var detectedSystemTimeOffset: TimeInterval = 0
     var automaticDosingEnabled: Bool = false
+    var automatedTreatmentState: AutomatedTreatmentState?
 
     /// Returned from `startDateToFilterNewPumpEvents(for:)`. Settable so a test can model a host
     /// app whose boundary marches forward as events are reported — Trio returns
@@ -202,12 +211,15 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
 
     func deviceManager(
         _ manager: DeviceManager,
-        logEventForDeviceIdentifier _: String?,
-        type _: DeviceLogEntryType,
-        message _: String,
+        logEventForDeviceIdentifier deviceIdentifier: String?,
+        type: DeviceLogEntryType,
+        message: String,
         completion: ((Error?) -> Void)?
     ) {
         expectDelegateQueue(of: manager)
+        synchronized {
+            _deviceLogEntries.append(DeviceLogEntry(deviceIdentifier: deviceIdentifier, type: type, message: message))
+        }
         completion?(nil)
     }
 
@@ -236,6 +248,15 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
         }
     }
 
+    /// The driver hands alerts to the main actor from a `Task`, so they arrive after the delegate
+    /// queue drains. Spins the main run loop until `condition` holds or `timeout` passes.
+    func waitForAlerts(timeout: TimeInterval = 2, until condition: () -> Bool) {
+        let deadline = Date().addingTimeInterval(timeout)
+        while !condition(), Date() < deadline {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.01))
+        }
+    }
+
     // MARK: - Alert routing
 
     private final class WeakResponder {
@@ -258,28 +279,29 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
         guard let responder = synchronized({ _alertResponders[identifier.managerIdentifier]?.responder }) else {
             return false
         }
-        responder.acknowledgeAlert(alertIdentifier: identifier.alertIdentifier, completion: completion)
+        Task {
+            do {
+                try await responder.acknowledgeAlert(alertIdentifier: identifier.alertIdentifier)
+                completion(nil)
+            } catch {
+                completion(error)
+            }
+        }
         return true
     }
 
     // MARK: - PersistedAlertStore
 
-    func doesIssuedAlertExist(identifier _: Alert.Identifier, completion: @escaping (Swift.Result<Bool, Error>) -> Void) {
-        completion(.success(false))
+    func doesIssuedAlertExist(identifier _: Alert.Identifier) async throws -> Bool {
+        false
     }
 
-    func lookupAllUnretracted(
-        managerIdentifier _: String,
-        completion: @escaping (Swift.Result<[PersistedAlert], Error>) -> Void
-    ) {
-        completion(.success([]))
+    func lookupAllUnretracted(managerIdentifier _: String) async throws -> [PersistedAlert] {
+        []
     }
 
-    func lookupAllUnacknowledgedUnretracted(
-        managerIdentifier _: String,
-        completion: @escaping (Swift.Result<[PersistedAlert], Error>) -> Void
-    ) {
-        completion(.success([]))
+    func lookupAllUnacknowledgedUnretracted(managerIdentifier _: String) async throws -> [PersistedAlert] {
+        []
     }
 
     func recordRetractedAlert(_: Alert, at _: Date) {}
@@ -307,8 +329,8 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
         return false
     }
 
-    func pumpManagerWillDeactivate(_ manager: PumpManager) {
-        expectDelegateQueue(of: manager)
+    // Async, so off the delegate queue; `lastBatchAndDeactivation` pins its order instead.
+    func pumpManagerWantsDeletion(_: PumpManager) async {
         synchronized {
             _willDeactivateCount += 1
             record(.willDeactivate)

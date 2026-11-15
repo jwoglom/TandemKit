@@ -11,11 +11,23 @@ extension TandemPumpManager {
         let timeSinceReset = response.pumpTimeSinceReset
         let currentPumpTime = response.currentTimeDate
         let checkedAt = now
+        // The same pump, not reset since: another's clock, or a reset one's, says nothing of a step.
+        let previousShift = state.currentPumpTime != nil && state.pumpState.timeSinceReset.map { timeSinceReset >= $0 } == true
+            ? state.pumpWallClockShift
+            : nil
 
         state.pumpState.timeSinceReset = timeSinceReset
         state.currentPumpTime = currentPumpTime
         state.lastPumpTimeCheckDate = checkedAt
         state.pumpTimeCheckUTCOffset = TimeZone.current.secondsFromGMT()
+
+        if let previousShift {
+            let step = state.pumpWallClockShift - previousShift
+            if abs(step) >= TandemPumpManagerState.pumpClockStepThreshold {
+                logger.warning("The pump's clock moved \(Int(step.rounded())) s since it was last read; it was set")
+                state.lastPumpClockStep = PumpClockStep(foundAt: checkedAt, by: step)
+            }
+        }
 
         notifyDelegateStateUpdated()
         reconcilePumpClockSkewAlert()
@@ -109,10 +121,16 @@ extension TandemPumpManager {
         }
 
         let serial = pumpVersionResponse.serialNumber
-        if let previous = state.lastPumpSerial, previous != serial {
+        switch state.lastPumpSerial {
+        case nil:
+            logger.info("First pump this pump manager has read; reporting it added")
+            emitPumpEvents([NewPumpEvent.pumpAdded(date: now)], replacePendingEvents: false)
+        case let previous? where previous != serial:
             logger.warning("A different pump is paired; reporting a pump replacement")
             emitPumpEvents([NewPumpEvent.pumpReplacement(date: now)], replacePendingEvents: false)
             pumpDelegate.notify { $0?.pumpManagerPumpWasReplaced(self) }
+        default:
+            break
         }
         state.lastPumpSerial = serial
         state.pumpState.pumpSerial = serial
@@ -156,9 +174,14 @@ extension TandemPumpManager {
     /// Returns whether the pump answered.
     @discardableResult
     func fetchBasalStatus() -> Bool {
+        processedBasalStatus() != nil
+    }
+
+    /// The sync's basal status read, with everything a reading of it does. Nil when unanswered.
+    func processedBasalStatus() -> CurrentBasalStatusResponse? {
         guard let response = bluetooth.write(CurrentBasalStatusRequest()) else {
             logger.error("Failed to fetch basal status: \(String(describing: CurrentBasalStatusRequest.self))")
-            return false
+            return nil
         }
 
         verifyDeliveredBasalRate(response)
@@ -173,7 +196,7 @@ extension TandemPumpManager {
         }
 
         maintainPumpClockSkewCompensation(response)
-        return true
+        return response
     }
 
     /// A temp is a percent of the pump's profile, so on one that differs from the schedule it runs
@@ -294,7 +317,8 @@ extension TandemPumpManager {
             bolusProgressReport = TandemDoseProgressReporter(
                 pumpManager: self,
                 dose: dose.toDoseEntry(isMutable: true),
-                activationType: dose.automatic ? .automatic : .manualNoRecommendation
+                activationType: dose.automatic ? .automatic : .manualNoRecommendation,
+                eventRaw: dose.eventRaw
             )
         }
 
@@ -346,10 +370,7 @@ extension TandemPumpManager {
                 // and a finalized dose is never revised (#328).
                 logger.error("No delivered volume for finished bolus \(dose.bolusId ?? -1); keeping it mutable")
                 holdForFinalization(dose, fallbackUnits: dose.value)
-                events.append(NewPumpEvent.bolus(
-                    dose: dose.toDoseEntry(isMutable: true),
-                    date: dose.startDate
-                ))
+                events.append(NewPumpEvent.bolus(dose: dose.toDoseEntry(isMutable: true), of: dose))
             } else {
                 // Not the sampled estimate, which is 0 U until a second delivering status (#448).
                 events.append(progressReport.getPumpEvent(actualDeliveredUnits: progressReport.programmedUnits))
@@ -382,14 +403,11 @@ extension TandemPumpManager {
                     ),
                     now: now
                 ),
-                date: dose.startDate
+                of: dose
             ))
         } else {
             holdForFinalization(dose, fallbackUnits: dose.value)
-            events.append(NewPumpEvent.bolus(
-                dose: dose.toDoseEntry(isMutable: true),
-                date: dose.startDate
-            ))
+            events.append(NewPumpEvent.bolus(dose: dose.toDoseEntry(isMutable: true), of: dose))
         }
 
         state.bolusDose = nil
@@ -824,7 +842,7 @@ extension TandemPumpManager {
         }
 
         var events = getActivePumpEvents()
-        events.append(NewPumpEvent.bolus(dose: finalizedDose, date: pending.startDate))
+        events.append(NewPumpEvent.bolus(dose: finalizedDose, of: pending))
 
         state.lastReconciliation = now
         notifyDelegateStateUpdated()
@@ -981,16 +999,13 @@ extension TandemPumpManager {
             return nil
         }
 
-        // Look the schedule up at the pump's time of day. The offset, not `currentPumpTime`, which
-        // is a snapshot from the last clock read.
-        let pumpNow = now.addingTimeInterval(state.pumpClockOffset)
-        let expected = getScheduledBasalRate(at: pumpNow)
+        let expected = pumpScheduledBasalRate(at: now)
 
         // The offset trails the pump's clock by up to a second plus the read's latency, and the read
         // a segment change triggers lands in that gap. A real mismatch lasts the whole segment.
         let tolerance = Self.basalRateCheckTolerance
-        let nearbyRates = [pumpNow.addingTimeInterval(-tolerance), pumpNow, pumpNow.addingTimeInterval(tolerance)]
-            .map { getScheduledBasalRate(at: $0) }
+        let nearbyRates = [now.addingTimeInterval(-tolerance), now, now.addingTimeInterval(tolerance)]
+            .map { pumpScheduledBasalRate(at: $0) }
 
         // Compare whole milliunits, as the pump stores them, so float noise isn't a mismatch.
         let pumpMilliunits = Int((pumpRate * 1000).rounded())
@@ -1053,16 +1068,17 @@ extension TandemPumpManager {
                     acknowledgeActionButtonLabel: String(localized: "OK", comment: "Acknowledges the pump time alert")
                 )
                 self.logger.warning("Pump clock is \(minutes) min off the phone's; issuing an alert")
-                delegate.issueAlert(LoopKit.Alert(
+                let alert = LoopKit.Alert(
                     identifier: identifier,
                     foregroundContent: content,
                     backgroundContent: content,
                     trigger: .immediate,
                     interruptionLevel: .timeSensitive
-                ))
+                )
+                Task { await delegate.issueAlert(alert) }
             } else {
                 self.logger.info("Pump clock agrees with the phone's again; retracting the alert")
-                delegate.retractAlert(identifier: identifier)
+                Task { await delegate.retractAlert(identifier: identifier) }
             }
             self.state.pumpClockSkewAlertIssued = skewed
             self.notifyDelegateStateUpdated()

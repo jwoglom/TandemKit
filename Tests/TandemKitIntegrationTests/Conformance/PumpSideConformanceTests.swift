@@ -573,7 +573,7 @@ final class PumpSideConformanceTests: ConformanceTestCase {
 
         let (loop, trio) = feedOracles()
         XCTAssertTrue(loop.doses.isEmpty, "nothing was delivered: \(loop.doses.map(LoopDoseStoreOracle.describe))")
-        XCTAssertTrue(trio.events.isEmpty, "\(trio.events)")
+        XCTAssertEqual(trio.events.map(\.type), [.siteChange], "only the pump added: \(trio.events)")
         XCTAssertEqual(loop.lastReconciliation, driver.manager.state.lastReconciliation)
         try timeline().assertMatches(loop)
     }
@@ -581,7 +581,7 @@ final class PumpSideConformanceTests: ConformanceTestCase {
     // MARK: - D7
 
     /// The host deletes the pump manager while a bolus and a temp basal are running, through the
-    /// `prepareForDeactivation` Loop and Trio call. A Tandem pump keeps delivering both after the app
+    /// `delete()` Loop and Trio call. A Tandem pump keeps delivering both after the app
     /// forgets it, so no `.suspend` is due: the host is given both finalized as the pump will deliver
     /// them, before it is told of the deletion. Loop stores a finalized dose only once it has ended, so
     /// the temp basal is cut at the deletion and what remains of it is a dose of its own.
@@ -616,7 +616,7 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         try deactivateDriver()
         driver.drainDelegate()
 
-        XCTAssertEqual(driver.delegate.willDeactivateCount, 1, "pumpManagerWillDeactivate fires once")
+        XCTAssertEqual(driver.delegate.willDeactivateCount, 1, "pumpManagerWantsDeletion fires once")
         let journal = driver.delegate.journal
         let willDeactivate = try XCTUnwrap(journal.first { if case .willDeactivate = $0.kind { true } else { false } }?.index)
         let lastBatch = try XCTUnwrap(journal.last { $0.pumpEventBatch != nil }?.index)
@@ -632,6 +632,7 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         XCTAssertTrue(finalBatch.replacePendingEvents, "the final batch is a complete, replacing one")
         XCTAssertEqual(finalBatch.lastReconciliation, deactivatedAt)
         XCTAssertFalse(finalBatch.events.contains { $0.type == .suspend }, "no phantom suspend: delivery did not stop: \(finalBatch.events)")
+        XCTAssertEqual(finalBatch.events.filter { $0.type == .replaceComponent(componentType: .pump) }.map(\.title), ["Pump Removed"])
 
         let temps = finalBatch.events.filter { $0.dose?.type == .tempBasal }
         XCTAssertEqual(temps.count, 2, "what ran so far and the remainder: \(temps)")
@@ -799,7 +800,8 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         XCTAssertLessThanOrEqual(suspend?.date ?? .distantFuture, checkedAt, "dated no later than the check that found it")
         let stored = loop.doses.first { $0.dose.type == .suspend }
         XCTAssertEqual(stored?.isMutable, false, "the resume closes the host's suspend: \(loop.doses.map(LoopDoseStoreOracle.describe))")
-        XCTAssertEqual(suspend?.date.timeIntervalSince(suspendedAt) ?? .infinity, 0, accuracy: 1, "the suspend is dated at the pump's stop")
+        // The record is to the pump's second, and the clock offset trails the pump's by up to a second plus the read's latency.
+        XCTAssertEqual(suspend?.date.timeIntervalSince(suspendedAt) ?? .infinity, 0, accuracy: 2, "the suspend is dated at the pump's stop")
         timeline.assertMatches(loop)
     }
 
@@ -1110,18 +1112,18 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         let (loop, trio) = feedOracles()
         XCTAssertTrue(loop.doses.isEmpty, "no insulin dose came out of a fill: \(loop.doses.map(LoopDoseStoreOracle.describe))")
         XCTAssertEqual(trio.events.filter { $0.type == .prime }.count, 2, "\(trio.events)")
-        XCTAssertEqual(trio.events.filter { $0.type == .siteChange }.count, 1, "\(trio.events)")
+        XCTAssertEqual(trio.events.filter { $0.type == .siteChange }.count, 2, "the site change and the pump added: \(trio.events)")
         try timeline().assertMatches(loop)
     }
 
     // MARK: - D15
 
     /// A pump with another serial than the last one the driver read is reported once as a
-    /// replacement (#349 P14-5). The first pump paired is not one: C4 and D6 see no events at all.
+    /// replacement (#349 P14-5). The first pump a manager pairs is reported added, not replaced.
     func testD15APumpWithAnotherSerialIsReportedAsAReplacement() throws {
         let driver = try startPairedDriver(scheduledRate: Self.profileRate)
         let firstSerial = try XCTUnwrap(driver.manager.state.lastPumpSerial)
-        XCTAssertFalse(eventsSince(0).contains { $0.type == .replaceComponent(componentType: .pump) }, "pairing the first pump is no replacement")
+        XCTAssertEqual(eventsSince(0).filter { $0.type == .replaceComponent(componentType: .pump) }.map(\.title), ["Pump Added"])
         let batchesBefore = allPumpEventBatches.count
 
         // The emulator answers PumpVersionB from this constant, so another serial in it is another pump to the driver.
@@ -1142,7 +1144,7 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         _ = try sync()
 
         let replacements = eventsSince(batchesBefore).filter { $0.type == .replaceComponent(componentType: .pump) }
-        XCTAssertEqual(replacements.count, 1, "\(eventsSince(batchesBefore))")
+        XCTAssertEqual(replacements.map(\.title), ["Pump Replaced"], "\(eventsSince(batchesBefore))")
         XCTAssertNil(replacements.first?.dose)
         XCTAssertEqual(replacements.first?.date.timeIntervalSince(replacedAt) ?? .infinity, 0, accuracy: 1)
         XCTAssertEqual(driver.manager.state.lastPumpSerial, secondSerial)
@@ -1154,7 +1156,7 @@ final class PumpSideConformanceTests: ConformanceTestCase {
 
         let (loop, trio) = feedOracles()
         XCTAssertTrue(loop.doses.isEmpty, "\(loop.doses.map(LoopDoseStoreOracle.describe))")
-        XCTAssertEqual(trio.events.filter { $0.type == .siteChange }.count, 1, "Trio stores a pump replacement as a site change: \(trio.events)")
+        XCTAssertEqual(trio.events.filter { $0.type == .siteChange }.count, 2, "Trio stores a pump added or replaced as a site change: \(trio.events)")
     }
 
     // MARK: - D16

@@ -27,6 +27,7 @@ struct TandemKitScanView: View {
         }
         .onAppear {
             viewModel.startScan()
+            viewModel.startCheckingForConnectedPump()
         }
         .safeAreaInset(edge: .bottom) {
             VStack {
@@ -60,6 +61,26 @@ struct TandemKitScanView: View {
             }
         }
         .alert(
+            String(localized: "Pump Already Connected", comment: "Title of the warning when the pump is connected to the phone"),
+            isPresented: $viewModel.isConnectedElsewhere,
+            actions: {
+                Button(String(localized: "OK", comment: "OK button")) {
+                    viewModel.connectedElsewhereDismissed()
+                }
+            },
+            message: { Text(viewModel.connectedElsewhereMessage) }
+        )
+        .alert(
+            String(localized: "Multiple Pumps Found", comment: "Title of the notice when more than one pump is advertising"),
+            isPresented: $viewModel.isMultiplePumpsFound,
+            actions: {
+                Button(String(localized: "OK", comment: "OK button")) {
+                    viewModel.multiplePumpsDismissed()
+                }
+            },
+            message: { Text(viewModel.multiplePumpsMessage) }
+        )
+        .alert(
             viewModel.connectionErrorTitle,
             isPresented: $viewModel.isConnectionError,
             presenting: $viewModel.connectionErrorMessage,
@@ -70,76 +91,8 @@ struct TandemKitScanView: View {
             },
             message: { detail in Text(detail.wrappedValue ?? "") }
         )
-        .alert(
-            String(localized: "Control-IQ Is On", comment: "Title of the setup prompt when the paired pump is running Control-IQ"),
-            isPresented: $viewModel.isPromptingControlIQOff,
-            actions: {
-                Button(String(localized: "OK", comment: "OK button")) {
-                    viewModel.turnOffControlIQ()
-                }
-            },
-            message: { Text(viewModel.controlIQOffPromptMessage) }
-        )
-        .alert(
-            String(localized: "Control-IQ Not Turned Off", comment: "Title of the setup error when turning Control-IQ off failed"),
-            isPresented: $viewModel.isControlIQOffError,
-            presenting: $viewModel.controlIQOffErrorMessage,
-            actions: { _ in
-                Button(String(localized: "Try Again", comment: "Retry button")) {
-                    viewModel.turnOffControlIQ()
-                }
-            },
-            message: { detail in Text(detail.wrappedValue ?? "") }
-        )
-        .alert(
-            String(localized: "Pump Settings Not Saved", comment: "Onboarding settings write failure"),
-            isPresented: $viewModel.isSettingsError,
-            presenting: $viewModel.settingsErrorMessage,
-            actions: { _ in
-                Button(String(localized: "Try Again", comment: "Retry button")) {
-                    viewModel.applyOnboardingSettings()
-                }
-                Button(String(localized: "Continue Anyway", comment: "Continue button"), role: .destructive) {
-                    viewModel.continueWithoutOnboardingSettings()
-                }
-            },
-            message: { detail in Text(detail.wrappedValue ?? "") }
-        )
-        .alert(
-            String(localized: "Enter Pairing code", comment: "Enter Pairing code instruction"),
-            isPresented: $viewModel.isPromptingPincode
-        ) {
-            Button(String(localized: "Cancel", comment: "Cancel button title"), role: .cancel) {
-                viewModel.cancelPinPrompt()
-            }
-            Button(String(localized: "Pair", comment: "Pair button")) {
-                viewModel.processPinPrompt()
-            }
-
-            TextField(String(localized: "PIN", comment: "Tandem pairing code prompt"), text: $viewModel.devicePinCode)
-                .keyboardType(.numberPad)
-                .onChange(of: viewModel.devicePinCode) { newValue in
-                    let filtered = newValue.filter { $0.isNumber }
-                    if filtered != newValue {
-                        viewModel.devicePinCode = filtered
-                    }
-                }
-        } message: {
-            if let message = $viewModel.pinCodePromptError.wrappedValue, !message.isEmpty {
-                Text(message)
-            } else {
-                VStack {
-                    Text(String(
-                        localized: "Enter the pairing code from your pump",
-                        comment: "Tandem pairing code prompt message"
-                    ))
-                    Text(String(
-                        localized:
-                        "The pairing code is located on the inside of the cartridge area labeled as 'PIN' and consists of six numbers.",
-                        comment: "Tandem instructions for finding pairing code"
-                    )).font(.caption)
-                }
-            }
+        .sheet(isPresented: $viewModel.isPromptingPincode) {
+            PairingCodePrompt(viewModel: viewModel)
         }
         .sheet(isPresented: $isHelpSheetPresented, onDismiss: {}, content: {
             VStack(alignment: .leading, spacing: 10) {
@@ -201,6 +154,7 @@ struct TandemKitScanView: View {
             Text("Place your Mobi on the charging pad", comment: "Place on charging pad explanation")
                 .font(.headline)
                 .bold()
+                .multilineTextAlignment(.center)
 
             Image(imageName: "mobi_on_pad")
                 .resizable()
@@ -208,20 +162,23 @@ struct TandemKitScanView: View {
                 .padding(.horizontal)
                 .frame(height: 150)
         }
+        .frame(maxWidth: .infinity)
     }
 
     @ViewBuilder var DoubleTapView: some View {
         VStack(alignment: .center, spacing: 40) {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .center, spacing: 10) {
                 Text(
                     "Pick up your pump, wait a second, then double-press the T button",
                     comment: "Double-tap explanation"
                 )
                 .font(.headline)
                 .bold()
+                .multilineTextAlignment(.center)
 
-                Text(String(localized: "Found the ", comment: "Found device prefix text") + (viewModel.connectingTo ?? ""))
+                Text(String(localized: "Found device ", comment: "Found device prefix text") + (viewModel.connectingTo ?? ""))
                     .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
             }
 
             Image(imageName: "mobi_double_tap")
@@ -234,7 +191,9 @@ struct TandemKitScanView: View {
 
             Text("You should hear two beeps after double-pressing the button.", comment: "Beep explanation")
                 .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
         }
+        .frame(maxWidth: .infinity)
     }
 
     @ViewBuilder var AuthenticatingView: some View {
@@ -258,5 +217,109 @@ struct TandemKitScanView: View {
             Text("This can take up to 60 seconds to complete.", comment: "Pump authenticating wait message")
                 .foregroundStyle(.secondary)
         }
+    }
+}
+
+private struct PairingCodePrompt: View {
+    @Environment(\.guidanceColors) private var guidanceColors
+    @ObservedObject var viewModel: TandemKitScanViewModel
+
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 20) {
+                Text(viewModel.pinPromptHeading)
+                    .font(.headline)
+                    .multilineTextAlignment(.center)
+
+                PairingCodeField(code: $viewModel.devicePinCode, length: TandemKitScanViewModel.pairingCodeLength)
+
+                if let message = viewModel.pinCodePromptError, !message.isEmpty {
+                    Text(message)
+                        .font(.footnote)
+                        .foregroundColor(guidanceColors.critical)
+                        .multilineTextAlignment(.center)
+                }
+
+                Text(String(
+                    localized:
+                    "The pairing code is located on the inside of the cartridge area labeled as 'PIN' and consists of six numbers.",
+                    comment: "Tandem instructions for finding pairing code"
+                ))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
+                Spacer()
+
+                ContinueButton(
+                    text: Text("Pair", comment: "Pair button"),
+                    disabled: .constant(!viewModel.isPinCodeComplete)
+                ) {
+                    viewModel.processPinPrompt()
+                }
+            }
+            .padding()
+            .navigationTitle(String(localized: "Enter Pairing code", comment: "Enter Pairing code instruction"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(String(localized: "Cancel", comment: "Cancel button title")) {
+                        viewModel.cancelPinPrompt()
+                    }
+                }
+            }
+        }
+        .navigationViewStyle(.stack)
+        .interactiveDismissDisabled()
+    }
+}
+
+/// The invisible field under the boxes takes the typing, pasting and VoiceOver.
+struct PairingCodeField: View {
+    @Binding var code: String
+    let length: Int
+
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        ZStack {
+            TextField("", text: $code)
+                .keyboardType(.numberPad)
+                .foregroundColor(.clear)
+                .tint(.clear)
+                .focused($isFocused)
+                .accessibilityLabel(Text("PIN", comment: "Tandem pairing code prompt"))
+
+            HStack(spacing: 8) {
+                ForEach(0 ..< length, id: \.self) { index in
+                    digitBox(at: index)
+                }
+            }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
+        .frame(maxWidth: 360)
+        .contentShape(Rectangle())
+        .onTapGesture { isFocused = true }
+        .onAppear {
+            // Focus set while the sheet is still animating in is dropped.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { isFocused = true }
+        }
+    }
+
+    private func digitBox(at index: Int) -> some View {
+        let digits = Array(code)
+        let isCurrent = isFocused && (index == digits.count || (digits.count == length && index == length - 1))
+        return Text(verbatim: index < digits.count ? String(digits[index]) : "")
+            .font(.title.weight(.semibold).monospacedDigit())
+            .frame(maxWidth: .infinity, minHeight: 56)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color(UIColor.secondarySystemBackground))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(isCurrent ? Color.accentColor : Color(UIColor.systemGray4), lineWidth: isCurrent ? 2 : 1)
+            )
     }
 }

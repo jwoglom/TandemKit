@@ -140,7 +140,7 @@ final class OnboardingIntegrationTests: FaketandemIntegrationTestCase {
         XCTAssertEqual(try pumpClockError(), 0, accuracy: 5)
 
         let box = ResultBox<PumpManagerError?>()
-        driver.manager.enactTempBasal(unitsPerHour: 1.5, for: .minutes(30)) { box.set($0) }
+        driver.manager.enactTempBasal(decisionId: nil, unitsPerHour: 1.5, for: .minutes(30)) { box.set($0) }
         guard case let .configuration(underlying?)? = try box.wait("enactTempBasal", timeout: 60) else {
             return XCTFail("a temp basal must be refused until the schedule is written")
         }

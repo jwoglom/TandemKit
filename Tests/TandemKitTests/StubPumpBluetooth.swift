@@ -29,6 +29,7 @@ final class StubPumpBluetooth: PumpBluetoothConnection {
     private(set) var ensureConnectedCount = 0
     private(set) var disconnectCount = 0
     private(set) var deactivateCount = 0
+    private(set) var adoptedCount = 0
     private(set) var unhandledRequests: [Message] = []
 
     private var jobThread: Thread?
@@ -79,7 +80,9 @@ final class StubPumpBluetooth: PumpBluetoothConnection {
             capMilliunits: capMilliunits
         )
         stub(SetTempRateRequest.self) { request in
-            pump.setTempPercent((request as? SetTempRateRequest)?.percent)
+            let percent = (request as? SetTempRateRequest)?.percent
+            guard pump.accepts(percent) else { return SetTempRateResponse(status: 1, tempRateId: 0) }
+            pump.setTempPercent(percent)
             return SetTempRateResponse(status: 0, tempRateId: tempRateId)
         }
         stub(StopTempRateRequest.self) { _ in
@@ -134,9 +137,19 @@ final class StubPumpBluetooth: PumpBluetoothConnection {
 
     // MARK: - PumpBluetoothConnection
 
+    func pumpManagerWasAdopted() {
+        lock.lock()
+        adoptedCount += 1
+        lock.unlock()
+    }
+
     func startScan(_: @escaping (_ result: TandemPumpScan) -> Void) -> Bool { false }
 
     func stopScan() {}
+
+    var connectedNames: [String] = []
+
+    func connectedPumpNames() -> [String] { connectedNames }
 
     /// Set to hold `connect`'s completion in `heldConnectCompletion` for the test to call, as a real
     /// attempt's arrives later.
@@ -252,6 +265,13 @@ private final class StubBasalPump {
         lock.lock()
         tempPercent = percent
         lock.unlock()
+    }
+
+    /// A Mobi answered 17% of 0.58 U/hr with status 1 and tempRateId 0, and runs 21% of 0.48 U/hr.
+    func accepts(_ percent: Int?) -> Bool {
+        guard let percent, percent > 0 else { return true }
+        let minimumMilliunits = UInt32((TandemPumpCapabilities.minimumBasalRate * 1000).rounded())
+        return profileMilliunits * UInt32(percent) >= minimumMilliunits * 100
     }
 
     func status() -> CurrentBasalStatusResponse {

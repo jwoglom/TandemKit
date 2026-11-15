@@ -11,7 +11,7 @@ final class BolusIntegrationTests: FaketandemIntegrationTestCase {
 
     private func enactBolus(_ driver: FaketandemHarness.Driver) throws -> PumpManagerError? {
         let box = ResultBox<PumpManagerError?>()
-        driver.manager.enactBolus(units: Self.units, activationType: .manualNoRecommendation) { box.set($0) }
+        driver.manager.enactBolus(decisionId: nil, units: Self.units, activationType: .manualNoRecommendation) { box.set($0) }
         return try box.wait("enactBolus completion", timeout: 60)
     }
 
@@ -40,10 +40,8 @@ final class BolusIntegrationTests: FaketandemIntegrationTestCase {
         XCTAssertEqual(started.dose?.isMutable, true, "a running bolus is reported mutable")
         XCTAssertEqual(started.dose?.manuallyEntered, false)
         XCTAssertNotNil(started.dose?.syncIdentifier)
-        XCTAssertTrue(
-            String(decoding: started.raw, as: UTF8.self).hasPrefix("bolus \(Self.units) "),
-            "raw must be keyed on the programmed amount: \(String(decoding: started.raw, as: UTF8.self))"
-        )
+        let serial = try XCTUnwrap(HistoryLogSyncIdentifier.PumpSerial(driver.manager.state.pumpState.pumpSerial))
+        XCTAssertEqual(started.raw, HistoryLogSyncIdentifier.bolus(pumpSerial: serial, bolusId: bolusId), "keyed on the pump's bolus id")
 
         let control = try harness.requestsSeen(since: logStart).filter { $0.characteristic == "Control" }
         XCTAssertEqual(

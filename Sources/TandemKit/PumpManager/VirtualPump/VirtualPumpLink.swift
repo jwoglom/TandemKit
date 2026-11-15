@@ -225,7 +225,7 @@ final class SocketLink {
 
             if let timeout {
                 var pollfd = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
-                let ready = poll(&pollfd, 1, Int32(timeout * 1000))
+                let ready = poll(&pollfd, 1, Int32((timeout * 1000).rounded()))
                 if ready == 0 {
                     throw SocketPumpError.timedOut
                 }

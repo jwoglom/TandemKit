@@ -61,7 +61,7 @@ import XCTest
         ))
 
         let enacted = expectation(description: "enactBolus")
-        manager.enactBolus(units: units, activationType: .manualNoRecommendation) { error in
+        manager.enactBolus(decisionId: nil, units: units, activationType: .manualNoRecommendation) { error in
             XCTAssertNil(error)
             enacted.fulfill()
         }
@@ -86,7 +86,7 @@ import XCTest
 
         for units in amounts {
             let enacted = expectation(description: "enactBolus \(units) U")
-            manager.enactBolus(units: units, activationType: .manualNoRecommendation) { _ in enacted.fulfill() }
+            manager.enactBolus(decisionId: nil, units: units, activationType: .manualNoRecommendation) { _ in enacted.fulfill() }
             wait(for: [enacted], timeout: 5.0)
         }
         return bluetooth.sent(InitiateBolusRequest.self)

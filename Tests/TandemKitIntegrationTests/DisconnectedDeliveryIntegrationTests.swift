@@ -48,11 +48,17 @@ final class DisconnectedDeliveryIntegrationTests: FaketandemIntegrationTestCase 
         try XCTUnwrap(driver.manager.lastKnownBasalDelivery).localizedDescription(appName: "Trio", now: driver.clock.now)
     }
 
+    private func time(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+
     func testATempBasalRunningAtTheDropIsDescribedUntilItsEndAndAfter() throws {
         let driver = try stageDriver()
         let clock = try XCTUnwrap(driver.clock as? ManualClock)
         let box = ResultBox<PumpManagerError?>()
-        driver.manager.enactTempBasal(unitsPerHour: 0.5, for: .minutes(30)) { box.set($0) }
+        driver.manager.enactTempBasal(decisionId: nil, unitsPerHour: 0.5, for: .minutes(30)) { box.set($0) }
         XCTAssertNil(try box.wait("enactTempBasal completion", timeout: 60))
         driver.drainDelegate()
         let end = driver.manager.state.basalDose.estimatedEndDate
@@ -71,7 +77,7 @@ final class DisconnectedDeliveryIntegrationTests: FaketandemIntegrationTestCase 
         clock.set(lastContact.addingTimeInterval(.minutes(5)))
         let running = try describe(driver)
         XCTAssertTrue(
-            running.hasPrefix("Trio last connected to your pump 5 minutes ago. At that time, the pump was delivering basal at a temp rate of 0.50 U/hr, and will return to the profile basal rate of 1.00 U/hr at "),
+            running.hasPrefix("Trio has not connected to your pump since \(time(lastContact)) (5 minutes ago). At that time, the pump was delivering basal at a temp rate of 0.50 U/hr, and will return to the profile basal rate of 1.00 U/hr at "),
             running
         )
 
@@ -90,7 +96,7 @@ final class DisconnectedDeliveryIntegrationTests: FaketandemIntegrationTestCase 
         try XCTUnwrap(driver.clock as? ManualClock).set(lastContact.addingTimeInterval(.minutes(12)))
         XCTAssertEqual(
             try describe(driver),
-            "Trio last connected to your pump 12 minutes ago. At that time, the pump was delivering basal at the profile basal rate of 1.00 U/hr and will continue to deliver basal as programmed until reconnected."
+            "Trio has not connected to your pump since \(time(lastContact)) (12 minutes ago). At that time, the pump was delivering basal at the profile basal rate of 1.00 U/hr and will continue to deliver basal as programmed until reconnected."
         )
     }
 

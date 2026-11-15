@@ -41,9 +41,9 @@ struct LoopApp {
     }
 
     /// Loop stopped and started again on the same data, with the same launch arguments, as after
-    /// the system ended it.
-    func relaunched() throws -> LoopApp {
-        try Self.launch(launcher, "relaunch", [:])
+    /// the system ended it. `files` are written over that data first, as `launchNew`'s are.
+    func relaunched(files: [String: String] = [:]) throws -> LoopApp {
+        try Self.launch(launcher, "relaunch", ["files": files])
     }
 
     /// With `sample`, the launcher first records a few seconds of Loop's stacks into the test's logs.
@@ -57,9 +57,17 @@ struct LoopApp {
 
     /// The driver state Loop last saved, which a relaunch restores.
     func savedPumpManagerState() throws -> TandemPumpManagerState? {
-        let url = dataContainer.appendingPathComponent("Documents/PumpManagerState.plist")
-        let plist = try PropertyListSerialization.propertyList(from: Data(contentsOf: url), format: nil)
+        let plist = try PropertyListSerialization.propertyList(from: Data(contentsOf: pumpManagerStateURL), format: nil)
         return ((plist as? [String: Any])?["state"] as? [String: Any]).map(TandemPumpManagerState.init(rawValue:))
+    }
+
+    /// Whether Loop has a pump manager saved to restore at its next launch; deleting one removes the file.
+    func hasSavedPumpManager() -> Bool {
+        FileManager.default.fileExists(atPath: pumpManagerStateURL.path)
+    }
+
+    private var pumpManagerStateURL: URL {
+        dataContainer.appendingPathComponent("Documents/PumpManagerState.plist")
     }
 
     func store() throws -> LoopStore {

@@ -165,19 +165,58 @@ import XCTest
     // MARK: - What it stops
 
     func testAnAutomaticReconnectIsSkippedOnceTheLimitIsReached() {
+        let delegate = attachDelegate()
         reachTheLimit()
 
         runConnectJob(bluetooth.reconnectAutomatically)
 
         XCTAssertTrue(manager.state.isConnected, "no connect attempt was made")
+        withExtendedLifetime(delegate) {}
     }
 
     func testAnAutomaticReconnectStillRunsBeforeTheLimit() {
+        let delegate = attachDelegate()
         failHandshakes(TandemBluetoothManager.jpakeFailureLimit - 1)
 
         runConnectJob(bluetooth.reconnectAutomatically)
 
         XCTAssertFalse(manager.state.isConnected, "a connect attempt was made")
+        withExtendedLifetime(delegate) {}
+    }
+
+    // MARK: - Whose the manager is
+
+    /// Until a host adopts it, a manager is a setup flow's, which connects as a command when it
+    /// needs to; one left pairing on in the background held the pump's one link (#603).
+    func testAnAutomaticReconnectIsSkippedUntilAHostAdoptsTheManager() {
+        runConnectJob(bluetooth.reconnectAutomatically)
+
+        XCTAssertTrue(manager.state.isConnected, "no connect attempt was made")
+    }
+
+    func testAnAutomaticReconnectRunsOnceAHostHasAdoptedTheManager() {
+        let delegate = attachDelegate()
+
+        runConnectJob(bluetooth.reconnectAutomatically)
+
+        XCTAssertFalse(manager.state.isConnected, "a connect attempt was made")
+        withExtendedLifetime(delegate) {}
+    }
+
+    func testAHostCommandStillTriesBeforeAHostAdoptsTheManager() {
+        runConnectJob(bluetooth.ensureConnected)
+
+        XCTAssertFalse(manager.state.isConnected, "a connect attempt was made")
+    }
+
+    func testBluetoothComingOnDoesNotConnectAManagerNoHostHasAdopted() {
+        manager.state.isConnected = true
+
+        bluetooth.handleBluetoothStateChange(.poweredOn)
+        // Queued behind the connect the power-on would have started.
+        runConnectJob(bluetooth.reconnectAutomatically)
+
+        XCTAssertTrue(manager.state.isConnected, "no connect attempt was made")
     }
 
     func testAHostCommandStillTriesOnceTheLimitIsReached() {

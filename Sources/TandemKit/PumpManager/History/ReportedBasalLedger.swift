@@ -52,8 +52,9 @@ public struct ReportedBasalLedger: Equatable {
     /// Past the 24 h a history pass compares, and the hours a temp basal can run before it.
     public static let retention: TimeInterval = .hours(36)
 
-    /// When this build started recording what it reports; nothing before it is compared.
-    public let trackingSince: Date
+    /// When this build started recording what it reports, or how far back setup loaded history from;
+    /// nothing before it is compared.
+    public private(set) var trackingSince: Date
     public private(set) var rows: [Row]
     /// The pump `reconciledThrough` counts on.
     public private(set) var pumpSerial: UInt32?
@@ -75,6 +76,13 @@ public struct ReportedBasalLedger: Equatable {
 
     public func isTracking(pumpSerial: UInt32, lastSequenceNum: UInt32) -> Bool {
         self.pumpSerial == pumpSerial && (reconciledThrough ?? 0) <= lastSequenceNum
+    }
+
+    /// Compares basal from `date` on, as setup's history load does. Passes that ran meanwhile marked the
+    /// earlier chunks done without comparing them, so the next starts over.
+    public mutating func reportHistory(since date: Date) {
+        trackingSince = min(trackingSince, date)
+        reconciledThrough = nil
     }
 
     public mutating func reconcile(through sequenceNum: UInt32) {
@@ -165,9 +173,10 @@ public struct ReportedBasalLedger: Equatable {
         return Set(edges.filter { interval.start < $0 && $0 < interval.end }).sorted()
     }
 
-    /// The BasalDelivery record a basal correction on the tracked pump was reported for.
+    /// The BasalDelivery record a basal correction on the tracked pump was reported for. A suspend or
+    /// resume carries its own record's.
     public func correctedSequenceNum(of row: Row) -> UInt32? {
-        guard let identifier = HistoryLogSyncIdentifier.decode(row.raw), identifier.scheme == .logSequence,
+        guard row.kind == .tempBasal, let identifier = HistoryLogSyncIdentifier.decode(row.raw), identifier.scheme == .logSequence,
               identifier.pumpSerial.rawValue == pumpSerial
         else {
             return nil
@@ -184,37 +193,81 @@ public struct ReportedBasalLedger: Equatable {
     }
 }
 
-/// The host's basal schedule on the phone's clock, as `TandemPumpManager.getScheduledBasalRate(at:)` reads it.
+/// A basal schedule by a wall clock's time of day, the phone's for the host and the pump's for its
+/// profile; never by the time since midnight, an hour off it from a DST change to the next midnight.
 public struct HostBasalSchedule {
     public let items: [(startTime: TimeInterval, rate: Double)]
-    public let calendar: Calendar
+    /// The zone whose wall clock the schedule follows, after `shift`.
+    public let timeZone: TimeZone
+    /// Seconds a phone instant is moved before `timeZone` reads it.
+    public let shift: TimeInterval
 
     public init(_ schedule: BasalRateSchedule, calendar: Calendar = .current) {
+        self.init(schedule, timeZone: calendar.timeZone)
+    }
+
+    public init(_ schedule: BasalRateSchedule, timeZone: TimeZone, shift: TimeInterval = 0) {
         items = schedule.items.map { ($0.startTime, $0.value) }.sorted { $0.startTime < $1.startTime }
-        self.calendar = calendar
+        self.timeZone = timeZone
+        self.shift = shift
+    }
+
+    /// The pump's clock, which never observes DST: phone time plus `pumpWallClockShift` on a fixed
+    /// offset, so a pump day is always 24 hours long.
+    public static func pumpClock(_ schedule: BasalRateSchedule, pumpWallClockShift: TimeInterval) -> HostBasalSchedule {
+        HostBasalSchedule(schedule, timeZone: TimeZone(secondsFromGMT: 0)!, shift: pumpWallClockShift)
     }
 
     public func rate(at date: Date) -> Double {
         guard let first = items.first else { return 0 }
-        let sinceMidnight = date.timeIntervalSince(calendar.startOfDay(for: date))
+        let sinceMidnight = secondsSinceMidnight(at: date)
         return items.last(where: { $0.startTime < sinceMidnight })?.rate ?? first.rate
     }
 
+    /// The wall clock's time of day at `date`. A fall-back hour reads its times of day twice.
+    public func secondsSinceMidnight(at date: Date) -> TimeInterval {
+        let local = wallSeconds(at: date)
+        return local - (local / .days(1)).rounded(.down) * .days(1)
+    }
+
+    private func utcOffset(at date: Date) -> TimeInterval {
+        TimeInterval(timeZone.secondsFromGMT(for: date.addingTimeInterval(shift)))
+    }
+
+    private func wallSeconds(at date: Date) -> TimeInterval {
+        date.timeIntervalSince1970 + shift + utcOffset(at: date)
+    }
+
+    /// Each instant in `interval` the wall clock reaches an item's start, twice in a fall-back hour, and
+    /// each DST change the rate differs across: an item starting in a skipped hour starts at the jump.
     public func changes(in interval: DateInterval) -> [Date] {
         guard items.count > 1 else { return [] }
         var changes: [Date] = []
-        var day = calendar.startOfDay(for: interval.start)
-        while day < interval.end {
-            for item in items {
-                let date = day.addingTimeInterval(item.startTime)
-                if interval.start < date, date < interval.end {
-                    changes.append(date)
+        var spanStart = interval.start
+        while spanStart < interval.end {
+            let transition = timeZone.nextDaylightSavingTimeTransition(after: spanStart.addingTimeInterval(shift))
+                .map { $0.addingTimeInterval(-shift) }
+                .flatMap { $0 < interval.end ? $0 : nil }
+            let spanEnd = transition ?? interval.end
+            let offset = utcOffset(at: spanStart)
+            let firstDay = ((spanStart.timeIntervalSince1970 + shift + offset) / .days(1)).rounded(.down)
+            let lastDay = ((spanEnd.timeIntervalSince1970 + shift + offset) / .days(1)).rounded(.down)
+            for day in stride(from: firstDay, through: lastDay, by: 1) {
+                for item in items {
+                    let date = Date(timeIntervalSince1970: day * .days(1) + item.startTime - offset - shift)
+                    if spanStart <= date, date < spanEnd, interval.start < date {
+                        changes.append(date)
+                    }
                 }
             }
-            guard let next = calendar.date(byAdding: .day, value: 1, to: day) else { break }
-            day = next
+            if let transition, interval.start < transition,
+               Int((rate(at: transition.addingTimeInterval(-1)) * 1000).rounded()) != Int((rate(at: transition) * 1000).rounded())
+            {
+                changes.append(transition)
+            }
+            spanStart = spanEnd
         }
-        return changes
+        return Array(Set(changes)).sorted()
     }
 }
 

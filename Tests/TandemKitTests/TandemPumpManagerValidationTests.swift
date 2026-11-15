@@ -50,7 +50,7 @@ import XCTest
         let manager = makeManager(settings: TandemPumpManagerSettings(maxBolus: 5.0))
 
         let expectation = expectation(description: "Bolus completion")
-        manager.enactBolus(units: 6.0, activationType: .manualNoRecommendation) { error in
+        manager.enactBolus(decisionId: nil, units: 6.0, activationType: .manualNoRecommendation) { error in
             guard case let .deviceState(underlyingError?) = error,
                   let validationError = underlyingError as? TandemPumpManagerValidationError
             else {
@@ -85,7 +85,7 @@ import XCTest
 
         let expectation = expectation(description: "Bolus completion")
         var error: PumpManagerError?
-        manager.enactBolus(units: 1.0, activationType: .automatic) {
+        manager.enactBolus(decisionId: nil, units: 1.0, activationType: .automatic) {
             error = $0
             expectation.fulfill()
         }
@@ -99,7 +99,7 @@ import XCTest
 
         let expectation = expectation(description: "Temp basal completion")
         var error: PumpManagerError?
-        manager.enactTempBasal(unitsPerHour: 1.0, for: .minutes(30)) {
+        manager.enactTempBasal(decisionId: nil, unitsPerHour: 1.0, for: .minutes(30)) {
             error = $0
             expectation.fulfill()
         }
@@ -118,7 +118,7 @@ import XCTest
     private func enactTempBasal(_ manager: TandemPumpManager, unitsPerHour: Double, for duration: TimeInterval) -> PumpManagerError? {
         let expectation = expectation(description: "Temp basal completion")
         var error: PumpManagerError?
-        manager.enactTempBasal(unitsPerHour: unitsPerHour, for: duration) {
+        manager.enactTempBasal(decisionId: nil, unitsPerHour: unitsPerHour, for: duration) {
             error = $0
             expectation.fulfill()
         }
@@ -424,8 +424,9 @@ import XCTest
         XCTAssertFalse(bluetooth.didSend(StopTempRateRequest.self))
     }
 
-    /// A pump max basal limit of 1.2 U/hr caps the 150% temp.
-    func testMismatchedReadbackStopsTheTempBasalAndFails() {
+    /// A pump the driver does not know the max basal limit of caps the 150% temp at 1.2 U/hr. What
+    /// runs is kept and told to the host; stopping it would put the pump on its 1.0 U/hr profile.
+    func testMismatchedReadbackKeepsTheTempBasalAtThePumpsRateAndFails() {
         let bluetooth = StubPumpBluetooth()
         bluetooth.stubBasalPump(profileMilliunits: 1000, capMilliunits: 1200)
         let (manager, delegate, queue) = makeReadbackManager(bluetooth: bluetooth)
@@ -437,24 +438,11 @@ import XCTest
         let sent = bluetooth.sentMessages.map { String(describing: type(of: $0)) }
         XCTAssertEqual(
             sent.filter { $0.contains("TempRate") || $0 == "CurrentBasalStatusRequest" },
-            ["CurrentBasalStatusRequest", "SetTempRateRequest", "CurrentBasalStatusRequest", "StopTempRateRequest"]
+            ["CurrentBasalStatusRequest", "SetTempRateRequest", "CurrentBasalStatusRequest"]
         )
-        XCTAssertEqual(manager.state.basalDose.type, .basal)
-        XCTAssertEqual(reportedTempBasalRates(delegate), [], "the host is never told the temp basal ran")
-    }
-
-    func testMismatchedTempBasalThatCannotBeStoppedIsReportedAtThePumpsRate() {
-        let bluetooth = StubPumpBluetooth()
-        bluetooth.stubBasalPump(profileMilliunits: 1000, capMilliunits: 1200)
-        bluetooth.stub(StopTempRateRequest.self, with: StopTempRateResponse(status: 1, tempRateId: 42))
-        let (manager, delegate, queue) = makeReadbackManager(bluetooth: bluetooth)
-
-        let error = enactTempBasal(manager, unitsPerHour: 1.5, for: .minutes(30))
-        queue.sync {}
-
-        XCTAssertEqual(validationError(from: error), .tempBasalRateMismatch(expected: 1.5, actual: 1.2))
         XCTAssertEqual(manager.state.basalDose.type, .tempBasal)
         XCTAssertEqual(manager.state.basalDose.value, 1.2, accuracy: 0.0001)
+        XCTAssertEqual(manager.state.basalDose.tempPercent, 150)
         XCTAssertEqual(reportedTempBasalRates(delegate), [1.2])
     }
 
@@ -586,7 +574,7 @@ import XCTest
     private func enactBolus(_ manager: TandemPumpManager, units: Double, _ activationType: BolusActivationType) -> PumpManagerError? {
         let expectation = expectation(description: "Bolus completion")
         var error: PumpManagerError?
-        manager.enactBolus(units: units, activationType: activationType) {
+        manager.enactBolus(decisionId: nil, units: units, activationType: activationType) {
             error = $0
             expectation.fulfill()
         }
@@ -971,6 +959,7 @@ import XCTest
         manager.reconcilePumpClockSkewAlert()
         manager.reconcilePumpClockSkewAlert()
         queue.sync {}
+        delegate.waitForAlerts { !delegate.issuedAlerts.isEmpty }
 
         XCTAssertEqual(delegate.issuedAlerts.map(\.identifier.alertIdentifier), [TandemPumpManager.pumpClockSkewAlertIdentifier])
         XCTAssertTrue(manager.state.pumpClockSkewAlertIssued)
@@ -978,6 +967,7 @@ import XCTest
         skewPumpClock(manager, minutes: 0)
         manager.reconcilePumpClockSkewAlert()
         queue.sync {}
+        delegate.waitForAlerts { !delegate.retractedAlerts.isEmpty }
 
         XCTAssertEqual(delegate.retractedAlerts.map(\.alertIdentifier), [TandemPumpManager.pumpClockSkewAlertIdentifier])
         XCTAssertFalse(manager.state.pumpClockSkewAlertIssued)

@@ -15,6 +15,9 @@ import Foundation
 /// reason today, and issuing those would spend a BLE round trip on a response that gets
 /// discarded.
 enum QualifyingEventFetch: CaseIterable {
+    /// First: the basal read looks segments up and dates the pump's temp on the pump's clock, which
+    /// a `timeChange` batch has just moved.
+    case timeSinceReset
     /// The whole alert/alarm/reminder/CGM-alert/malfunction bundle (`fetchNotifications`).
     case notifications
     case controlIQStatus
@@ -26,7 +29,6 @@ enum QualifyingEventFetch: CaseIterable {
     case batteryStatus
     case deliveryLimits
     case globalPumpSettings
-    case timeSinceReset
 
     /// The fetch that issues and consumes `request`, or nil when the driver has no use for it.
     ///

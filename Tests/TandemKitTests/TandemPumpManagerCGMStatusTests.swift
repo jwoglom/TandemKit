@@ -161,6 +161,58 @@ import XCTest
         XCTAssertEqual(manager.state.cgmSessionState, .stopped)
     }
 
+    private func enableBlocker(
+        of manager: TandemPumpManager,
+        weightLbs: Int? = 154,
+        totalDailyInsulin: Int? = 42
+    ) -> ControlIQEnableBlocker? {
+        var blocker: ControlIQEnableBlocker?
+        let checked = expectation(description: "checkControlIQCanBeEnabled")
+        manager.checkControlIQCanBeEnabled(weightLbs: weightLbs, totalDailyInsulin: totalDailyInsulin) {
+            blocker = $0
+            checked.fulfill()
+        }
+        wait(for: [checked], timeout: 5)
+        return blocker
+    }
+
+    func testControlIQCanBeEnabledWithValuesAndASensorSession() {
+        let manager = makeManager()
+        bluetooth.stub(CGMStatusV2Request.self, with: makeResponse(sessionState: .active))
+
+        XCTAssertNil(enableBlocker(of: manager))
+    }
+
+    func testAWarmingUpSensorDoesNotBlockEnablingControlIQ() {
+        let manager = makeManager()
+        bluetooth.stub(CGMStatusV2Request.self, with: makeResponse(sessionState: .startPending))
+
+        XCTAssertNil(enableBlocker(of: manager))
+    }
+
+    func testControlIQCannotBeEnabledWithoutASensorSession() {
+        let manager = makeManager()
+        bluetooth.stub(CGMStatusV2Request.self, with: makeResponse(sessionState: .stopped))
+
+        XCTAssertEqual(enableBlocker(of: manager), .cgmRequired)
+    }
+
+    func testControlIQCannotBeEnabledWhenThePumpDoesNotAnswerTheCGMRead() {
+        let manager = makeManager()
+        bluetooth.stub(CGMStatusV2Request.self) { _ in nil }
+
+        XCTAssertEqual(enableBlocker(of: manager), .cgmRequired)
+    }
+
+    func testControlIQCannotBeEnabledWithoutAWeightOrTotalDailyInsulin() {
+        let manager = makeManager()
+        bluetooth.stub(CGMStatusV2Request.self, with: makeResponse(sessionState: .active))
+
+        XCTAssertEqual(enableBlocker(of: manager, weightLbs: nil), .valuesRequired)
+        XCTAssertEqual(enableBlocker(of: manager, totalDailyInsulin: nil), .valuesRequired)
+        XCTAssertFalse(bluetooth.didSend(CGMStatusV2Request.self), "the pump is not read for a switch that cannot be made")
+    }
+
     /// `rawState` is what survives an app restart, so the session state has to round-trip through
     /// it rather than resetting to unknown on every launch.
     func testSessionStateSurvivesRawValueRoundTrip() {

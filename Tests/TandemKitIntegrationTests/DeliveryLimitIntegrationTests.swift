@@ -1,5 +1,4 @@
 import Foundation
-import HealthKit
 import LoopKit
 @testable import TandemKit
 // Package.swift: on Linux the oracles and MockPumpManagerDelegate are compiled into TandemKitTests.
@@ -12,7 +11,6 @@ import XCTest
 /// command validation"): what reaches the pump, what the pump holds afterwards, and that a refused
 /// command leaves no dose in either host.
 final class DeliveryLimitIntegrationTests: ConformanceTestCase {
-    private static let basalUnit = HKUnit.internationalUnit().unitDivided(by: .hour())
 
     override func setUpWithError() throws {
         try super.setUpWithError()
@@ -24,8 +22,8 @@ final class DeliveryLimitIntegrationTests: ConformanceTestCase {
     private func syncDeliveryLimits(maxBasal: Double, maxBolus: Double) throws -> Result<DeliveryLimits, Error> {
         let manager = try XCTUnwrap(current, "no driver").manager
         let limits = DeliveryLimits(
-            maximumBasalRate: HKQuantity(unit: Self.basalUnit, doubleValue: maxBasal),
-            maximumBolus: HKQuantity(unit: .internationalUnit(), doubleValue: maxBolus)
+            maximumBasalRate: LoopQuantity(unit: .internationalUnitsPerHour, doubleValue: maxBasal),
+            maximumBolus: LoopQuantity(unit: .internationalUnit, doubleValue: maxBolus)
         )
         let box = ResultBox<Result<DeliveryLimits, Error>>()
         manager.syncDeliveryLimits(limits: limits) { box.set($0) }
@@ -271,12 +269,12 @@ final class DeliveryLimitIntegrationTests: ConformanceTestCase {
         let batchesBefore = allPumpEventBatches.count
 
         let manual = ResultBox<PumpManagerError?>()
-        driver.manager.enactBolus(units: 1, activationType: .manualNoRecommendation) { manual.set($0) }
+        driver.manager.enactBolus(decisionId: nil, units: 1, activationType: .manualNoRecommendation) { manual.set($0) }
         try IntegrationWait.until("the pump to be asked to permit the manual bolus", timeout: 30) {
             try requestsSince(mark).contains("BolusPermissionRequest")
         }
         let automatic = ResultBox<PumpManagerError?>()
-        driver.manager.enactBolus(units: 0.5, activationType: .automatic) { automatic.set($0) }
+        driver.manager.enactBolus(decisionId: nil, units: 0.5, activationType: .automatic) { automatic.set($0) }
 
         XCTAssertNil(try manual.wait("manual enactBolus completion", timeout: commandTimeout))
         let error = try automatic.wait("automatic enactBolus completion", timeout: commandTimeout)
