@@ -44,6 +44,12 @@ final class CartridgeProcedureIntegrationTests: FaketandemIntegrationTestCase {
         try status("recoverAndReenterChangeCartridgeMode", driver.manager.recoverAndReenterChangeCartridgeMode) { $0.status }
     }
 
+    private func activeLoadState(_ driver: FaketandemHarness.Driver) throws -> LoadStatusResponse.LoadState? {
+        let box = ResultBox<LoadStatusResponse.LoadState?>()
+        driver.manager.fetchLoadStatus { box.set($0.flatMap { $0.isLoadingActive ? $0.loadState : nil }) }
+        return try box.wait("LoadStatus", timeout: 30)
+    }
+
     private func workflowMode() throws -> String? {
         try harness.client.snapshot().workflowMode
     }
@@ -78,14 +84,23 @@ final class CartridgeProcedureIntegrationTests: FaketandemIntegrationTestCase {
         )
     }
 
-    func testRecoveryUnwindsAChangeModeLeftOpen() throws {
+    func testAChangeModeLeftOpenReadsAsChangeCartridgeInLoadStatus() throws {
         let driver = try pairedSuspendedDriver()
         XCTAssertEqual(try enterChangeCartridge(driver), 0)
         XCTAssertEqual(try enterChangeCartridge(driver), 1, "already in change mode")
 
-        XCTAssertEqual(try recover(driver), 0)
-
+        XCTAssertEqual(try activeLoadState(driver), .changeCartridge)
         XCTAssertEqual(try workflowMode(), "change_cartridge")
+    }
+
+    func testRecoveryFromAChangeModeLeftOpenLeavesACartridgeLoadingAndChangeModeRefused() throws {
+        let driver = try pairedSuspendedDriver()
+        XCTAssertEqual(try enterChangeCartridge(driver), 0)
+
+        XCTAssertEqual(try recover(driver), 1, "the exit is taken as a new cartridge being in")
+
+        XCTAssertEqual(try activeLoadState(driver), .loadCartridge)
+        XCTAssertEqual(try workflowMode(), "none")
     }
 
     func testRecoveryOnAnIdlePumpJustEntersChangeMode() throws {
