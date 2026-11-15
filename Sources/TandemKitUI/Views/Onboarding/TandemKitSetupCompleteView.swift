@@ -8,10 +8,7 @@ struct TandemKitSetupCompleteView: View {
     var body: some View {
         VStack(alignment: .leading) {
             List {
-                Section(header: SectionHeader(label: String(
-                    localized: "Your Tandem pump is connected!",
-                    comment: "Tandem setup complete message"
-                ))) {
+                Section(header: SectionHeader(label: viewModel.header)) {
                     HStack {
                         Spacer()
                         Image(imageName: "tandem_mobi")
@@ -27,25 +24,10 @@ struct TandemKitSetupCompleteView: View {
 
             Spacer()
 
-            if viewModel.isLoadingHistory {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(viewModel.loadingMessage)
-                    ProgressView(value: viewModel.progress)
-                    Text(viewModel.progress, format: .percent.precision(.fractionLength(0)))
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                .padding(.horizontal)
-            }
-
-            Text(String(format: String(
-                localized:
-                "You can now use your Tandem pump with %@. Make sure to keep your pump nearby and within Bluetooth range.",
-                comment: "Tandem setup complete instructions"
-            ), HostApp.current.appName))
-                .padding(.all)
-
             if viewModel.isFinished {
+                Text(viewModel.stepMessage)
+                    .padding(.all)
+
                 ContinueButton(
                     text: Text("Finish", comment: "Text for finish button")
                 ) {
@@ -53,12 +35,19 @@ struct TandemKitSetupCompleteView: View {
                 }
                 .padding(.horizontal)
             } else {
-                HStack {
-                    Spacer()
-                    ActivityIndicator(isAnimating: .constant(true), style: .medium)
-                    Spacer()
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(viewModel.stepMessage)
+                    ProgressView(value: viewModel.progress)
+                        .animation(.default, value: viewModel.progress)
+                    HStack {
+                        Text(String(localized: "Keep the pump near your phone.", comment: "Setup caption while setup writes to the pump and reads it"))
+                        Spacer()
+                        Text(viewModel.progress, format: .percent.precision(.fractionLength(0)))
+                    }
+                    .font(.caption)
+                    .foregroundColor(.secondary)
                 }
-                .padding()
+                .padding(.all)
             }
         }
         .edgesIgnoringSafeArea(.bottom)

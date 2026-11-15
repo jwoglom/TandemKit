@@ -4,10 +4,18 @@ import Foundation
 /// Setup's writes, after the Load Pump History step has read the pump as its last user left it:
 /// Control-IQ off, the host's settings, a sync, the chosen history load, then the host gets the manager.
 class TandemKitSetupCompleteViewModel: ObservableObject {
-    @Published var isFinished = false
-    @Published var isLoadingHistory = false
-    /// 0 to 1, never moving back.
-    @Published var progress: Double = 0
+    enum Step: Int {
+        case checkingPump
+        case savingSettings
+        case syncing
+        case loadingHistory
+        case finished
+    }
+
+    /// Stays `.loadingHistory` behind the load's summary, so the screen does not change under the alert.
+    @Published private(set) var step: Step = .checkingPump
+    /// Across every step, 0 to 1, never moving back.
+    @Published private(set) var progress: Double = 0
     @Published var isShowingLoadFailedAlert = false
     @Published var loadFailedMessage: String?
     @Published var isShowingLoadSummary = false
@@ -28,6 +36,60 @@ class TandemKitSetupCompleteViewModel: ObservableObject {
         self.pumpManager = pumpManager
         self.loadsHistory = loadsHistory
         self.pumpIsSetUp = pumpIsSetUp
+    }
+
+    var isFinished: Bool { step == .finished }
+
+    /// The load reads far more from the pump than the steps before it, which get a fifth of the bar.
+    private var shareBeforeHistory: Double { loadsHistory ? 0.2 : 1 }
+
+    private func enter(_ step: Step, historyProgress: Double = 0) {
+        self.step = step
+        let stepsBeforeHistory = Double(Step.loadingHistory.rawValue)
+        let overall: Double
+        switch step {
+        case .checkingPump, .savingSettings, .syncing:
+            overall = shareBeforeHistory * Double(step.rawValue) / stepsBeforeHistory
+        case .loadingHistory:
+            overall = shareBeforeHistory + (1 - shareBeforeHistory) * historyProgress
+        case .finished:
+            overall = 1
+        }
+        progress = max(progress, overall)
+    }
+
+    static func title(for step: Step) -> String {
+        step == .finished
+            ? String(localized: "Setup Complete", comment: "Title for setup complete")
+            : String(localized: "Finishing Setup", comment: "Title for the last setup step while it writes to the pump")
+    }
+
+    var header: String {
+        isFinished
+            ? String(localized: "Your Tandem pump is connected!", comment: "Tandem setup complete message")
+            : String(localized: "Finishing your pump's setup", comment: "Setup header while setup writes to the pump and reads it")
+    }
+
+    var stepMessage: String {
+        switch step {
+        case .checkingPump:
+            return String(localized: "Checking the pump's settings.", comment: "Setup step that reads whether the pump runs Control-IQ")
+        case .savingSettings:
+            return String(localized: "Saving your settings to the pump.", comment: "Setup step that writes the app's basal rates, delivery limits and time to the pump")
+        case .syncing:
+            return String(localized: "Reading the pump's current status.", comment: "Setup step that syncs with the pump")
+        case .loadingHistory:
+            return String(format: String(
+                localized: "Reading the past %1$@ hours of your pump's history into %2$@.",
+                comment: "Setup message while the pump's history loads (1: number of hours, 2: app name)"
+            ), String(Int(TandemPumpManager.setupHistoryLoadWindow / .hours(1))), HostApp.current.appName)
+        case .finished:
+            return String(format: String(
+                localized:
+                "You can now use your Tandem pump with %@. Make sure to keep your pump nearby and within Bluetooth range.",
+                comment: "Tandem setup complete instructions"
+            ), HostApp.current.appName)
+        }
     }
 
     func start() {
@@ -78,9 +140,12 @@ class TandemKitSetupCompleteViewModel: ObservableObject {
     /// On failure, setup waits on the alert instead of advancing, because the pump would otherwise
     /// be left running basal rates the app doesn't know about (#206).
     func applyOnboardingSettings() {
+        enter(.savingSettings)
         pumpManager.applyOnboardingSettings { failure in
             guard let failure else {
-                self.finishSetup()
+                DispatchQueue.main.async {
+                    self.finishSetup()
+                }
                 return
             }
 
@@ -101,6 +166,7 @@ class TandemKitSetupCompleteViewModel: ObservableObject {
 
     /// The load after the sync: its reports reach Loop's doses only under the boundary a sync gives.
     private func finishSetup() {
+        enter(.syncing)
         pumpManager.syncPumpData { _ in
             DispatchQueue.main.async {
                 if self.loadsHistory {
@@ -112,27 +178,19 @@ class TandemKitSetupCompleteViewModel: ObservableObject {
         }
     }
 
-    var loadingMessage: String {
-        String(format: String(
-            localized: "Reading the past %1$@ hours of your pump's history into %2$@. Keep the pump near your phone.",
-            comment: "Setup message while the pump's history loads (1: number of hours, 2: app name)"
-        ), String(Int(TandemPumpManager.setupHistoryLoadWindow / .hours(1))), HostApp.current.appName)
-    }
-
     func loadHistory() {
-        isLoadingHistory = true
+        enter(.loadingHistory)
         pumpManager.loadHistoryForSetup(
             progress: { value in
                 DispatchQueue.main.async {
-                    self.progress = max(self.progress, value)
+                    self.enter(.loadingHistory, historyProgress: value)
                 }
             },
             completion: { outcome in
                 DispatchQueue.main.async {
                     switch outcome {
                     case let .success(summary):
-                        self.progress = 1
-                        self.isLoadingHistory = false
+                        self.enter(.loadingHistory, historyProgress: 1)
                         self.loadSummaryMessage = Self.message(for: summary)
                         self.isShowingLoadSummary = true
                     case let .failure(error):
@@ -159,7 +217,7 @@ class TandemKitSetupCompleteViewModel: ObservableObject {
     private func handOver() {
         log.info("Pump set up")
         pumpIsSetUp()
-        isFinished = true
+        enter(.finished)
     }
 
     static func message(for failure: OnboardingSettingsFailure) -> String {

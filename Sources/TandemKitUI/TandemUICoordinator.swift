@@ -1,3 +1,4 @@
+import Combine
 import LoopKit
 import LoopKitUI
 import SwiftUI
@@ -177,10 +178,11 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
                 guard let self else { return }
                 self.completionDelegate?.completionNotifyingDidComplete(self)
             })
-            return hostingController(
-                rootView: view,
-                title: String(localized: "Setup Complete", comment: "Title for setup complete")
-            )
+            let controller = hostingController(rootView: view, title: TandemKitSetupCompleteViewModel.title(for: viewModel.step))
+            setupCompleteTitleObserver = viewModel.$step.sink { [weak controller] step in
+                controller?.navigationItem.title = TandemKitSetupCompleteViewModel.title(for: step)
+            }
+            return controller
         case .insulinType:
             let isOnboarded = pumpManager.isOnboarded
             let view = TandemKitInsulinType(
@@ -408,6 +410,7 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
     /// What the pump reported right after pairing, for the Load Pump History step.
     private(set) var setupDeliveryReading = SetupDeliveryReading()
     private(set) var loadsSetupHistory = false
+    private var setupCompleteTitleObserver: AnyCancellable?
 
     /// Before setup writes anything, so the readings are what the pump's last user left, and before the
     /// host has the manager, so it doses on none of the pump's history until the user has chosen.
