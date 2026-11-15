@@ -200,6 +200,10 @@ class TandemKitSettingsViewModel: ObservableObject {
         basalDose?.type == .suspend
     }
 
+    var showsAlgorithmStatus: Bool {
+        controlIQSupportEnabled && !isDeliverySuspended
+    }
+
     func suspendResumeButtonPressed() {
         guard let pumpManager else {
             return
