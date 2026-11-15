@@ -27,7 +27,7 @@ on:
         type: boolean
         default: false
       trio_ref:
-        description: "nightscout/Trio branch/tag/SHA for the trio job; every job then builds against its LoopKit submodule (default: feat/tandem-closed-beta with loopkit-frameworks' pinned LoopKit, or -next-dev and its LoopKit on a TandemKit branch named for next-dev)"
+        description: "nightscout/Trio branch/tag/SHA for the trio job; every job then builds against its LoopKit submodule (default: feat/tandem-closed-beta with loopkit-frameworks' pinned LoopKit, or -next-dev and its LoopKit on a TandemKit branch named for next-dev or a pull request into one)"
         required: false
         default: ""
       trio_repository:
@@ -35,7 +35,7 @@ on:
         required: false
         default: ""
       loop_ref:
-        description: "LoopKit/LoopWorkspace branch/tag/SHA for the loop job (default: feat/tandem-closed-beta, or -next-dev on a TandemKit branch named for next-dev)"
+        description: "LoopKit/LoopWorkspace branch/tag/SHA for the loop job (default: feat/tandem-closed-beta, or -next-dev on a TandemKit branch named for next-dev or a pull request into one)"
         required: false
         default: ""
 
@@ -76,17 +76,18 @@ jobs:
           workflow: macos
           externals: |
             jwoglom/faketandem ${{ github.head_ref }}
-            nightscout/Trio ${{ contains(github.head_ref || github.ref_name, 'next-dev') && 'feat/tandem-closed-beta-next-dev' || 'feat/tandem-closed-beta' }}
-            LoopKit/LoopWorkspace ${{ contains(github.head_ref || github.ref_name, 'next-dev') && 'feat/tandem-closed-beta-next-dev' || 'feat/tandem-closed-beta' }}
+            nightscout/Trio ${{ contains(format('{0} {1}', github.base_ref, github.head_ref || github.ref_name), 'next-dev') && 'feat/tandem-closed-beta-next-dev' || 'feat/tandem-closed-beta' }}
+            LoopKit/LoopWorkspace ${{ contains(format('{0} {1}', github.base_ref, github.head_ref || github.ref_name), 'next-dev') && 'feat/tandem-closed-beta-next-dev' || 'feat/tandem-closed-beta' }}
 
-      # LoopKit next-dev's API is not in loopkit-frameworks' pin, so a next-dev branch builds against
-      # its Trio's LoopKit even without trio_ref. Otherwise loopkit-frameworks builds its pin.
+      # LoopKit next-dev's API is not in loopkit-frameworks' pin, so a next-dev branch, or a pull request
+      # into one, builds against its Trio's LoopKit even without trio_ref. Otherwise loopkit-frameworks
+      # builds its pin.
       - name: Pick LoopKit from Trio's submodule
         id: loopkit
-        if: inputs.trio_ref != '' || inputs.trio_repository != '' || contains(github.head_ref || github.ref_name, 'next-dev')
+        if: inputs.trio_ref != '' || inputs.trio_repository != '' || contains(format('{0} {1}', github.base_ref, github.head_ref || github.ref_name), 'next-dev')
         env:
           GH_TOKEN: ${{ github.token }}
-          TRIO_REF: ${{ inputs.trio_ref || (contains(github.head_ref || github.ref_name, 'next-dev') && 'feat/tandem-closed-beta-next-dev' || '') }}
+          TRIO_REF: ${{ inputs.trio_ref || (contains(format('{0} {1}', github.base_ref, github.head_ref || github.ref_name), 'next-dev') && 'feat/tandem-closed-beta-next-dev' || '') }}
           TRIO_REPOSITORY: ${{ inputs.trio_repository || 'nightscout/Trio' }}
         run: |
           set -euo pipefail
