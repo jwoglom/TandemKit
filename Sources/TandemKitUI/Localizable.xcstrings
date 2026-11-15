@@ -928,35 +928,13 @@
     "Basal reconciliation held back" : {
 
     },
-    "Beep (high)" : {
-      "comment" : "sound setting audioHigh",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Beep (high)"
-          }
-        }
-      }
-    },
-    "Beep (low)" : {
+    "Beep" : {
       "comment" : "sound setting audioLow",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Beep (low)"
-          }
-        }
-      }
-    },
-    "Beep (medium)" : {
-      "comment" : "sound setting audioMedium",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Beep (medium)"
+            "value" : "Beep"
           }
         }
       }
