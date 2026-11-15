@@ -20,26 +20,33 @@ struct TandemKitControlIQSettingsView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading) {
-            if viewModel.isFetching {
-                HStack {
-                    Spacer()
-                    ProgressView()
-                        .padding()
-                    Text("Loading settings...", comment: "Loading Control-IQ settings")
-                        .foregroundColor(.secondary)
-                    Spacer()
+        VStack(alignment: .leading, spacing: 0) {
+            List {
+                Section {
+                    nativeAlgorithmOnlyWarningCard
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
                 }
-                Spacer()
-            } else {
-                List {
+
+                if viewModel.isFetching {
+                    Section {
+                        HStack {
+                            Spacer()
+                            ProgressView()
+                                .padding()
+                            Text("Loading settings...", comment: "Loading Control-IQ settings")
+                                .foregroundColor(.secondary)
+                            Spacer()
+                        }
+                    }
+                } else {
                     controlIQSection
                     sleepScheduleSection
                 }
-                .listStyle(InsetGroupedListStyle())
+            }
+            .listStyle(InsetGroupedListStyle())
 
-                Spacer()
-
+            if !viewModel.isFetching {
                 ContinueButton(
                     text: Text("Save", comment: "Save action"),
                     loading: $viewModel.isLoading,
@@ -81,6 +88,23 @@ struct TandemKitControlIQSettingsView: View {
                 viewModel.saveError = nil
             }
         )
+    }
+
+    private var nativeAlgorithmOnlyWarningCard: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundColor(guidanceColors.warning)
+                .font(.title2)
+            Text(String(
+                format: String(
+                    localized: "These options are only used when the pump's native Control-IQ algorithm is enabled, and separate from %@'s Closed Loop settings.",
+                    comment: "Warning at the top of the Control-IQ settings screen, parameter is app name"
+                ),
+                HostApp.current.appName
+            ))
+            .font(.subheadline)
+        }
+        .wizardCard(background: guidanceColors.warning.opacity(0.1))
     }
 
     // MARK: - Control-IQ Settings Section

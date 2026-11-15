@@ -462,12 +462,12 @@ struct TandemKitSettingsView: View {
                         label: Text("Control-IQ Settings", comment: "Label for Control-IQ settings"),
                         action: { viewModel.openControlIQSettings() }
                     )
-                }
 
-                navigationLink(
-                    label: Text("Mobi CGM settings", comment: "Label for Mobi CGM settings"),
-                    action: { viewModel.openCgmSettings() }
-                )
+                    navigationLink(
+                        label: Text("Mobi CGM settings", comment: "Label for Mobi CGM settings"),
+                        action: { viewModel.openCgmSettings() }
+                    )
+                }
 
                 if viewModel.quickBolusButtonSupportEnabled {
                     navigationLink(

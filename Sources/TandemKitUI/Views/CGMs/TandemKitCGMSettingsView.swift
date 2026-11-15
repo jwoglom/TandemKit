@@ -19,44 +19,46 @@ struct TandemKitCGMSettingsView: View {
     @State private var activeAlert: CGMAlertType?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            controlIQOnlyWarningCard
-                .padding([.horizontal, .top])
+        List {
+            Section {
+                controlIQOnlyWarningCard
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
+            }
 
             if viewModel.isFetching {
-                HStack {
-                    Spacer()
-                    ProgressView()
-                        .padding()
-                    Text("Loading CGM status...", comment: "Loading CGM status")
-                        .foregroundColor(.secondary)
-                    Spacer()
-                }
-                Spacer()
-            } else {
-                List {
-                    cgmStatusSection
-
-                    if viewModel.cgmSessionState == .startPending {
-                        Section {
-                            Button(action: {
-                                activeAlert = .stopConfirmation
-                            }) {
-                                HStack {
-                                    Spacer()
-                                    Text("Stop Sensor", comment: "Button to stop sensor during startup")
-                                        .fontWeight(.semibold)
-                                        .foregroundColor(guidanceColors.critical)
-                                    Spacer()
-                                }
-                            }
-                            .disabled(viewModel.isLoading)
-                        }
+                Section {
+                    HStack {
+                        Spacer()
+                        ProgressView()
+                            .padding()
+                        Text("Loading CGM status...", comment: "Loading CGM status")
+                            .foregroundColor(.secondary)
+                        Spacer()
                     }
                 }
-                .listStyle(InsetGroupedListStyle())
+            } else {
+                cgmStatusSection
+
+                if viewModel.cgmSessionState == .startPending {
+                    Section {
+                        Button(action: {
+                            activeAlert = .stopConfirmation
+                        }) {
+                            HStack {
+                                Spacer()
+                                Text("Stop Sensor", comment: "Button to stop sensor during startup")
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(guidanceColors.critical)
+                                Spacer()
+                            }
+                        }
+                        .disabled(viewModel.isLoading)
+                    }
+                }
             }
         }
+        .listStyle(InsetGroupedListStyle())
         .onAppear {
             viewModel.fetchCGMStatus()
         }
