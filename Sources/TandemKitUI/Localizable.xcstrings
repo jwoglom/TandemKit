@@ -523,6 +523,105 @@
         }
       }
     },
+    "Disconnect before changing the cartridge." : {
+      "comment" : "Step description",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disconnect before changing the cartridge."
+          }
+        }
+      }
+    },
+    "Disconnect before filling the tubing." : {
+      "comment" : "Step description",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disconnect before filling the tubing."
+          }
+        }
+      }
+    },
+    "Disconnect Pump" : {
+      "comment" : "Step header",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disconnect Pump"
+          }
+        }
+      }
+    },
+    "Filling tubing requires suspending insulin delivery." : {
+      "comment" : "Warning message for tubing fill",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filling tubing requires suspending insulin delivery."
+          }
+        }
+      }
+    },
+    "Insert the new infusion set to your body before filling cannula." : {
+      "comment" : "Step description",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Insert the new infusion set to your body before filling cannula."
+          }
+        }
+      }
+    },
+    "Please dismiss the active notifications on your pump before changing the cartridge." : {
+      "comment" : "Step description shown while the pump has notifications to dismiss",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Please dismiss the active notifications on your pump before changing the cartridge."
+          }
+        }
+      }
+    },
+    "Please dismiss the active notifications on your pump before filling the tubing." : {
+      "comment" : "Step description shown while the pump has notifications to dismiss",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Please dismiss the active notifications on your pump before filling the tubing."
+          }
+        }
+      }
+    },
+    "The pump is completing the cartridge change. Do not remove the cartridge." : {
+      "comment" : "Step description",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The pump is completing the cartridge change. Do not remove the cartridge."
+          }
+        }
+      }
+    },
+    "The pump is preparing to change the cartridge. Do not remove the cartridge." : {
+      "comment" : "Step description",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The pump is preparing to change the cartridge. Do not remove the cartridge."
+          }
+        }
+      }
+    },
     "The pump runs a temporary basal rate of %1$d%% instead of %2$d%%" : {
       "comment" : "Error when the pump took a temp basal set from TandemKit's settings but reports another (1: the percent it runs, 2: the percent sent)",
       "localizations" : {
@@ -1203,17 +1302,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Checking insulin delivery status..."
-          }
-        }
-      }
-    },
-    "Checking notifications..." : {
-      "comment" : "Loading notifications message",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Checking notifications..."
           }
         }
       }
@@ -1907,17 +1995,6 @@
         }
       }
     },
-    "Dismiss any active pump notifications below" : {
-      "comment" : "Step description",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dismiss any active pump notifications below"
-          }
-        }
-      }
-    },
     "Display" : {
 
     },
@@ -2508,28 +2585,6 @@
         }
       }
     },
-    "Filling tubing requires disconnecting from your site." : {
-      "comment" : "Step description",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Filling tubing requires disconnecting from your site."
-          }
-        }
-      }
-    },
-    "Filling tubing requires suspending insulin delivery. You will use the pump button to fill." : {
-      "comment" : "Warning message for tubing fill",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Filling tubing requires suspending insulin delivery. You will use the pump button to fill."
-          }
-        }
-      }
-    },
     "Finalizing tubing fill process" : {
       "comment" : "Step description",
       "localizations" : {
@@ -2600,17 +2655,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "First, suspend insulin delivery"
-          }
-        }
-      }
-    },
-    "Follow these steps to replace your cartridge" : {
-      "comment" : "Step description",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Follow these steps to replace your cartridge"
           }
         }
       }
@@ -2777,17 +2821,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "If your pump is not being detected, make sure you've:"
-          }
-        }
-      }
-    },
-    "Important" : {
-      "comment" : "Important section header",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Important"
           }
         }
       }
@@ -3205,17 +3238,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "No active bolus to cancel"
-          }
-        }
-      }
-    },
-    "No active notifications" : {
-      "comment" : "No notifications message",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No active notifications"
           }
         }
       }
@@ -3689,17 +3711,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Please try again. If the problem persists, re-pair your pump."
-          }
-        }
-      }
-    },
-    "Prepare Pump" : {
-      "comment" : "Step header",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Prepare Pump"
           }
         }
       }
@@ -5155,7 +5166,7 @@
       "isCommentAutoGenerated" : true
     },
     "Tap to adjust the amount of insulin for priming the cannula." : {
-      "comment" : "Step description",
+      "comment" : "Instruction above the prime amount",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -5407,17 +5418,6 @@
     },
     "The pump is not in a state that allows a bolus right now, so it did not give permission for the bolus." : {
 
-    },
-    "The pump is preparing for cartridge change" : {
-      "comment" : "Step description",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The pump is preparing for cartridge change"
-          }
-        }
-      }
     },
     "The pump ran a temporary basal rate of %.2f U/hr instead of %.2f U/hr" : {
       "localizations" : {
@@ -6116,17 +6116,6 @@
     },
     "Use this schedule" : {
 
-    },
-    "Use your pump to fill the tubing with insulin" : {
-      "comment" : "Step description",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Use your pump to fill the tubing with insulin"
-          }
-        }
-      }
     },
     "Vibe" : {
 

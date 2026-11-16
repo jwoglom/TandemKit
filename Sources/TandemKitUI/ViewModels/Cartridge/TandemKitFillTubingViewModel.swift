@@ -50,11 +50,8 @@ class TandemKitFillTubingViewModel: ObservableObject {
     /// stopped the fill and is waiting to be confirmed.
     @Published var isCheckingNotifications = false
 
-    /// True until the read made as the prepare step appears lands; the fill can't start before it.
+    /// True until the read made as the disconnect step appears lands; the fill can't start before it.
     @Published var isCheckingNotificationsBeforeFill = true
-
-    private let followsCartridgeChange: Bool
-    private var foundNothingToClearAfterCartridgeChange = false
 
     /// Last button state the pump reported, or nil before it has reported any. Used to spot the
     /// moment the button is released rather than reacting to every repeat of the same state.
@@ -92,16 +89,10 @@ class TandemKitFillTubingViewModel: ObservableObject {
     /// pump can stop a fill on its own and wait for the user to confirm before delivering more.
     static let notificationPollInterval: TimeInterval = 5
 
-    init(
-        pumpManager: TandemPumpManager?,
-        done: @escaping () -> Void,
-        toFillingCannula: @escaping () -> Void,
-        followsCartridgeChange: Bool = false
-    ) {
+    init(pumpManager: TandemPumpManager?, done: @escaping () -> Void, toFillingCannula: @escaping () -> Void) {
         self.pumpManager = pumpManager
         self.done = done
         self.toFillingCannula = toFillingCannula
-        self.followsCartridgeChange = followsCartridgeChange
         notificationsViewModel = TandemKitNotificationsViewModel(pumpManager)
 
         // Forward child ViewModel changes to parent
@@ -175,24 +166,22 @@ class TandemKitFillTubingViewModel: ObservableObject {
 
     func checkNotificationsBeforeFill() {
         isCheckingNotificationsBeforeFill = true
-        let requestedAt = Date()
         notificationsViewModel.refreshNotifications { [weak self] in
-            guard let self else { return }
-            isCheckingNotificationsBeforeFill = false
-            // A failed read leaves the last list in place, which says nothing about the pump now.
-            let readSucceeded = (notificationsViewModel.lastRefreshTime ?? .distantPast) >= requestedAt
-            foundNothingToClearAfterCartridgeChange = followsCartridgeChange && readSucceeded && !hasActiveNotifications
+            self?.isCheckingNotificationsBeforeFill = false
         }
-    }
-
-    /// After a cartridge change with nothing to clear, the prepare step shows only the disconnect
-    /// reminder; the user still starts the fill and confirms the pump is off their body.
-    var skipsNotificationsCheck: Bool {
-        foundNothingToClearAfterCartridgeChange && !hasActiveNotifications
     }
 
     var canStartFill: Bool {
         !hasActiveNotifications && !isCheckingNotificationsBeforeFill && !notificationsViewModel.isRefreshing
+    }
+
+    var showsGraphics: Bool {
+        MobiAppGraphic.suits(pumpManager?.state.pumpState.pumpModel)
+    }
+
+    /// The press-and-hold until the button comes back up, then the drop to look for at the tubing's end.
+    var fillingGraphic: MobiAppGraphic {
+        hasDisplayedFlow && !buttonDown ? .fillingStopped : .fillTubing
     }
 
     func suspendPumping() {
@@ -234,6 +223,8 @@ class TandemKitFillTubingViewModel: ObservableObject {
                 } else {
                     self.failedEnterMode = true
                     self.isProcessing = false
+                    // An empty notification list is not on screen, so only a read can show what the pump refused over.
+                    self.notificationsViewModel.refreshNotifications()
                 }
             }
         }

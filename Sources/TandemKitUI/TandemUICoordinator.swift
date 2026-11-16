@@ -14,7 +14,6 @@ enum TandemScreen {
     case soundSettings
     case changeCartridge
     case fillTubing
-    case fillTubingAfterCartridgeChange
     case fillCannula
     case notifications
     case cgmSettings
@@ -255,7 +254,7 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
             let viewModel = TandemKitChangeCartridgeViewModel(
                 pumpManager: pumpManager,
                 done: { [weak self] in self?.resetNavigationTo([.pumpSettings]) },
-                toFillTubing: { [weak self] in self?.navigateTo(.fillTubingAfterCartridgeChange) }
+                toFillTubing: { [weak self] in self?.navigateTo(.fillTubing) }
             )
 
             return hostingController(
@@ -264,12 +263,11 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
                 largeTitleDisplayMode: .never
             )
 
-        case .fillTubing, .fillTubingAfterCartridgeChange:
+        case .fillTubing:
             let viewModel = TandemKitFillTubingViewModel(
                 pumpManager: pumpManager,
                 done: { [weak self] in self?.resetNavigationTo([.pumpSettings]) },
-                toFillingCannula: { [weak self] in self?.navigateTo(.fillCannula) },
-                followsCartridgeChange: screen == .fillTubingAfterCartridgeChange
+                toFillingCannula: { [weak self] in self?.navigateTo(.fillCannula) }
             )
 
             return hostingController(

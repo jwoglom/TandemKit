@@ -592,6 +592,21 @@ host queue, so its state stays behind its lock.
   as the new cartridge being in, streamed detection, and refused change mode and both exits from
   then on.
 
+### Cartridge wizard screens
+- A pump notification takes a step over. On the four steps that watch for them (the change's
+  disconnect and replace steps, the tubing fill's disconnect and fill steps) the list replaces the
+  graphic and the instructions, and the subtitle asks for it to be dismissed. An empty list is not
+  shown, so nothing on screen re-reads it: the first read gates the start (`canStartChange`,
+  `canStartFill`), and a refused `EnterFillTubingMode` reads again.
+- Yellow messages are pinned with the bottom action (`WizardWarning`), opaque because the step
+  scrolls beneath them. The tubing fill keeps its disconnect warning up with a notification to
+  dismiss: the pump still fills while its button is held.
+- The animations draw a Mobi, so they show unless the pump is known to be another model
+  (`MobiAppGraphic.suits`). `replace_cartridge` is not Tandem's:
+  `scripts/make-replace-cartridge-graphic.py` builds it from `remove_cartridge`, keeping the one
+  transparent index the source has. gifsicle and ImageMagick give each frame its own, and a decoder
+  that clears to the screen's background index then leaves specks where the cartridge was.
+
 ### Marker events
 Events with no dose, each in a `replacePendingEvents: false` batch under a `raw` of its kind and date.
 - Loop derives no doses from reservoir drops within an insulin duration of a `.prime`, so after a

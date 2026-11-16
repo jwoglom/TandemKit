@@ -78,6 +78,18 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
         !notificationsViewModel.notifications.isEmpty
     }
 
+    /// True until the read made as the disconnect step appears lands; the change can't start before it.
+    @Published var isCheckingNotificationsBeforeChange = true
+
+    var canStartChange: Bool {
+        !hasActiveNotifications && !indeterminateEnterMode && !isCheckingNotificationsBeforeChange
+            && !notificationsViewModel.isRefreshing
+    }
+
+    var showsGraphics: Bool {
+        MobiAppGraphic.suits(pumpManager?.state.pumpState.pumpModel)
+    }
+
     init(pumpManager: TandemPumpManager?, done: @escaping () -> Void, toFillTubing: @escaping () -> Void) {
         self.pumpManager = pumpManager
         self.done = done
@@ -125,6 +137,13 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
     func stopPeriodicNotificationCheck() {
         notificationCheckTask?.cancel()
         notificationCheckTask = nil
+    }
+
+    func checkNotificationsBeforeChange() {
+        isCheckingNotificationsBeforeChange = true
+        notificationsViewModel.refreshNotifications { [weak self] in
+            self?.isCheckingNotificationsBeforeChange = false
+        }
     }
 
     func checkSuspendedStatus() {

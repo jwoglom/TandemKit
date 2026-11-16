@@ -193,6 +193,40 @@ import XCTest
         XCTAssertFalse(bluetooth.didSend(EnterChangeCartridgeModeRequest.self))
     }
 
+    // MARK: - Starting the change
+
+    func testTheChangeCannotStartBeforeTheNotificationReadLands() {
+        let viewModel = makeViewModel()
+
+        viewModel.checkNotificationsBeforeChange()
+        XCTAssertFalse(viewModel.canStartChange)
+
+        drainMainQueue()
+        XCTAssertTrue(viewModel.canStartChange)
+    }
+
+    func testANotificationToDismissBlocksTheChange() {
+        stubActiveAlert(.LOW_INSULIN_ALERT)
+        let viewModel = makeViewModel()
+
+        viewModel.checkNotificationsBeforeChange()
+        drainMainQueue()
+
+        XCTAssertTrue(viewModel.hasActiveNotifications)
+        XCTAssertFalse(viewModel.canStartChange)
+    }
+
+    func testGraphicsAreShownUnlessThePumpIsKnownNotToBeAMobi() {
+        let viewModel = makeViewModel()
+        XCTAssertTrue(viewModel.showsGraphics, "no model read yet")
+
+        manager.state.pumpState.pumpModel = .MOBI
+        XCTAssertTrue(viewModel.showsGraphics)
+
+        manager.state.pumpState.pumpModel = .TSLIM_X2
+        XCTAssertFalse(viewModel.showsGraphics)
+    }
+
     // MARK: - Stuck cartridge procedure
 
     /// A refusal with delivery suspended and nothing on the pump's notification list is what a
