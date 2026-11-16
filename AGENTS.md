@@ -416,12 +416,18 @@ host queue, so its state stays behind its lock.
   pump's permission nack stopped it (#504). Past the bolus's estimated end and its 30 s grace
   (`shouldDeferBolusSync`) it reads `CurrentBolusStatus` first, so a bolus that finished out of
   contact does not block the next; no answer still refuses.
-- An accepted bolus is `.initiating` until a `CurrentBolusStatus` read finds the pump delivering it,
-  which is when Loop shows its progress and cancel and Trio leaves its Initiating state. The pump
-  answers `requesting` for about `bolusInitiationDelay` first, and the read its `.bolusChange` asks
-  for queued behind a sync for 28 s, so `enactBolus`'s job, once the host has its answer, reads it
-  about once a second (`followBolusToDeliveryStart`) and gives way to a cancel. Only that bolus
-  delivering moves it on: whether the pump answers no bolus before starting one is unconfirmed.
+- The bolus state follows each host's display. Loop (and an unknown host, as LoopKit's guide has it)
+  shows "Starting Bolus" for `.initiating` only while the command goes out, and its progress and
+  cancel for `.inProgress`: so `.initiating` from before `BolusPermission`, `.inProgress` once the
+  pump accepts, `.noBolus` again if it refuses. Trio shows its Initiating state for `.initiating`
+  until the pump delivers: nothing while the command goes out, `.initiating` once the pump accepts,
+  `.inProgress` once it delivers (`holdsInitiatingUntilDelivery`).
+- The pump answers `requesting` for about `bolusInitiationDelay` before it delivers an accepted bolus,
+  and the read its `.bolusChange` asks for queued behind a sync for 28 s, so `enactBolus`'s job, once
+  the host has its answer, reads it about once a second (`followBolusToDeliveryStart`) and gives way
+  to a cancel. The progress count starts at the first read of it delivering. Only that bolus
+  delivering moves it on: whether the pump answers no bolus before starting one is unconfirmed, as
+  is whether it takes a cancel while `requesting`, which Loop offers.
 - The progress reporter is rebuilt from the saved bolus at launch, counting from its delivery start:
   Loop asks for one only when it first reads `.inProgress`, which after a relaunch comes before any
   read of the pump. An unconfirmed bolus still gets none until the pump is seen delivering it.

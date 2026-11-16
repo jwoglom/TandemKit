@@ -2,13 +2,14 @@ import LoopKit
 @testable import TandemKit
 import XCTest
 
-/// How an accepted bolus moves from `.initiating` to `.inProgress`, and what a relaunch keeps of it.
+/// How a bolus moves through `.initiating` and `.inProgress` under each host, and what a relaunch keeps of it.
 @available(macOS 13.0, iOS 14.0, *) final class BolusDeliveryStartTests: XCTestCase {
     private var bluetooth: StubPumpBluetooth!
     private var clock: ManualClock!
     private var manager: TandemPumpManager!
     private var delegate: MockPumpManagerDelegate!
     private var delegateQueue: DispatchQueue!
+    private var hostApp: HostApp = .trio
 
     private static let bolusId = 6902
     private static let units = 4.7
@@ -42,11 +43,17 @@ import XCTest
     private func start(state: TandemPumpManagerState) {
         manager = TandemPumpManager(state: state, bluetooth: bluetooth, clock: clock)
         manager.bolusStartPollInterval = 0
+        manager.hostApp = hostApp
         delegate = MockPumpManagerDelegate()
         delegateQueue = DispatchQueue(label: "bolus-delivery-start-test")
         manager.pumpManagerDelegate = delegate
         manager.delegateQueue = delegateQueue
         delegateQueue.sync {}
+    }
+
+    private func runUnder(_ host: HostApp) {
+        hostApp = host
+        manager.hostApp = host
     }
 
     private func relaunch() {
@@ -87,7 +94,7 @@ import XCTest
 
     // MARK: - After the pump accepts
 
-    func testAnAcceptedBolusTurnsInProgressAsSoonAsThePumpDeliversIt() {
+    func testUnderTrioAnAcceptedBolusTurnsInProgressAsSoonAsThePumpDeliversIt() {
         bluetooth.enqueue(CurrentBolusStatusRequest.self, responses: [status(.requesting), status(.requesting), status(.delivering)])
 
         XCTAssertNil(enactBolus())
@@ -97,7 +104,7 @@ import XCTest
         XCTAssertNotNil(manager.state.bolusDose?.deliveryStartDate)
     }
 
-    func testTheHostSeesInitiatingBeforeInProgress() {
+    func testUnderTrioTheHostSeesInitiatingBeforeInProgress() {
         bluetooth.enqueue(CurrentBolusStatusRequest.self, responses: [status(.requesting), status(.delivering)])
 
         XCTAssertNil(enactBolus())
@@ -211,6 +218,119 @@ import XCTest
         }
 
         XCTAssertEqual(statusReads, 1, "only settleUnansweredBolus's own read")
+    }
+
+    // MARK: - Under Loop
+
+    private func bolusStateAtWrite(of requestType: Message.Type) -> () -> PumpManagerStatus.BolusState? {
+        var seen: PumpManagerStatus.BolusState?
+        bluetooth.onWrite = { [unowned self] message in
+            if type(of: message) == requestType, seen == nil {
+                seen = self.manager.status.bolusState
+            }
+        }
+        return { seen }
+    }
+
+    func testUnderLoopTheBolusIsStartingWhileItsCommandGoesOut() {
+        runUnder(.loop)
+        bluetooth.stub(CurrentBolusStatusRequest.self, with: status(.requesting))
+        let atInitiate = bolusStateAtWrite(of: InitiateBolusRequest.self)
+
+        XCTAssertNil(enactBolus())
+
+        XCTAssertEqual(atInitiate(), .initiating)
+    }
+
+    func testUnderLoopAnAcceptedBolusIsInProgressBeforeThePumpDeliversIt() throws {
+        runUnder(.loop)
+        bluetooth.stub(CurrentBolusStatusRequest.self, with: status(.requesting))
+
+        XCTAssertNil(enactBolus())
+
+        XCTAssertTrue(isInProgress, "\(manager.status.bolusState)")
+        XCTAssertNil(manager.state.bolusDose?.deliveryStartDate)
+        let reporter = try XCTUnwrap(manager.createBolusProgressReporter(reportingOn: delegateQueue))
+        XCTAssertEqual(reporter.progress.deliveredUnits, 0)
+    }
+
+    func testUnderLoopTheHostGoesFromStartingToInProgressWithNothingBetween() {
+        runUnder(.loop)
+        bluetooth.stub(CurrentBolusStatusRequest.self, with: status(.requesting))
+
+        XCTAssertNil(enactBolus())
+
+        let states = delegate.statusUpdates.map(\.newStatus.bolusState)
+        let initiating = states.firstIndex(of: .initiating)
+        let inProgress = states.firstIndex { if case .inProgress = $0 { return true } else { return false } }
+        XCTAssertNotNil(initiating, "\(states)")
+        XCTAssertNotNil(inProgress, "\(states)")
+        XCTAssertEqual((initiating ?? 0) + 1, inProgress, "\(states)")
+    }
+
+    func testUnderLoopTheProgressCountStartsWhenThePumpDelivers() {
+        runUnder(.loop)
+        bluetooth.enqueue(CurrentBolusStatusRequest.self, responses: [status(.requesting), status(.delivering)])
+
+        XCTAssertNil(enactBolus())
+
+        XCTAssertEqual(statusReads, 2)
+        XCTAssertNotNil(manager.state.bolusDose?.deliveryStartDate)
+        XCTAssertNotNil(manager.bolusProgressReport?.bolusStatedOn)
+    }
+
+    func testUnderLoopARefusedPermissionClearsStartingBolus() {
+        runUnder(.loop)
+        bluetooth.stub(BolusPermissionRequest.self, with: BolusPermissionResponse(status: 1, bolusId: 0, nackReasonId: 1))
+
+        XCTAssertNotNil(enactBolus())
+
+        XCTAssertEqual(manager.status.bolusState, .noBolus)
+        XCTAssertEqual(delegate.statusUpdates.map(\.newStatus.bolusState).last, .noBolus)
+        XCTAssertTrue(delegate.statusUpdates.contains { $0.newStatus.bolusState == .initiating })
+    }
+
+    func testUnderLoopARefusedBolusClearsStartingBolus() {
+        runUnder(.loop)
+        bluetooth.stub(InitiateBolusRequest.self, with: InitiateBolusResponse(status: 1, bolusId: Self.bolusId, statusTypeId: 1))
+
+        XCTAssertNotNil(enactBolus())
+
+        XCTAssertEqual(manager.status.bolusState, .noBolus)
+        XCTAssertNil(manager.state.bolusDose)
+    }
+
+    func testUnderLoopAnUncertainBolusStaysInitiating() {
+        runUnder(.loop)
+        bluetooth.stub(InitiateBolusRequest.self) { _ in nil }
+        bluetooth.stub(CurrentBolusStatusRequest.self) { _ in nil }
+
+        guard case .uncertainDelivery? = enactBolus() else {
+            return XCTFail("expected uncertainDelivery")
+        }
+
+        XCTAssertEqual(manager.status.bolusState, .initiating)
+    }
+
+    func testUnderTrioNothingIsReportedWhileTheCommandGoesOut() {
+        bluetooth.stub(CurrentBolusStatusRequest.self, with: status(.requesting))
+        let atInitiate = bolusStateAtWrite(of: InitiateBolusRequest.self)
+
+        XCTAssertNil(enactBolus())
+
+        XCTAssertEqual(atInitiate(), .noBolus)
+        XCTAssertEqual(manager.status.bolusState, .initiating)
+    }
+
+    func testUnderLoopARelaunchBeforeDeliveryKeepsTheBolusInProgress() throws {
+        runUnder(.loop)
+        bluetooth.stub(CurrentBolusStatusRequest.self) { _ in nil }
+        XCTAssertNil(enactBolus())
+
+        relaunch()
+
+        XCTAssertTrue(isInProgress, "\(manager.status.bolusState)")
+        XCTAssertNotNil(manager.createBolusProgressReporter(reportingOn: delegateQueue))
     }
 
     // MARK: - Relaunch

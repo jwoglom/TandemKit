@@ -193,6 +193,12 @@ public class TandemPumpManager: PumpManager, Pluggable {
         pendingBolusCancelsLock.unlock()
     }
 
+    var hostApp: HostApp = .current
+
+    /// LoopDocs has Loop show "Starting Bolus" only while the command goes out, then progress and its cancel;
+    /// Trio shows its Initiating state until the pump delivers.
+    private var holdsInitiatingUntilDelivery: Bool { hostApp == .trio }
+
     var bolusStartPollInterval: TimeInterval = 1
     /// Reads, a `bolusStartPollInterval` apart: twice the pump's usual `bolusInitiationDelay`.
     static let bolusStartPollLimit = 30
@@ -868,16 +874,22 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
+            self.showStartingBolus()
+            let finish = { (error: PumpManagerError?) in
+                self.clearStartingBolus()
+                completion(error)
+            }
+
             let permissionRequest = BolusPermissionRequest()
             guard let permissionResponse = self.bluetooth.write(permissionRequest) else {
                 self.logger.error("Failed to request bolus permission")
-                completion(.communication(PumpCommError.noResponse))
+                finish(.communication(PumpCommError.noResponse))
                 return
             }
 
             guard permissionResponse.isPermissionGranted else {
                 self.logger.error("Pump rejected bolus permission request: \(permissionResponse.description)")
-                completion(.deviceState(PumpRefusal.bolusPermission(permissionResponse, to: permissionRequest)))
+                finish(.deviceState(PumpRefusal.bolusPermission(permissionResponse, to: permissionRequest)))
                 return
             }
 
@@ -903,7 +915,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     bolusId: permissionResponse.bolusId,
                     sentAt: sentAt
                 )
-                completion(result)
+                finish(result)
                 if result == nil {
                     self.followBolusToDeliveryStart(bolusId: permissionResponse.bolusId)
                 }
@@ -913,7 +925,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             guard initiateResponse.wasBolusInitiated else {
                 self.logger.error("Bolus was not initiated: \(initiateResponse.description)")
                 self.releaseBolusPermission(bolusId: permissionResponse.bolusId)
-                completion(.deviceState(PumpRefusal.initiateBolus(initiateResponse, to: bolusRequest)))
+                finish(.deviceState(PumpRefusal.initiateBolus(initiateResponse, to: bolusRequest)))
                 return
             }
 
@@ -925,16 +937,33 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 startDate: sentAt,
                 isUnconfirmed: false
             )
-            completion(nil)
+            finish(nil)
             self.followBolusToDeliveryStart(bolusId: permissionResponse.bolusId)
         }
     }
 
-    /// The pump answers `requesting` for about `bolusInitiationDelay`, and its bolusChange read queues behind
-    /// any sync, which held Loop on "Starting Bolus", with no cancel, for 28 s after the pump had started.
+    /// Loop's "Starting Bolus" while the command goes out. Trio's Initiating state starts at acceptance.
+    private func showStartingBolus() {
+        guard !holdsInitiatingUntilDelivery else {
+            return
+        }
+        state.bolusState = .initiating
+        notifyDelegateStateUpdated()
+    }
+
+    private func clearStartingBolus() {
+        guard state.bolusDose == nil, state.bolusState == .initiating else {
+            return
+        }
+        state.bolusState = .noBolus
+        notifyDelegateStateUpdated()
+    }
+
+    /// The pump answers `requesting` for about `bolusInitiationDelay`, and its bolusChange read queues behind any
+    /// sync: the progress count and Trio's Initiating state waited on it for 28 s after the pump had started.
     private func followBolusToDeliveryStart(bolusId: Int) {
         for poll in 0..<Self.bolusStartPollLimit {
-            guard state.bolusState == .initiating, state.bolusDose?.bolusId == bolusId, !isBolusCancelPending else {
+            guard let dose = state.bolusDose, dose.bolusId == bolusId, dose.deliveryStartDate == nil, !isBolusCancelPending else {
                 return
             }
             if poll > 0 {
@@ -1046,7 +1075,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         ))
 
         state.bolusDose = dose
-        state.bolusState = .initiating
+        state.bolusState = isUnconfirmed || holdsInitiatingUntilDelivery ? .initiating : .inProgress(doseEntry)
         state.lastReconciliation = now
         notifyDelegateStateUpdated()
         emitPumpEvents([event], replacePendingEvents: false)
