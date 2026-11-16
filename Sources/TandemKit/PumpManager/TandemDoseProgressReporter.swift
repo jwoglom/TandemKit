@@ -24,12 +24,19 @@ class TandemDoseProgressReporter: DoseProgressReporter {
 
     var programmedUnits: Double { total }
 
-    public init(pumpManager: TandemPumpManager, dose: DoseEntry, activationType: BolusActivationType, eventRaw: Data? = nil) {
+    public init(
+        pumpManager: TandemPumpManager,
+        dose: DoseEntry,
+        activationType: BolusActivationType,
+        eventRaw: Data? = nil,
+        deliveringSince: Date? = nil
+    ) {
         self.pumpManager = pumpManager
         self.dose = dose
         self.activationType = activationType
         self.eventRaw = eventRaw
         total = dose.programmedUnits
+        _bolusStatedOn = deliveringSince
     }
 
     /// This reporter, calling back the observers added through it on `queue`.

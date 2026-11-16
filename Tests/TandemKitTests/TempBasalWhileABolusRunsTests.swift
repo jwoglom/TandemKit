@@ -213,11 +213,9 @@ import XCTest
         XCTAssertEqual(events[finalized].dose?.deliveredUnits, 2.0)
     }
 
-    /// No progress reporter survives a relaunch, so only the persisted bolus can hold the temp basal back.
     func testAfterARelaunchMidBolusATempBasalIsRefusedWithoutConnecting() {
         XCTAssertNil(enactBolus())
         relaunch()
-        XCTAssertNil(manager.bolusProgressReport)
         bluetooth.resetRecordedTraffic()
 
         XCTAssertEqual(validationError(enactTempBasal()), .bolusIsRunning)

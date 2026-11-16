@@ -416,7 +416,6 @@ final class DeliveryLimitIntegrationTests: ConformanceTestCase {
 
     // MARK: - L13
 
-    /// No progress reporter survives a relaunch, so only the bolus the driver persisted holds the temp basal back.
     func testAfterARelaunchMidBolusATempBasalIsRefusedUntilThePumpSaysTheBolusFinished() throws {
         let driver = try startDriverWithSchedule()
         let batchesBefore = allPumpEventBatches.count
@@ -427,7 +426,6 @@ final class DeliveryLimitIntegrationTests: ConformanceTestCase {
         let persisted = driver.manager.state.rawValue
         try shutDownDriver()
         let relaunched = startDriver(state: TandemPumpManagerState(rawValue: persisted))
-        XCTAssertNil(relaunched.manager.bolusProgressReport)
         let mark = try logMark()
 
         let insideTheEstimate = try enactTempBasal(unitsPerHour: 1.5, duration: .minutes(30))

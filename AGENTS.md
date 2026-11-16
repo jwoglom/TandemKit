@@ -409,13 +409,34 @@ host queue, so its state stays behind its lock.
   differences went uncorrected (#563).
 - `enactTempBasal` decides whether a bolus is running by `bolusIsStillRunning`, not the progress
   reporter's elapsed-time estimate: a pump slower than the estimate is still delivering when it runs
-  out, and no reporter survives a relaunch (#347).
+  out (#347).
 - `enactBolus` refuses with `bolusIsRunning` while a bolus it started has not been seen to end
   (`isBolusInFlight`), and checks again inside its command job: a host's SMB enacted while a manual
   bolus was being initiated queued behind it and ran right after its `InitiateBolus`, and only the
   pump's permission nack stopped it (#504). Past the bolus's estimated end and its 30 s grace
   (`shouldDeferBolusSync`) it reads `CurrentBolusStatus` first, so a bolus that finished out of
   contact does not block the next; no answer still refuses.
+- The bolus state follows each host's display. Loop (and an unknown host, as LoopKit's guide has it)
+  shows "Starting Bolus" for `.initiating` only while the command goes out, and its progress and
+  cancel for `.inProgress`: so `.initiating` from before `BolusPermission`, `.inProgress` once the
+  pump accepts, `.noBolus` again if it refuses. Trio shows its Initiating state for `.initiating`
+  until the pump delivers: nothing while the command goes out, `.initiating` once the pump accepts,
+  `.inProgress` once it delivers (`holdsInitiatingUntilDelivery`).
+- The pump answers `requesting` for about `bolusInitiationDelay` before it delivers an accepted bolus,
+  and the read its `.bolusChange` asks for queued behind a sync for 28 s, so `enactBolus`'s job, once
+  the host has its answer, reads it about once a second (`followBolusToDeliveryStart`) and gives way
+  to a cancel. The progress count starts at the first read of it delivering. Only that bolus
+  delivering moves it on: whether the pump answers no bolus before starting one is unconfirmed.
+- A Mobi takes a cancel while `requesting`, which Loop offers, and stores nothing of the bolus:
+  `LastBolusStatus` keeps naming the one before. So a cancel finalizes at 0 U a bolus never seen
+  delivering whose last read, `requestingReadEvidenceWindow` or less before the pump confirmed the
+  cancel, was `requesting`, when `LastBolusStatus` then names an earlier bolus. Without that read an
+  earlier last bolus stays the unknown it was (#328). Under Loop the bolus is `.canceling` from the
+  call, since the cancel can wait seconds behind queued jobs and Loop put its tappable progress row
+  back on the next status push, and a second tap sent a second cancel; a failed cancel puts it back.
+- The progress reporter is rebuilt from the saved bolus at launch, counting from its delivery start:
+  Loop asks for one only when it first reads `.inProgress`, which after a relaunch comes before any
+  read of the pump. An unconfirmed bolus still gets none until the pump is seen delivering it.
 - A zero temp basal is always allowed, whatever the profile, sync or update state, since 0% of any
   profile is 0. Control-IQ, a running bolus and a duration the pump refuses still refuse it.
 - `enactTempBasal` refuses a temp outside 15 minutes to 72 hours before connecting: the pump
