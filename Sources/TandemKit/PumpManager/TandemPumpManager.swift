@@ -177,6 +177,36 @@ public class TandemPumpManager: PumpManager, Pluggable {
             bolusProgressReportLock.unlock()
         }
     }
+
+    // Taken before a cancel's job is queued, so a job holding the queue can step aside for it.
+    private let pendingBolusCancelsLock = NSLock()
+    private var _pendingBolusCancels = 0
+    private var isBolusCancelPending: Bool {
+        pendingBolusCancelsLock.lock()
+        defer { pendingBolusCancelsLock.unlock() }
+        return _pendingBolusCancels > 0
+    }
+
+    private func adjustPendingBolusCancels(by delta: Int) {
+        pendingBolusCancelsLock.lock()
+        _pendingBolusCancels += delta
+        pendingBolusCancelsLock.unlock()
+    }
+
+    var hostApp: HostApp = .current
+
+    /// LoopDocs has Loop show "Starting Bolus" only while the command goes out, then progress and its cancel;
+    /// Trio shows its Initiating state until the pump delivers.
+    private var holdsInitiatingUntilDelivery: Bool { hostApp == .trio }
+
+    /// The last read of a bolus the pump had not started, on the command queue only.
+    var lastRequestingRead: (bolusId: Int, at: Date)?
+    /// At 1/28.7 U/s, at most 0.1 U the pump could have run between that read and a cancel and not stored.
+    static let requestingReadEvidenceWindow: TimeInterval = 3
+
+    var bolusStartPollInterval: TimeInterval = 1
+    /// Reads, a `bolusStartPollInterval` apart: twice the pump's usual `bolusInitiationDelay`.
+    static let bolusStartPollLimit = 30
     private let silentToneManager = TandemSilentToneManager()
     var notificationBundle = NotificationBundle()
     var unreportedInsulinOnBoard = UnreportedInsulinOnBoardMonitor()
@@ -303,6 +333,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         self.clock = clock
         bluetooth.pumpManager = self
         logInitialization()
+        restoreBolusProgressReporter()
         #if TANDEMKIT_VIRTUAL_PUMP
         VirtualPumpControl.attach(self)
         #endif
@@ -848,16 +879,22 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
+            self.showStartingBolus()
+            let finish = { (error: PumpManagerError?) in
+                self.clearStartingBolus()
+                completion(error)
+            }
+
             let permissionRequest = BolusPermissionRequest()
             guard let permissionResponse = self.bluetooth.write(permissionRequest) else {
                 self.logger.error("Failed to request bolus permission")
-                completion(.communication(PumpCommError.noResponse))
+                finish(.communication(PumpCommError.noResponse))
                 return
             }
 
             guard permissionResponse.isPermissionGranted else {
                 self.logger.error("Pump rejected bolus permission request: \(permissionResponse.description)")
-                completion(.deviceState(PumpRefusal.bolusPermission(permissionResponse, to: permissionRequest)))
+                finish(.deviceState(PumpRefusal.bolusPermission(permissionResponse, to: permissionRequest)))
                 return
             }
 
@@ -876,20 +913,24 @@ public class TandemPumpManager: PumpManager, Pluggable {
             )
             let sentAt = self.now
             guard let initiateResponse = self.bluetooth.write(bolusRequest) else {
-                completion(self.settleUnansweredBolus(
+                let result = self.settleUnansweredBolus(
                     decisionId: decisionId,
                     units: units,
                     activationType: activationType,
                     bolusId: permissionResponse.bolusId,
                     sentAt: sentAt
-                ))
+                )
+                finish(result)
+                if result == nil {
+                    self.followBolusToDeliveryStart(bolusId: permissionResponse.bolusId)
+                }
                 return
             }
 
             guard initiateResponse.wasBolusInitiated else {
                 self.logger.error("Bolus was not initiated: \(initiateResponse.description)")
                 self.releaseBolusPermission(bolusId: permissionResponse.bolusId)
-                completion(.deviceState(PumpRefusal.initiateBolus(initiateResponse, to: bolusRequest)))
+                finish(.deviceState(PumpRefusal.initiateBolus(initiateResponse, to: bolusRequest)))
                 return
             }
 
@@ -901,7 +942,90 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 startDate: sentAt,
                 isUnconfirmed: false
             )
-            completion(nil)
+            finish(nil)
+            self.followBolusToDeliveryStart(bolusId: permissionResponse.bolusId)
+        }
+    }
+
+    /// Loop's "Starting Bolus" while the command goes out. Trio's Initiating state starts at acceptance.
+    private func showStartingBolus() {
+        guard !holdsInitiatingUntilDelivery else {
+            return
+        }
+        state.bolusState = .initiating
+        notifyDelegateStateUpdated()
+    }
+
+    func noteRequestingRead(_ response: CurrentBolusStatusResponse) {
+        if response.status == .requesting {
+            lastRequestingRead = (response.bolusId, now)
+        } else if lastRequestingRead?.bolusId == response.bolusId {
+            lastRequestingRead = nil
+        }
+    }
+
+    private func wasRequesting(_ bolusId: Int, before cancelledAt: Date) -> Bool {
+        guard let read = lastRequestingRead, read.bolusId == bolusId else {
+            return false
+        }
+        return cancelledAt.timeIntervalSince(read.at) <= Self.requestingReadEvidenceWindow
+    }
+
+    private func endCancelingBolus() {
+        guard state.bolusState == .canceling, let dose = state.bolusDose else {
+            return
+        }
+        state.bolusState = dose.isUnconfirmed ? .initiating : .inProgress(dose.toDoseEntry(isMutable: true))
+        notifyDelegateStateUpdated()
+    }
+
+    private func clearStartingBolus() {
+        guard state.bolusDose == nil, state.bolusState == .initiating else {
+            return
+        }
+        state.bolusState = .noBolus
+        notifyDelegateStateUpdated()
+    }
+
+    /// The pump answers `requesting` for about `bolusInitiationDelay`, and its bolusChange read queues behind any
+    /// sync: the progress count and Trio's Initiating state waited on it for 28 s after the pump had started.
+    private func followBolusToDeliveryStart(bolusId: Int) {
+        for poll in 0..<Self.bolusStartPollLimit {
+            guard let dose = state.bolusDose, dose.bolusId == bolusId, dose.deliveryStartDate == nil, !isBolusCancelPending else {
+                return
+            }
+            if poll > 0 {
+                Thread.sleep(forTimeInterval: bolusStartPollInterval)
+            }
+            guard let response = bluetooth.write(CurrentBolusStatusRequest()), response.bolusId == bolusId else {
+                return
+            }
+            noteRequestingRead(response)
+            if response.status == .delivering {
+                applyBolusStatus(response)
+                return
+            }
+        }
+        logger.warning("Bolus \(bolusId) still requesting after \(Self.bolusStartPollLimit) reads; leaving it to the pump's bolusChange")
+    }
+
+    /// Loop asks for the reporter once, when it first reads `.inProgress`, which after a relaunch is
+    /// before any read of the pump.
+    private func restoreBolusProgressReporter() {
+        guard let dose = state.bolusDose, !dose.isUnconfirmed else {
+            return
+        }
+        bolusProgressReport = TandemDoseProgressReporter(
+            pumpManager: self,
+            dose: dose.toDoseEntry(isMutable: true),
+            activationType: dose.automatic ? .automatic : .manualNoRecommendation,
+            eventRaw: dose.eventRaw,
+            deliveringSince: dose.deliveryStartDate
+        )
+        if dose.deliveryStartDate != nil {
+            telemetryScheduler.schedule(kind: .bolus, interval: .seconds(1), leeway: .milliseconds(100)) {
+                self.bolusProgressReport?.notify()
+            }
         }
     }
 
@@ -980,7 +1104,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         ))
 
         state.bolusDose = dose
-        state.bolusState = .initiating
+        state.bolusState = isUnconfirmed || holdsInitiatingUntilDelivery ? .initiating : .inProgress(doseEntry)
         state.lastReconciliation = now
         notifyDelegateStateUpdated()
         emitPumpEvents([event], replacePendingEvents: false)
@@ -1020,23 +1144,36 @@ public class TandemPumpManager: PumpManager, Pluggable {
             return
         }
 
+        // The cancel can wait seconds behind queued jobs, and Loop puts its tappable progress row back on
+        // any status push that still reads `.inProgress`: a second tap sent a second cancel.
+        if !holdsInitiatingUntilDelivery {
+            state.bolusState = .canceling
+            notifyDelegateStateUpdated()
+        }
+        let fail = { (error: PumpManagerError) in
+            self.endCancelingBolus()
+            completion(.failure(error))
+        }
+
+        adjustPendingBolusCancels(by: 1)
         bluetooth.ensureConnected { error in
+            self.adjustPendingBolusCancels(by: -1)
             if let error {
                 self.logger.error("Failed to connect for cancel bolus: \(error.localizedDescription)")
-                completion(.failure(.communication(PumpCommError.pumpNotConnected)))
+                fail(.communication(PumpCommError.pumpNotConnected))
                 return
             }
 
             let cancelRequest = CancelBolusRequest(bolusId: bolusId)
             guard let response = self.bluetooth.write(cancelRequest) else {
                 self.logger.error("Failed to cancel bolus")
-                completion(.failure(.communication(PumpCommError.noResponse)))
+                fail(.communication(PumpCommError.noResponse))
                 return
             }
 
             guard response.wasCancelled else {
                 self.logger.error("Pump failed to cancel bolus: \(response.description)")
-                completion(.failure(.deviceState(PumpRefusal.cancelBolus(response, to: cancelRequest))))
+                fail(.deviceState(PumpRefusal.cancelBolus(response, to: cancelRequest)))
                 return
             }
             let stoppedAt = self.now
@@ -1057,7 +1194,16 @@ public class TandemPumpManager: PumpManager, Pluggable {
             self.state.bolusDose = nil
             self.state.bolusState = .noBolus
 
-            guard let lastBolus = self.queryLastBolusReport(bolusId: bolusId) else {
+            let delivered: (units: Double, pumpEnd: Date?)
+            switch self.readLastBolus(bolusId: bolusId) {
+            case let .report(lastBolus):
+                delivered = (lastBolus.deliveredUnits, self.hostDate(forPumpDate: lastBolus.pumpTimestamp))
+            case .earlierBolus where self.wasRequesting(bolusId, before: stoppedAt) && bolusDose.deliveryStartDate == nil:
+                // Read `requesting` just before the cancel and stored nowhere on the pump after it: cancelled before
+                // delivery. Without that read an earlier last bolus is no evidence (#328).
+                self.logger.info("Bolus \(bolusId) was cancelled before the pump started it; reporting 0 U delivered")
+                delivered = (0, nil)
+            case .earlierBolus, .unknown:
                 // Unknown, not zero: finalizing at 0 would permanently erase the insulin that
                 // went in before the cancel (#328).
                 self.logger.error(
@@ -1077,7 +1223,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            bolusDose.deliveredUnits = lastBolus.deliveredUnits
+            bolusDose.deliveredUnits = delivered.units
 
             // Not now: a cancel is only noticed here, while the insulin stopped going in when the
             // pump says it did (#339).
@@ -1085,7 +1231,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 startDate: bolusDose.startDate,
                 deliveryStartDate: bolusDose.deliveryStartDate,
                 deliveredUnits: bolusDose.deliveredUnits,
-                pumpTimestamp: self.hostDate(forPumpDate: lastBolus.pumpTimestamp),
+                pumpTimestamp: delivered.pumpEnd,
                 detectedAt: stoppedAt
             ))
 
