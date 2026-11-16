@@ -62,6 +62,10 @@ class TandemKitFillCannulaViewModel: ObservableObject {
         primeAmountOptions.min { abs($0 - amount) < abs($1 - amount) } ?? amount
     }
 
+    var showsGraphics: Bool {
+        MobiAppGraphic.suits(pumpManager?.state.pumpState.pumpModel)
+    }
+
     init(pumpManager: TandemPumpManager?, done: @escaping () -> Void) {
         self.pumpManager = pumpManager
         self.done = done
