@@ -18,6 +18,22 @@ final class MobiAppGraphicTests: XCTestCase {
         }
     }
 
+    func testTheReplaceCartridgeGraphicRunsLongerThanTheRemovalItIsBuiltFrom() throws {
+        func duration(_ graphic: MobiAppGraphic) throws -> Double {
+            let data = try XCTUnwrap(graphic.gifData(colorScheme: .light, displayScale: 2))
+            let source = try XCTUnwrap(CGImageSourceCreateWithData(data as CFData, nil))
+            return (0 ..< CGImageSourceGetCount(source)).reduce(0) { total, index in
+                let properties = CGImageSourceCopyPropertiesAtIndex(source, index, nil) as? [CFString: Any]
+                let gif = properties?[kCGImagePropertyGIFDictionary] as? [CFString: Any]
+                return total + ((gif?[kCGImagePropertyGIFUnclampedDelayTime] as? NSNumber)?.doubleValue ?? 0)
+            }
+        }
+
+        // 231 frames out and 229 back at 20 ms, against the source's 330.
+        XCTAssertEqual(try duration(.replaceCartridge), 9.2, accuracy: 0.01)
+        XCTAssertEqual(try duration(.removeCartridge), 6.6, accuracy: 0.01)
+    }
+
     func testSixDigitPairingImageLoads() {
         XCTAssertNotNil(UIImage(named: "mobi_six_digit_pairing", in: Bundle(for: TandemUICoordinator.self), compatibleWith: nil))
     }

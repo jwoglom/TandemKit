@@ -13,6 +13,14 @@ enum MobiAppGraphic: String, CaseIterable {
     case newInfusionSet = "new_infusion_set"
     case removeCartridge = "remove_cartridge"
     case fillingStopped = "filling_stopped"
+    /// Not Tandem's: `remove_cartridge` up to the empty pump, then backwards, so the new cartridge
+    /// goes in the way the old one came out. `scripts/make-replace-cartridge-graphic.py` builds it.
+    case replaceCartridge = "replace_cartridge"
+
+    /// The animations draw a Mobi, so a pump known to be another model is shown none.
+    static func suits(_ pumpModel: PumpModel?) -> Bool {
+        pumpModel == nil || pumpModel == .MOBI
+    }
 
     /// A data set varies by neither appearance nor scale, so each variant is a data set of its own,
     /// named as in Tandem's app.
