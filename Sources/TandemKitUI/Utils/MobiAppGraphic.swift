@@ -9,6 +9,7 @@ enum MobiAppGraphic: String, CaseIterable {
     case pressAndHold = "press_and_hold"
     case pressTwice = "press_twice"
     case disconnectInfusionSet = "disconnect_infusion_set"
+    case connectTubing = "connect_tubing"
     case fillTubing = "fill_tubing"
     case newInfusionSet = "new_infusion_set"
     case removeCartridge = "remove_cartridge"

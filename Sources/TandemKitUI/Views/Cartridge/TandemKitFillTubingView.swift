@@ -274,6 +274,8 @@ struct TandemKitFillTubingView: View {
 
             if viewModel.hasActiveNotifications {
                 WizardNotificationsPanel(viewModel: viewModel.notificationsViewModel)
+            } else if viewModel.showsGraphics {
+                WizardGraphic(graphic: .connectTubing)
             }
 
             if viewModel.failedEnterMode {
