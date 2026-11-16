@@ -25,7 +25,9 @@ enum MobiAppGraphic: String, CaseIterable {
     /// A data set varies by neither appearance nor scale, so each variant is a data set of its own,
     /// named as in Tandem's app.
     func assetName(colorScheme: ColorScheme, displayScale: CGFloat) -> String {
-        "\(colorScheme == .dark ? "dm" : "lm")_\(rawValue)@\(displayScale > 2 ? 3 : 2)x"
+        let appearance = colorScheme == .dark ? "dm" : "lm"
+        let scale = displayScale > 2 ? 3 : 2
+        return [appearance, "_", rawValue, "@", String(scale), "x"].joined()
     }
 
     func gifData(colorScheme: ColorScheme, displayScale: CGFloat) -> Data? {
