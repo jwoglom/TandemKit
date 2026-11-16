@@ -118,7 +118,7 @@ import XCTest
 
     func testThePauseDoesNotPromptBeforeTheFillStarts() {
         stubAlerts(.FILL_TUBING_STILL_IN_PROGRESS)
-        viewModel.currentStep = .enterMode
+        viewModel.currentStep = .disconnect
 
         refreshNotifications()
 
@@ -250,7 +250,7 @@ import XCTest
     func testTheFillCannotStartBeforeTheNotificationReadLands() {
         stubAlerts()
         viewModel.isSuspended = true
-        viewModel.currentStep = .enterMode
+        viewModel.currentStep = .disconnect
 
         viewModel.checkNotificationsBeforeFill()
         XCTAssertFalse(viewModel.canStartFill)
@@ -262,7 +262,7 @@ import XCTest
     func testTheFillCannotStartWhileARefreshIsInFlight() {
         stubAlerts()
         viewModel.isSuspended = true
-        viewModel.currentStep = .enterMode
+        viewModel.currentStep = .disconnect
         viewModel.checkNotificationsBeforeFill()
         drainMainQueue()
 
@@ -283,11 +283,16 @@ import XCTest
         drainMainQueue()
 
         XCTAssertEqual(bluetooth.sent(EnterFillTubingModeRequest.self).count, 0)
-        XCTAssertEqual(viewModel.currentStep, .enterMode)
+        XCTAssertEqual(viewModel.currentStep, .disconnect)
+    }
+
+    func testTheTubingIsConnectedBetweenDisconnectingAndFilling() {
+        XCTAssertEqual(TubingFillStep.disconnect.nextStep(), .connectTubing)
+        XCTAssertEqual(TubingFillStep.connectTubing.nextStep(), .filling)
     }
 
     func testStartingTheFillEntersFillMode() {
-        startAtTheDisconnectStep()
+        startAtTheConnectTubingStep()
         stubAlerts()
         bluetooth.stub(EnterFillTubingModeRequest.self, with: EnterFillTubingModeResponse(status: 0))
         viewModel.checkNotificationsBeforeFill()
@@ -301,8 +306,8 @@ import XCTest
         XCTAssertFalse(viewModel.failedEnterMode)
     }
 
-    func testARefusedEnterKeepsTheDisconnectStep() {
-        startAtTheDisconnectStep()
+    func testARefusedEnterKeepsTheConnectTubingStep() {
+        startAtTheConnectTubingStep()
         stubAlerts()
         bluetooth.stub(EnterFillTubingModeRequest.self, with: EnterFillTubingModeResponse(status: 1))
         viewModel.checkNotificationsBeforeFill()
@@ -311,14 +316,14 @@ import XCTest
         viewModel.enterFillTubingMode()
         drainMainQueue()
 
-        XCTAssertEqual(viewModel.currentStep, .enterMode)
+        XCTAssertEqual(viewModel.currentStep, .connectTubing)
         XCTAssertTrue(viewModel.failedEnterMode)
         XCTAssertFalse(viewModel.isProcessing)
     }
 
     /// The step shows no notification list while it is empty, so nothing on screen re-reads it.
     func testARefusedEnterReadsTheNotificationsAgain() {
-        startAtTheDisconnectStep()
+        startAtTheConnectTubingStep()
         stubAlerts()
         bluetooth.stub(EnterFillTubingModeRequest.self, with: EnterFillTubingModeResponse(status: 1))
         viewModel.checkNotificationsBeforeFill()
@@ -413,7 +418,12 @@ import XCTest
 
     private func startAtTheDisconnectStep() {
         viewModel.isSuspended = true
-        viewModel.currentStep = .enterMode
+        viewModel.currentStep = .disconnect
+    }
+
+    private func startAtTheConnectTubingStep() {
+        viewModel.isSuspended = true
+        viewModel.currentStep = .connectTubing
     }
 
     private func attachDelegate() -> MockPumpManagerDelegate {

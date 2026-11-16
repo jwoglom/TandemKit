@@ -4,16 +4,20 @@ import LoopKit
 
 enum TubingFillStep: Int {
     case suspend = 0
-    case enterMode = 1
-    case filling = 2
-    case exiting = 3
-    case done = 4
+    case disconnect = 1
+    /// `EnterFillTubingMode` is sent from here, once the tubing is on the cartridge.
+    case connectTubing = 2
+    case filling = 3
+    case exiting = 4
+    case done = 5
 
     func nextStep() -> TubingFillStep? {
         switch self {
         case .suspend:
-            return .enterMode
-        case .enterMode:
+            return .disconnect
+        case .disconnect:
+            return .connectTubing
+        case .connectTubing:
             return .filling
         case .filling:
             return .exiting
@@ -158,7 +162,7 @@ class TandemKitFillTubingViewModel: ObservableObject {
                 self.isSuspended = isSuspended
 
                 if self.isSuspended == true, self.currentStep == .suspend {
-                    self.currentStep = .enterMode
+                    self.currentStep = .disconnect
                 }
             }
         }
@@ -358,7 +362,7 @@ class TandemKitFillTubingViewModel: ObservableObject {
 
     func cancelOperation() {
         // Attempt to exit fill tubing mode if we're in it
-        if currentStep.rawValue >= TubingFillStep.enterMode.rawValue,
+        if currentStep.rawValue >= TubingFillStep.disconnect.rawValue,
            currentStep.rawValue < TubingFillStep.done.rawValue
         {
             exitFillTubingMode()

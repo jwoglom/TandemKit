@@ -593,11 +593,13 @@ host queue, so its state stays behind its lock.
   then on.
 
 ### Cartridge wizard screens
-- A pump notification takes a step over. On the four steps that watch for them (the change's
-  disconnect and replace steps, the tubing fill's disconnect and fill steps) the list replaces the
-  graphic and the instructions, and the subtitle asks for it to be dismissed. An empty list is not
-  shown, so nothing on screen re-reads it: the first read gates the start (`canStartChange`,
-  `canStartFill`), and a refused `EnterFillTubingMode` reads again.
+- A pump notification takes a step over. On the five steps that watch for them (the change's
+  disconnect and replace steps, the tubing fill's disconnect, connect and fill steps) the list
+  replaces the graphic and the instructions, and the subtitle asks for it to be dismissed. An empty
+  list is not shown, so nothing on screen re-reads it: the first read gates the start
+  (`canStartChange`, `canStartFill`), and a refused `EnterFillTubingMode` reads again.
+- The tubing fill sends `EnterFillTubingMode` from its connect step, after the disconnect step, so
+  the tubing is on the cartridge before the pump will fill.
 - Yellow messages are pinned with the bottom action (`WizardWarning`), opaque because the step
   scrolls beneath them. The tubing fill keeps its disconnect warning up with a notification to
   dismiss: the pump still fills while its button is held.

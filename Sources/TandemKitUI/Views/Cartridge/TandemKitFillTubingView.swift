@@ -13,7 +13,7 @@ struct TandemKitFillTubingView: View {
     var body: some View {
         WizardStepContainer(
             currentStep: viewModel.currentStep.rawValue + 1,
-            totalSteps: 5,
+            totalSteps: 6,
             canCancel: !viewModel.isProcessing,
             disableInteractiveDismiss: true,
             lockModalWhenCantCancel: true,
@@ -66,8 +66,10 @@ struct TandemKitFillTubingView: View {
         switch viewModel.currentStep {
         case .suspend:
             suspendStepContent
-        case .enterMode:
-            enterModeStepContent
+        case .disconnect:
+            disconnectStepContent
+        case .connectTubing:
+            connectTubingStepContent
         case .filling:
             fillingStepContent
         case .exiting:
@@ -86,7 +88,7 @@ struct TandemKitFillTubingView: View {
                     comment: "Warning message for tubing fill"
                 ))
             }
-        case .enterMode:
+        case .disconnect, .connectTubing:
             if viewModel.hasActiveNotifications {
                 WizardWarning(text: String(
                     localized: "Dismiss all notifications before starting tubing fill",
@@ -126,9 +128,21 @@ struct TandemKitFillTubingView: View {
                     actionSheet = .suspend
                 }
             }
-        case .enterMode:
+        case .disconnect:
             ContinueButton(
-                text: Text("Start tubing fill", comment: "Button text"),
+                text: Text("Continue", comment: "Continue button"),
+                disabled: Binding(
+                    get: { !viewModel.canStartFill },
+                    set: { _ in }
+                )
+            ) {
+                withAnimation {
+                    viewModel.currentStep = viewModel.currentStep.nextStep() ?? .done
+                }
+            }
+        case .connectTubing:
+            ContinueButton(
+                text: Text("Start Tubing Fill", comment: "Button text"),
                 loading: $viewModel.loadingEnterMode,
                 disabled: Binding(
                     get: { !viewModel.canStartFill },
@@ -214,7 +228,7 @@ struct TandemKitFillTubingView: View {
         }
     }
 
-    private var enterModeStepContent: some View {
+    private var disconnectStepContent: some View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Disconnect Pump", comment: "Step header")
@@ -234,6 +248,33 @@ struct TandemKitFillTubingView: View {
             } else if viewModel.showsGraphics {
                 WizardGraphic(graphic: .disconnectInfusionSet)
             }
+        }
+        .task {
+            viewModel.checkNotificationsBeforeFill()
+        }
+    }
+
+    private var connectTubingStepContent: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Connect tubing", comment: "Step header")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                Text(
+                    viewModel.hasActiveNotifications
+                        ? dismissNotificationsText
+                        : String(
+                            localized: "Attach the tubing's lock connector to your cartridge. Do not connect to your body.",
+                            comment: "Step description"
+                        )
+                )
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+            }
+
+            if viewModel.hasActiveNotifications {
+                WizardNotificationsPanel(viewModel: viewModel.notificationsViewModel)
+            }
 
             if viewModel.failedEnterMode {
                 Label(
@@ -247,9 +288,6 @@ struct TandemKitFillTubingView: View {
                 .foregroundColor(guidanceColors.critical)
                 .wizardCard(background: guidanceColors.critical.opacity(0.1))
             }
-        }
-        .task {
-            viewModel.checkNotificationsBeforeFill()
         }
     }
 
