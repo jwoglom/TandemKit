@@ -199,6 +199,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
     /// Trio shows its Initiating state until the pump delivers.
     private var holdsInitiatingUntilDelivery: Bool { hostApp == .trio }
 
+    /// The last read of a bolus the pump had not started, on the command queue only.
+    var lastRequestingRead: (bolusId: Int, at: Date)?
+    /// At 1/28.7 U/s, at most 0.1 U the pump could have run between that read and a cancel and not stored.
+    static let requestingReadEvidenceWindow: TimeInterval = 3
+
     var bolusStartPollInterval: TimeInterval = 1
     /// Reads, a `bolusStartPollInterval` apart: twice the pump's usual `bolusInitiationDelay`.
     static let bolusStartPollLimit = 30
@@ -951,6 +956,29 @@ public class TandemPumpManager: PumpManager, Pluggable {
         notifyDelegateStateUpdated()
     }
 
+    func noteRequestingRead(_ response: CurrentBolusStatusResponse) {
+        if response.status == .requesting {
+            lastRequestingRead = (response.bolusId, now)
+        } else if lastRequestingRead?.bolusId == response.bolusId {
+            lastRequestingRead = nil
+        }
+    }
+
+    private func wasRequesting(_ bolusId: Int, before cancelledAt: Date) -> Bool {
+        guard let read = lastRequestingRead, read.bolusId == bolusId else {
+            return false
+        }
+        return cancelledAt.timeIntervalSince(read.at) <= Self.requestingReadEvidenceWindow
+    }
+
+    private func endCancelingBolus() {
+        guard state.bolusState == .canceling, let dose = state.bolusDose else {
+            return
+        }
+        state.bolusState = dose.isUnconfirmed ? .initiating : .inProgress(dose.toDoseEntry(isMutable: true))
+        notifyDelegateStateUpdated()
+    }
+
     private func clearStartingBolus() {
         guard state.bolusDose == nil, state.bolusState == .initiating else {
             return
@@ -972,6 +1000,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             guard let response = bluetooth.write(CurrentBolusStatusRequest()), response.bolusId == bolusId else {
                 return
             }
+            noteRequestingRead(response)
             if response.status == .delivering {
                 applyBolusStatus(response)
                 return
@@ -1115,25 +1144,36 @@ public class TandemPumpManager: PumpManager, Pluggable {
             return
         }
 
+        // The cancel can wait seconds behind queued jobs, and Loop puts its tappable progress row back on
+        // any status push that still reads `.inProgress`: a second tap sent a second cancel.
+        if !holdsInitiatingUntilDelivery {
+            state.bolusState = .canceling
+            notifyDelegateStateUpdated()
+        }
+        let fail = { (error: PumpManagerError) in
+            self.endCancelingBolus()
+            completion(.failure(error))
+        }
+
         adjustPendingBolusCancels(by: 1)
         bluetooth.ensureConnected { error in
             self.adjustPendingBolusCancels(by: -1)
             if let error {
                 self.logger.error("Failed to connect for cancel bolus: \(error.localizedDescription)")
-                completion(.failure(.communication(PumpCommError.pumpNotConnected)))
+                fail(.communication(PumpCommError.pumpNotConnected))
                 return
             }
 
             let cancelRequest = CancelBolusRequest(bolusId: bolusId)
             guard let response = self.bluetooth.write(cancelRequest) else {
                 self.logger.error("Failed to cancel bolus")
-                completion(.failure(.communication(PumpCommError.noResponse)))
+                fail(.communication(PumpCommError.noResponse))
                 return
             }
 
             guard response.wasCancelled else {
                 self.logger.error("Pump failed to cancel bolus: \(response.description)")
-                completion(.failure(.deviceState(PumpRefusal.cancelBolus(response, to: cancelRequest))))
+                fail(.deviceState(PumpRefusal.cancelBolus(response, to: cancelRequest)))
                 return
             }
             let stoppedAt = self.now
@@ -1154,7 +1194,16 @@ public class TandemPumpManager: PumpManager, Pluggable {
             self.state.bolusDose = nil
             self.state.bolusState = .noBolus
 
-            guard let lastBolus = self.queryLastBolusReport(bolusId: bolusId) else {
+            let delivered: (units: Double, pumpEnd: Date?)
+            switch self.readLastBolus(bolusId: bolusId) {
+            case let .report(lastBolus):
+                delivered = (lastBolus.deliveredUnits, self.hostDate(forPumpDate: lastBolus.pumpTimestamp))
+            case .earlierBolus where self.wasRequesting(bolusId, before: stoppedAt) && bolusDose.deliveryStartDate == nil:
+                // Read `requesting` just before the cancel and stored nowhere on the pump after it: cancelled before
+                // delivery. Without that read an earlier last bolus is no evidence (#328).
+                self.logger.info("Bolus \(bolusId) was cancelled before the pump started it; reporting 0 U delivered")
+                delivered = (0, nil)
+            case .earlierBolus, .unknown:
                 // Unknown, not zero: finalizing at 0 would permanently erase the insulin that
                 // went in before the cancel (#328).
                 self.logger.error(
@@ -1174,7 +1223,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            bolusDose.deliveredUnits = lastBolus.deliveredUnits
+            bolusDose.deliveredUnits = delivered.units
 
             // Not now: a cancel is only noticed here, while the insulin stopped going in when the
             // pump says it did (#339).
@@ -1182,7 +1231,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 startDate: bolusDose.startDate,
                 deliveryStartDate: bolusDose.deliveryStartDate,
                 deliveredUnits: bolusDose.deliveredUnits,
-                pumpTimestamp: self.hostDate(forPumpDate: lastBolus.pumpTimestamp),
+                pumpTimestamp: delivered.pumpEnd,
                 detectedAt: stoppedAt
             ))
 

@@ -426,8 +426,14 @@ host queue, so its state stays behind its lock.
   and the read its `.bolusChange` asks for queued behind a sync for 28 s, so `enactBolus`'s job, once
   the host has its answer, reads it about once a second (`followBolusToDeliveryStart`) and gives way
   to a cancel. The progress count starts at the first read of it delivering. Only that bolus
-  delivering moves it on: whether the pump answers no bolus before starting one is unconfirmed, as
-  is whether it takes a cancel while `requesting`, which Loop offers.
+  delivering moves it on: whether the pump answers no bolus before starting one is unconfirmed.
+- A Mobi takes a cancel while `requesting`, which Loop offers, and stores nothing of the bolus:
+  `LastBolusStatus` keeps naming the one before. So a cancel finalizes at 0 U a bolus never seen
+  delivering whose last read, `requestingReadEvidenceWindow` or less before the pump confirmed the
+  cancel, was `requesting`, when `LastBolusStatus` then names an earlier bolus. Without that read an
+  earlier last bolus stays the unknown it was (#328). Under Loop the bolus is `.canceling` from the
+  call, since the cancel can wait seconds behind queued jobs and Loop put its tappable progress row
+  back on the next status push, and a second tap sent a second cancel; a failed cancel puts it back.
 - The progress reporter is rebuilt from the saved bolus at launch, counting from its delivery start:
   Loop asks for one only when it first reads `.inProgress`, which after a relaunch comes before any
   read of the pump. An unconfirmed bolus still gets none until the pump is seen delivering it.

@@ -333,6 +333,164 @@ import XCTest
         XCTAssertNotNil(manager.createBolusProgressReporter(reportingOn: delegateQueue))
     }
 
+    // MARK: - Cancel
+
+    private func stubLastBolus(bolusId: Int, deliveredMilliunits: UInt32) {
+        bluetooth.stub(LastBolusStatusRequest.self, with: LastBolusStatusResponse(
+            status: 0,
+            bolusId: bolusId,
+            timestamp: 0,
+            deliveredVolume: deliveredMilliunits,
+            bolusStatusId: 3,
+            bolusSourceId: 8,
+            bolusTypeBitmask: 0,
+            extendedBolusDuration: 0
+        ))
+    }
+
+    private func cancelBolus() -> PumpManagerResult<DoseEntry?> {
+        let cancelled = expectation(description: "cancelBolus")
+        var result: PumpManagerResult<DoseEntry?>!
+        manager.cancelBolus {
+            result = $0
+            cancelled.fulfill()
+        }
+        wait(for: [cancelled], timeout: 15.0)
+        delegateQueue.sync {}
+        return result
+    }
+
+    private func stubCancel(succeeds: Bool) {
+        bluetooth.stub(CancelBolusRequest.self, with: CancelBolusResponse(
+            statusId: succeeds ? 0 : 1,
+            bolusId: Self.bolusId,
+            reasonId: succeeds ? 0 : 2
+        ))
+    }
+
+    private var lastReportedBolus: NewPumpEvent? {
+        delegate.pumpEventBatches.flatMap(\.events).last { $0.dose?.type == .bolus }
+    }
+
+    func testACancelBeforeThePumpStartsTheBolusIsFinalizedAtNothingDelivered() throws {
+        runUnder(.loop)
+        bluetooth.stub(CurrentBolusStatusRequest.self, with: status(.requesting))
+        XCTAssertNil(enactBolus())
+        stubCancel(succeeds: true)
+        stubLastBolus(bolusId: Self.bolusId - 1, deliveredMilliunits: 1000)
+
+        guard case let .success(dose) = cancelBolus() else {
+            return XCTFail("cancel failed")
+        }
+
+        XCTAssertEqual(dose?.deliveredUnits, 0)
+        XCTAssertEqual(dose?.isMutable, false)
+        let reported = try XCTUnwrap(lastReportedBolus?.dose)
+        XCTAssertEqual(reported.deliveredUnits, 0)
+        XCTAssertFalse(reported.isMutable)
+        XCTAssertNil(manager.state.pendingBolusFinalization)
+        XCTAssertEqual(manager.status.bolusState, .noBolus)
+    }
+
+    func testACancelLongAfterTheLastRequestingReadIsHeld() {
+        runUnder(.loop)
+        bluetooth.stub(CurrentBolusStatusRequest.self, with: status(.requesting))
+        XCTAssertNil(enactBolus())
+        clock.advance(by: TandemPumpManager.requestingReadEvidenceWindow + 1)
+        stubCancel(succeeds: true)
+        stubLastBolus(bolusId: Self.bolusId - 1, deliveredMilliunits: 1000)
+
+        guard case let .success(dose) = cancelBolus() else {
+            return XCTFail("cancel failed")
+        }
+
+        XCTAssertEqual(dose?.isMutable, true)
+        XCTAssertEqual(manager.state.pendingBolusFinalization?.bolusId, Self.bolusId)
+    }
+
+    func testACancelOfABolusSeenDeliveringIsHeldWhenThePumpStoredNothingOfIt() throws {
+        runUnder(.loop)
+        bluetooth.stub(CurrentBolusStatusRequest.self, with: status(.delivering))
+        XCTAssertNil(enactBolus())
+        clock.advance(by: 5)
+        stubCancel(succeeds: true)
+        stubLastBolus(bolusId: Self.bolusId - 1, deliveredMilliunits: 1000)
+
+        guard case let .success(dose) = cancelBolus() else {
+            return XCTFail("cancel failed")
+        }
+
+        XCTAssertEqual(dose?.isMutable, true)
+        XCTAssertEqual(manager.state.pendingBolusFinalization?.bolusId, Self.bolusId)
+    }
+
+    func testACancelWhoseLastBolusIsUnreadableIsHeldEvenBeforeDelivery() {
+        runUnder(.loop)
+        bluetooth.stub(CurrentBolusStatusRequest.self, with: status(.requesting))
+        XCTAssertNil(enactBolus())
+        stubCancel(succeeds: true)
+        bluetooth.stub(LastBolusStatusRequest.self) { _ in nil }
+
+        guard case let .success(dose) = cancelBolus() else {
+            return XCTFail("cancel failed")
+        }
+
+        XCTAssertEqual(dose?.isMutable, true)
+        XCTAssertEqual(manager.state.pendingBolusFinalization?.bolusId, Self.bolusId)
+    }
+
+    func testUnderLoopTheBolusIsCancelingFromTheTapUntilThePumpAnswers() {
+        runUnder(.loop)
+        bluetooth.stub(CurrentBolusStatusRequest.self, with: status(.requesting))
+        XCTAssertNil(enactBolus())
+        stubCancel(succeeds: true)
+        stubLastBolus(bolusId: Self.bolusId - 1, deliveredMilliunits: 1000)
+        let atCancel = bolusStateAtWrite(of: CancelBolusRequest.self)
+
+        _ = cancelBolus()
+
+        XCTAssertEqual(atCancel(), .canceling)
+        XCTAssertEqual(manager.status.bolusState, .noBolus)
+    }
+
+    func testUnderLoopACancelThePumpRefusesGoesBackToInProgress() {
+        runUnder(.loop)
+        bluetooth.stub(CurrentBolusStatusRequest.self, with: status(.requesting))
+        XCTAssertNil(enactBolus())
+        stubCancel(succeeds: false)
+
+        guard case .failure = cancelBolus() else {
+            return XCTFail("expected the refusal")
+        }
+
+        XCTAssertTrue(isInProgress, "\(manager.status.bolusState)")
+        XCTAssertEqual(manager.state.bolusDose?.bolusId, Self.bolusId)
+    }
+
+    func testUnderLoopADeliveringReadWhileCancelingKeepsItCanceling() {
+        runUnder(.loop)
+        bluetooth.stub(CurrentBolusStatusRequest.self, with: status(.requesting))
+        XCTAssertNil(enactBolus())
+        manager.state.bolusState = .canceling
+
+        manager.applyBolusStatus(status(.delivering))
+
+        XCTAssertEqual(manager.status.bolusState, .canceling)
+        XCTAssertNotNil(manager.state.bolusDose?.deliveryStartDate)
+    }
+
+    func testUnderTrioACancelLeavesTheBolusStateAlone() {
+        bluetooth.stub(CurrentBolusStatusRequest.self, with: status(.requesting))
+        XCTAssertNil(enactBolus())
+        stubCancel(succeeds: true)
+        stubLastBolus(bolusId: Self.bolusId - 1, deliveredMilliunits: 1000)
+        let atCancel = bolusStateAtWrite(of: CancelBolusRequest.self)
+
+        _ = cancelBolus()
+
+        XCTAssertEqual(atCancel(), .initiating)
+    }
+
     // MARK: - Relaunch
 
     func testARelaunchMidBolusGivesTheHostAReporterCountingFromTheDeliveryStart() throws {

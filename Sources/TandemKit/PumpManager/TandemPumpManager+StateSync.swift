@@ -284,6 +284,7 @@ extension TandemPumpManager {
     }
 
     func applyBolusStatus(_ response: CurrentBolusStatusResponse) {
+        noteRequestingRead(response)
         noteUntrackedBolus(response)
 
         if let dose = state.bolusDose, dose.isUnconfirmed, let bolusId = dose.bolusId,
@@ -336,7 +337,9 @@ extension TandemPumpManager {
                 dose.estimatedEndDate = now.addingTimeInterval(estimatedDuration(toBolus: dose.value))
 
                 state.bolusDose = dose
-                state.bolusState = .inProgress(dose.toDoseEntry(isMutable: true))
+                if state.bolusState != .canceling {
+                    state.bolusState = .inProgress(dose.toDoseEntry(isMutable: true))
+                }
                 notifyDelegateStateUpdated()
             }
 
@@ -863,6 +866,20 @@ extension TandemPumpManager {
     /// the pump's own timestamp for it. Returns nil if the query fails or the bolus ID doesn't
     /// match.
     func queryLastBolusReport(bolusId: Int) -> LastBolusReport? {
+        guard case let .report(report) = readLastBolus(bolusId: bolusId) else {
+            return nil
+        }
+        return report
+    }
+
+    enum LastBolusRead {
+        case report(LastBolusReport)
+        /// The pump's last bolus comes before `bolusId` on its counter, so it has stored nothing of it.
+        case earlierBolus
+        case unknown
+    }
+
+    func readLastBolus(bolusId: Int) -> LastBolusRead {
         let request = LastBolusRequestBuilder.create(
             apiVersion: state.pumpState.apiVersion,
             pumpModel: state.pumpState.pumpModel
@@ -870,21 +887,21 @@ extension TandemPumpManager {
 
         guard let response = bluetooth.write(request) as? LastBolusStatusAbstractResponse else {
             logger.error("Failed to get lastBolusStatus: \(type(of: request))")
-            return nil
+            return .unknown
         }
 
         guard let milliunits = deliveredMilliunits(from: response, bolusId: bolusId) else {
-            return nil
+            return Self.bolusId(response.bolusId, precedes: bolusId) ? .earlierBolus : .unknown
         }
 
-        return LastBolusReport(
+        return .report(LastBolusReport(
             // Round to nearest milliunit, matching `HistoryToDoseMapper`. Not
             // `roundToSupportedBolusVolume`: that floors to the 0.05 U command grid, understating
             // a partial delivery by up to an increment — the direction that lets the loop
             // over-deliver.
             deliveredUnits: TandemPumpCapabilities.roundToReportingResolution(Double(milliunits) / 1000.0),
             pumpTimestamp: pumpTimestamp(from: response, bolusId: bolusId)
-        )
+        ))
     }
 
     /// Convenience for callers that only need the volume.
