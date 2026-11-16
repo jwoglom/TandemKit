@@ -47,10 +47,11 @@ class TandemKitFillCannulaViewModel: ObservableObject {
     // message is dropped or never arrives.
     private let fillTimeout: DispatchTimeInterval = .seconds(30)
 
-    /// Prime amounts the wizard offers, in units. The picker tags rows with these exact values,
-    /// so any amount assigned to `primeAmount` has to come from this list or the picker will show
-    /// no selection — `stride` accumulates floating-point error, so `0.3` is not `options[2]`.
-    static let primeAmountOptions: [Double] = Array(stride(from: 0.1, through: 2.0, by: 0.1))
+    /// Prime amounts the wizard offers, in units: the pump refuses a fill over 1.0 U. The picker tags
+    /// rows with these exact values, so any amount assigned to `primeAmount` has to come from this
+    /// list or the picker will show no selection — `stride` accumulates floating-point error, so
+    /// `0.3` is not `options[2]`.
+    static let primeAmountOptions: [Double] = Array(stride(from: 0.1, through: 1.0, by: 0.1))
 
     /// Prime amount used when the user has not filled a cannula before.
     static let defaultPrimeAmount: Double = 0.3
