@@ -272,6 +272,22 @@ final class TandemKitReconciliationViewModel: ObservableObject {
             ))
         }
 
+        let refusals = state.futureDatedDoseRefusals
+        if refusals.count > 0 {
+            rows.append(Row(
+                id: "future-dated",
+                title: String(localized: "Doses dated in the future, not sent", comment: "Reconciliation screen: doses refused because their start is ahead of the phone's clock"),
+                value: String(refusals.count),
+                detail: refusals.lastAt.map {
+                    String(
+                        localized: "Last \(when($0, now: now)). Each had a start ahead of the phone's clock, so when it was given is unknown and it was kept from the app.",
+                        comment: "Reconciliation screen: what a refused future-dated dose means"
+                    )
+                },
+                isWarning: true
+            ))
+        }
+
         if let endedAt = state.controlIQEndedAt {
             rows.append(Row(
                 id: "controliq",

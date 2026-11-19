@@ -135,6 +135,18 @@ import XCTest
         XCTAssertEqual(viewModel.discrepancies[1].title, "Pump bolus #42 not yet reported")
     }
 
+    func testDosesRefusedForAFutureDateAreADiscrepancyWithTheirCount() {
+        _ = manager.state.futureDatedDoseRefusals.record(raw: Data([1]), at: clock.now.addingTimeInterval(-600))
+        _ = manager.state.futureDatedDoseRefusals.record(raw: Data([2]), at: clock.now.addingTimeInterval(-60))
+        let viewModel = ViewModel(pumpManager: manager)
+
+        XCTAssertEqual(viewModel.discrepancies.map(\.id), ["future-dated"])
+        XCTAssertEqual(viewModel.discrepancies[0].title, "Doses dated in the future, not sent")
+        XCTAssertEqual(viewModel.discrepancies[0].value, "2")
+        XCTAssertTrue(viewModel.discrepancies[0].isWarning)
+        XCTAssertNotNil(viewModel.discrepancies[0].detail)
+    }
+
     func testASkippedPassIsAWarningRowAndTheClockRowFollowsTheOffset() {
         manager.historyTickFailed(startedAt: clock.now)
         manager.state.currentPumpTime = clock.now.addingTimeInterval(400)

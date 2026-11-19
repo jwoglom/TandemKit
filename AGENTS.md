@@ -61,6 +61,11 @@ platforms.
 Rules that are easy to break without noticing. The overall design is in
 [docs/ARCHITECTURE_ANALYSIS.md](docs/ARCHITECTURE_ANALYSIS.md).
 
+Dating a dose the way that counts more insulin is the safe direction only for a dose the pump
+confirmed, placed within the window its readings bound. A dose whose date is unknown is refused and
+the refusal shown, never placed where it counts most: phantom IOB withholds insulin, and Trio's total
+daily dose, which Dynamic ISF reads, counts it.
+
 ### Floating point
 Insulin amounts are compared and converted in whole milliunits, through
 `TandemPumpCapabilities.milliunits(_:)` and `floor(_:ontoGrid:)`, never by `==` or `Int(x * 1000)`
@@ -201,9 +206,14 @@ host queue, so its state stays behind its lock.
   dismiss, stays acknowledged.
 
 ### Pump event batches
-- Nothing reaches the host that ends before it starts or starts more than a minute ahead of the
-  phone (`HostDoseDates`): Trio's Apple Health upload threw on such a temp basal at every launch
-  until its row was deleted. Each one it catches is a misdated dose upstream and logs an error.
+- Nothing reaches the host that ends before it starts (`HostDoseDates`): Trio's Apple Health upload
+  threw on such a temp basal at every launch until its row was deleted. Each one it catches is a
+  misdated dose upstream, cut to zero length, and logs an error.
+- A dose starting more than a minute ahead of the phone is refused, not dated now: its date is wrong,
+  so when it ran is unknown. Clamped, boluses from before a pump's shelf mode, dated 2033 by a clock
+  change applied past the reset, reached Trio's IOB as new. History bolus reporting refuses one before
+  the ledger records it, and `emitPumpEvents` refuses any other. Each is logged and counted once by
+  its `raw` in `futureDatedDoseRefusals` (persisted), which the Reconciliation screen shows.
 - A `replacePendingEvents: true` batch makes both hosts delete every mutable dose it leaves out,
   and Loop never revives a deleted one, so `emitPumpEvents` appends the boluses the host holds as
   mutable (`bolusDose`, `pendingBolusFinalization`, `heldExtendedPartEvents`) to each one (#330).

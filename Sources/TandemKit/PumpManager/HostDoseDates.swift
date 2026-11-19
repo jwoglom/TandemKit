@@ -4,21 +4,21 @@ import LoopKit
 /// A dose ending before it starts crashed Trio's Apple Health upload at every launch until its row was
 /// deleted, so none leaves the driver, whichever path misdated it; each caught is logged as a bug.
 enum HostDoseDates {
-    /// Past this a start is no second-later nudge (`resumedTempBasal`, a Bolex start) but a pump
-    /// stamp from before its clock went back.
+    /// Past this a start is no second-later nudge (`resumedTempBasal`, a Bolex start) but a wrong date.
+    /// Dated now instead, boluses from before a pump's shelf mode, dated 2033, reached the host's IOB as new.
     static let startAheadTolerance: TimeInterval = .minutes(1)
 
-    /// `event` with dates the host can store, and what was wrong with them; nil when nothing was.
-    static func repaired(_ event: NewPumpEvent, now: Date) -> (event: NewPumpEvent, problem: String)? {
+    static func startsAhead(_ dose: DoseEntry, of now: Date) -> Bool {
+        dose.startDate > now.addingTimeInterval(startAheadTolerance)
+    }
+
+    /// `event` with an end the host can store, and what was wrong with it; nil when nothing was.
+    static func repaired(_ event: NewPumpEvent) -> (event: NewPumpEvent, problem: String)? {
         guard let dose = event.dose else { return nil }
 
         var problems: [String] = []
         var start = dose.startDate
         var end = dose.endDate
-        if start > now.addingTimeInterval(startAheadTolerance) {
-            problems.append("starts at \(start), ahead of the phone's \(now)")
-            start = now
-        }
         if end < start {
             problems.append("ends at \(end), before it starts at \(start)")
             // Zero length, which both hosts count as nothing rather than a guessed duration.
@@ -64,11 +64,27 @@ enum HostDoseDates {
 }
 
 extension TandemPumpManager {
+    /// Left out of a replacing batch, a dose the host holds as mutable is deleted, which is what a
+    /// dose with no knowable date should be.
     func withDatesTheHostCanStore(_ events: [NewPumpEvent]) -> [NewPumpEvent] {
-        events.map { event in
-            guard let (repaired, problem) = HostDoseDates.repaired(event, now: now) else { return event }
+        events.compactMap { event in
+            if let dose = event.dose, HostDoseDates.startsAhead(dose, of: now) {
+                refuseFutureDatedDose(event)
+                return nil
+            }
+            guard let (repaired, problem) = HostDoseDates.repaired(event) else { return event }
             logger.error("Misdated \(event.dose?.type.rawValue ?? "event") \(event.raw.hexadecimalString) \(problem); sent as \(repaired.dose?.startDate ?? repaired.date) to \(repaired.dose?.endDate ?? repaired.date)")
             return repaired
         }
+    }
+
+    func refuseFutureDatedDose(_ event: NewPumpEvent) {
+        guard let dose = event.dose else { return }
+        let description = "\(dose.type.rawValue) \(event.raw.hexadecimalString) of \(dose.value) \(dose.unit.rawValue) starting \(dose.startDate), ahead of the phone's \(now)"
+        guard state.futureDatedDoseRefusals.record(raw: event.raw, at: now) else {
+            logger.debug("Refused again: \(description)")
+            return
+        }
+        logger.error("Refused \(description); not sent to the app (\(state.futureDatedDoseRefusals.count) refused so far)")
     }
 }

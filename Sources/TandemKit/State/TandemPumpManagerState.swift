@@ -98,6 +98,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
     public var pumpTimeCheckUTCOffset: Int?
     /// The last time a clock read found the pump's clock set since the read before it.
     public var lastPumpClockStep: PumpClockStep?
+    public var futureDatedDoseRefusals = FutureDatedDoseRefusals()
 
     // Pump global settings
     /// In memory only, not saved with the state, so a relaunch re-reads the pump's settings at its first sync.
@@ -234,6 +235,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
               lhs.lastPumpTimeCheckDate == rhs.lastPumpTimeCheckDate,
               lhs.pumpTimeCheckUTCOffset == rhs.pumpTimeCheckUTCOffset,
               lhs.lastPumpClockStep == rhs.lastPumpClockStep,
+              lhs.futureDatedDoseRefusals == rhs.futureDatedDoseRefusals,
               lhs.lastSettingsCheckedAt == rhs.lastSettingsCheckedAt,
               lhs.quickBolusAnnun == rhs.quickBolusAnnun,
               lhs.reminderAnnun == rhs.reminderAnnun,
@@ -329,6 +331,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         lastPumpTimeCheckDate = rawValue["lastPumpTimeCheckDate"] as? Date
         pumpTimeCheckUTCOffset = rawValue["pumpTimeCheckUTCOffset"] as? Int
         lastPumpClockStep = (rawValue["lastPumpClockStep"] as? PumpClockStep.RawValue).flatMap(PumpClockStep.init(rawValue:))
+        futureDatedDoseRefusals = (rawValue["futureDatedDoseRefusals"] as? FutureDatedDoseRefusals.RawValue)
+            .flatMap(FutureDatedDoseRefusals.init(rawValue:)) ?? FutureDatedDoseRefusals()
 
         if let pumpStateRaw = rawValue["pumpState"] as? PumpState.RawValue {
             pumpState = PumpState(rawValue: pumpStateRaw)
@@ -545,6 +549,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         raw["lastPumpTimeCheckDate"] = lastPumpTimeCheckDate
         raw["pumpTimeCheckUTCOffset"] = pumpTimeCheckUTCOffset
         raw["lastPumpClockStep"] = lastPumpClockStep?.rawValue
+        raw["futureDatedDoseRefusals"] = futureDatedDoseRefusals.rawValue
         raw["quickBolusAnnun"] = quickBolusAnnun?.rawValue
         raw["reminderAnnun"] = reminderAnnun?.rawValue
         raw["alertAnnun"] = alertAnnun?.rawValue
@@ -755,6 +760,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
             "* lastPumpTimeCheckDate: \(debugValue(lastPumpTimeCheckDate))",
             "* pumpTimeCheckUTCOffset: \(debugValue(pumpTimeCheckUTCOffset.map { "\($0) s" }))",
             "* lastPumpClockStep: \(debugValue(lastPumpClockStep.map { "\($0.by) s, found \($0.foundAt)" }))",
+            "* futureDatedDoseRefusals: \(futureDatedDoseRefusals.count), last \(debugValue(futureDatedDoseRefusals.lastAt))",
             "* lastSettingsCheckedAt: \(debugValue(lastSettingsCheckedAt))",
             "* quickBolusAnnun: \(debugValue(quickBolusAnnun))",
             "* reminderAnnun: \(debugValue(reminderAnnun))",
@@ -1162,5 +1168,45 @@ public struct PumpClockStep: Equatable, RawRepresentable {
 
     public var rawValue: RawValue {
         ["foundAt": foundAt, "by": by]
+    }
+}
+
+/// Doses refused for a start ahead of the phone's clock (`HostDoseDates.startsAhead`).
+public struct FutureDatedDoseRefusals: Equatable, RawRepresentable {
+    public typealias RawValue = [String: Any]
+
+    /// A held dose is refused on every replacing batch and a history record on every pass, so the
+    /// count goes by `raw`.
+    static let rememberedRawCount = 64
+
+    public private(set) var count = 0
+    public private(set) var lastAt: Date?
+    private(set) var recentRaws: [Data] = []
+
+    public init() {}
+
+    /// Whether `raw` was not among those refused before.
+    mutating func record(raw: Data, at date: Date) -> Bool {
+        guard !recentRaws.contains(raw) else { return false }
+        recentRaws.append(raw)
+        recentRaws.removeFirst(max(0, recentRaws.count - Self.rememberedRawCount))
+        count += 1
+        lastAt = date
+        return true
+    }
+
+    public init?(rawValue: RawValue) {
+        guard let count = rawValue["count"] as? Int else {
+            return nil
+        }
+        self.count = count
+        lastAt = rawValue["lastAt"] as? Date
+        recentRaws = rawValue["recentRaws"] as? [Data] ?? []
+    }
+
+    public var rawValue: RawValue {
+        var raw: RawValue = ["count": count, "recentRaws": recentRaws]
+        raw["lastAt"] = lastAt
+        return raw
     }
 }

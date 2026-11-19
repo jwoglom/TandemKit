@@ -10,37 +10,52 @@ import XCTest
         return NewPumpEvent.tempBasal(dose: dose.toDoseEntry(isMutable: isMutable, endDate: end, now: now), of: dose)
     }
 
-    private func bolus(from start: Date, to end: Date) -> NewPumpEvent {
+    private func bolus(from start: Date, to end: Date, raw: Data = Data([1, 2, 3])) -> NewPumpEvent {
         let dose = DoseEntry(type: .bolus, startDate: start, endDate: end, value: 1, unit: .units, decisionId: nil, deliveredUnits: 1, insulinType: .novolog)
-        return NewPumpEvent(date: start, dose: dose, raw: Data([1, 2, 3]), title: "Bolus", type: .bolus)
+        return NewPumpEvent(date: start, dose: dose, raw: raw, title: "Bolus", type: .bolus)
     }
 
-    func testADoseWithSaneDatesIsLeftAlone() {
-        XCTAssertNil(HostDoseDates.repaired(temp(1.0, from: now.addingTimeInterval(-600), to: now), now: now))
-        XCTAssertNil(HostDoseDates.repaired(temp(1.0, from: now, to: now.addingTimeInterval(1800), isMutable: true), now: now))
-        XCTAssertNil(HostDoseDates.repaired(temp(1.0, from: now.addingTimeInterval(1), to: now.addingTimeInterval(600)), now: now))
+    private func makeManager() -> (TandemPumpManager, MockPumpManagerDelegate, DispatchQueue) {
+        let manager = TandemPumpManager(state: TandemPumpManagerState(rawValue: [:]), bluetooth: StubPumpBluetooth(), clock: ManualClock(now))
+        let delegate = MockPumpManagerDelegate()
+        let queue = DispatchQueue(label: "host-dose-dates-test")
+        manager.pumpManagerDelegate = delegate
+        manager.delegateQueue = queue
+        queue.sync {}
+        return (manager, delegate, queue)
     }
 
-    /// The field report's temp basal: dated from a pump stamp an hour ahead, ended at detection.
+    func testADoseWithSaneDatesIsLeftAlone() throws {
+        let events = [
+            temp(1.0, from: now.addingTimeInterval(-600), to: now),
+            temp(1.0, from: now, to: now.addingTimeInterval(1800), isMutable: true),
+            temp(1.0, from: now.addingTimeInterval(1), to: now.addingTimeInterval(600))
+        ]
+        for event in events {
+            XCTAssertNil(HostDoseDates.repaired(event))
+            XCTAssertFalse(HostDoseDates.startsAhead(try XCTUnwrap(event.dose), of: now))
+        }
+    }
+
     func testATempEndingBeforeItStartsIsSentAtItsEndWithNothingDelivered() throws {
-        let event = temp(0.42, from: now.addingTimeInterval(.minutes(56)), to: now.addingTimeInterval(-2))
+        let event = temp(0.42, from: now.addingTimeInterval(-60), to: now.addingTimeInterval(-120))
 
-        let (repaired, problem) = try XCTUnwrap(HostDoseDates.repaired(event, now: now))
+        let (repaired, problem) = try XCTUnwrap(HostDoseDates.repaired(event))
         let dose = try XCTUnwrap(repaired.dose)
 
-        XCTAssertEqual(dose.startDate, now.addingTimeInterval(-2))
-        XCTAssertEqual(dose.endDate, now.addingTimeInterval(-2))
+        XCTAssertEqual(dose.startDate, now.addingTimeInterval(-120))
+        XCTAssertEqual(dose.endDate, now.addingTimeInterval(-120))
         XCTAssertEqual(dose.unitsPerHour, 0.42, accuracy: 1e-9)
         XCTAssertEqual(try XCTUnwrap(dose.deliveredUnits), 0)
         XCTAssertEqual(repaired.raw, event.raw)
         XCTAssertEqual(repaired.date, dose.startDate)
-        XCTAssertTrue(problem.contains("ahead of the phone"), problem)
+        XCTAssertTrue(problem.contains("before it starts"), problem)
     }
 
     func testABolusEndingBeforeItStartsEndsWhereItStarts() throws {
         let start = now.addingTimeInterval(-60)
 
-        let dose = try XCTUnwrap(HostDoseDates.repaired(bolus(from: start, to: start.addingTimeInterval(-30)), now: now)?.event.dose)
+        let dose = try XCTUnwrap(HostDoseDates.repaired(bolus(from: start, to: start.addingTimeInterval(-30)))?.event.dose)
 
         XCTAssertEqual(dose.startDate, start)
         XCTAssertEqual(dose.endDate, start)
@@ -48,20 +63,43 @@ import XCTest
     }
 
     func testTheManagerNeverSendsTheHostADoseEndingBeforeItStarts() throws {
-        let clock = ManualClock(now)
-        let manager = TandemPumpManager(state: TandemPumpManagerState(rawValue: [:]), bluetooth: StubPumpBluetooth(), clock: clock)
-        let delegate = MockPumpManagerDelegate()
-        let queue = DispatchQueue(label: "host-dose-dates-test")
-        manager.pumpManagerDelegate = delegate
-        manager.delegateQueue = queue
-        queue.sync {}
+        let (manager, delegate, queue) = makeManager()
 
-        manager.emitPumpEvents([temp(0.42, from: now.addingTimeInterval(.minutes(56)), to: now.addingTimeInterval(-2))], replacePendingEvents: false)
+        manager.emitPumpEvents([temp(0.42, from: now.addingTimeInterval(-60), to: now.addingTimeInterval(-120))], replacePendingEvents: false)
         queue.sync {}
 
         let doses = delegate.pumpEvents.compactMap(\.dose)
         XCTAssertEqual(doses.count, 1)
-        XCTAssertTrue(doses.allSatisfy { $0.endDate >= $0.startDate && $0.startDate <= self.now }, "\(doses)")
+        XCTAssertTrue(doses.allSatisfy { $0.endDate >= $0.startDate }, "\(doses)")
         XCTAssertTrue(manager.state.reportedBasal.rows.allSatisfy { $0.end >= $0.date }, "the ledger holds what the host was sent")
+    }
+
+    func testADoseStartingAheadOfThePhoneIsRefusedNotDatedNow() throws {
+        let (manager, delegate, queue) = makeManager()
+        let yearsAhead = bolus(from: now.addingTimeInterval(.hours(24 * 2512)), to: now.addingTimeInterval(.hours(24 * 2512) + 60), raw: Data([4, 5, 6]))
+        let sane = bolus(from: now.addingTimeInterval(-300), to: now.addingTimeInterval(-240))
+
+        manager.emitPumpEvents([
+            yearsAhead,
+            temp(0.42, from: now.addingTimeInterval(.minutes(56)), to: now.addingTimeInterval(-2)),
+            sane
+        ], replacePendingEvents: false)
+        queue.sync {}
+
+        XCTAssertEqual(delegate.pumpEvents.map(\.raw), [sane.raw])
+        XCTAssertTrue(manager.state.reportedBasal.rows.isEmpty, "the ledger holds only what the host was sent")
+        XCTAssertEqual(manager.state.futureDatedDoseRefusals.count, 2)
+        XCTAssertEqual(manager.state.futureDatedDoseRefusals.lastAt, now)
+    }
+
+    func testADoseRefusedOnEveryBatchIsCountedOnce() {
+        let (manager, _, queue) = makeManager()
+        let ahead = bolus(from: now.addingTimeInterval(.hours(2)), to: now.addingTimeInterval(.hours(2) + 60))
+
+        manager.emitPumpEvents([ahead], replacePendingEvents: false)
+        manager.emitPumpEvents([ahead], replacePendingEvents: false)
+        queue.sync {}
+
+        XCTAssertEqual(manager.state.futureDatedDoseRefusals.count, 1)
     }
 }

@@ -470,6 +470,20 @@ import XCTest
         XCTAssertTrue(delegate.pumpEventBatches.isEmpty, "Its pump stamp is past the floor; the instant it was given is not")
     }
 
+    func testAPumpBolusStampedBeforeAClockResetIsRefusedNotDatedNow() {
+        let start = quickBolusStart(bolusId: 47, units: 2.0, firstSequenceNum: 500, secondsAgo: 2 * 86400)
+        let completion = bolusCompletion(bolusId: 47, delivered: 2.0, requested: 2.0, sequenceNum: 503, secondsAgo: 2 * 86400 - 60)
+        // Setup's clock write after shelf mode: every record below it moves 2,512 days forward.
+        let dateChange = DateChangeHistoryLog(pumpTimeSec: nowPumpTimeSec, sequenceNum: 504, datePrior: 4383, dateAfter: 6895, rawRTCTime: 0)
+
+        report(start + [completion, dateChange])
+        report(start + [completion, dateChange])
+
+        XCTAssertTrue(reportedBoluses.isEmpty)
+        XCTAssertNil(manager.state.bolusReportLedger.entry(bolusId: 47, pumpSerial: Self.pumpSerial))
+        XCTAssertEqual(manager.state.futureDatedDoseRefusals.count, 1, "A record re-read on the next pass is counted once")
+    }
+
     // MARK: - Floors and gating
 
     func testBolusBeforeTheLedgerStartedTrackingIsNotReported() {
