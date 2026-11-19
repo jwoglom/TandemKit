@@ -582,9 +582,7 @@ final class TimeChangeConformanceTests: ConformanceTestCase {
         let serial = try XCTUnwrap(driver.manager.historyLogStoreSerial)
         let reports = eventsSince(batchesBefore).filter { $0.dose?.type == .bolus }
         let old = reports.filter { $0.raw == HistoryLogSyncIdentifier.bolus(pumpSerial: serial, bolusId: Self.untrackedBolusId) }
-        XCTExpectFailure("A bolus from before the driver tracked the pump is reported as given now once the app sets a clock that restarted") {
-            XCTAssertTrue(old.isEmpty, "\(old.map(\.dose))")
-        }
+        XCTAssertTrue(old.isEmpty, "\(old.map(\.dose))")
         let given = reports.filter { $0.raw == HistoryLogSyncIdentifier.bolus(pumpSerial: serial, bolusId: pump.bolusId) }
         XCTAssertEqual(given.count, 1, "\(given.map(\.dose))")
         XCTAssertEqual(given.first?.dose?.startDate.timeIntervalSince(pump.start) ?? .infinity, 0, accuracy: 2, "when the pump gave it")

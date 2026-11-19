@@ -1162,17 +1162,13 @@ final class SetupHistoryLoadConformanceTests: ConformanceTestCase {
         let reported = hostEvents.filter { old.contains($0.raw) }
         let (loop, trio) = hostOracles()
         let ledger = day.driver.manager.state.bolusReportLedger
-        try XCTExpectFailure("Boluses from before the pump was put away are reported to the host as given now") {
-            XCTAssertTrue(reported.isEmpty, "reported from before it was put away: \(reported.map(\.dose))", file: file, line: line)
-            let ahead = hostDoseEvents.filter { ($0.dose?.endDate ?? .distantPast) > clock.now.addingTimeInterval(.minutes(1)) && $0.dose?.isMutable == false }
-            XCTAssertTrue(ahead.isEmpty, "finalized doses ending after the phone's clock: \(ahead.map(\.dose))", file: file, line: line)
-            try assertHostsHoldThePumpsBoluses(from: start, loop, trio, count: bolusCount, file: file, line: line)
-        }
-        XCTExpectFailure("The bolus ledger keeps entries dated in the future and an extended part it never finalizes") {
-            let ahead = ledger.entries.filter { $0.eventDate > clock.now.addingTimeInterval(.minutes(1)) }
-            XCTAssertTrue(ahead.isEmpty, "ledger entries dated after the phone's clock: \(ahead.map(\.eventDate))", file: file, line: line)
-            XCTAssertTrue(ledger.heldExtendedParts.isEmpty, "\(ledger.heldExtendedParts)", file: file, line: line)
-        }
+        XCTAssertTrue(reported.isEmpty, "reported from before it was put away: \(reported.map(\.dose))", file: file, line: line)
+        let ahead = hostDoseEvents.filter { ($0.dose?.endDate ?? .distantPast) > clock.now.addingTimeInterval(.minutes(1)) && $0.dose?.isMutable == false }
+        XCTAssertTrue(ahead.isEmpty, "finalized doses ending after the phone's clock: \(ahead.map(\.dose))", file: file, line: line)
+        try assertHostsHoldThePumpsBoluses(from: start, loop, trio, count: bolusCount, file: file, line: line)
+        let ledgerAhead = ledger.entries.filter { $0.eventDate > clock.now.addingTimeInterval(.minutes(1)) }
+        XCTAssertTrue(ledgerAhead.isEmpty, "ledger entries dated after the phone's clock: \(ledgerAhead.map(\.eventDate))", file: file, line: line)
+        XCTAssertTrue(ledger.heldExtendedParts.isEmpty, "\(ledger.heldExtendedParts)", file: file, line: line)
     }
 
     private static let readsPastShelfMode = "The walk backward reads on past the pump's ShelfMode record"
@@ -1234,10 +1230,8 @@ final class SetupHistoryLoadConformanceTests: ConformanceTestCase {
             "setup's first slice holds the ShelfMode record: \(day.historyReads.prefix(2))"
         )
         let old = try raws(ofBolusesBefore: pump, day.driver)
-        XCTExpectFailure("Boluses in the slice that holds the ShelfMode record are reported at setup as given now") {
-            let atSetup = day.eventsAtAdoption.filter { old.contains($0.raw) }
-            XCTAssertTrue(atSetup.isEmpty, "reported when the host adopted the manager: \(atSetup.map(\.dose))")
-        }
+        let atSetup = day.eventsAtAdoption.filter { old.contains($0.raw) }
+        XCTAssertTrue(atSetup.isEmpty, "reported when the host adopted the manager: \(atSetup.map(\.dose))")
         assertNoHistoryIsReadFromBeforeThePumpWasPutAway(pump, day, expectedFailure: Self.readsPastShelfMode)
         try assertNoBolusFromBeforeThePumpWasPutAwayIsCounted(pump, day, from: pairedAt, bolusCount: day.appBolusCount)
     }
