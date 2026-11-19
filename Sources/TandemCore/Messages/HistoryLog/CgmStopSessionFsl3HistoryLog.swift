@@ -75,7 +75,7 @@ public class CgmStopSessionFsl3HistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "CgmStopSessionFsl3HistoryLog(cargo=\(cargo.hexadecimalString), sessionStartTime=\(sessionStartTime), sessionStopTime=\(sessionStopTime), sessionDuration=\(sessionDuration), sessionStopReason=\(sessionStopReason))"
     }
 }

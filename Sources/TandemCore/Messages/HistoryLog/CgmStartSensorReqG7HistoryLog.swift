@@ -21,7 +21,7 @@ public class CgmStartSensorReqG7HistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "CgmStartSensorReqG7HistoryLog(cargo=\(cargo.hexadecimalString))"
     }
 }

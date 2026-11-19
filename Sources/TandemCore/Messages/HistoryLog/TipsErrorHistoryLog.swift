@@ -57,7 +57,7 @@ public class TipsErrorHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "TipsErrorHistoryLog(cargo=\(cargo.hexadecimalString), messageType=\(messageType), requestCode=\(requestCode), errorCode=\(errorCode), isDataMasked=\(isDataMasked))"
     }
 }

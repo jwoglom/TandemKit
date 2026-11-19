@@ -21,7 +21,7 @@ public class TipscReqPrimeCannulaHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "TipscReqPrimeCannulaHistoryLog(cargo=\(cargo.hexadecimalString))"
     }
 }

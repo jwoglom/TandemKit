@@ -114,7 +114,7 @@ public class BleSoftDeviceVersionHistoryLog: HistoryLog {
         return "\(major).\(minor).\(bugfix)"
     }
 
-    public var description: String {
+    override public var description: String {
         "BleSoftDeviceVersionHistoryLog(cargo=\(cargo.hexadecimalString), softDeviceId=\(softDeviceId), softDeviceMajorVersion=\(softDeviceMajorVersion), softDeviceMinorVersion=\(softDeviceMinorVersion), softDeviceBugfixVersion=\(softDeviceBugfixVersion), softDeviceId2=\(softDeviceId2), softDeviceMajorVersion2=\(softDeviceMajorVersion2), softDeviceMinorVersion2=\(softDeviceMinorVersion2), softDeviceBugfixVersion2=\(softDeviceBugfixVersion2))"
     }
 }

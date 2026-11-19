@@ -21,7 +21,7 @@ public class ConfirmCartridgeFilledHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "ConfirmCartridgeFilledHistoryLog(cargo=\(cargo.hexadecimalString))"
     }
 }

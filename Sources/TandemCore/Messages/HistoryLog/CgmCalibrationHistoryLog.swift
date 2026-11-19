@@ -68,7 +68,7 @@ public class CgmCalibrationHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "CgmCalibrationHistoryLog(cargo=\(cargo.hexadecimalString), currentTime=\(currentTime), timestamp=\(timestamp), calTimestamp=\(calTimestamp), value=\(value), currentDisplayValue=\(currentDisplayValue))"
     }
 }

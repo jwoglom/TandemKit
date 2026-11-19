@@ -40,7 +40,7 @@ public class IdpActionMsg2HistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "IdpActionMsg2HistoryLog(cargo=\(cargo.hexadecimalString), idp=\(idp), name=\(name))"
     }
 }

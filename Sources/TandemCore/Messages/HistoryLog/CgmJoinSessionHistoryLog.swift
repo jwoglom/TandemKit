@@ -103,7 +103,7 @@ public class CgmJoinSessionHistoryLog: HistoryLog {
         SessionJoinReason.fromId(sessionJoinReasonRaw)
     }
 
-    public var description: String {
+    override public var description: String {
         "CgmJoinSessionHistoryLog(cargo=\(cargo.hexadecimalString), currentTransmitterTime=\(currentTransmitterTime), sessionStartTime=\(sessionStartTime), sessionJoinReasonRaw=\(sessionJoinReasonRaw), sessionDuration=\(sessionDuration))"
     }
 }

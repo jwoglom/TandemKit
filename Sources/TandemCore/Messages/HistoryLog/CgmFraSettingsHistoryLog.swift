@@ -71,7 +71,7 @@ public class CgmFraSettingsHistoryLog: HistoryLog {
         ModifiedField(rawValue: modifiedField) ?? .invalid
     }
 
-    public var description: String {
+    override public var description: String {
         "CgmFraSettingsHistoryLog(cargo=\(cargo.hexadecimalString), alertLevel=\(alertLevel), repeatDuration=\(repeatDuration), isEnabled=\(isEnabled), modifiedField=\(modifiedField))"
     }
 }

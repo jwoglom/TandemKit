@@ -31,7 +31,7 @@ public class AaEnableSettingChangeHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "AaEnableSettingChangeHistoryLog(cargo=\(cargo.hexadecimalString), enabled=\(enabled))"
     }
 }

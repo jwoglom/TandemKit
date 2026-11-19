@@ -96,7 +96,7 @@ public class CgmStopSessionG7HistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "CgmStopSessionG7HistoryLog(cargo=\(cargo.hexadecimalString), currentTransmitterTime=\(currentTransmitterTime), sessionStartTime=\(sessionStartTime), sessionStopTime=\(sessionStopTime), stopSessionCode=\(stopSessionCode), sessionStopReason=\(sessionStopReason), sessionDuration=\(sessionDuration))"
     }
 }

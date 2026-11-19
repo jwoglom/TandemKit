@@ -72,7 +72,7 @@ public class SoftwareIdHistoryLog: HistoryLog {
         return String(format: "%08x%08x", armSwVersion, softwareIdLow)
     }
 
-    public var description: String {
+    override public var description: String {
         "SoftwareIdHistoryLog(cargo=\(cargo.hexadecimalString), slot=\(slot), unknown11=\(unknown11), armSwVersion=\(armSwVersion), softwareIdLow=\(softwareIdLow), unknown22=\(unknown22))"
     }
 }

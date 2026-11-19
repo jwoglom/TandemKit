@@ -21,7 +21,7 @@ public class AaSleepScheduleChangeHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "AaSleepScheduleChangeHistoryLog(cargo=\(cargo.hexadecimalString))"
     }
 }

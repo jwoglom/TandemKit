@@ -60,7 +60,7 @@ public class ControlIQAutomatedInsulinHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "ControlIQAutomatedInsulinHistoryLog(cargo=\(cargo.hexadecimalString), totalInsulin=\(totalInsulin), basalAboveProfileInsulin=\(basalAboveProfileInsulin), autoBolusInsulin=\(autoBolusInsulin), unknown22=\(unknown22))"
     }
 }

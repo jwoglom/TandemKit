@@ -21,7 +21,7 @@ public class CgmRejoinSessionHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "CgmRejoinSessionHistoryLog(cargo=\(cargo.hexadecimalString))"
     }
 }

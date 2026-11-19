@@ -245,7 +245,7 @@ public class UpdateStatusHistoryLog: HistoryLog {
         UpdateSuccessful(rawValue: updateSuccessful)
     }
 
-    public var description: String {
+    override public var description: String {
         "UpdateStatusHistoryLog(cargo=\(cargo.hexadecimalString), swUpdateStatus=\(swUpdateStatus), metadataAndVersionStatus=\(metadataAndVersionStatus), fullDlAndCrcStatus=\(fullDlAndCrcStatus), fileDlAndSideloadStatus=\(fileDlAndSideloadStatus), externalFlashStatus=\(externalFlashStatus), updateSuccessful=\(updateSuccessful), swPartNum=\(swPartNum))"
     }
 }

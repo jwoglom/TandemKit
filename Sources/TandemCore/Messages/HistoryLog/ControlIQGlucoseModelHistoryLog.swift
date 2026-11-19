@@ -86,7 +86,7 @@ public class ControlIQGlucoseModelHistoryLog: HistoryLog {
         Double(shortTermPredictedGlucoseRaw) / 100.0
     }
 
-    public var description: String {
+    override public var description: String {
         "ControlIQGlucoseModelHistoryLog(cargo=\(cargo.hexadecimalString), tdiEstimate=\(tdiEstimate), unknown11=\(unknown11), unknown12=\(unknown12), shortTermPredictedGlucoseRaw=\(shortTermPredictedGlucoseRaw), filteredGlucose=\(filteredGlucose), unknown18=\(unknown18), correctionFactor=\(correctionFactor), unknown21=\(unknown21), unknown22=\(unknown22), unknown24=\(unknown24))"
     }
 }

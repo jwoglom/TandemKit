@@ -21,7 +21,7 @@ public class AaDeliveryStatusChangeHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "AaDeliveryStatusChangeHistoryLog(cargo=\(cargo.hexadecimalString))"
     }
 }

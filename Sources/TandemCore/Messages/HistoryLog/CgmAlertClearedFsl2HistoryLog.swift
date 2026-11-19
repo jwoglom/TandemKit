@@ -44,7 +44,7 @@ public class CgmAlertClearedFsl2HistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "CgmAlertClearedFsl2HistoryLog(cargo=\(cargo.hexadecimalString), alertId=\(alertId), alert=\(String(describing: alert)), sensorType=\(sensorType))"
     }
 }

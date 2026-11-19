@@ -59,7 +59,7 @@ public class CgmStartSessionFsl2HistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "CgmStartSessionFsl2HistoryLog(cargo=\(cargo.hexadecimalString), sessionStartTime=\(sessionStartTime), sessionDuration=\(sessionDuration))"
     }
 }

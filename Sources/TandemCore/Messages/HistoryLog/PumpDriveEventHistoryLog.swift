@@ -96,7 +96,7 @@ public class PumpDriveEventHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "PumpDriveEventHistoryLog(cargo=\(cargo.hexadecimalString), driveCounter=\(driveCounter), unknownI16At14=\(unknownI16At14), unknownI16At16=\(unknownI16At16), unknownU8At18=\(unknownU8At18), unknownU8At19=\(unknownU8At19), unknownU8At20=\(unknownU8At20), unknownU8At21=\(unknownU8At21), unknownU16At22=\(unknownU16At22), unknownU16At24=\(unknownU16At24))"
     }
 }

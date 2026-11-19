@@ -21,7 +21,7 @@ public class SnoozeActivatedHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "SnoozeActivatedHistoryLog(cargo=\(cargo.hexadecimalString))"
     }
 }

@@ -98,7 +98,7 @@ public class AamAnnunciationHistoryLog: HistoryLog {
         return AlarmStatusResponse.AlarmResponseType(rawValue: Int(notificationId))
     }
 
-    public var description: String {
+    override public var description: String {
         "AamAnnunciationHistoryLog(cargo=\(cargo.hexadecimalString), category=\(String(describing: category)), categoryId=\(categoryId), notificationId=\(notificationId), unknown11=\(unknown11), unknown12=\(unknown12), unknown18=\(unknown18), unknown19=\(unknown19))"
     }
 }

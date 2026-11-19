@@ -78,7 +78,7 @@ public class BleDailyConnectionsHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "BleDailyConnectionsHistoryLog(cargo=\(cargo.hexadecimalString), connectedPercent=\(connectedPercent), unknown11=\(unknown11), connections=\(connections), unauthenticatedConnections=\(unauthenticatedConnections), unknownTail=\(unknownTail.hexadecimalString))"
     }
 }

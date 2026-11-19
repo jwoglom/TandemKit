@@ -156,7 +156,7 @@ public class DexcomG7CGMHistoryLog: HistoryLog {
         DexcomG6CGMHistoryLog.egvSensorType(egvInfoBitmaskRaw)
     }
 
-    public var description: String {
+    override public var description: String {
         "DexcomG7CGMHistoryLog(cargo=\(cargo.hexadecimalString), glucoseValueStatusRaw=\(glucoseValueStatusRaw), cgmDataTypeRaw=\(cgmDataTypeRaw), rate=\(rate), algorithmStateRaw=\(algorithmStateRaw), rssi=\(rssi), currentGlucoseDisplayValue=\(currentGlucoseDisplayValue), egvTimestamp=\(egvTimestamp), egvInfoBitmaskRaw=\(egvInfoBitmaskRaw), interval=\(interval), egvCount=\(egvCount))"
     }
 }

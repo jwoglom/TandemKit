@@ -21,7 +21,7 @@ public class CgmStopSessionMsg1HistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "CgmStopSessionMsg1HistoryLog(cargo=\(cargo.hexadecimalString))"
     }
 }

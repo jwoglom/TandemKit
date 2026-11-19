@@ -127,7 +127,7 @@ public class ControlIQCycleHistoryLog: HistoryLog {
     /// 0.0 = full brake, 1.0 = none.
     public var hypoBrakeFraction: Double { Double(hypoBrake) / 200.0 }
 
-    public var description: String {
+    override public var description: String {
         "ControlIQCycleHistoryLog(cargo=\(cargo.hexadecimalString), basalIncreaseMilliunits=\(basalIncreaseMilliunits), cycleInsulinMilliunits=\(cycleInsulinMilliunits), predictedGlucoseX100=\(predictedGlucoseX100), programmedBasalRate=\(programmedBasalRate), netIobMilliunits=\(netIobMilliunits), glucoseEstimate=\(glucoseEstimate), correctionFactor=\(correctionFactor), tdiEstimate=\(tdiEstimate), hypoBrake=\(hypoBrake), sleepRamp=\(sleepRamp), upperTarget=\(upperTarget))"
     }
 }

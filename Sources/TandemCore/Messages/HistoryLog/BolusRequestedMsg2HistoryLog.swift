@@ -156,7 +156,7 @@ public class BolusRequestedMsg2HistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "BolusRequestedMsg2HistoryLog(cargo=\(cargo.hexadecimalString), bolusId=\(bolusId), options=\(options), standardPercent=\(standardPercent), duration=\(duration), spare1=\(spare1), isf=\(isf), targetBG=\(targetBG), userOverride=\(userOverride), declinedCorrection=\(declinedCorrection), selectedIOB=\(selectedIOB), spare2=\(spare2))"
     }
 }

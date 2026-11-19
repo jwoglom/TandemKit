@@ -36,7 +36,7 @@ public class CarbEnteredHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "CarbEnteredHistoryLog(cargo=\(cargo.hexadecimalString), carbs=\(carbs))"
     }
 }

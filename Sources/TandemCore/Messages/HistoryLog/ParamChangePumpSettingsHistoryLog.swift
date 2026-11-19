@@ -97,7 +97,7 @@ public class ParamChangePumpSettingsHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "ParamChangePumpSettingsHistoryLog(cargo=\(cargo.hexadecimalString), modification=\(modification), status=\(status), lowInsulinThreshold=\(lowInsulinThreshold), cannulaPrimeSize=\(cannulaPrimeSize), isFeatureLocked=\(isFeatureLocked), autoShutdownEnabled=\(autoShutdownEnabled), oledTimeout=\(oledTimeout), autoShutdownDuration=\(autoShutdownDuration))"
     }
 }

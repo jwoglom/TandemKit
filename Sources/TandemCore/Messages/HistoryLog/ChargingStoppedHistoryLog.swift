@@ -68,7 +68,7 @@ public class ChargingStoppedHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "ChargingStoppedHistoryLog(cargo=\(cargo.hexadecimalString), currentBatteryAbc=\(currentBatteryAbc), unknown12=\(unknown12), unknown14=\(unknown14), currentBatteryIbc=\(currentBatteryIbc), unknown18=\(unknown18), lipoMv=\(lipoMv), unknown22=\(unknown22), unknown24=\(unknown24))"
     }
 }

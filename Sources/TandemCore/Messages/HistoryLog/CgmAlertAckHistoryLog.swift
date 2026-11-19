@@ -31,7 +31,7 @@ public class CgmAlertAckHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "CgmAlertAckHistoryLog(cargo=\(cargo.hexadecimalString), alertId=\(alertId))"
     }
 }

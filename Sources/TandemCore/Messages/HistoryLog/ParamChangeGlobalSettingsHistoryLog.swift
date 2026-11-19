@@ -118,7 +118,7 @@ public class ParamChangeGlobalSettingsHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "ParamChangeGlobalSettingsHistoryLog(cargo=\(cargo.hexadecimalString), modifiedData=\(modifiedData), qbDataStatus=\(qbDataStatus), qbActive=\(qbActive), qbDataEntryType=\(qbDataEntryType), qbIncrementUnits=\(qbIncrementUnits), qbIncrementCarbs=\(qbIncrementCarbs), buttonVolume=\(buttonVolume), qbVolume=\(qbVolume), bolusVolume=\(bolusVolume), reminderVolume=\(reminderVolume), alertVolume=\(alertVolume))"
     }
 }

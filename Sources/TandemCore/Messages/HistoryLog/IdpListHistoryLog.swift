@@ -91,7 +91,7 @@ public class IdpListHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "IdpListHistoryLog(cargo=\(cargo.hexadecimalString), numProfiles=\(numProfiles), slot1=\(slot1), slot2=\(slot2), slot3=\(slot3), slot4=\(slot4), slot5=\(slot5), slot6=\(slot6))"
     }
 }

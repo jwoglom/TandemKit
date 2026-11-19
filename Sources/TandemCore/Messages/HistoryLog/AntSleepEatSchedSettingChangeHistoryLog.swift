@@ -109,7 +109,7 @@ public class AntSleepEatSchedSettingChangeHistoryLog: HistoryLog {
 
 
 
-    public var description: String {
+    override public var description: String {
         "AntSleepEatSchedSettingChangeHistoryLog(cargo=\(cargo.hexadecimalString), sleepEatSegmentStartTime0=\(sleepEatSegmentStartTime0), sleepEatSegmentStartTime1=\(sleepEatSegmentStartTime1), sleepEatSegmentStartTime2=\(sleepEatSegmentStartTime2), sleepEatSegmentStartTime3=\(sleepEatSegmentStartTime3), sleepEatSegmentType0=\(sleepEatSegmentType0), sleepEatSegmentType1=\(sleepEatSegmentType1), sleepEatSegmentType2=\(sleepEatSegmentType2), sleepEatSegmentType3=\(sleepEatSegmentType3))"
     }
 }

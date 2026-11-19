@@ -84,7 +84,7 @@ public class TempAdjustmentCompletedHistoryLog: HistoryLog {
         StopReason.fromId(stopReason)
     }
 
-    public var description: String {
+    override public var description: String {
         "TempAdjustmentCompletedHistoryLog(cargo=\(cargo.hexadecimalString), stopReason=\(stopReason), tempRateId=\(tempRateId), timeLeft=\(timeLeft))"
     }
 }

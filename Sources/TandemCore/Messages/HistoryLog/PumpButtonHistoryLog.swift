@@ -43,7 +43,7 @@ public class PumpButtonHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "PumpButtonHistoryLog(cargo=\(cargo.hexadecimalString), timeOfDayMs=\(timeOfDayMs), state=\(state))"
     }
 }

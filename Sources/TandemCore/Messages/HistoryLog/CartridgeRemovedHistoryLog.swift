@@ -21,7 +21,7 @@ public class CartridgeRemovedHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "CartridgeRemovedHistoryLog(cargo=\(cargo.hexadecimalString))"
     }
 }

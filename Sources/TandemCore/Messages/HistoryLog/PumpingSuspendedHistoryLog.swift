@@ -78,7 +78,7 @@ public class PumpingSuspendedHistoryLog: HistoryLog {
         SuspendReason(rawValue: reasonId)
     }
 
-    public var description: String {
+    override public var description: String {
         "PumpingSuspendedHistoryLog(cargo=\(cargo.hexadecimalString), preSuspendState=\(preSuspendState), insulinAmount=\(insulinAmount), reason=\(String(describing: reason)), reasonId=\(reasonId), rpaTimeout=\(rpaTimeout))"
     }
 }

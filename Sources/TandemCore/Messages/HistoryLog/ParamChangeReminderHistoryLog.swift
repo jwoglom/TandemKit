@@ -97,7 +97,7 @@ public class ParamChangeReminderHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "ParamChangeReminderHistoryLog(cargo=\(cargo.hexadecimalString), modification=\(modification), reminderId=\(reminderId), status=\(status), enable=\(enable), frequencyMinutes=\(frequencyMinutes), startTime=\(startTime), endTime=\(endTime), activeDays=\(activeDays))"
     }
 }

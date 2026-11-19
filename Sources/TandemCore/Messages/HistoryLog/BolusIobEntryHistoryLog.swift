@@ -72,7 +72,7 @@ public class BolusIobEntryHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "BolusIobEntryHistoryLog(cargo=\(cargo.hexadecimalString), unknownU8At10=\(unknownU8At10), unknownU8At11=\(unknownU8At11), insulinDurationMillis=\(insulinDurationMillis), insulinDelivered=\(insulinDelivered), mudaliarIob=\(mudaliarIob))"
     }
 }

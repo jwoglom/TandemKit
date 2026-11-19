@@ -115,7 +115,7 @@ public class SyncDoseStartHistoryLog: HistoryLog {
         DoseSource.fromId(doseSource)
     }
 
-    public var description: String {
+    override public var description: String {
         "SyncDoseStartHistoryLog(cargo=\(cargo.hexadecimalString), doseId=\(doseId), doseSource=\(doseSource), tempAdjustmentPercent=\(tempAdjustmentPercent), syncDoseSizeRequested=\(syncDoseSizeRequested), currentBasalRate=\(currentBasalRate), profileBasalRate=\(profileBasalRate), activeInsulin=\(activeInsulin))"
     }
 }

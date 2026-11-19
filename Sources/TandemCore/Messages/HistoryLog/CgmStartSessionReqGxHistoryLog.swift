@@ -21,7 +21,7 @@ public class CgmStartSessionReqGxHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "CgmStartSessionReqGxHistoryLog(cargo=\(cargo.hexadecimalString))"
     }
 }

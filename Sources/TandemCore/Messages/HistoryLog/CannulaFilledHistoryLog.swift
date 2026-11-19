@@ -58,7 +58,7 @@ public class CannulaFilledHistoryLog: HistoryLog {
         CompletionStatus(rawValue: Int(completionStatusRaw))
     }
 
-    public var description: String {
+    override public var description: String {
         "CannulaFilledHistoryLog(cargo=\(cargo.hexadecimalString), primeSize=\(primeSize), completionStatusRaw=\(completionStatusRaw), infusionSetTypeRaw=\(infusionSetTypeRaw))"
     }
 }

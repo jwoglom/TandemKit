@@ -21,7 +21,7 @@ public class AaWeightSettingChangeHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "AaWeightSettingChangeHistoryLog(cargo=\(cargo.hexadecimalString))"
     }
 }

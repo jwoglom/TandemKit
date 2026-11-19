@@ -21,7 +21,7 @@ public class CgmTransmitterIdHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "CgmTransmitterIdHistoryLog(cargo=\(cargo.hexadecimalString))"
     }
 }

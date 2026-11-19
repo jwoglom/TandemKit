@@ -126,7 +126,7 @@ public class BGHistoryLog: HistoryLog {
         case remoteEntry = 1
     }
 
-    public var description: String {
+    override public var description: String {
         "BGHistoryLog(cargo=\(cargo.hexadecimalString), bg=\(bg), cgmCalibration=\(cgmCalibration), bgSource=\(String(describing: bgSource)), bgSourceId=\(bgSourceId), iob=\(iob), targetBG=\(targetBG), isf=\(isf), selectedIOB=\(selectedIOB), selectedIOBType=\(String(describing: selectedIOBType)), bgSourceType=\(bgSourceType), bgSourceTypeEnum=\(String(describing: bgSourceTypeEnum)), spare=\(spare))"
     }
 }

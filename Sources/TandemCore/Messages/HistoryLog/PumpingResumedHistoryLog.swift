@@ -55,7 +55,7 @@ public class PumpingResumedHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "PumpingResumedHistoryLog(cargo=\(cargo.hexadecimalString), preResumeState=\(preResumeState), insulinAmount=\(insulinAmount))"
     }
 }

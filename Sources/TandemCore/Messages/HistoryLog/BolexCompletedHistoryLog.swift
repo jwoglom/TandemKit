@@ -80,7 +80,7 @@ public class BolexCompletedHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "BolexCompletedHistoryLog(cargo=\(cargo.hexadecimalString), completionStatus=\(completionStatus), bolusId=\(bolusId), iob=\(iob), insulinDelivered=\(insulinDelivered), insulinRequested=\(insulinRequested))"
     }
 }

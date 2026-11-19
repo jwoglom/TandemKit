@@ -68,7 +68,7 @@ public class CorrectionDeclinedHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "CorrectionDeclinedHistoryLog(cargo=\(cargo.hexadecimalString), bg=\(bg), bolusId=\(bolusId), iob=\(iob), targetBg=\(targetBg), isf=\(isf))"
     }
 }

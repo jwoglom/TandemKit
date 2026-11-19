@@ -77,7 +77,7 @@ public class ParamChangeRemSettingsHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "ParamChangeRemSettingsHistoryLog(cargo=\(cargo.hexadecimalString), modification=\(modification), status=\(status), lowBgThreshold=\(lowBgThreshold), highBgThreshold=\(highBgThreshold), siteChangeDays=\(siteChangeDays))"
     }
 }

@@ -104,7 +104,7 @@ public class IdpTimeDependentSegmentHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "IdpTimeDependentSegmentHistoryLog(cargo=\(cargo.hexadecimalString), idp=\(idp), status=\(status), segmentIndex=\(segmentIndex), modificationType=\(modificationType), startTime=\(startTime), basalRate=\(basalRate), isf=\(isf), targetBg=\(targetBg), carbRatio=\(carbRatio))"
     }
 }

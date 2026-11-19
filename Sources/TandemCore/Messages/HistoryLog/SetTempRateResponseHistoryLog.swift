@@ -46,7 +46,7 @@ public class SetTempRateResponseHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "SetTempRateResponseHistoryLog(cargo=\(cargo.hexadecimalString), status=\(status), unknown11=\(unknown11), tempRateId=\(tempRateId))"
     }
 }
