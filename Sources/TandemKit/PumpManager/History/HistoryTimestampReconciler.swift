@@ -9,28 +9,34 @@ import Foundation
 /// after it. The pump documents each change in the log itself — `TimeChangedHistoryLog` for
 /// time-of-day changes, `DateChangeHistoryLog` for date changes — so recording those deltas from
 /// a fetched window lets every earlier record be shifted onto the clock in effect now.
-///
-/// A change is carried back only along the clock it changed. A reset, shelf mode (whose wake restarts
-/// the clock at 2008) or a stamp that runs back unexplained ends it, and nothing at or below that
-/// `clockBreak` is dated.
 final class HistoryTimestampReconciler {
+    /// Read by every history pass alongside its own types, since every other record is dated by them.
+    static let clockHistoryTypes = [
+        TimeChangedHistoryLog.typeId,
+        DateChangeHistoryLog.typeId,
+        ArmInitHistoryLog.typeId,
+        ShelfModeHistoryLog.typeId
+    ]
+
     /// `TimeChanged`'s delta is rounded from milliseconds, so a corrected stamp may run back a second
     /// past the change; a reset runs back years.
     static let clockStepTolerance = 2
 
     private var clockChangeDeltas: [(sequenceNum: UInt32, deltaSec: Int)] = []
-    private(set) var clockBreak: UInt32?
+    /// Records up to and including this sequence number were written on a clock the pump has since
+    /// lost (a reset, shelf mode, or a stamp that runs back unexplained), so they have no date.
+    private(set) var undatableThroughSequenceNum: UInt32?
 
-    /// Record the clock changes and any clock break among `logs`. Call this with a fetched window
-    /// before converting any of its timestamps — a conversion only sees changes recorded so far.
+    /// Record the clock changes among `logs`, and the newest record they cannot date. Call this with a
+    /// fetched window before converting any of its timestamps — a conversion only sees changes recorded so far.
     func recordClockChanges(in logs: [HistoryLog]) {
         for log in logs {
             if let deltaSec = Self.clockChangeDelta(of: log) {
                 recordClockChange(at: log.sequenceNum, deltaSec: deltaSec)
             }
         }
-        if let found = Self.newestClockBreak(in: logs) {
-            clockBreak = max(clockBreak ?? found, found)
+        if let found = Self.newestUndatableSequenceNum(in: logs) {
+            undatableThroughSequenceNum = max(undatableThroughSequenceNum ?? found, found)
         }
     }
 
@@ -42,11 +48,11 @@ final class HistoryTimestampReconciler {
     }
 
     func isDatable(sequenceNum: UInt32) -> Bool {
-        clockBreak.map { sequenceNum > $0 } ?? true
+        undatableThroughSequenceNum.map { sequenceNum > $0 } ?? true
     }
 
     /// Convert a record's pump timestamp to a UTC `Date`, applying every recorded clock change
-    /// that happened after the record was written; nil at or below `clockBreak`.
+    /// that happened after the record was written; nil through `undatableThroughSequenceNum`.
     ///
     /// `Dates.fromJan12008EpochSecondsToDate` already converts the pump's local-wall-clock
     /// seconds (Tandem 2008 epoch) into a UTC instant — it subtracts the device's UTC offset
@@ -87,7 +93,7 @@ final class HistoryTimestampReconciler {
 
     /// Walks back from the newest record with each change's delta applied below it, so on one clock
     /// the corrected stamps never decrease as sequence numbers do.
-    private static func newestClockBreak(in logs: [HistoryLog]) -> UInt32? {
+    private static func newestUndatableSequenceNum(in logs: [HistoryLog]) -> UInt32? {
         var shift = 0
         var laterStamp: Int?
         for log in logs.sorted(by: { $0.sequenceNum > $1.sequenceNum }) {
@@ -113,17 +119,17 @@ final class HistoryTimestampReconciler {
 /// among `logs`, then by the pump clock offset (`TandemPumpManager.hostDate(forPumpDate:)`). One per
 /// pass; a reconciler shared across passes would apply each clock change once per pass.
 struct HistoryRecordDates {
-    /// The records given, less those at or below a clock break. A pass works from these alone.
+    /// The records given, less those through `undatableThroughSequenceNum`. A pass works from these alone.
     let logs: [HistoryLog]
-    let clockBreak: UInt32?
+    let undatableThroughSequenceNum: UInt32?
     private let reconciler = HistoryTimestampReconciler()
     private let hostDate: (Date) -> Date
 
     init(_ logs: [HistoryLog], hostDate: @escaping (Date) -> Date) {
         reconciler.recordClockChanges(in: logs)
-        let clockBreak = reconciler.clockBreak
-        self.clockBreak = clockBreak
-        self.logs = clockBreak.map { clockBreak in logs.filter { $0.sequenceNum > clockBreak } } ?? logs
+        let undatableThrough = reconciler.undatableThroughSequenceNum
+        undatableThroughSequenceNum = undatableThrough
+        self.logs = undatableThrough.map { undatableThrough in logs.filter { $0.sequenceNum > undatableThrough } } ?? logs
         self.hostDate = hostDate
     }
 
@@ -141,8 +147,8 @@ struct HistoryRecordDates {
 extension TandemPumpManager {
     func historyRecordDates(_ logs: [HistoryLog]) -> HistoryRecordDates {
         let dates = HistoryRecordDates(logs) { [weak self] in self?.hostDate(forPumpDate: $0) ?? $0 }
-        if let clockBreak = dates.clockBreak, loggedClockBreaks.insert(clockBreak).inserted {
-            logger.warning("Pump history at or below #\(clockBreak) is on a clock lost to a reset or shelf mode; none of it is dated or reported")
+        if let undatableThrough = dates.undatableThroughSequenceNum, loggedUndatableHistory.insert(undatableThrough).inserted {
+            logger.warning("Pump history through #\(undatableThrough) is on a clock lost to a reset or shelf mode; none of it is dated or reported")
         }
         return dates
     }

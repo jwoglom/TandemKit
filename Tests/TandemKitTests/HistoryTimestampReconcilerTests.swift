@@ -106,7 +106,7 @@ final class HistoryTimestampReconcilerTests: XCTestCase {
             DateChangeHistoryLog(pumpTimeSec: UInt32(201 * day + 300), sequenceNum: 51, datePrior: 200, dateAfter: 201, rawRTCTime: 0)
         ])
 
-        XCTAssertNil(reconciler.clockBreak)
+        XCTAssertNil(reconciler.undatableThroughSequenceNum)
         XCTAssertEqual(reconciler.utcDate(pumpTimeSec: UInt32(before), sequenceNum: 49), pumpDate(before + 600))
     }
 
@@ -119,20 +119,20 @@ final class HistoryTimestampReconcilerTests: XCTestCase {
         XCTAssertEqual(reconciler.utcDate(pumpTimeSec: 8000, sequenceNum: 49), pumpDate(8000))
     }
 
-    // MARK: - Clock breaks
+    // MARK: - Undatable records
 
     func testChangesAfterAShelfModeWakeAreNotCarriedBackToThePreviousUse() {
         let reconciler = HistoryTimestampReconciler()
         reconciler.recordClockChanges(in: shelfModeWake())
 
-        XCTAssertEqual(reconciler.clockBreak, 103)
+        XCTAssertEqual(reconciler.undatableThroughSequenceNum, 103)
         XCTAssertNil(reconciler.utcDate(pumpTimeSec: UInt32(previousUseStamp), sequenceNum: 100))
         XCTAssertNil(reconciler.utcDate(pumpTimeSec: 212, sequenceNum: 103))
         XCTAssertEqual(reconciler.utcDate(pumpTimeSec: 219, sequenceNum: 104), pumpDate(6800 * day + 219 + 46181))
         XCTAssertEqual(reconciler.utcDate(pumpTimeSec: UInt32(4383 * day + 3819), sequenceNum: 107), pumpDate(6800 * day + 50000))
     }
 
-    func testStampRunningBackWithNoChangeRecordIsABreak() {
+    func testRecordsBeforeAStampRunningBackWithNoChangeRecordAreUndatable() {
         let reconciler = HistoryTimestampReconciler()
         reconciler.recordClockChanges(in: [
             record(previousUseStamp, 1),
@@ -141,20 +141,20 @@ final class HistoryTimestampReconcilerTests: XCTestCase {
             record(6800 * day + 200, 4)
         ])
 
-        XCTAssertEqual(reconciler.clockBreak, 1)
+        XCTAssertEqual(reconciler.undatableThroughSequenceNum, 1)
         XCTAssertNil(reconciler.utcDate(pumpTimeSec: UInt32(previousUseStamp), sequenceNum: 1))
         XCTAssertEqual(reconciler.utcDate(pumpTimeSec: 100, sequenceNum: 2), pumpDate(6800 * day + 100))
     }
 
-    func testBreakIsFoundWithoutTheResetRecords() {
+    func testRecordsBeforeAResetAreUndatableWithoutTheResetRecords() {
         // The basal pass reads by raw stamp, which leaves ArmInit's 2008 one out.
         let reconciler = HistoryTimestampReconciler()
         reconciler.recordClockChanges(in: shelfModeWake().filter { !($0 is ShelfModeHistoryLog || $0 is ArmInitHistoryLog) })
 
-        XCTAssertEqual(reconciler.clockBreak, 100)
+        XCTAssertEqual(reconciler.undatableThroughSequenceNum, 100)
     }
 
-    func testOneClockWithForwardAndBackwardChangesHasNoBreak() {
+    func testOneClockWithForwardAndBackwardChangesIsAllDatable() {
         let reconciler = HistoryTimestampReconciler()
         reconciler.recordClockChanges(in: [
             record(6800 * day + 1000, 1),
@@ -164,15 +164,15 @@ final class HistoryTimestampReconcilerTests: XCTestCase {
             record(6800 * day + 1200, 5)
         ])
 
-        XCTAssertNil(reconciler.clockBreak)
+        XCTAssertNil(reconciler.undatableThroughSequenceNum)
         XCTAssertEqual(reconciler.utcDate(pumpTimeSec: UInt32(6800 * day + 1000), sequenceNum: 1), pumpDate(6800 * day + 1000))
     }
 
-    func testRecordDatesLeaveOutRecordsAtOrBelowTheBreak() {
+    func testRecordDatesLeaveOutUndatableRecords() {
         let logs = shelfModeWake()
         let dates = HistoryRecordDates(logs) { $0 }
 
-        XCTAssertEqual(dates.clockBreak, 103)
+        XCTAssertEqual(dates.undatableThroughSequenceNum, 103)
         XCTAssertEqual(dates.logs.map(\.sequenceNum), logs.map(\.sequenceNum).filter { $0 > 103 })
         XCTAssertEqual(dates.phoneDate(of: logs[0]), .distantPast)
     }

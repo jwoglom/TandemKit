@@ -18,11 +18,7 @@ extension TandemPumpManager {
         PumpingSuspendedHistoryLog.typeId,
         PumpingResumedHistoryLog.typeId,
         ControlIQPcmChangeHistoryLog.typeId,
-        BolusActivatedHistoryLog.typeId,
-        TimeChangedHistoryLog.typeId,
-        DateChangeHistoryLog.typeId,
-        ArmInitHistoryLog.typeId,
-        ShelfModeHistoryLog.typeId
+        BolusActivatedHistoryLog.typeId
     ]
 
     /// Read before the floor so the cross-check knows a temp or suspend in force there, as far as the
@@ -121,7 +117,7 @@ extension TandemPumpManager {
             let since = Dates.fromInstantToJan12008EpochSeconds(floor.addingTimeInterval(state.pumpClockOffset - Self.basalHistoryLookback))
             dates = try historyRecordDates(historyLogStore.logs(
                 pumpSerial: serial.rawValue,
-                ofTypes: Self.basalHistoryTypes,
+                ofTypes: Self.basalHistoryTypes + HistoryTimestampReconciler.clockHistoryTypes,
                 sincePumpTimeSec: UInt32(clamping: Int64(max(0, since)))
             )
             .filter { covered.contains($0.sequenceNum) }
