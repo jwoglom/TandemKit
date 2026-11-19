@@ -302,13 +302,14 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  # Four shards of one suite, each a swift test against its own faketandem, sized to finish
+  # Six shards of one suite, each a swift test against its own faketandem, sized to finish
   # together: integration_fault takes the conformance groups built on pump-side failures and
   # outages (D and F in docs/conformance-test-plan.md), integration_commands the groups that
   # interrupt, cancel and repeat the app's own commands (A-C), integration_history the history
-  # reads (H, G and K, and HistoryBackfillIntegrationTests), and integration everything else, skipping
-  # the other shards' classes, so a new class lands in integration unless it is added to one of the
-  # *_SUITES regexes below.
+  # reads (H and K, and HistoryBackfillIntegrationTests), integration_setup_history
+  # setup's history load (L and M), integration_time_change the time changes (G), and integration
+  # everything else, skipping the other shards' classes, so a new class lands in integration unless
+  # it is added to one of the *_SUITES regexes below.
   integration:
     name: ${{ matrix.suite }} tests (faketandem)
     needs: [virtual-pump, faketandem]
@@ -320,18 +321,24 @@ jobs:
       matrix:
         include:
           - suite: integration
-            selection: --skip "$FAULT_SUITES|$COMMAND_SUITES|$HISTORY_SUITES"
+            selection: --skip "$FAULT_SUITES|$COMMAND_SUITES|$HISTORY_SUITES|$SETUP_HISTORY_SUITES|$TIME_CHANGE_SUITES"
           - suite: integration_fault
             selection: --filter "$FAULT_SUITES"
           - suite: integration_commands
             selection: --filter "$COMMAND_SUITES"
           - suite: integration_history
             selection: --filter "$HISTORY_SUITES"
+          - suite: integration_setup_history
+            selection: --filter "$SETUP_HISTORY_SUITES"
+          - suite: integration_time_change
+            selection: --filter "$TIME_CHANGE_SUITES"
     env:
       TANDEMKIT_INTEGRATION_TESTS: '1'
       FAULT_SUITES: 'TandemKitIntegrationTests\.(PumpSide|Outage)ConformanceTests'
       COMMAND_SUITES: 'TandemKitIntegrationTests\.(Interrupt|Idempotency|Cancel)ConformanceTests'
-      HISTORY_SUITES: 'TandemKitIntegrationTests\.(BasalHistoryConformance|HistoryBackfillIntegration|TimeChangeConformance|RepairConformance|SetupHistoryLoadConformance)Tests'
+      HISTORY_SUITES: 'TandemKitIntegrationTests\.(BasalHistoryConformance|HistoryBackfillIntegration|RepairConformance)Tests'
+      SETUP_HISTORY_SUITES: 'TandemKitIntegrationTests\.SetupHistoryLoadConformanceTests'
+      TIME_CHANGE_SUITES: 'TandemKitIntegrationTests\.TimeChangeConformanceTests'
     defaults:
       run:
         shell: bash

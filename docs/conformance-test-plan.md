@@ -194,6 +194,23 @@ offset the driver's decode (the phone's offset now) agrees with. Both history fl
 | G7 | The pump's date set two days ahead on the pump, then a bolus on the pump | pump clock +2 d on the pump; sync; pump-programmed bolus; sync; `syncPumpTime`; sync | the clock untrusted (past `pumpClockOffsetTrustLimit`) until `syncPumpTime`. Strict expected failures: the bolus reported at its instant and ended by the phone's clock (it is sent starting when history reads it and ending two days ahead); both hosts match the pump once the clock is set |
 | G8 | The pump's date set two days behind on the pump, then a bolus on the pump | pump clock −2 d on the pump; sync; pump-programmed bolus; sync; `syncPumpTime`; sync | the clock untrusted; the bolus reported once, at its instant, by the pass after `syncPumpTime`; no dose out of order; both hosts match the pump |
 | G9 | The pump's clock restarts at 2008-01-01 while the app is paired, with no record of the change, and the app sets it | a pump-programmed bolus logged two hours before tracking began; pump clock skewed to 2008-01-01 00:03; sync; pump-programmed bolus; sync; `syncPumpTime`; sync | the clock untrusted; the bolus given on the restarted clock reported once at its instant; both hosts match the pump, since Loop stores no dose until it has ended; the bolus from before tracking is not reported, since its stamp runs back unexplained once the change `syncPumpTime` leaves is added to it. M1's defect without a setup |
+| G10–G20 | A pump bolus read in range; out of range, a bolus on the pump, then the clock change below, then another; back in range a sync, `syncPumpTime` if the pump's clock is more than a minute off the phone's, and an hour of syncs | per change, below | Each of the three boluses reported under one start, at the instant the pump gave it; the pump on the phone's time; no dose out of order; both hosts match the pump |
+
+The clock changes G10–G20 and L12–L22 share (`PumpClockChange`), in fixed-offset zones:
+
+| Change | Phone | Pump |
+|---|---|---|
+| Spring forward (G10, L12) | UTC-5 → UTC-4 | set +1 h on the pump |
+| Fall back (G11, L13) | UTC-4 → UTC-5 | set −1 h on the pump |
+| Three hours east (G12, L14) | UTC-7 → UTC-4 | set +3 h on the pump |
+| Three hours west (G13, L15) | UTC-4 → UTC-7 | set −3 h on the pump |
+| Twelve hours east (G14, L16) | UTC-5 → UTC+7 | set +12 h on the pump |
+| Twelve hours west (G15, L17) | UTC+7 → UTC-5 | set −12 h on the pump |
+| 73 hours ahead (G16, L18) | UTC-4 | set +73 h on the pump |
+| 73 hours behind (G17, L19) | UTC-4 | set −73 h on the pump |
+| Reset to 2008 (G18, L20) | UTC-4 | skewed to 2008-01-01 00:03 with `NewDay`, `ArmInit` and `VersionInfo` records, `time_since_reset` 0 |
+| Reset to 2020 (G19, L21) | UTC-4 | the same, to 2020-01-01 00:03 |
+| Jump to 2035 (G20, L22) | UTC-4 | skewed to 2035-01-01 00:03 with no record |
 
 ## H. Basal from the pump's history (#514, #213, #340)
 
@@ -313,6 +330,7 @@ oracles. `SetupHistoryLoadConformanceTests`.
 | L9 | The history log status unanswered at the load, then answered | The load fails with `historyUnreadable` after `setupHistoryLoadFailureLimit` reads; Try Again loads |
 | L10 | An hour of Control-IQ before pairing, still on when paired | Setup turns it off; one automatic correction per Control-IQ BasalDelivery record off the schedule; both hosts count the pump's basal |
 | L11 | A pump in use with its clock 12 hours behind, a bolus on its screen four hours before pairing and one an hour before; loaded, then 140 minutes of syncs | One clock adjustment, of the 12 hours; the later bolus, which setup's first 255-record slice holds, once. Strict expected failure: both hosts hold both boluses. The load measures its six hours back from the phone's clock against stamps on the clock setup replaced, so the first slice's oldest record reads as older than the window and the earlier bolus is never read |
+| L12–L22 | Four hours before pairing a bolus on the pump's screen, an hour later one of G's clock changes, an hour later another bolus; paired an hour after that and loaded, then an hour of syncs | Setup leaves the pump on the phone's time; each bolus reported under one start, at the pump's; no duplicates in either host; both hosts hold both boluses |
 
 ## M. A pump out of shelf mode
 

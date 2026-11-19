@@ -23,10 +23,12 @@ final class SetupHistoryLoadConformanceTests: ConformanceTestCase {
     private var hostDelegatesFrom = 0
     private var otherAppState: [String: Any]?
     private var stagingStart = Date.distantPast
+    private var phone: PhoneTimeZone!
 
     override func setUpWithError() throws {
         try super.setUpWithError()
         continueAfterFailure = true
+        phone = PhoneTimeZone()
         try harness.client.setState(["bolus_rate_units_per_second": Self.bolusRate])
         stagingStart = clock.now
     }
@@ -40,6 +42,8 @@ final class SetupHistoryLoadConformanceTests: ConformanceTestCase {
             }
         }
         try super.tearDownWithError()
+        phone?.restore()
+        phone = nil
     }
 
     // MARK: - The pump's past
@@ -934,6 +938,107 @@ final class SetupHistoryLoadConformanceTests: ConformanceTestCase {
         try XCTExpectFailure("The load stops at the first record stamped before its window on the clock setup replaced") {
             try assertHostsHoldThePumpsBoluses(from: since, loop, trio, count: 2)
         }
+    }
+
+    // MARK: - L12 to L22: a clock change in the window the load reads
+
+    /// A bolus on the pump an hour before `change` and one an hour after it, an hour before this app
+    /// pairs and loads; then an hour of the host's loop.
+    private func runALoadAcross(_ change: PumpClockChange) throws {
+        phone.set(change.zoneBefore)
+        try eraseHistory()
+        try pairing(at: 240)
+        try runBasalCycle()
+        try at(60)
+        let beforeChangeId = try bolusOnThePump(units: 1.0)
+        let beforeChange = (bolusId: beforeChangeId, start: minutes(60))
+        try at(120)
+        try change.apply(on: harness.client, clock: clock, phone: phone)
+        try at(180)
+        let afterChangeId = try bolusOnThePump(units: 1.5)
+        let afterChange = (bolusId: afterChangeId, start: minutes(180))
+        try at(240)
+
+        let driver = try pairThisApp()
+        let since = try loadHistory(driver)
+        adopt(driver)
+        _ = try sync()
+        try waitForHistoryPass(driver)
+        try syncEveryCycle(until: 300)
+        try waitForHistoryPass(driver)
+
+        XCTAssertTrue(driver.delegate.errors.isEmpty, "\(driver.delegate.errors)")
+        XCTAssertEqual(driver.manager.state.pumpClockOffset, 0, accuracy: 5, "setup set the pump's clock")
+        let serial = try XCTUnwrap(driver.manager.historyLogStoreSerial)
+        assertReportedOnce(beforeChange, "before the change", serial: serial)
+        assertReportedOnce(afterChange, "after the change", serial: serial)
+        let (loop, trio) = hostOracles()
+        assertNoDuplicates(loop, trio, "loaded across a clock change")
+        try assertHostsHoldThePumpsBoluses(from: since, loop, trio, count: 2)
+    }
+
+    private func assertReportedOnce(
+        _ bolus: (bolusId: Int, start: Date),
+        _ label: String,
+        serial: HistoryLogSyncIdentifier.PumpSerial,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        let raw = HistoryLogSyncIdentifier.bolus(pumpSerial: serial, bolusId: bolus.bolusId)
+        let starts = Set(hostEvents.filter { $0.raw == raw }.compactMap { $0.dose?.startDate })
+        XCTAssertEqual(starts.count, 1, "the bolus \(label), under one start: \(starts.sorted())", file: file, line: line)
+        XCTAssertEqual(
+            starts.first?.timeIntervalSince(bolus.start) ?? .infinity,
+            0,
+            accuracy: 2,
+            "the bolus \(label), at the instant the pump gave it",
+            file: file,
+            line: line
+        )
+    }
+
+    func testL12_theLoadReportsBolusesEitherSideOfASpringForwardWhenGiven() throws {
+        try runALoadAcross(.dstForward)
+    }
+
+    func testL13_theLoadReportsBolusesEitherSideOfAFallBackWhenGiven() throws {
+        try runALoadAcross(.dstBack)
+    }
+
+    func testL14_theLoadReportsBolusesEitherSideOfATripThreeHoursEastWhenGiven() throws {
+        try runALoadAcross(.threeHoursEast)
+    }
+
+    func testL15_theLoadReportsBolusesEitherSideOfATripThreeHoursWestWhenGiven() throws {
+        try runALoadAcross(.threeHoursWest)
+    }
+
+    func testL16_theLoadReportsBolusesEitherSideOfATripTwelveHoursEastWhenGiven() throws {
+        try runALoadAcross(.twelveHoursEast)
+    }
+
+    func testL17_theLoadReportsBolusesEitherSideOfATripTwelveHoursWestWhenGiven() throws {
+        try runALoadAcross(.twelveHoursWest)
+    }
+
+    func testL18_theLoadReportsBolusesEitherSideOfThePumpSet73HoursAheadWhenGiven() throws {
+        try runALoadAcross(.seventyThreeHoursAhead)
+    }
+
+    func testL19_theLoadReportsBolusesEitherSideOfThePumpSet73HoursBehindWhenGiven() throws {
+        try runALoadAcross(.seventyThreeHoursBehind)
+    }
+
+    func testL20_theLoadReportsBolusesEitherSideOfAResetTo2008WhenGiven() throws {
+        try runALoadAcross(.resetTo2008)
+    }
+
+    func testL21_theLoadReportsBolusesEitherSideOfAResetTo2020WhenGiven() throws {
+        try runALoadAcross(.resetTo2020)
+    }
+
+    func testL22_theLoadReportsBolusesEitherSideOfAnUnrecordedJumpTo2035WhenGiven() throws {
+        try runALoadAcross(.jumpTo2035)
     }
 
     // MARK: - M: a pump out of shelf mode

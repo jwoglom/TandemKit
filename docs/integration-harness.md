@@ -60,8 +60,8 @@ The script's header lists the environment variables it reads.
 CI runs it from `.github/workflows/macos.yml` (the `integration` job, only the classes
 `MACOS_SUITES` names: those that need Apple's frameworks, such as `PairingIntegrationTests`, whose
 fresh JPAKE pairing needs SwiftECC) and from `.github/workflows/linux.yml` (every class, in shards: a
-new class runs in the `integration` shard unless `FAULT_SUITES`, `COMMAND_SUITES` or
-`HISTORY_SUITES` names it). A class that tests something only Apple's frameworks show goes on the
+new class runs in the `integration` shard unless `FAULT_SUITES`, `COMMAND_SUITES`, `HISTORY_SUITES`,
+`SETUP_HISTORY_SUITES` or `TIME_CHANGE_SUITES` names it). A class that tests something only Apple's frameworks show goes on the
 macOS list. Both fail if any integration test skips, because a skip means the emulator's addresses
 never reached the test process. faketandem comes from its default branch; `faketandem_ref` on a
 manual run picks another, and a pull request uses a faketandem branch of the same name when one
