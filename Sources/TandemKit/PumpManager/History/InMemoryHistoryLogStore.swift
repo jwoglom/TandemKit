@@ -11,8 +11,8 @@ public final class InMemoryHistoryLogStore: HistoryLogStore {
     private let lock = NSLock()
     /// pumpSerial -> sequenceNum -> entry
     private var entries: [UInt32: [UInt32: StoredHistoryLog]] = [:]
-    /// pumpSerial -> retention watermark. Stored as Int64 so `highestPruned + 1` can't overflow.
-    private var prunedBelow: [UInt32: Int64] = [:]
+    /// pumpSerial -> retention watermark.
+    private var prunedBelow: [UInt32: UInt32] = [:]
 
     public init() {}
 
@@ -55,14 +55,24 @@ public final class InMemoryHistoryLogStore: HistoryLogStore {
     public func logs(
         pumpSerial: UInt32,
         ofTypes typeIds: [Int],
-        sincePumpTimeSec: UInt32
+        in range: ClosedRange<UInt32>
     ) throws -> [StoredHistoryLog] {
         let wanted = Set(typeIds)
         return withLock {
             (entries[pumpSerial] ?? [:])
                 .values
-                .filter { wanted.contains($0.typeId) && $0.pumpTimeSec >= sincePumpTimeSec }
+                .filter { wanted.contains($0.typeId) && range.contains($0.sequenceNum) }
                 .sorted { $0.sequenceNum < $1.sequenceNum }
+        }
+    }
+
+    public func lowestSequenceNum(pumpSerial: UInt32, receivedSince date: Date) throws -> UInt32? {
+        withLock {
+            (entries[pumpSerial] ?? [:])
+                .values
+                .filter { $0.receivedAt >= date }
+                .map(\.sequenceNum)
+                .min()
         }
     }
 
@@ -99,28 +109,26 @@ public final class InMemoryHistoryLogStore: HistoryLogStore {
     }
 
     public func prunedBelowSequenceNum(pumpSerial: UInt32) throws -> UInt32? {
-        withLock { prunedBelow[pumpSerial].map { UInt32(clamping: $0) } }
+        withLock { prunedBelow[pumpSerial] }
     }
 
     @discardableResult
-    public func prune(pumpSerial: UInt32, beforePumpTimeSec: UInt32) throws -> Int {
+    public func prune(pumpSerial: UInt32, belowSequenceNum: UInt32) throws -> Int {
         withLock {
             guard var stored = entries[pumpSerial] else {
                 return 0
             }
 
-            let doomed = stored.values.filter { $0.pumpTimeSec < beforePumpTimeSec }
-            guard let highest = doomed.map(\.sequenceNum).max() else {
+            let doomed = stored.keys.filter { $0 < belowSequenceNum }
+            guard !doomed.isEmpty else {
                 return 0
             }
 
-            for log in doomed {
-                stored.removeValue(forKey: log.sequenceNum)
+            for sequenceNum in doomed {
+                stored.removeValue(forKey: sequenceNum)
             }
             entries[pumpSerial] = stored
-
-            let watermark = Int64(highest) + 1
-            prunedBelow[pumpSerial] = max(prunedBelow[pumpSerial] ?? 0, watermark)
+            prunedBelow[pumpSerial] = max(prunedBelow[pumpSerial] ?? 0, belowSequenceNum)
             return doomed.count
         }
     }

@@ -446,4 +446,102 @@ final class HistoryBackfillPlannerTests: XCTestCase {
         XCTAssertNil(HistoryBackfillState(rawValue: [:]))
         XCTAssertNil(TandemPumpManagerState(rawValue: [:]).historyBackfill)
     }
+
+    // MARK: - Undatable floor and retention watermark
+
+    func testDeepSliceStopsAtTheLowestReadableRecord() {
+        XCTAssertEqual(
+            HistoryBackfillPlanner.deepSlice(firstSequenceNum: 1, sessionCovered: 1000 ... 2000, isDeepTargetCovered: false, lowestReadable: 900),
+            900 ... 999
+        )
+        XCTAssertNil(HistoryBackfillPlanner.deepSlice(firstSequenceNum: 1, sessionCovered: 1000 ... 2000, isDeepTargetCovered: false, lowestReadable: 1000))
+        XCTAssertNil(HistoryBackfillPlanner.deepSlice(firstSequenceNum: 1, sessionCovered: 1000 ... 2000, isDeepTargetCovered: false, lowestReadable: 1500))
+    }
+
+    func testAPlanReachingTheLowestReadableRecordIsComplete() {
+        let plan = HistoryBackfillPlanner.plan(
+            firstSequenceNum: 1,
+            lastSequenceNum: 2000,
+            watermark: 2000,
+            sessionCovered: 1500 ... 2000,
+            storeGaps: [1200 ... 1300, 1600 ... 1610],
+            isDeepTargetCovered: false,
+            lowestReadable: 1501
+        )
+
+        XCTAssertNil(plan.deep)
+        XCTAssertTrue(plan.isDeepBackfillComplete)
+        XCTAssertEqual(plan.gaps, [1600 ... 1610], "no gap below the floor is healed")
+    }
+
+    func testFirstTickAfterShelfModeReadsNothingBelowIt() {
+        let plan = HistoryBackfillPlanner.plan(
+            firstSequenceNum: 1,
+            lastSequenceNum: 2000,
+            watermark: nil,
+            isDeepTargetCovered: false,
+            lowestReadable: 1900
+        )
+
+        XCTAssertEqual(plan.incremental, 1900 ... 2000)
+    }
+
+    func testNothingIsReadWhenTheShelfModeRecordIsTheNewest() {
+        let plan = HistoryBackfillPlanner.plan(
+            firstSequenceNum: 1,
+            lastSequenceNum: 2000,
+            watermark: 2000,
+            sessionCovered: 1800 ... 2000,
+            isDeepTargetCovered: false,
+            lowestReadable: 2001
+        )
+
+        XCTAssertTrue(plan.isEmpty)
+        XCTAssertTrue(plan.isDeepBackfillComplete)
+    }
+
+    func testReadableRangeStartsAboveTheUndatableFloor() {
+        var state = bookkeeping(watermark: 2000)
+        XCTAssertEqual(state.readable(100 ... 200), 100 ... 200)
+
+        state.raiseUndatableThrough(to: 150)
+        XCTAssertEqual(state.readable(100 ... 200), 151 ... 200)
+        XCTAssertEqual(state.readable(160 ... 200), 160 ... 200)
+        XCTAssertNil(state.readable(100 ... 150))
+        XCTAssertNil(state.readable(100 ... 120))
+    }
+
+    func testTheUndatableFloorOnlyRises() {
+        var state = bookkeeping(watermark: 2000)
+        state.raiseUndatableThrough(to: 150)
+        state.raiseUndatableThrough(to: 120)
+        XCTAssertEqual(state.undatableThroughSequenceNum, 150)
+        state.raiseUndatableThrough(to: 1800)
+        XCTAssertEqual(state.undatableThroughSequenceNum, 1800)
+    }
+
+    func testAnErasedLogDropsTheUndatableFloor() {
+        var state = bookkeeping(watermark: 900)
+        state.raiseUndatableThrough(to: 800)
+
+        XCTAssertNil(state.resettingWatermarkIfAbove(lastSequenceNum: 50).undatableThroughSequenceNum)
+        XCTAssertEqual(state.resettingWatermarkIfAbove(lastSequenceNum: 950).undatableThroughSequenceNum, 800)
+    }
+
+    func testAReplacementPumpHasNoUndatableFloor() {
+        var state = bookkeeping(watermark: 900)
+        state.raiseUndatableThrough(to: 800)
+
+        XCTAssertNil(state.matching(pumpSerial: serial + 1).undatableThroughSequenceNum)
+        XCTAssertEqual(state.matching(pumpSerial: serial).undatableThroughSequenceNum, 800)
+    }
+
+    func testTheUndatableFloorSurvivesARawValueRoundTrip() throws {
+        var original = bookkeeping(watermark: 240, firstSeenFloor: Date(timeIntervalSinceReferenceDate: 1234))
+        original.raiseUndatableThrough(to: 200)
+
+        let restored = try XCTUnwrap(HistoryBackfillState(rawValue: original.rawValue))
+        XCTAssertEqual(restored.undatableThroughSequenceNum, 200)
+        XCTAssertEqual(restored, original)
+    }
 }

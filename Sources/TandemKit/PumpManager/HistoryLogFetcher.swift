@@ -16,8 +16,12 @@ public final class HistoryLogFetcher {
     public struct Progress {
         public let fetchedCount: Int
         public let expectedCount: Int
+        /// On the pump's clock as each record was stamped, for display: a clock change between them
+        /// leaves these out of order. `earliestFetchedSequenceNum` is the one to date.
         public let earliestFetched: Date?
         public let latestFetched: Date?
+        public var earliestFetchedSequenceNum: UInt32? = nil
+        public var latestFetchedSequenceNum: UInt32? = nil
     }
 
     public enum FetchError: LocalizedError {
@@ -427,12 +431,14 @@ public final class HistoryLogFetcher {
 
     private func progressLocked() -> Progress {
         let expected = windowEnd >= windowStart ? Int(windowEnd - windowStart + 1) : 0
-        let fetched = receivedSeqNums.filter { Int64($0) >= windowStart && Int64($0) <= windowEnd }.count
+        let fetched = receivedSeqNums.filter { Int64($0) >= windowStart && Int64($0) <= windowEnd }
         return Progress(
-            fetchedCount: fetched,
+            fetchedCount: fetched.count,
             expectedCount: expected,
             earliestFetched: earliestPumpTimeSec.map { Dates.fromJan12008EpochSecondsToDate(TimeInterval($0)) },
-            latestFetched: latestPumpTimeSec.map { Dates.fromJan12008EpochSecondsToDate(TimeInterval($0)) }
+            latestFetched: latestPumpTimeSec.map { Dates.fromJan12008EpochSecondsToDate(TimeInterval($0)) },
+            earliestFetchedSequenceNum: fetched.min(),
+            latestFetchedSequenceNum: fetched.max()
         )
     }
 

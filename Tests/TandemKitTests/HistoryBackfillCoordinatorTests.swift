@@ -40,8 +40,6 @@ import XCTest
 
     // MARK: - Helpers
 
-    /// A recent pump-clock base: entries must be inside the retention window or the manager's
-    /// store prunes them as they arrive.
     private lazy var basePumpTimeSec = UInt32(Dates.fromInstantToJan12008EpochSeconds(Date()))
 
     /// An entry whose pump clock runs one minute per sequence number, so a window of sequence
@@ -345,6 +343,177 @@ import XCTest
             "The next tick resumes below the frontier the capped tick left"
         )
         XCTAssertTrue(second.isDeepBackfillComplete, "The remaining slices reach the start of the log")
+    }
+
+    // MARK: - Dating the walk's stop
+
+    /// Serves exactly `logs`, newest first per request, the way the pump streams them.
+    private func stubHistory(serving logs: [HistoryLog], streamId: Int = 7) {
+        let bySequence = Dictionary(uniqueKeysWithValues: logs.map { ($0.sequenceNum, $0) })
+        let sequences = logs.map(\.sequenceNum)
+        stubStatus(first: sequences.min()!, last: sequences.max()!)
+        bluetooth.stub(HistoryLogRequest.self, with: HistoryLogResponse(status: 0, streamId: streamId))
+        bluetooth.onWrite = { [weak self] message in
+            guard let self, let request = message as? HistoryLogRequest else { return }
+            let top = request.startLog
+            let count = UInt32(max(request.numberOfLogs, 1))
+            let bottom = top >= count ? top - count + 1 : 0
+            let streamed = stride(from: top, through: bottom, by: -1).compactMap { bySequence[$0] }
+            guard !streamed.isEmpty else { return }
+            self.manager.historyLogStream.send(HistoryLogStreamResponse(
+                numberOfHistoryLogs: streamed.count,
+                streamId: streamId,
+                historyLogStreamBytes: streamed.map(\.cargo)
+            ))
+        }
+    }
+
+    private func requestedRanges() -> [ClosedRange<UInt32>] {
+        bluetooth.sent(HistoryLogRequest.self).map { request in
+            let count = UInt32(max(request.numberOfLogs, 1))
+            return (request.startLog >= count ? request.startLog - count + 1 : 0) ... request.startLog
+        }
+    }
+
+    private static let restartedClockDays: UInt32 = 400
+
+    /// `count` records a minute apart up to now, every one but the newest ten stamped on a clock
+    /// `restartedClockDays` behind, as a pump's after a reset, until a `DateChange` at `count - 10` set it.
+    private func historyAcrossAClockWrite(count: UInt32) -> [HistoryLog] {
+        let behind = Self.restartedClockDays * 86400
+        let changeAt = count - 10
+        return (1 ... count).map { sequence -> HistoryLog in
+            let stamp = basePumpTimeSec - (count - sequence) * 60
+            if sequence == changeAt {
+                return DateChangeHistoryLog(
+                    pumpTimeSec: stamp,
+                    sequenceNum: sequence,
+                    datePrior: 1000,
+                    dateAfter: 1000 + Self.restartedClockDays,
+                    rawRTCTime: 0
+                )
+            }
+            return log(sequenceNum: sequence, ageSeconds: (count - sequence) * 60 + (sequence < changeAt ? behind : 0))
+        }
+    }
+
+    /// Stamped on the restarted clock, the oldest record of the first slice reads 400 days old. Compared
+    /// raw against the target, the walk stopped there, four hours short of the insulin still acting.
+    func testTheWalkStopsByTheDateTheClockChangeGivesItsOldestRecord() throws {
+        setPumpSerial()
+        stubHistory(serving: historyAcrossAClockWrite(count: 600))
+
+        let outcome = try XCTUnwrap(runTick())
+
+        XCTAssertTrue(outcome.isDeepBackfillComplete)
+        // The lookback reaches record 180, inside the second slice.
+        XCTAssertEqual(requestedRanges(), [346 ... 600, 91 ... 345])
+        XCTAssertEqual(outcome.sessionCovered, 91 ... 600)
+    }
+
+    /// In a field log the hourly prune, by stamp, took the walk's oldest record every hour, and the walk
+    /// read a slice deeper each time, past a ShelfMode record into boluses from the pump's previous use.
+    func testAnHourlyPruneLeavesRecordsStampedYearsAgoAndTheWalkWhereItStopped() throws {
+        setPumpSerial()
+        let history = historyAcrossAClockWrite(count: 600)
+        stubHistory(serving: history)
+        let start = Date()
+        _ = try XCTUnwrap(runTick(now: start))
+        let stored = try manager.historyLogStore.count(pumpSerial: Self.pumpSerial)
+
+        for hour in 1 ... 3 {
+            let later = start.addingTimeInterval(.hours(Double(hour)) + .minutes(1))
+            manager.pruneHistoryLogStoreIfNeeded(now: later)
+            XCTAssertEqual(try manager.historyLogStore.count(pumpSerial: Self.pumpSerial), stored, "hour \(hour)")
+
+            bluetooth.resetRecordedTraffic()
+            stubHistory(serving: history)
+            _ = try XCTUnwrap(runTick(now: later))
+            XCTAssertTrue(requestedRanges().isEmpty, "hour \(hour) read \(requestedRanges())")
+        }
+    }
+
+    func testAPruneBelowTheWalksOldestRecordDoesNotReopenTheWalk() throws {
+        setPumpSerial()
+        let history = historyAcrossAClockWrite(count: 600)
+        stubHistory(serving: history)
+        let first = try XCTUnwrap(runTick())
+        let lowest = try XCTUnwrap(first.sessionCovered?.lowerBound)
+
+        try manager.historyLogStore.prune(pumpSerial: Self.pumpSerial, belowSequenceNum: lowest + 10)
+        bluetooth.resetRecordedTraffic()
+        stubHistory(serving: history)
+        let second = try XCTUnwrap(runTick())
+
+        XCTAssertTrue(requestedRanges().isEmpty, "read \(requestedRanges())")
+        XCTAssertTrue(second.isDeepBackfillComplete)
+    }
+
+    // MARK: - Shelf mode
+
+    private func shelfMode(sequenceNum: UInt32, ageSeconds: UInt32) -> ShelfModeHistoryLog {
+        ShelfModeHistoryLog(
+            pumpTimeSec: basePumpTimeSec - ageSeconds,
+            sequenceNum: sequenceNum,
+            msecSinceReset: 0,
+            lipoIbc: 0,
+            lipoAbc: 0,
+            lipoCurrent: 0,
+            lipoRemCap: 0,
+            lipoMv: 0
+        )
+    }
+
+    /// Records a minute apart up to now, with a ShelfMode record at `shelfModeAt`.
+    private func historyWithShelfMode(count: UInt32, shelfModeAt: UInt32) -> [HistoryLog] {
+        (1 ... count).map { sequence -> HistoryLog in
+            let age = (count - sequence) * 60
+            return sequence == shelfModeAt ? shelfMode(sequenceNum: sequence, ageSeconds: age) : log(sequenceNum: sequence, ageSeconds: age)
+        }
+    }
+
+    func testTheWalkStopsAtShelfModeAndSavesItsFloor() throws {
+        setPumpSerial()
+        // The lookback reaches record 180; the ShelfMode record sits above it, inside the first deep slice.
+        stubHistory(serving: historyWithShelfMode(count: 600, shelfModeAt: 300))
+
+        let outcome = try XCTUnwrap(runTick())
+
+        XCTAssertEqual(manager.state.historyBackfill?.undatableThroughSequenceNum, 300)
+        XCTAssertEqual(outcome.bookkeeping.undatableThroughSequenceNum, 300)
+        XCTAssertTrue(outcome.isDeepBackfillComplete)
+        XCTAssertTrue(outcome.reachesPumpStart)
+        XCTAssertEqual(outcome.reportableRange, 301 ... 600)
+        XCTAssertEqual(requestedRanges().count, 2, "the slice that read the ShelfMode record was the last: \(requestedRanges())")
+    }
+
+    func testAfterARelaunchNothingAtOrBelowTheShelfModeRecordIsRead() throws {
+        setPumpSerial()
+        let history = historyWithShelfMode(count: 600, shelfModeAt: 300)
+        stubHistory(serving: history)
+        _ = try XCTUnwrap(runTick())
+
+        manager = TandemPumpManager(state: manager.state, bluetooth: bluetooth)
+        coordinator = HistoryBackfillCoordinator(pumpManager: manager)
+        bluetooth.resetRecordedTraffic()
+        stubHistory(serving: history)
+        let outcome = try XCTUnwrap(runTick())
+
+        XCTAssertFalse(requestedRanges().isEmpty)
+        XCTAssertTrue(requestedRanges().allSatisfy { $0.lowerBound > 300 }, "read \(requestedRanges())")
+        XCTAssertEqual(outcome.reportableRange?.lowerBound, 301)
+        XCTAssertTrue(outcome.isDeepBackfillComplete)
+    }
+
+    func testAShelfModeRecordBelowTheLookbackIsNeverRead() throws {
+        setPumpSerial()
+        stubHistory(serving: historyWithShelfMode(count: 600, shelfModeAt: 20))
+
+        let outcome = try XCTUnwrap(runTick())
+
+        XCTAssertNil(manager.state.historyBackfill?.undatableThroughSequenceNum)
+        XCTAssertTrue(outcome.isDeepBackfillComplete)
+        XCTAssertTrue(requestedRanges().allSatisfy { $0.lowerBound > 20 })
     }
 
     // MARK: - Floors

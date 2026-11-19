@@ -451,7 +451,7 @@ extension TandemPumpManager {
             state.deliveryTransitions.track(pumpSerial: serial.rawValue, after: pumpRange.upperBound)
         }
         guard state.deliveryTransitions.trackedAfter != nil else { return batch }
-        guard let covered = outcome.sessionCovered else {
+        guard let covered = outcome.reportableRange else {
             if let pending = state.deliveryTransitions.pending, outcome.startedAt >= pending.detectedAt {
                 logger.warning("Pump history was not read; reporting the \(pending.observed) seen at \(pending.detectedAt) at detection")
                 closeTransition(pending, into: &batch)

@@ -195,7 +195,8 @@ final class TandemPumpManagerStateEqualityTests: XCTestCase {
         state.historyBackfill = HistoryBackfillState(
             pumpSerial: pumpSerial,
             watermark: 4321,
-            firstSeenFloor: t0.addingTimeInterval(-.hours(24))
+            firstSeenFloor: t0.addingTimeInterval(-.hours(24)),
+            undatableThroughSequenceNum: 4000
         )
         state.bolusReportLedger = BolusReportLedger(
             trackingSince: t0.addingTimeInterval(-.hours(48)),

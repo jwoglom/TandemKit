@@ -22,7 +22,7 @@ extension TandemPumpManager {
             self.reconciliationLog.current?.transitionsReported = batch.events.count
             self.reconcileBasalHistory(after: outcome, pumpSerial: serial, into: &batch)
             self.emitHistoryReports(batch)
-            if self.state.featureFlags.historyDoseReporting, let covered = outcome.sessionCovered {
+            if self.state.featureFlags.historyDoseReporting, let covered = outcome.reportableRange {
                 self.reportHistoryBoluses(in: covered, pumpSerial: serial, floor: outcome.emitFloor, now: now)
             }
             self.reconciliationLog.end(at: self.now)
@@ -40,9 +40,8 @@ extension TandemPumpManager {
     ) {
         let logs: [HistoryLog]
         do {
-            logs = try historyLogStore.logs(pumpSerial: serial.rawValue, in: covered)
-                .filter { Self.bolusHistoryTypes.contains($0.typeId) || HistoryTimestampReconciler.clockHistoryTypes.contains($0.typeId) }
-                .map { $0.parsed() }
+            let types = Self.bolusHistoryTypes + HistoryTimestampReconciler.clockHistoryTypes
+            logs = try historyLogStore.logs(pumpSerial: serial.rawValue, ofTypes: types, in: covered).map { $0.parsed() }
         } catch {
             logger.error("Could not read the history log store for dose reporting: \(error)")
             return
@@ -66,6 +65,11 @@ extension TandemPumpManager {
             guard let dose = event.dose, dose.type == .bolus, dose.startDate >= floor,
                   let decoded = HistoryLogSyncIdentifier.decode(event.raw)
             else {
+                continue
+            }
+            // A pump record dated ahead of the phone was misdated; reported, the host would take it as given now.
+            guard dose.startDate <= self.now.addingTimeInterval(HostDoseDates.startAheadTolerance) else {
+                logger.error("Not reporting a history bolus dated \(dose.startDate), ahead of the phone's \(self.now)")
                 continue
             }
             let bolusId = Int(decoded.identifier)

@@ -798,33 +798,34 @@ extension TandemPumpManager {
     /// The pump's `BolusCompleted` record for `bolusId`, if history backfill has already read it
     /// into the session store. Never reads the pump itself, so it honours the backfill flag (#448).
     func historyBolusReport(bolusId: Int, startedAt: Date) -> LastBolusReport? {
-        guard let serial = historyLogStoreSerial else {
+        guard let serial = historyLogStoreSerial, let range = reportableHistoryRange else {
             return nil
         }
 
-        // An hour's margin for clock skew; bolus ids repeat only over far longer.
-        let since = Dates.fromInstantToJan12008EpochSeconds(startedAt.addingTimeInterval(state.pumpClockOffset - .hours(1)))
-        let stored: [StoredHistoryLog]
+        let history: (logs: [HistoryLog], dates: HistoryRecordDates)
         do {
-            stored = try historyLogStore.logs(
-                pumpSerial: serial.rawValue,
+            // An hour's margin for clock skew; bolus ids repeat only over far longer.
+            history = try datedHistory(
                 ofTypes: [BolusCompletedHistoryLog.typeId],
-                sincePumpTimeSec: UInt32(clamping: Int64(max(0, since)))
+                in: range,
+                since: startedAt.addingTimeInterval(-.hours(1)),
+                pumpSerial: serial
             )
         } catch {
             logger.error("Failed to read history for bolus \(bolusId): \(error)")
             return nil
         }
 
-        guard let completion = stored.compactMap({ $0.parsed() as? BolusCompletedHistoryLog }).last(where: { $0.bolusId == bolusId })
+        guard let completion = history.logs.compactMap({ $0 as? BolusCompletedHistoryLog }).last(where: { $0.bolusId == bolusId }),
+              // On the pump's clock as it runs now, as `LastBolusStatus` is, so `finalize` translates it the same way.
+              let pumpTimestamp = history.dates.pumpDate(pumpTimeSec: completion.pumpTimeSec, sequenceNum: completion.sequenceNum)
         else {
             return nil
         }
         logger.info("Delivered volume for bolus \(bolusId) recovered from pump history")
         return LastBolusReport(
             deliveredUnits: TandemPumpCapabilities.roundToReportingResolution(Double(completion.insulinDelivered)),
-            // Same pump clock and epoch as `LastBolusStatus`, so `finalize` translates it the same way.
-            pumpTimestamp: Dates.fromJan12008EpochSecondsToDate(TimeInterval(completion.pumpTimeSec))
+            pumpTimestamp: pumpTimestamp
         )
     }
 

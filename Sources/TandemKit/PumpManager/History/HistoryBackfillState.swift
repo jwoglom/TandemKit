@@ -25,10 +25,30 @@ public struct HistoryBackfillState: Equatable {
     /// on top of this one — see `HistoryBackfillPlanner.emitFloor`.
     public var firstSeenFloor: Date?
 
-    public init(pumpSerial: UInt32, watermark: UInt32? = nil, firstSeenFloor: Date? = nil) {
+    /// The newest record on a clock the pump has since lost (`HistoryTimestampReconciler`). Nothing at or
+    /// below it is read, dated or reported. Saved, since a relaunch empties the store the walk stops on.
+    public var undatableThroughSequenceNum: UInt32?
+
+    public init(pumpSerial: UInt32, watermark: UInt32? = nil, firstSeenFloor: Date? = nil, undatableThroughSequenceNum: UInt32? = nil) {
         self.pumpSerial = pumpSerial
         self.watermark = watermark
         self.firstSeenFloor = firstSeenFloor
+        self.undatableThroughSequenceNum = undatableThroughSequenceNum
+    }
+
+    /// `range` above the undatable floor, nil if nothing in it is.
+    public func readable(_ range: ClosedRange<UInt32>) -> ClosedRange<UInt32>? {
+        guard let floor = undatableThroughSequenceNum else {
+            return range
+        }
+        guard floor < range.upperBound else {
+            return nil
+        }
+        return max(range.lowerBound, floor + 1) ... range.upperBound
+    }
+
+    public mutating func raiseUndatableThrough(to sequenceNum: UInt32) {
+        undatableThroughSequenceNum = max(undatableThroughSequenceNum ?? sequenceNum, sequenceNum)
     }
 
     /// Bookkeeping for a pump seen for the first time: nothing read yet, and a floor one
@@ -72,14 +92,15 @@ public struct HistoryBackfillState: Equatable {
 
     /// This bookkeeping, with the watermark dropped if the pump's newest entry sits below it —
     /// the log was erased and the counter restarted. Left alone, `watermark >= lastSequenceNum`
-    /// reads as "nothing new" from then on and the pump is never read again. The floor is kept:
-    /// same pump, same service, so only the read position is meaningless.
+    /// reads as "nothing new" from then on and the pump is never read again. The first-seen floor is
+    /// kept: same pump, same service. The undatable floor numbers the old log, so it goes with the watermark.
     public func resettingWatermarkIfAbove(lastSequenceNum: UInt32) -> HistoryBackfillState {
         guard let watermark, watermark > lastSequenceNum else {
             return self
         }
         var reset = self
         reset.watermark = nil
+        reset.undatableThroughSequenceNum = nil
         return reset
     }
 }
@@ -102,7 +123,8 @@ extension HistoryBackfillState: RawRepresentable {
         self.init(
             pumpSerial: pumpSerial,
             watermark: rawValue["watermark"] as? UInt32,
-            firstSeenFloor: floor.map { Date(timeIntervalSinceReferenceDate: $0) }
+            firstSeenFloor: floor.map { Date(timeIntervalSinceReferenceDate: $0) },
+            undatableThroughSequenceNum: rawValue["undatableThroughSequenceNum"] as? UInt32
         )
     }
 
@@ -110,6 +132,7 @@ extension HistoryBackfillState: RawRepresentable {
         var raw: RawValue = ["pumpSerial": pumpSerial]
         raw["watermark"] = watermark
         raw["firstSeenFloor"] = firstSeenFloor?.timeIntervalSinceReferenceDate
+        raw["undatableThroughSequenceNum"] = undatableThroughSequenceNum
         return raw
     }
 }

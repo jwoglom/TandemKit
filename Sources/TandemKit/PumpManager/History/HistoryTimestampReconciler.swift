@@ -149,7 +149,17 @@ struct HistoryRecordDates {
     /// A record outside `logs` dates to `distantPast`, below every pass's reporting floor, so a caller
     /// that missed the filter still reports nothing from it.
     func phoneDate(of log: HistoryLog) -> Date {
-        reconciler.utcDate(pumpTimeSec: log.pumpTimeSec, sequenceNum: log.sequenceNum).map(hostDate) ?? .distantPast
+        phoneDate(pumpTimeSec: log.pumpTimeSec, sequenceNum: log.sequenceNum)
+    }
+
+    func phoneDate(pumpTimeSec: UInt32, sequenceNum: UInt32) -> Date {
+        pumpDate(pumpTimeSec: pumpTimeSec, sequenceNum: sequenceNum).map(hostDate) ?? .distantPast
+    }
+
+    /// On the pump's clock as it runs now, which `TandemPumpManager.hostDate(forPumpDate:)` takes; nil
+    /// through `undatableThroughSequenceNum`.
+    func pumpDate(pumpTimeSec: UInt32, sequenceNum: UInt32) -> Date? {
+        reconciler.utcDate(pumpTimeSec: pumpTimeSec, sequenceNum: sequenceNum)
     }
 }
 
@@ -160,5 +170,33 @@ extension TandemPumpManager {
             logger.warning("Pump history through #\(undatableThrough) is on a clock lost to a reset or shelf mode; none of it is dated or reported")
         }
         return dates
+    }
+
+    /// The session store's datable records of `typeIds` in `range` dated `since` or later, dated by the
+    /// clock records in `range` alongside them. `range` is above the undatable floor.
+    func datedHistory(
+        ofTypes typeIds: [Int],
+        in range: ClosedRange<UInt32>,
+        since: Date? = nil,
+        pumpSerial serial: HistoryLogSyncIdentifier.PumpSerial
+    ) throws -> (logs: [HistoryLog], dates: HistoryRecordDates) {
+        let wanted = Set(typeIds)
+        let types = wanted.union(HistoryTimestampReconciler.clockHistoryTypes)
+        let dates = try historyRecordDates(historyLogStore.logs(pumpSerial: serial.rawValue, ofTypes: Array(types), in: range).map { $0.parsed() })
+        let logs = dates.logs.filter { log in
+            wanted.contains(log.typeId) && since.map { dates.phoneDate(of: log) >= $0 } ?? true
+        }
+        return (logs, dates)
+    }
+
+    /// What the session store holds above the undatable floor.
+    var reportableHistoryRange: ClosedRange<UInt32>? {
+        guard let serial = historyLogStoreSerial,
+              let oldest = try? historyLogStore.oldest(pumpSerial: serial.rawValue)?.sequenceNum,
+              let newest = try? historyLogStore.newest(pumpSerial: serial.rawValue)?.sequenceNum
+        else {
+            return nil
+        }
+        return state.historyBackfill.map { $0.readable(oldest ... newest) } ?? oldest ... newest
     }
 }

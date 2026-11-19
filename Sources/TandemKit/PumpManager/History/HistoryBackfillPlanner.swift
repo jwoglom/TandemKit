@@ -110,17 +110,21 @@ enum HistoryBackfillPlanner {
     ///   - sessionCovered: The span this session has read into the store, nil if none.
     ///   - storeGaps: Missing ranges the store reports within `sessionCovered`, retention
     ///     watermark already applied (`HistoryLogStore.missingRanges`).
-    ///   - isDeepTargetCovered: Whether the oldest entry the store holds is at or before
-    ///     `deepFetchTarget`. Answering this needs a timestamp, which is the coordinator's job;
-    ///     the planner only consumes the verdict.
+    ///   - isDeepTargetCovered: Whether the oldest record this session read is dated at or before
+    ///     `deepFetchTarget` on the phone's clock. Dating is the coordinator's job; the planner only
+    ///     consumes the verdict.
+    ///   - lowestReadable: Nothing below it is read: the record after the undatable floor, or the
+    ///     store's retention watermark.
     static func plan(
         firstSequenceNum: UInt32,
         lastSequenceNum: UInt32,
         watermark: UInt32?,
         sessionCovered: ClosedRange<UInt32>? = nil,
         storeGaps: [ClosedRange<UInt32>] = [],
-        isDeepTargetCovered: Bool
+        isDeepTargetCovered: Bool,
+        lowestReadable: UInt32 = 0
     ) -> Plan {
+        let firstSequenceNum = max(firstSequenceNum, lowestReadable)
         guard lastSequenceNum >= firstSequenceNum else {
             return Plan(incremental: nil, gaps: [], deep: nil, isDeepBackfillComplete: true)
         }
@@ -169,8 +173,10 @@ enum HistoryBackfillPlanner {
     static func deepSlice(
         firstSequenceNum: UInt32,
         sessionCovered: ClosedRange<UInt32>?,
-        isDeepTargetCovered: Bool
+        isDeepTargetCovered: Bool,
+        lowestReadable: UInt32 = 0
     ) -> ClosedRange<UInt32>? {
+        let firstSequenceNum = max(firstSequenceNum, lowestReadable)
         guard !isDeepTargetCovered,
               let lowestCovered = sessionCovered?.lowerBound,
               lowestCovered > firstSequenceNum

@@ -332,4 +332,95 @@ final class HistoryBackfillIntegrationTests: ConformanceTestCase {
         XCTAssertEqual(trio.suspends.count, 1)
         XCTAssertEqual(trio.resumes.count, 1)
     }
+
+    // MARK: - H8
+
+    /// Waking from shelf mode restarts the pump's clock with no record of it; here 400 days behind.
+    private static let restartedClockBehind: TimeInterval = .days(400)
+
+    /// A pump back from shelf mode, used on its restarted clock, then set. Setup's clock change, added
+    /// to the bolus from its previous use, reported it to the host as new in a field log.
+    func testABolusFromBeforeShelfModeNeverReachesTheHost() throws {
+        let driver = try stageDriver()
+        let serial = try XCTUnwrap(driver.manager.historyLogStoreSerial)
+        let batchesBefore = allPumpEventBatches.count
+        try clock.advanceBoth(seconds: .hours(3), ticks: 3)
+        let previousUse = try harness.client.appendHistory(records: [
+            ["type": "BolusActivated", "seconds_ago": TimeInterval.days(30), "data": ["bolusId": 4400, "bolusSize": 2.0]],
+            ["type": "BolusCompleted", "seconds_ago": TimeInterval.days(30) - 60, "data": [
+                "completionStatusId": 3, "bolusId": 4400, "insulinDelivered": 2.0, "insulinRequested": 2.0,
+            ]],
+            ["type": "ShelfMode", "seconds_ago": TimeInterval.days(30) - 120, "data": [String: Any]()],
+        ])
+        try clock.setSkew(seconds: -Self.restartedClockBehind)
+        try harness.client.appendHistory(records: [
+            ["type": "BolusActivated", "seconds_ago": 3600.0, "data": ["bolusId": 4401, "bolusSize": 1.0]],
+            ["type": "BolusCompleted", "seconds_ago": 3580.0, "data": [
+                "completionStatusId": 3, "bolusId": 4401, "insulinDelivered": 1.0, "insulinRequested": 1.0,
+            ]],
+        ])
+        try harness.client.setPumpTimeOnThePump(deltaSeconds: Self.restartedClockBehind)
+        _ = try sync()
+        try waitForBackfill(driver)
+
+        let afterReset = try waitForEvent("the bolus after the reset", since: batchesBefore) {
+            $0.raw == HistoryLogSyncIdentifier.bolus(pumpSerial: serial, bolusId: 4401) && $0.dose?.isMutable == false
+        }
+        XCTAssertEqual(try XCTUnwrap(afterReset.dose?.startDate).timeIntervalSince(clock.now.addingTimeInterval(-3600)), 0, accuracy: 2)
+        XCTAssertEqual(driver.manager.state.historyBackfill?.undatableThroughSequenceNum, UInt32(previousUse.upperBound))
+        let previousUseRaw = HistoryLogSyncIdentifier.bolus(pumpSerial: serial, bolusId: 4400)
+        XCTAssertFalse(eventsSince(0).contains { $0.raw == previousUseRaw }, "the bolus from the pump's previous use was reported")
+
+        let relaunched = try relaunch()
+        let mark = try logMark()
+        _ = try sync()
+        try IntegrationWait.until("the tick to finish", timeout: 300) { !relaunched.manager.historyFetchGate.isBusy }
+
+        let reads = try historyReads(since: mark)
+        XCTAssertFalse(reads.isEmpty)
+        XCTAssertTrue(reads.allSatisfy { $0.lowerBound > previousUse.upperBound }, "read at or below the ShelfMode record after a relaunch: \(reads)")
+        XCTAssertFalse(eventsSince(0).contains { $0.raw == previousUseRaw }, "the bolus from the pump's previous use was reported after a relaunch")
+        let (loop, trio) = feedOracles()
+        loop.assertNoDuplicates()
+        trio.assertNoDuplicates()
+        XCTAssertEqual(trio.boluses.count, 1, "\(trio.boluses)")
+    }
+
+    // MARK: - H9
+
+    /// Eight hours on a restarted clock, then set: every record the walk reads is stamped 400 days ago.
+    /// Pruned by stamp, the walk's oldest record went every hour and the walk read a slice deeper each time.
+    func testAnHourlyPruneDoesNotWalkPastTheLookbackAfterAClockReset() throws {
+        try stageDriver()
+        try clock.advanceBoth(seconds: .hours(8), ticks: 8)
+        try clock.setSkew(seconds: -Self.restartedClockBehind)
+        let spacing: TimeInterval = 60
+        let staged = try pumpLogs(count: Int(.hours(8) / spacing), spacing: spacing)
+        try harness.client.setPumpTimeOnThePump(deltaSeconds: Self.restartedClockBehind)
+        _ = try sync()
+        let driver = try XCTUnwrap(current)
+        try waitForBackfill(driver, timeout: 600)
+
+        let relaunched = try relaunch()
+        _ = try sync()
+        try IntegrationWait.until("the walk to finish", timeout: 600) { !relaunched.manager.historyFetchGate.isBusy }
+        let lowest = try XCTUnwrap(relaunched.manager.historyBackfillCoordinator.sessionCoverage?.lowerBound)
+        let lookbackStart = staged.upperBound - Int(HistoryBackfillPlanner.deepFetchLookback / spacing)
+        XCTAssertLessThanOrEqual(Int(lowest), lookbackStart, "the walk stopped short of the lookback by the records' stamps")
+
+        let mark = try logMark()
+        for _ in 1 ... 3 {
+            try clock.advanceBoth(seconds: .hours(1) + .minutes(1), ticks: 12)
+            _ = try sync()
+            try IntegrationWait.until("the tick to finish", timeout: 300) { !relaunched.manager.historyFetchGate.isBusy }
+        }
+
+        let reads = try historyReads(since: mark)
+        XCTAssertTrue(reads.allSatisfy { $0.lowerBound >= Int(lowest) }, "the walk went deeper after it stopped: \(reads), lowest \(lowest)")
+        let serial = try XCTUnwrap(relaunched.manager.historyLogStoreSerial)
+        XCTAssertNotNil(
+            try relaunched.manager.historyLogStore.logs(pumpSerial: serial.rawValue, in: lowest ... lowest).first,
+            "the walk's oldest record was pruned"
+        )
+    }
 }
