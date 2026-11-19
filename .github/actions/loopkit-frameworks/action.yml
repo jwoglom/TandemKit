@@ -21,13 +21,12 @@ description: >-
 # targets out of the build graph so nothing can decide to recompile them.
 #
 # The repository/revision defaults mirror the LoopKit submodule of the Trio that
-# ships TandemKit, nightscout/Trio feat/tandem-closed-beta, which is the real
+# ships TandemKit, nightscout/Trio feat/tandem, which is the real
 # source of truth -- Trio pulls its dependencies in as git submodules, and
 # TandemKit is one of them. Upstream
 # LoopKit/LoopKit is not interchangeable with Trio's loopandlearn fork:
-# upstream has no `Pluggable`, which TandemPumpManager conforms to. When Trio
-# bumps its LoopKit submodule, bump the revision here to match. macos.yml passes Trio's submodule
-# instead on a next-dev branch (feat/tandem-closed-beta-next-dev's) and on a manual run with trio_ref.
+# upstream has no `Pluggable`, which TandemPumpManager conforms to. macos.yml always passes that
+# Trio's submodule (trio_ref's on a manual run), so the pin is only the fallback for a caller that doesn't.
 inputs:
   derived-data-path:
     description: xcodebuild -derivedDataPath the frameworks are staged into.
@@ -56,7 +55,7 @@ runs:
       shell: bash
       env:
         REPOSITORY: ${{ inputs.loopkit-repository || 'loopandlearn/LoopKit' }}
-        REVISION: ${{ inputs.loopkit-revision || 'd52c298e3e3fe640e2ae1c5cef885da5daaa58cb' }}
+        REVISION: ${{ inputs.loopkit-revision || 'babddf04536c04c6852ee7c76a1905164ee9893d' }}
       run: |
         echo "repository=${REPOSITORY}" >> "${GITHUB_OUTPUT}"
         echo "revision=${REVISION}" >> "${GITHUB_OUTPUT}"

@@ -10,7 +10,7 @@ inputs:
     description: Trio repository (must contain a TandemKit submodule at path TandemKit); empty for nightscout/Trio.
     default: ''
   ref:
-    description: Branch, tag or SHA of the Trio repository; empty for feat/tandem-closed-beta, or feat/tandem-closed-beta-next-dev when the TandemKit branch name contains next-dev.
+    description: Branch, tag or SHA of the Trio repository; empty for feat/tandem.
     default: ''
   token:
     description: Token that can read the Trio repository, if it is private.
@@ -32,7 +32,7 @@ runs:
       uses: actions/checkout@v6
       with:
         repository: ${{ inputs.repository || 'nightscout/Trio' }}
-        ref: ${{ inputs.ref || (contains(github.head_ref || github.ref_name, 'next-dev') && 'feat/tandem-closed-beta-next-dev' || 'feat/tandem-closed-beta') }}
+        ref: ${{ inputs.ref || 'feat/tandem' }}
         path: trio
         submodules: false
         fetch-depth: 1

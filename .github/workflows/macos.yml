@@ -27,7 +27,7 @@ on:
         type: boolean
         default: false
       trio_ref:
-        description: "nightscout/Trio branch/tag/SHA for the trio job; every job then builds against its LoopKit submodule (default: feat/tandem-closed-beta with loopkit-frameworks' pinned LoopKit, or -next-dev and its LoopKit on a TandemKit branch named for next-dev)"
+        description: "nightscout/Trio branch/tag/SHA for the trio job; every job builds against its LoopKit submodule (default: feat/tandem)"
         required: false
         default: ""
       trio_repository:
@@ -35,7 +35,7 @@ on:
         required: false
         default: ""
       loop_ref:
-        description: "LoopKit/LoopWorkspace branch/tag/SHA for the loop job (default: feat/tandem-closed-beta, or -next-dev on a TandemKit branch named for next-dev)"
+        description: "LoopKit/LoopWorkspace branch/tag/SHA for the loop job (default: feat/tandem-next-dev)"
         required: false
         default: ""
 
@@ -76,24 +76,17 @@ jobs:
           workflow: macos
           externals: |
             jwoglom/faketandem ${{ github.head_ref }}
-            nightscout/Trio ${{ contains(github.head_ref || github.ref_name, 'next-dev') && 'feat/tandem-closed-beta-next-dev' || 'feat/tandem-closed-beta' }}
-            LoopKit/LoopWorkspace ${{ contains(github.head_ref || github.ref_name, 'next-dev') && 'feat/tandem-closed-beta-next-dev' || 'feat/tandem-closed-beta' }}
+            nightscout/Trio feat/tandem
+            LoopKit/LoopWorkspace feat/tandem-next-dev
 
-      # LoopKit next-dev's API is not in loopkit-frameworks' pin, so a next-dev branch builds against
-      # its Trio's LoopKit even without trio_ref. Otherwise loopkit-frameworks builds its pin.
       - name: Pick LoopKit from Trio's submodule
         id: loopkit
-        if: inputs.trio_ref != '' || inputs.trio_repository != '' || contains(github.head_ref || github.ref_name, 'next-dev')
         env:
           GH_TOKEN: ${{ github.token }}
-          TRIO_REF: ${{ inputs.trio_ref || (contains(github.head_ref || github.ref_name, 'next-dev') && 'feat/tandem-closed-beta-next-dev' || '') }}
+          TRIO_REF: ${{ inputs.trio_ref || 'feat/tandem' }}
           TRIO_REPOSITORY: ${{ inputs.trio_repository || 'nightscout/Trio' }}
         run: |
           set -euo pipefail
-          if [[ -z "${TRIO_REF}" ]]; then
-            echo "::error::trio_repository needs trio_ref"
-            exit 1
-          fi
           submodule="$(gh api "repos/${TRIO_REPOSITORY}/contents/LoopKit?ref=${TRIO_REF}" \
             --jq 'select(.type == "submodule") | "\(.submodule_git_url) \(.sha)"')"
           read -r url revision <<< "${submodule}"
@@ -411,7 +404,7 @@ jobs:
             ${{ env.LOG_DIR }}
             !${{ env.LOG_DIR }}/faketandem
 
-  # Loop itself, from LoopKit/LoopWorkspace feat/tandem-closed-beta with this TandemKit as its
+  # Loop itself, from LoopKit/LoopWorkspace feat/tandem-next-dev with this TandemKit as its
   # TandemKitPlugin, on the virtual pump against faketandem, as trio runs Trio: upstream LoopKit and its
   # DoseStore, where trio has Trio's fork and its own pump history. LoopIntegrationTests compare both of
   # DoseStore's tables with LoopDoseStoreOracle's prediction.
