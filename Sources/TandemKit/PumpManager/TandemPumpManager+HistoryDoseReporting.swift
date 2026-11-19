@@ -41,7 +41,7 @@ extension TandemPumpManager {
         let logs: [HistoryLog]
         do {
             logs = try historyLogStore.logs(pumpSerial: serial.rawValue, in: covered)
-                .filter { Self.bolusHistoryTypes.contains($0.typeId) }
+                .filter { Self.bolusHistoryTypes.contains($0.typeId) || HistoryTimestampReconciler.clockHistoryTypes.contains($0.typeId) }
                 .map { $0.parsed() }
         } catch {
             logger.error("Could not read the history log store for dose reporting: \(error)")
@@ -109,14 +109,14 @@ extension TandemPumpManager {
         notifyDelegateStateUpdated()
     }
 
-    private static let bolusHistoryTypes = Set([
+    private static let bolusHistoryTypes = [
         BolusActivatedHistoryLog.typeId,
         BolusCompletedHistoryLog.typeId,
         BolusDeliveryHistoryLog.typeId,
         BolusRequestedMsg2HistoryLog.typeId,
         BolexActivatedHistoryLog.typeId,
         BolexCompletedHistoryLog.typeId
-    ] + HistoryTimestampReconciler.clockHistoryTypes)
+    ]
 
     private func historyBolusReport(
         _ event: NewPumpEvent,
