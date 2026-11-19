@@ -309,3 +309,25 @@ oracles. `SetupHistoryLoadConformanceTests`.
 | L8 | A pump suspended on its screen before pairing and still suspended when paired, resumed from the app | One suspend in each host, closed at the resume: setup's sync reports the suspend under its `PumpingSuspended` record, which the load then takes as reported rather than a second one in a row. Dated from that sync rather than the pump's stop, so both hosts count the schedule over the stop before pairing (strict expected failure) |
 | L9 | The history log status unanswered at the load, then answered | The load fails with `historyUnreadable` after `setupHistoryLoadFailureLimit` reads; Try Again loads |
 | L10 | An hour of Control-IQ before pairing, still on when paired | Setup turns it off; one automatic correction per Control-IQ BasalDelivery record off the schedule; both hosts count the pump's basal |
+
+## M. A pump out of shelf mode
+
+A Mobi as one came to setup, its whole log staged from sequence 1 at a pump's record counts: used 201
+days before on a right clock, with six boluses on its screen (one stopped part-way, one with an
+extended part) up to four hours before a `ShelfMode` record; woken 7 h 21 min before pairing with its
+clock at 2008-01-01 and no `TimeChanged` or `DateChange` record for the reset, set on the pump to
+2020-01-01, and stopped since. Setup sets its clock, 6.9 years forward. The host adopts the manager,
+the pump is resumed, the app gives an SMB and is relaunched 52 minutes after pairing, inside the 7
+hours the walk backward covers, then syncs for an hour per 255-record slice of the log and gives a
+second SMB. `SetupHistoryLoadConformanceTests`.
+
+The store prunes records stamped over 90 days before the phone's clock, which takes the record the
+walk backward stopped at, so each hour it reads a slice deeper, past the `ShelfMode` record and into
+the old boluses. The clock change setup wrote is added to their stamps, which lands them in 2033, and
+each reaches the host starting at the phone's time. The three assertions that fail are strict
+expected failures, to come out when history is no longer read past a `ShelfMode` record.
+
+| ID | Scenario | Assert |
+|---|---|---|
+| M1 | The pump above, not loaded | Setup sets the pump's clock and the host is told one adjustment, of what it was behind; the app's two boluses once each. Strict expected failures: no `HistoryLogRequest` asks only for records below the `ShelfMode` record; nothing the pump gave before shelf mode reaches either host, and no finalized dose ends after the phone's clock; the bolus ledger holds no entry dated after the phone's clock and no extended part left mutable |
+| M2 | The same pump with the load chosen | The load reports no bolus; the same three strict expected failures |
