@@ -121,20 +121,21 @@ public extension HistoryLogStore {
         return HistoryLogSequenceGaps.missingRanges(present: present, in: clamped)
     }
 
-    /// Deletes everything below the oldest entry stored within `retention`. By when it was stored, since a
-    /// stamp after a clock reset reads years old; by sequence number, so the watermark claims nothing kept.
+    /// Deletes everything below the oldest entry stored within `retention`, or everything if none was. By when
+    /// it was stored, since a stamp after a clock reset reads years old; by sequence number, so the watermark claims nothing kept.
     @discardableResult
     func pruneExpired(
         pumpSerial: UInt32,
         retention: TimeInterval = HistoryLogRetention.default,
         now: Date = Date()
     ) throws -> Int {
-        let keepFrom = try lowestSequenceNum(pumpSerial: pumpSerial, receivedSince: now.addingTimeInterval(-retention))
-            ?? newest(pumpSerial: pumpSerial)?.sequenceNum
-        guard let keepFrom else {
+        if let keepFrom = try lowestSequenceNum(pumpSerial: pumpSerial, receivedSince: now.addingTimeInterval(-retention)) {
+            return try prune(pumpSerial: pumpSerial, belowSequenceNum: keepFrom)
+        }
+        guard let newest = try newest(pumpSerial: pumpSerial)?.sequenceNum else {
             return 0
         }
-        return try prune(pumpSerial: pumpSerial, belowSequenceNum: keepFrom)
+        return try prune(pumpSerial: pumpSerial, belowSequenceNum: newest == .max ? newest : newest + 1)
     }
 }
 

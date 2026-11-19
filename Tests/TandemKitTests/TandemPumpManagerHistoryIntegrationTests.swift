@@ -371,31 +371,26 @@ import XCTest
     func testRetentionPruneRunsAtMostOncePerInterval() throws {
         setPumpSerial()
         let now = Date()
+        let retention = HistoryLogRetention.default
 
-        // The first insert primes the prune clock (nothing is expired yet).
+        // The first insert primes the prune clock.
         manager.storeHistoryLogs([log(sequenceNum: 1)], now: now)
-        XCTAssertEqual(try manager.historyLogStore.count(pumpSerial: Self.pumpSerial), 1)
-
-        // An entry far past retention survives when it arrives inside the prune interval...
-        let expired = BolusActivatedHistoryLog(
-            pumpTimeSec: 1000, // 2008, far outside the 90-day retention window
-            sequenceNum: 2,
-            bolusId: 2,
-            selectedIob: 0,
-            iob: 0,
-            bolusSize: 1.0
-        )
-        manager.storeHistoryLogs([expired], now: now.addingTimeInterval(60))
+        // Half an hour short of entry 1's retention: the prune runs and keeps it.
+        manager.storeHistoryLogs([log(sequenceNum: 2)], now: now.addingTimeInterval(retention - .minutes(30)))
         XCTAssertEqual(try manager.historyLogStore.count(pumpSerial: Self.pumpSerial), 2)
+
+        // Past its retention, but inside the prune interval: it survives...
+        manager.storeHistoryLogs([log(sequenceNum: 3)], now: now.addingTimeInterval(retention + .minutes(10)))
+        XCTAssertEqual(try manager.historyLogStore.count(pumpSerial: Self.pumpSerial), 3)
 
         // ...and is pruned by the first insert after the interval elapses.
         manager.storeHistoryLogs(
-            [log(sequenceNum: 3)],
-            now: now.addingTimeInterval(TandemPumpManager.historyLogPruneInterval + 1)
+            [log(sequenceNum: 4)],
+            now: now.addingTimeInterval(retention - .minutes(30) + TandemPumpManager.historyLogPruneInterval + 1)
         )
         XCTAssertEqual(
-            try manager.historyLogStore.sequenceNumbers(pumpSerial: Self.pumpSerial, in: 1 ... 3),
-            [1, 3]
+            try manager.historyLogStore.sequenceNumbers(pumpSerial: Self.pumpSerial, in: 1 ... 4),
+            [2, 3, 4]
         )
     }
 }

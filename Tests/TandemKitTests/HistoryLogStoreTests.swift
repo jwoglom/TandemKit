@@ -371,7 +371,7 @@ final class HistoryLogStoreTests: XCTestCase {
         }
     }
 
-    func testPruneExpiredWithNothingRecentKeepsTheNewestRecord() {
+    func testPruneExpiredWithNothingRecentPrunesEverythingAndKeepsTheWatermark() {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         forEachStore { store, label in
             try store.insert([
@@ -379,8 +379,10 @@ final class HistoryLogStoreTests: XCTestCase {
                 makeLog(sequenceNum: 8, receivedAt: now.addingTimeInterval(-.days(100)))
             ])
 
-            XCTAssertEqual(try store.pruneExpired(pumpSerial: pumpA, now: now), 1, label)
-            XCTAssertEqual(try store.newest(pumpSerial: pumpA)?.sequenceNum, 8, label)
+            XCTAssertEqual(try store.pruneExpired(pumpSerial: pumpA, now: now), 2, label)
+            XCTAssertEqual(try store.count(pumpSerial: pumpA), 0, label)
+            XCTAssertEqual(try store.prunedBelowSequenceNum(pumpSerial: pumpA), 9, label)
+            XCTAssertEqual(try store.missingRanges(pumpSerial: pumpA, in: 1 ... 8), [], label)
         }
     }
 
