@@ -96,21 +96,29 @@ final class HistoryTimestampReconciler {
     private static func newestUndatableSequenceNum(in logs: [HistoryLog]) -> UInt32? {
         var shift = 0
         var laterStamp: Int?
+        // A run of change records is bounded by its latest stamp: the pump stamps its last at the final time
+        // and faketandem every one, but a DateChange can carry the old time of day, so no stamp is the bound.
+        var changeRun: (shift: Int, latest: Int)?
         for log in logs.sorted(by: { $0.sequenceNum > $1.sequenceNum }) {
             if log is ArmInitHistoryLog || log is ShelfModeHistoryLog {
                 return log.sequenceNum
             }
-            let delta = clockChangeDelta(of: log)
-            // A change record can carry its whole set's final stamp (faketandem writes TimeChanged then
-            // DateChange, both at it), and NewDay its new date's midnight, a record before the DateChange.
-            if delta == nil, !(log is NewDayHistoryLog) {
-                let stamp = Int(log.pumpTimeSec) + shift
-                if let laterStamp, stamp > laterStamp + clockStepTolerance {
-                    return log.sequenceNum
-                }
-                laterStamp = stamp
+            if let delta = clockChangeDelta(of: log) {
+                let run = changeRun ?? (shift: shift, latest: Int.min)
+                changeRun = (run.shift, max(run.latest, Int(log.pumpTimeSec) + run.shift))
+                shift += delta
+                continue
             }
-            shift += delta ?? 0
+            // NewDay is stamped at its new date's midnight, a record before the DateChange.
+            if log is NewDayHistoryLog {
+                continue
+            }
+            let stamp = Int(log.pumpTimeSec) + shift
+            if let bound = [laterStamp, changeRun?.latest].compactMap({ $0 }).min(), stamp > bound + clockStepTolerance {
+                return log.sequenceNum
+            }
+            laterStamp = stamp
+            changeRun = nil
         }
         return nil
     }

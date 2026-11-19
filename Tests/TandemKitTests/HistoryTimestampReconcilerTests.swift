@@ -183,6 +183,19 @@ final class HistoryTimestampReconcilerTests: XCTestCase {
         XCTAssertEqual(reconciler.utcDate(pumpTimeSec: UInt32(6800 * day + 53_000), sequenceNum: 1), pumpDate(6800 * day + 53_000 + 12 * 3600))
     }
 
+    func testRecordsBeforeAResetAreUndatableWithOnlyTheClockSetAfterThem() {
+        // The session store prunes the reset's records and everything stamped on the restarted clock.
+        let reconciler = HistoryTimestampReconciler()
+        let setAt = 6800 * day + 50000
+        reconciler.recordClockChanges(in: [
+            record(previousUseStamp, 1),
+            DateChangeHistoryLog(pumpTimeSec: UInt32(6800 * day + 7200), sequenceNum: 40, datePrior: 0, dateAfter: 6800, rawRTCTime: 0),
+            TimeChangedHistoryLog(pumpTimeSec: UInt32(setAt), sequenceNum: 41, timePrior: 7_200_000, timeAfter: 50_000_000, rawRTC: 0)
+        ])
+
+        XCTAssertEqual(reconciler.undatableThroughSequenceNum, 1)
+    }
+
     func testRecordDatesLeaveOutUndatableRecords() {
         let logs = shelfModeWake()
         let dates = HistoryRecordDates(logs) { $0 }

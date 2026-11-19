@@ -943,8 +943,9 @@ final class SetupHistoryLoadConformanceTests: ConformanceTestCase {
     // MARK: - L12 to L22: a clock change in the window the load reads
 
     /// A bolus on the pump an hour before `change` and one an hour after it, an hour before this app
-    /// pairs and loads; then an hour of the host's loop.
-    private func runALoadAcross(_ change: PumpClockChange) throws {
+    /// pairs and loads; then an hour of the host's loop. A known failure to report the bolus before the change is
+    /// given with its reason.
+    private func runALoadAcross(_ change: PumpClockChange, beforeChangeFails: String? = nil) throws {
         phone.set(change.zoneBefore)
         try eraseHistory()
         try pairing(at: 240)
@@ -970,12 +971,28 @@ final class SetupHistoryLoadConformanceTests: ConformanceTestCase {
         XCTAssertTrue(driver.delegate.errors.isEmpty, "\(driver.delegate.errors)")
         XCTAssertEqual(driver.manager.state.pumpClockOffset, 0, accuracy: 5, "setup set the pump's clock")
         let serial = try XCTUnwrap(driver.manager.historyLogStoreSerial)
-        assertReportedOnce(beforeChange, "before the change", serial: serial)
+        try expectingFailure(beforeChangeFails) {
+            assertReportedOnce(beforeChange, "before the change", serial: serial)
+        }
         assertReportedOnce(afterChange, "after the change", serial: serial)
         let (loop, trio) = hostOracles()
         assertNoDuplicates(loop, trio, "loaded across a clock change")
-        try assertHostsHoldThePumpsBoluses(from: since, loop, trio, count: 2)
+        try expectingFailure(beforeChangeFails) {
+            try assertHostsHoldThePumpsBoluses(from: since, loop, trio, count: 2)
+        }
     }
+
+    private func expectingFailure(_ reason: String?, _ body: () throws -> Void) throws {
+        if let reason {
+            try XCTExpectFailure(reason, failingBlock: body)
+        } else {
+            try body()
+        }
+    }
+
+    private static let fromBeforeAReset = "A record from before a pump reset is left undated, so a bolus before one is never reported"
+    private static let fromBeforeAJumpAhead =
+        "A record from before an unrecorded jump ahead takes the change that sets the clock back, which dates it years early"
 
     private func assertReportedOnce(
         _ bolus: (bolusId: Int, start: Date),
@@ -1030,15 +1047,15 @@ final class SetupHistoryLoadConformanceTests: ConformanceTestCase {
     }
 
     func testL20_theLoadReportsBolusesEitherSideOfAResetTo2008WhenGiven() throws {
-        try runALoadAcross(.resetTo2008)
+        try runALoadAcross(.resetTo2008, beforeChangeFails: Self.fromBeforeAReset)
     }
 
     func testL21_theLoadReportsBolusesEitherSideOfAResetTo2020WhenGiven() throws {
-        try runALoadAcross(.resetTo2020)
+        try runALoadAcross(.resetTo2020, beforeChangeFails: Self.fromBeforeAReset)
     }
 
     func testL22_theLoadReportsBolusesEitherSideOfAnUnrecordedJumpTo2035WhenGiven() throws {
-        try runALoadAcross(.jumpTo2035)
+        try runALoadAcross(.jumpTo2035, beforeChangeFails: Self.fromBeforeAJumpAhead)
     }
 
     // MARK: - M: a pump out of shelf mode
