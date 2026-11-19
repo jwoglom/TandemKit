@@ -51,9 +51,10 @@ extension TandemPumpManager {
         state.bolusReportLedger.prune(now: now)
         let ledger = state.bolusReportLedger
 
+        let dates = historyRecordDates(logs)
         let events = HistoryToDoseMapper().mapToEvents(
-            logs,
-            dates: historyRecordDates(logs),
+            dates.logs,
+            dates: dates,
             pumpSerial: serial,
             insulinType: state.insulinType,
             isCommandedBolus: { ledger.entry(bolusId: $0, pumpSerial: serial.rawValue)?.origin == .commanded }
@@ -112,7 +113,7 @@ extension TandemPumpManager {
         switch log {
         case is BolusActivatedHistoryLog, is BolusCompletedHistoryLog, is BolusDeliveryHistoryLog,
              is BolusRequestedMsg2HistoryLog, is BolexActivatedHistoryLog, is BolexCompletedHistoryLog,
-             is TimeChangedHistoryLog, is DateChangeHistoryLog:
+             is TimeChangedHistoryLog, is DateChangeHistoryLog, is ArmInitHistoryLog, is ShelfModeHistoryLog:
             return true
         default:
             return false

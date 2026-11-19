@@ -93,18 +93,21 @@ final class HistoryTimestampReconcilerTests: XCTestCase {
         // backward TimeChanged (-85800 s) plus a forward DateChange (+86400 s); the true shift
         // is their sum, +600 s.
         let reconciler = HistoryTimestampReconciler()
+        let before = 200 * day + 86000
         reconciler.recordClockChanges(in: [
+            record(before, 49),
             TimeChangedHistoryLog(
-                pumpTimeSec: 9000,
+                pumpTimeSec: UInt32(200 * day + 300),
                 sequenceNum: 50,
                 timePrior: 86_100_000,
                 timeAfter: 300_000,
                 rawRTC: 0
             ),
-            DateChangeHistoryLog(pumpTimeSec: 9000, sequenceNum: 51, datePrior: 200, dateAfter: 201, rawRTCTime: 0)
+            DateChangeHistoryLog(pumpTimeSec: UInt32(201 * day + 300), sequenceNum: 51, datePrior: 200, dateAfter: 201, rawRTCTime: 0)
         ])
 
-        XCTAssertEqual(reconciler.utcDate(pumpTimeSec: 8000, sequenceNum: 49), pumpDate(8000 + 600))
+        XCTAssertNil(reconciler.clockBreak)
+        XCTAssertEqual(reconciler.utcDate(pumpTimeSec: UInt32(before), sequenceNum: 49), pumpDate(before + 600))
     }
 
     func testIgnoresOtherLogTypes() {
@@ -114,5 +117,101 @@ final class HistoryTimestampReconcilerTests: XCTestCase {
         ])
 
         XCTAssertEqual(reconciler.utcDate(pumpTimeSec: 8000, sequenceNum: 49), pumpDate(8000))
+    }
+
+    // MARK: - Clock breaks
+
+    func testChangesAfterAShelfModeWakeAreNotCarriedBackToThePreviousUse() {
+        let reconciler = HistoryTimestampReconciler()
+        reconciler.recordClockChanges(in: shelfModeWake())
+
+        XCTAssertEqual(reconciler.clockBreak, 103)
+        XCTAssertNil(reconciler.utcDate(pumpTimeSec: UInt32(previousUseStamp), sequenceNum: 100))
+        XCTAssertNil(reconciler.utcDate(pumpTimeSec: 212, sequenceNum: 103))
+        XCTAssertEqual(reconciler.utcDate(pumpTimeSec: 219, sequenceNum: 104), pumpDate(6800 * day + 219 + 46181))
+        XCTAssertEqual(reconciler.utcDate(pumpTimeSec: UInt32(4383 * day + 3819), sequenceNum: 107), pumpDate(6800 * day + 50000))
+    }
+
+    func testStampRunningBackWithNoChangeRecordIsABreak() {
+        let reconciler = HistoryTimestampReconciler()
+        reconciler.recordClockChanges(in: [
+            record(previousUseStamp, 1),
+            record(100, 2),
+            DateChangeHistoryLog(pumpTimeSec: UInt32(6800 * day + 100), sequenceNum: 3, datePrior: 0, dateAfter: 6800, rawRTCTime: 0),
+            record(6800 * day + 200, 4)
+        ])
+
+        XCTAssertEqual(reconciler.clockBreak, 1)
+        XCTAssertNil(reconciler.utcDate(pumpTimeSec: UInt32(previousUseStamp), sequenceNum: 1))
+        XCTAssertEqual(reconciler.utcDate(pumpTimeSec: 100, sequenceNum: 2), pumpDate(6800 * day + 100))
+    }
+
+    func testBreakIsFoundWithoutTheResetRecords() {
+        // The basal pass reads by raw stamp, which leaves ArmInit's 2008 one out.
+        let reconciler = HistoryTimestampReconciler()
+        reconciler.recordClockChanges(in: shelfModeWake().filter { !($0 is ShelfModeHistoryLog || $0 is ArmInitHistoryLog) })
+
+        XCTAssertEqual(reconciler.clockBreak, 100)
+    }
+
+    func testOneClockWithForwardAndBackwardChangesHasNoBreak() {
+        let reconciler = HistoryTimestampReconciler()
+        reconciler.recordClockChanges(in: [
+            record(6800 * day + 1000, 1),
+            TimeChangedHistoryLog(pumpTimeSec: UInt32(6800 * day + 4600), sequenceNum: 2, timePrior: 1_000_000, timeAfter: 4_600_000, rawRTC: 0),
+            record(6800 * day + 4700, 3),
+            TimeChangedHistoryLog(pumpTimeSec: UInt32(6800 * day + 1100), sequenceNum: 4, timePrior: 4_700_000, timeAfter: 1_100_000, rawRTC: 0),
+            record(6800 * day + 1200, 5)
+        ])
+
+        XCTAssertNil(reconciler.clockBreak)
+        XCTAssertEqual(reconciler.utcDate(pumpTimeSec: UInt32(6800 * day + 1000), sequenceNum: 1), pumpDate(6800 * day + 1000))
+    }
+
+    func testRecordDatesLeaveOutRecordsAtOrBelowTheBreak() {
+        let logs = shelfModeWake()
+        let dates = HistoryRecordDates(logs) { $0 }
+
+        XCTAssertEqual(dates.clockBreak, 103)
+        XCTAssertEqual(dates.logs.map(\.sequenceNum), logs.map(\.sequenceNum).filter { $0 > 103 })
+        XCTAssertEqual(dates.phoneDate(of: logs[0]), .distantPast)
+    }
+
+    private let day = 86400
+    private let previousUseStamp = 6600 * 86400 + 36000
+
+    private func record(_ pumpTimeSec: Int, _ sequenceNum: UInt32) -> HistoryLog {
+        BolusActivatedHistoryLog(pumpTimeSec: UInt32(pumpTimeSec), sequenceNum: sequenceNum, bolusId: 1, selectedIob: 0, iob: 0, bolusSize: 1)
+    }
+
+    /// A Mobi's history across shelf mode: its clock restarts at 2008 on waking, the firmware moves the
+    /// date to 2020 (day 4383), and setup an hour later writes the date and time.
+    private func shelfModeWake() -> [HistoryLog] {
+        [
+            record(previousUseStamp, 100),
+            ShelfModeHistoryLog(
+                pumpTimeSec: UInt32(previousUseStamp + 60),
+                sequenceNum: 101,
+                msecSinceReset: 0,
+                lipoIbc: 0,
+                lipoAbc: 0,
+                lipoCurrent: 0,
+                lipoRemCap: 0,
+                lipoMv: 0
+            ),
+            NewDayHistoryLog(pumpTimeSec: 0, sequenceNum: 102, commandedBasalRate: 0, featuresBitmask: 0, featureBitmaskIndex: 0),
+            ArmInitHistoryLog(cargo: HistoryLog.fillCargo(Bytes.combine(
+                HistoryLog.typeIdBytes(ArmInitHistoryLog.typeId),
+                Bytes.toUint32(212),
+                Bytes.toUint32(103)
+            ))),
+            record(219, 104),
+            NewDayHistoryLog(pumpTimeSec: UInt32(4383 * day), sequenceNum: 105, commandedBasalRate: 0, featuresBitmask: 0, featureBitmaskIndex: 0),
+            DateChangeHistoryLog(pumpTimeSec: UInt32(4383 * day + 219), sequenceNum: 106, datePrior: 0, dateAfter: 4383, rawRTCTime: 0),
+            record(4383 * day + 3819, 107),
+            NewDayHistoryLog(pumpTimeSec: UInt32(6800 * day), sequenceNum: 108, commandedBasalRate: 0, featuresBitmask: 0, featureBitmaskIndex: 0),
+            DateChangeHistoryLog(pumpTimeSec: UInt32(6800 * day + 3819), sequenceNum: 109, datePrior: 4383, dateAfter: 6800, rawRTCTime: 0),
+            TimeChangedHistoryLog(pumpTimeSec: UInt32(6800 * day + 50000), sequenceNum: 110, timePrior: 3_819_000, timeAfter: 50_000_000, rawRTC: 0)
+        ]
     }
 }

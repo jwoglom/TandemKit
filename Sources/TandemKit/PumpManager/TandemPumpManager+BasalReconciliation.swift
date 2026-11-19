@@ -20,7 +20,9 @@ extension TandemPumpManager {
         ControlIQPcmChangeHistoryLog.typeId,
         BolusActivatedHistoryLog.typeId,
         TimeChangedHistoryLog.typeId,
-        DateChangeHistoryLog.typeId
+        DateChangeHistoryLog.typeId,
+        ArmInitHistoryLog.typeId,
+        ShelfModeHistoryLog.typeId
     ]
 
     /// Read before the floor so the cross-check knows a temp or suspend in force there, as far as the
@@ -113,24 +115,24 @@ extension TandemPumpManager {
             now.addingTimeInterval(-BolusReportLedger.reportingHorizon)
         )
 
-        let logs: [HistoryLog]
+        let dates: HistoryRecordDates
         let gaps: [ClosedRange<UInt32>]
         do {
             let since = Dates.fromInstantToJan12008EpochSeconds(floor.addingTimeInterval(state.pumpClockOffset - Self.basalHistoryLookback))
-            logs = try historyLogStore.logs(
+            dates = try historyRecordDates(historyLogStore.logs(
                 pumpSerial: serial.rawValue,
                 ofTypes: Self.basalHistoryTypes,
                 sincePumpTimeSec: UInt32(clamping: Int64(max(0, since)))
             )
             .filter { covered.contains($0.sequenceNum) }
-            .map { $0.parsed() }
-            gaps = try logs.first.map { try historyLogStore.missingRanges(pumpSerial: serial.rawValue, in: $0.sequenceNum ... covered.upperBound) } ?? []
+            .map { $0.parsed() })
+            gaps = try dates.logs.first.map { try historyLogStore.missingRanges(pumpSerial: serial.rawValue, in: $0.sequenceNum ... covered.upperBound) } ?? []
         } catch {
             logger.error("Could not read the history log store for basal reconciliation: \(error)")
             return
         }
 
-        let dates = historyRecordDates(logs)
+        let logs = dates.logs
         let timeline = PumpBasalTimeline(
             logs: logs,
             date: dates.phoneDate(of:),

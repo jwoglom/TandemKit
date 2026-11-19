@@ -245,6 +245,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
     var loggedBasalDifferences = Set<UInt32>()
     /// The records whose basal history check failure has been logged this session. Command queue only.
     var loggedBasalProblems = Set<UInt32>()
+    /// The clock breaks in pump history logged this session. Command queue only.
+    var loggedClockBreaks = Set<UInt32>()
     /// Command queue only.
     var basalResidualDays = BasalReconciler.ResidualDays()
     /// How many history passes each store gap has held basal reconciliation back. Command queue only.
