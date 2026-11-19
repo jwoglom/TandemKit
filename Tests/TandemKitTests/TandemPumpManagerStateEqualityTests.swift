@@ -104,7 +104,7 @@ final class TandemPumpManagerStateEqualityTests: XCTestCase {
             ("lastPumpTimeCheckDate", { $0.lastPumpTimeCheckDate = nil }),
             ("pumpTimeCheckUTCOffset", { $0.pumpTimeCheckUTCOffset = nil }),
             ("lastPumpClockStep", { $0.lastPumpClockStep = nil }),
-            ("futureDatedDoseRefusals", { _ = $0.futureDatedDoseRefusals.record(raw: Data([0xFE]), at: later) }),
+            ("futureDatedDoseRefusals", { _ = $0.futureDatedDoseRefusals.record(raw: Data([0xFE]), startDate: later, at: later) }),
             ("lastSettingsCheckedAt", { $0.lastSettingsCheckedAt = nil }),
             ("quickBolusAnnun", { $0.quickBolusAnnun = nil }),
             ("reminderAnnun", { $0.reminderAnnun = nil }),
@@ -250,7 +250,7 @@ final class TandemPumpManagerStateEqualityTests: XCTestCase {
         state.lastPumpTimeCheckDate = t0
         state.pumpTimeCheckUTCOffset = -4 * 3600
         state.lastPumpClockStep = PumpClockStep(foundAt: t0, by: -3600)
-        _ = state.futureDatedDoseRefusals.record(raw: Data([0x01, 0x02]), at: t0)
+        _ = state.futureDatedDoseRefusals.record(raw: Data([0x01, 0x02]), startDate: t0.addingTimeInterval(3600), at: t0)
         state.lastSettingsCheckedAt = t0
         state.quickBolusAnnun = .audioHigh
         state.reminderAnnun = .audioMedium

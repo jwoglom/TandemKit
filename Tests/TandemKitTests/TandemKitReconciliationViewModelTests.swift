@@ -136,8 +136,8 @@ import XCTest
     }
 
     func testDosesRefusedForAFutureDateAreADiscrepancyWithTheirCount() {
-        _ = manager.state.futureDatedDoseRefusals.record(raw: Data([1]), at: clock.now.addingTimeInterval(-600))
-        _ = manager.state.futureDatedDoseRefusals.record(raw: Data([2]), at: clock.now.addingTimeInterval(-60))
+        _ = manager.state.futureDatedDoseRefusals.record(raw: Data([1]), startDate: clock.now.addingTimeInterval(3000), at: clock.now.addingTimeInterval(-600))
+        _ = manager.state.futureDatedDoseRefusals.record(raw: Data([2]), startDate: clock.now.addingTimeInterval(3540), at: clock.now.addingTimeInterval(-60))
         let viewModel = ViewModel(pumpManager: manager)
 
         XCTAssertEqual(viewModel.discrepancies.map(\.id), ["future-dated"])

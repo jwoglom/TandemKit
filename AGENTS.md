@@ -212,8 +212,10 @@ host queue, so its state stays behind its lock.
 - A dose starting more than a minute ahead of the phone is refused, not dated now: its date is wrong,
   so when it ran is unknown. Clamped, boluses from before a pump's shelf mode, dated 2033 by a clock
   change applied past the reset, reached Trio's IOB as new. History bolus reporting refuses one before
-  the ledger records it, and `emitPumpEvents` refuses any other. Each is logged and counted once by
-  its `raw` in `futureDatedDoseRefusals` (persisted), which the Reconciliation screen shows.
+  the ledger records it, and `emitPumpEvents` refuses any other. Every pass re-reads the session's
+  history, so a refused `raw` stays refused once the phone's clock passes its start, until the
+  history floor excludes it (`futureDatedDoseRefusals`, persisted); each is logged and counted once,
+  and the Reconciliation screen shows the count.
 - A `replacePendingEvents: true` batch makes both hosts delete every mutable dose it leaves out,
   and Loop never revives a deleted one, so `emitPumpEvents` appends the boluses the host holds as
   mutable (`bolusDose`, `pendingBolusFinalization`, `heldExtendedPartEvents`) to each one (#330).

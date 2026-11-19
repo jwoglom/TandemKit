@@ -68,8 +68,7 @@ extension TandemPumpManager {
                 continue
             }
             // Refused before the ledger records it, or the ledger holds it as reported at that date.
-            if HostDoseDates.startsAhead(dose, of: now) {
-                refuseFutureDatedDose(event)
+            if refusesForItsDate(event, now: now) {
                 continue
             }
             let bolusId = Int(decoded.identifier)

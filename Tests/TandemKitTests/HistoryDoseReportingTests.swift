@@ -118,7 +118,8 @@ import XCTest
         Dates.fromJan12008EpochSecondsToDate(TimeInterval(log.pumpTimeSec))
     }
 
-    private func report(_ logs: [HistoryLog], floor: Date? = nil) {
+    private func report(_ logs: [HistoryLog], floor: Date? = nil, at time: Date? = nil) {
+        let now = time ?? self.now
         manager.storeHistoryLogs(logs, now: now)
         let sequences = logs.map(\.sequenceNum)
         manager.reportHistoryBoluses(
@@ -482,6 +483,20 @@ import XCTest
         XCTAssertTrue(reportedBoluses.isEmpty)
         XCTAssertNil(manager.state.bolusReportLedger.entry(bolusId: 47, pumpSerial: Self.pumpSerial))
         XCTAssertEqual(manager.state.futureDatedDoseRefusals.count, 1, "A record re-read on the next pass is counted once")
+    }
+
+    func testAPumpBolusRefusedForADateAheadIsNotReportedOnceThePhoneCatchesUp() {
+        // Stamped two hours ahead, with no clock read to correct it by.
+        pumpClockAhead = 2 * 3600
+        let start = quickBolusStart(bolusId: 48, units: 1.0, firstSequenceNum: 600, secondsAgo: 300)
+        let completion = bolusCompletion(bolusId: 48, delivered: 1.0, requested: 1.0, sequenceNum: 603, secondsAgo: 240)
+
+        report(start + [completion])
+        report(start + [completion], at: now.addingTimeInterval(.hours(3)))
+
+        XCTAssertTrue(reportedBoluses.isEmpty)
+        XCTAssertNil(manager.state.bolusReportLedger.entry(bolusId: 48, pumpSerial: Self.pumpSerial))
+        XCTAssertEqual(manager.state.futureDatedDoseRefusals.count, 1)
     }
 
     // MARK: - Floors and gating

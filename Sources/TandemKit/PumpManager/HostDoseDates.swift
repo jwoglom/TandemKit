@@ -5,7 +5,6 @@ import LoopKit
 /// deleted, so none leaves the driver, whichever path misdated it; each caught is logged as a bug.
 enum HostDoseDates {
     /// Past this a start is no second-later nudge (`resumedTempBasal`, a Bolex start) but a wrong date.
-    /// Dated now instead, boluses from before a pump's shelf mode, dated 2033, reached the host's IOB as new.
     static let startAheadTolerance: TimeInterval = .minutes(1)
 
     static func startsAhead(_ dose: DoseEntry, of now: Date) -> Bool {
@@ -68,8 +67,7 @@ extension TandemPumpManager {
     /// dose with no knowable date should be.
     func withDatesTheHostCanStore(_ events: [NewPumpEvent]) -> [NewPumpEvent] {
         events.compactMap { event in
-            if let dose = event.dose, HostDoseDates.startsAhead(dose, of: now) {
-                refuseFutureDatedDose(event)
+            if refusesForItsDate(event, now: now) {
                 return nil
             }
             guard let (repaired, problem) = HostDoseDates.repaired(event) else { return event }
@@ -78,13 +76,19 @@ extension TandemPumpManager {
         }
     }
 
-    func refuseFutureDatedDose(_ event: NewPumpEvent) {
-        guard let dose = event.dose else { return }
-        let description = "\(dose.type.rawValue) \(event.raw.hexadecimalString) of \(dose.value) \(dose.unit.rawValue) starting \(dose.startDate), ahead of the phone's \(now)"
-        guard state.futureDatedDoseRefusals.record(raw: event.raw, at: now) else {
-            logger.debug("Refused again: \(description)")
-            return
+    /// Whether `event` starts ahead of the phone, or did when it was first refused.
+    func refusesForItsDate(_ event: NewPumpEvent, now: Date) -> Bool {
+        guard let dose = event.dose,
+              HostDoseDates.startsAhead(dose, of: now) || state.futureDatedDoseRefusals.contains(event.raw, now: now)
+        else {
+            return false
         }
-        logger.error("Refused \(description); not sent to the app (\(state.futureDatedDoseRefusals.count) refused so far)")
+        let description = "\(dose.type.rawValue) \(event.raw.hexadecimalString) of \(dose.value) \(dose.unit.rawValue) starting \(dose.startDate), as of the phone's \(now)"
+        if state.futureDatedDoseRefusals.record(raw: event.raw, startDate: dose.startDate, at: now) {
+            logger.error("Refused \(description); not sent to the app (\(state.futureDatedDoseRefusals.count) refused so far)")
+        } else {
+            logger.debug("Refused again: \(description)")
+        }
+        return true
     }
 }

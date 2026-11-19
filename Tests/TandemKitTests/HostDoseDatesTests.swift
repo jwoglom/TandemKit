@@ -15,8 +15,8 @@ import XCTest
         return NewPumpEvent(date: start, dose: dose, raw: raw, title: "Bolus", type: .bolus)
     }
 
-    private func makeManager() -> (TandemPumpManager, MockPumpManagerDelegate, DispatchQueue) {
-        let manager = TandemPumpManager(state: TandemPumpManagerState(rawValue: [:]), bluetooth: StubPumpBluetooth(), clock: ManualClock(now))
+    private func makeManager(clock: ManualClock? = nil) -> (TandemPumpManager, MockPumpManagerDelegate, DispatchQueue) {
+        let manager = TandemPumpManager(state: TandemPumpManagerState(rawValue: [:]), bluetooth: StubPumpBluetooth(), clock: clock ?? ManualClock(now))
         let delegate = MockPumpManagerDelegate()
         let queue = DispatchQueue(label: "host-dose-dates-test")
         manager.pumpManagerDelegate = delegate
@@ -101,5 +101,28 @@ import XCTest
         queue.sync {}
 
         XCTAssertEqual(manager.state.futureDatedDoseRefusals.count, 1)
+    }
+
+    func testARefusedDoseStaysRefusedOnceThePhoneCatchesUpWithItsDate() {
+        let clock = ManualClock(now)
+        let (manager, delegate, queue) = makeManager(clock: clock)
+        let ahead = bolus(from: now.addingTimeInterval(.hours(2)), to: now.addingTimeInterval(.hours(2) + 60))
+
+        manager.emitPumpEvents([ahead], replacePendingEvents: false)
+        clock.advance(by: .hours(3))
+        manager.emitPumpEvents([ahead], replacePendingEvents: false)
+        queue.sync {}
+
+        XCTAssertTrue(delegate.pumpEvents.isEmpty)
+        XCTAssertEqual(manager.state.futureDatedDoseRefusals.count, 1)
+    }
+
+    func testARefusalIsForgottenOnceItsStartIsPastTheHistoryFloor() {
+        var refusals = FutureDatedDoseRefusals()
+        let start = now.addingTimeInterval(.hours(2))
+        XCTAssertTrue(refusals.record(raw: Data([7]), startDate: start, at: now))
+
+        XCTAssertTrue(refusals.contains(Data([7]), now: start.addingTimeInterval(BolusReportLedger.retention)))
+        XCTAssertFalse(refusals.contains(Data([7]), now: start.addingTimeInterval(BolusReportLedger.retention + 1)))
     }
 }

@@ -1175,24 +1175,35 @@ public struct PumpClockStep: Equatable, RawRepresentable {
 public struct FutureDatedDoseRefusals: Equatable, RawRepresentable {
     public typealias RawValue = [String: Any]
 
-    /// A held dose is refused on every replacing batch and a history record on every pass, so the
-    /// count goes by `raw`.
-    static let rememberedRawCount = 64
+    struct Refused: Equatable {
+        let raw: Data
+        let startDate: Date
+    }
 
     public private(set) var count = 0
     public private(set) var lastAt: Date?
-    private(set) var recentRaws: [Data] = []
+    /// Every pass re-reads the session's history, so a dose refused only while its start is ahead
+    /// would be reported once the phone caught up. Kept until the history floor excludes its start.
+    private(set) var refused: [Refused] = []
 
     public init() {}
 
-    /// Whether `raw` was not among those refused before.
-    mutating func record(raw: Data, at date: Date) -> Bool {
-        guard !recentRaws.contains(raw) else { return false }
-        recentRaws.append(raw)
-        recentRaws.removeFirst(max(0, recentRaws.count - Self.rememberedRawCount))
+    func contains(_ raw: Data, now: Date) -> Bool {
+        refused.contains { $0.raw == raw && !Self.isExpired($0, now: now) }
+    }
+
+    /// Whether `raw` was not refused already.
+    mutating func record(raw: Data, startDate: Date, at now: Date) -> Bool {
+        refused.removeAll { Self.isExpired($0, now: now) }
+        guard !contains(raw, now: now) else { return false }
+        refused.append(Refused(raw: raw, startDate: startDate))
         count += 1
-        lastAt = date
+        lastAt = now
         return true
+    }
+
+    private static func isExpired(_ refused: Refused, now: Date) -> Bool {
+        now.timeIntervalSince(refused.startDate) > BolusReportLedger.retention
     }
 
     public init?(rawValue: RawValue) {
@@ -1201,11 +1212,17 @@ public struct FutureDatedDoseRefusals: Equatable, RawRepresentable {
         }
         self.count = count
         lastAt = rawValue["lastAt"] as? Date
-        recentRaws = rawValue["recentRaws"] as? [Data] ?? []
+        refused = (rawValue["refused"] as? [[String: Any]] ?? []).compactMap {
+            guard let raw = $0["raw"] as? Data, let startDate = $0["startDate"] as? Date else { return nil }
+            return Refused(raw: raw, startDate: startDate)
+        }
     }
 
     public var rawValue: RawValue {
-        var raw: RawValue = ["count": count, "recentRaws": recentRaws]
+        var raw: RawValue = [
+            "count": count,
+            "refused": refused.map { ["raw": $0.raw, "startDate": $0.startDate] as [String: Any] }
+        ]
         raw["lastAt"] = lastAt
         return raw
     }
