@@ -193,6 +193,40 @@ import XCTest
         XCTAssertFalse(bluetooth.didSend(EnterChangeCartridgeModeRequest.self))
     }
 
+    // MARK: - Starting the change
+
+    func testTheChangeCannotStartBeforeTheNotificationReadLands() {
+        let viewModel = makeViewModel()
+
+        viewModel.checkNotificationsBeforeChange()
+        XCTAssertFalse(viewModel.canStartChange)
+
+        drainMainQueue()
+        XCTAssertTrue(viewModel.canStartChange)
+    }
+
+    func testANotificationToDismissBlocksTheChange() {
+        stubActiveAlert(.LOW_INSULIN_ALERT)
+        let viewModel = makeViewModel()
+
+        viewModel.checkNotificationsBeforeChange()
+        drainMainQueue()
+
+        XCTAssertTrue(viewModel.hasActiveNotifications)
+        XCTAssertFalse(viewModel.canStartChange)
+    }
+
+    func testGraphicsAreShownUnlessThePumpIsKnownNotToBeAMobi() {
+        let viewModel = makeViewModel()
+        XCTAssertTrue(viewModel.showsGraphics, "no model read yet")
+
+        manager.state.pumpState.pumpModel = .MOBI
+        XCTAssertTrue(viewModel.showsGraphics)
+
+        manager.state.pumpState.pumpModel = .TSLIM_X2
+        XCTAssertFalse(viewModel.showsGraphics)
+    }
+
     // MARK: - Stuck cartridge procedure
 
     /// A refusal with delivery suspended and nothing on the pump's notification list is what a
@@ -465,35 +499,30 @@ import XCTest
         XCTAssertEqual(viewModel.currentStep, .physicalChange)
     }
 
-    // MARK: - Detection stream
+    // MARK: - Cartridge inserted
 
-    func testDetectionProgressFollowsThePumpWhenItReportsAny() {
-        let viewModel = makeViewModel()
-        viewModel.currentStep = .physicalChange
-        viewModel.cartridgeInserted()
-
-        manager.detectingCartridgeStateStream.send(DetectingCartridgeStateStreamResponse(percentComplete: 40))
-        drainMainQueue()
-
-        XCTAssertEqual(viewModel.detectingProgress, 40)
-        XCTAssertTrue(viewModel.isDetecting)
-    }
-
-    func testDetectionCompletesOnceAndRecordsTheCartridgeChange() {
+    func testInsertingTheCartridgeRecordsTheChangeAndExitsChangeModeOnce() {
         bluetooth.stub(ExitChangeCartridgeModeRequest.self, with: ExitChangeCartridgeModeResponse(status: 0))
 
         let viewModel = makeViewModel()
         viewModel.currentStep = .physicalChange
         viewModel.cartridgeInserted()
-
-        manager.detectingCartridgeStateStream.send(DetectingCartridgeStateStreamResponse(percentComplete: 100))
-        // A duplicate completion must not drive a second exit request.
-        manager.detectingCartridgeStateStream.send(DetectingCartridgeStateStreamResponse(percentComplete: 100))
         drainMainQueue()
 
-        XCTAssertFalse(viewModel.isDetecting)
         XCTAssertNotNil(manager.state.lastCartridgeChangeDate)
         XCTAssertEqual(bluetooth.sent(ExitChangeCartridgeModeRequest.self).count, 1)
         XCTAssertEqual(viewModel.currentStep, .done)
+    }
+
+    func testARefusedExitStaysOnTheCompletingStepForRetry() {
+        bluetooth.stub(ExitChangeCartridgeModeRequest.self, with: ExitChangeCartridgeModeResponse(status: 1))
+
+        let viewModel = makeViewModel()
+        viewModel.currentStep = .physicalChange
+        viewModel.cartridgeInserted()
+        drainMainQueue()
+
+        XCTAssertEqual(viewModel.currentStep, .completing)
+        XCTAssertTrue(viewModel.failedExitMode)
     }
 }

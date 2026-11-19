@@ -7,7 +7,7 @@ enum CartridgeChangeStep: Int {
     case enterMode = 1
     case waitingForReady = 2
     case physicalChange = 3
-    case detecting = 4
+    case completing = 4
     case done = 5
 
     func nextStep() -> CartridgeChangeStep? {
@@ -19,8 +19,8 @@ enum CartridgeChangeStep: Int {
         case .waitingForReady:
             return .physicalChange
         case .physicalChange:
-            return .detecting
-        case .detecting:
+            return .completing
+        case .completing:
             return .done
         case .done:
             return nil
@@ -58,15 +58,11 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
     @Published var foundCartridgeAlreadyLoaded = false
 
     @Published var changeCartridgeState: EnterChangeCartridgeModeStateStreamResponse.ChangeCartridgeState?
-    @Published var detectingProgress: Int = 0
-    @Published var isDetecting = false
 
     @Published var cartridgeUnitsRemaining: Double?
 
     private var readyToChangeWorkItem: DispatchWorkItem?
     private var readyToChangeResolved = false
-    private var simulatedDetectingTimer: Timer?
-    private var detectingResolved = false
     private var streamCancellables = Set<AnyCancellable>()
 
     let done: () -> Void
@@ -80,6 +76,18 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
 
     var hasActiveNotifications: Bool {
         !notificationsViewModel.notifications.isEmpty
+    }
+
+    /// True until the read made as the disconnect step appears lands; the change can't start before it.
+    @Published var isCheckingNotificationsBeforeChange = true
+
+    var canStartChange: Bool {
+        !hasActiveNotifications && !indeterminateEnterMode && !isCheckingNotificationsBeforeChange
+            && !notificationsViewModel.isRefreshing
+    }
+
+    var showsGraphics: Bool {
+        MobiAppGraphic.suits(pumpManager?.state.pumpState.pumpModel)
     }
 
     init(pumpManager: TandemPumpManager?, done: @escaping () -> Void, toFillTubing: @escaping () -> Void) {
@@ -99,7 +107,6 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
     deinit {
         notificationCheckTask?.cancel()
         readyToChangeWorkItem?.cancel()
-        simulatedDetectingTimer?.invalidate()
     }
 
     func startPeriodicNotificationCheck() async {
@@ -130,6 +137,13 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
     func stopPeriodicNotificationCheck() {
         notificationCheckTask?.cancel()
         notificationCheckTask = nil
+    }
+
+    func checkNotificationsBeforeChange() {
+        isCheckingNotificationsBeforeChange = true
+        notificationsViewModel.refreshNotifications { [weak self] in
+            self?.isCheckingNotificationsBeforeChange = false
+        }
     }
 
     func checkSuspendedStatus() {
@@ -358,59 +372,8 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
 
     func cartridgeInserted() {
         currentStep = currentStep.nextStep() ?? .done
-        startDetectingCartridge()
-    }
-
-    func startDetectingCartridge() {
-        isDetecting = true
-        detectingProgress = 0
         failedExitMode = false
-        detectingResolved = false
-        simulatedDetectingTimer?.invalidate()
-
-        // Real progress takes over as soon as the pump reports any. The simulated ramp below only
-        // drives the bar while the detecting stream stays dark, which is its current state.
-        pumpManager?.detectingCartridgeStateStream
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] response in
-                guard let self = self else { return }
-                self.simulatedDetectingTimer?.invalidate()
-                self.simulatedDetectingTimer = nil
-                self.detectingProgress = min(max(response.percentComplete, 0), 100)
-
-                if response.isComplete {
-                    self.finishDetecting()
-                }
-            }
-            .store(in: &streamCancellables)
-
-        simulatedDetectingTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] timer in
-            guard let self = self else {
-                timer.invalidate()
-                return
-            }
-
-            DispatchQueue.main.async {
-                self.detectingProgress += 10
-
-                if self.detectingProgress >= 100 {
-                    self.finishDetecting()
-                }
-            }
-        }
-    }
-
-    private func finishDetecting() {
-        guard !detectingResolved else { return }
-        detectingResolved = true
-        simulatedDetectingTimer?.invalidate()
-        simulatedDetectingTimer = nil
-        streamCancellables.removeAll()
-
-        detectingProgress = 100
-        isDetecting = false
         pumpManager?.recordCartridgeChange()
-        // Exit change cartridge mode before completing
         exitChangeCartridgeMode()
     }
 
@@ -432,9 +395,8 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
                     self.failedExitMode = false
                     self.currentStep = self.currentStep.nextStep() ?? .done
                 } else {
-                    // Exit failed - go back to detecting step and show error
                     self.failedExitMode = true
-                    self.currentStep = .detecting
+                    self.currentStep = .completing
                 }
             }
         }
@@ -443,8 +405,6 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
     func cancelOperation() {
         readyToChangeWorkItem?.cancel()
         readyToChangeWorkItem = nil
-        simulatedDetectingTimer?.invalidate()
-        simulatedDetectingTimer = nil
         streamCancellables.removeAll()
 
         // Attempt to exit change cartridge mode if we're in it

@@ -15,6 +15,7 @@ final class DoseOracleTests: XCTestCase {
             endDate: end ?? start.addingTimeInterval(30),
             value: units,
             unit: .units,
+            decisionId: nil,
             deliveredUnits: mutable ? nil : delivered,
             insulinType: .novolog,
             automatic: false,
@@ -32,6 +33,7 @@ final class DoseOracleTests: XCTestCase {
             endDate: actualEnd,
             value: rate,
             unit: .unitsPerHour,
+            decisionId: nil,
             deliveredUnits: mutable ? nil : rate * actualEnd.timeIntervalSince(start) / .hours(1),
             insulinType: .novolog,
             automatic: true,
@@ -222,7 +224,7 @@ final class DoseOracleTests: XCTestCase {
         XCTAssertNotNil(oracle.assertPermanent(raw: first.raw))
     }
 
-    func testAFinalizedDoseThatHasNotEndedIsCountedFromItsPumpEventUntilItIsStored() {
+    func testAFinalizedDoseThatHasNotEndedIsCountedFromItsPumpEventUntilTheNextBatchStoresIt() {
         let oracle = LoopDoseStoreOracle()
         let now = t0.addingTimeInterval(.minutes(1))
         let ended = tempBasal(rate: 1.5, start: t0, duration: .minutes(1), mutable: false)
@@ -233,13 +235,11 @@ final class DoseOracleTests: XCTestCase {
         XCTAssertNil(oracle.dose(raw: remainder.raw))
         XCTAssertEqual(oracle.normalizedDoses().compactMap(\.syncIdentifier), [ended.raw.hexadecimalString, remainder.raw.hexadecimalString])
 
-        // A boundary past its end with no save since leaves it uncounted.
+        // An empty batch saves too, so a boundary past its end stores it.
         let afterEnd = t0.addingTimeInterval(.minutes(35))
         oracle.addPumpEvents([], lastReconciliation: afterEnd, replacePendingEvents: false, now: afterEnd)
-        XCTAssertEqual(oracle.normalizedDoses().compactMap(\.syncIdentifier), [ended.raw.hexadecimalString])
-
-        oracle.syncPumpEventsToInsulinDeliveryStore(now: afterEnd)
         XCTAssertNotNil(oracle.assertPermanent(raw: remainder.raw))
+        XCTAssertEqual(oracle.normalizedDoses().compactMap(\.syncIdentifier), [ended.raw.hexadecimalString, remainder.raw.hexadecimalString])
     }
 
     func testTempBasalReplacementTrimsThePredecessor() {
@@ -306,16 +306,65 @@ final class DoseOracleTests: XCTestCase {
         oracle.doses.filter { $0.syncIdentifier.hasPrefix("BasalRateSchedule ") }.sorted { $0.dose.startDate < $1.dose.startDate }
     }
 
-    func testLoopFillsTheDayBeforeTheFirstTempBasalWithItsScheduleSplitAtMidnight() {
+    func testLoopFillsNothingBeforeTheFirstPumpEvent() {
         let oracle = LoopDoseStoreOracle(basalSchedule: utcSchedule)
         let now = t0.addingTimeInterval(.minutes(5))
         oracle.addPumpEvents([tempBasal(rate: 2.0, start: t0, duration: .minutes(30), mutable: true)], lastReconciliation: now, replacePendingEvents: true, now: now)
 
+        XCTAssertEqual(scheduleFill(oracle).count, 0)
+    }
+
+    func testLoopFillsFromAFinishedTempBasalToTheBoundaryKeyedOnItsStartAndMutable() {
+        let oracle = LoopDoseStoreOracle(basalSchedule: utcSchedule)
+        let end = t0.addingTimeInterval(.minutes(10))
+        let boundary = t0.addingTimeInterval(.minutes(20))
+        oracle.addPumpEvents(
+            [tempBasal(rate: 2.0, start: t0, duration: .minutes(30), mutable: false, end: end)],
+            lastReconciliation: boundary,
+            replacePendingEvents: true,
+            now: boundary
+        )
+
         let fill = scheduleFill(oracle)
-        XCTAssertEqual(fill.map(\.dose.startDate), [now.addingTimeInterval(-.hours(24)), utcMidnight(of: t0)])
-        XCTAssertEqual(fill.last?.dose.endDate, t0)
-        XCTAssertTrue(fill.allSatisfy { !$0.isMutable && $0.dose.type == .basal && $0.dose.unitsPerHour == 1.0 })
-        XCTAssertEqual(fill.reduce(0) { $0 + $1.value }, t0.timeIntervalSince(now.addingTimeInterval(-.hours(24))) / .hours(1), accuracy: 0.05)
+        XCTAssertEqual(fill.map(\.dose.startDate), [end])
+        XCTAssertEqual(fill.map(\.dose.endDate), [boundary])
+        XCTAssertEqual(fill.map(\.syncIdentifier), ["BasalRateSchedule \(ISO8601DateFormatter().string(from: end))"])
+        XCTAssertEqual(fill.map(\.isMutable), [true])
+    }
+
+    func testAnEmptyBatchExtendsLoopsMutableFillToTheNewBoundary() {
+        let oracle = LoopDoseStoreOracle(basalSchedule: utcSchedule)
+        let end = t0.addingTimeInterval(.minutes(10))
+        oracle.addPumpEvents(
+            [tempBasal(rate: 2.0, start: t0, duration: .minutes(30), mutable: false, end: end)],
+            lastReconciliation: t0.addingTimeInterval(.minutes(20)),
+            replacePendingEvents: true,
+            now: t0.addingTimeInterval(.minutes(20))
+        )
+
+        let later = t0.addingTimeInterval(.minutes(25))
+        oracle.addPumpEvents([], lastReconciliation: later, replacePendingEvents: false, now: later)
+
+        let fill = scheduleFill(oracle)
+        XCTAssertEqual(fill.map(\.dose.startDate), [end])
+        XCTAssertEqual(fill.map(\.dose.endDate), [later])
+        XCTAssertEqual(fill.map(\.isMutable), [true])
+    }
+
+    func testLoopEndsAResumedSuspendAtItsResume() {
+        let oracle = LoopDoseStoreOracle(basalSchedule: utcSchedule)
+        let resumeDate = t0.addingTimeInterval(.minutes(5))
+        let boundary = t0.addingTimeInterval(.minutes(6))
+        oracle.addPumpEvents(
+            [suspend(at: t0), resume(at: resumeDate)],
+            lastReconciliation: boundary,
+            replacePendingEvents: true,
+            now: boundary
+        )
+
+        let suspends = oracle.doses.filter { $0.dose.type == .suspend }
+        XCTAssertEqual(suspends.map(\.dose.endDate), [resumeDate], "LoopKit/LoopKit#688 stretches it to the boundary")
+        XCTAssertEqual(scheduleFill(oracle).map(\.dose.startDate), [resumeDate])
     }
 
     func testLoopsScheduleFillStartsTheNextSaveAtTheRunningTempBasal() {
@@ -348,7 +397,7 @@ final class DoseOracleTests: XCTestCase {
 
     private func scheduledBasal(rate: Double, at date: Date) -> NewPumpEvent {
         NewPumpEvent.basal(
-            dose: DoseEntry(type: .basal, startDate: date, endDate: date, value: rate, unit: .unitsPerHour, insulinType: .novolog),
+            dose: DoseEntry(type: .basal, startDate: date, endDate: date, value: rate, unit: .unitsPerHour, decisionId: nil, insulinType: .novolog),
             date: date
         )
     }
@@ -528,6 +577,7 @@ final class DoseOracleTests: XCTestCase {
             endDate: t0.addingTimeInterval(.minutes(30)),
             value: 2,
             unit: .unitsPerHour,
+            decisionId: nil,
             deliveredUnits: 5,
             insulinType: .novolog
         )

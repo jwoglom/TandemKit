@@ -462,12 +462,12 @@ struct TandemKitSettingsView: View {
                         label: Text("Control-IQ Settings", comment: "Label for Control-IQ settings"),
                         action: { viewModel.openControlIQSettings() }
                     )
-                }
 
-                navigationLink(
-                    label: Text("CGM Settings", comment: "Label for CGM settings"),
-                    action: { viewModel.openCgmSettings() }
-                )
+                    navigationLink(
+                        label: Text("Mobi CGM settings", comment: "Label for Mobi CGM settings"),
+                        action: { viewModel.openCgmSettings() }
+                    )
+                }
 
                 if viewModel.quickBolusButtonSupportEnabled {
                     navigationLink(
@@ -642,7 +642,7 @@ struct TandemKitSettingsView: View {
                 return Alert(
                     title: Text("No CGM Connected", comment: "Title for no CGM connected warning"),
                     message: Text(
-                        "Control-IQ was enabled but no CGM is connected to the pump.\n\nUntil a CGM sensor is connected, your configured profile rates will be used. To connect a sensor, go to CGM Settings below.",
+                        "Control-IQ was enabled but no CGM is connected to the pump.\n\nUntil a CGM sensor is connected, your configured profile rates will be used. To connect a sensor, go to Mobi CGM settings below.",
                         comment: "Message for no CGM connected warning after enabling Control-IQ"
                     ),
                     primaryButton: .default(Text(disableControlIQLabel)) {

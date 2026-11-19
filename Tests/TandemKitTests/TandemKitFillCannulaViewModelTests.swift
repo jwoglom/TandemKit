@@ -70,9 +70,21 @@ import XCTest
     }
 
     func testARememberedAmountIsPrefilled() {
-        manager.state.lastCannulaFillAmount = 1.1
+        manager.state.lastCannulaFillAmount = 0.8
 
-        XCTAssertEqual(makeViewModel().primeAmount, 1.1, accuracy: 0.0001)
+        XCTAssertEqual(makeViewModel().primeAmount, 0.8, accuracy: 0.0001)
+    }
+
+    func testTheOfferedAmountsAreThoseThePumpAccepts() {
+        XCTAssertEqual(ViewModel.primeAmountOptions.first ?? 0, 0.1, accuracy: 0.0001)
+        XCTAssertEqual(ViewModel.primeAmountOptions.last ?? 0, 1.0, accuracy: 0.0001)
+    }
+
+    func testARememberedAmountOverTheMaximumIsPrefilledAtTheMaximum() {
+        // Saved by a build whose picker went up to 2 U.
+        manager.state.lastCannulaFillAmount = 1.5
+
+        XCTAssertEqual(makeViewModel().primeAmount, ViewModel.primeAmountOptions.last)
     }
 
     // MARK: - Recording
@@ -93,7 +105,7 @@ import XCTest
         manager.state.lastCannulaFillAmount = 0.4
 
         let viewModel = makeViewModel()
-        viewModel.primeAmount = ViewModel.nearestPrimeAmount(to: 1.5)
+        viewModel.primeAmount = ViewModel.nearestPrimeAmount(to: 0.9)
         // The pump refuses to start priming.
         bluetooth.stub(FillCannulaRequest.self, with: FillCannulaResponse(status: 1))
         viewModel.fillCannula()

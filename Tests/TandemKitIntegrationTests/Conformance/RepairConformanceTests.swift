@@ -564,7 +564,14 @@ final class RepairConformanceTests: ConformanceTestCase {
         XCTAssertFalse(secondsDoses.contains { $0.raw == tempB })
         XCTAssertTrue(loop.doses.filter { $0.dose.type == .bolus }.isEmpty, "\(loop.doses.map(LoopDoseStoreOracle.describe))")
         XCTAssertTrue(trio.boluses.isEmpty, "\(trio.boluses)")
-        try assertHostsCountThePumpsBasal(loop: loop, trio: trio, exceptCyclesHolding: [tempBStart])
+        // Loop saves on an empty batch, so the first manager's remainder is stored whole to its programmed
+        // end before the second manager's history reports how the pump ran it, and that report then starts
+        // before Loop's save does.
+        let options = XCTExpectedFailure.Options()
+        options.isStrict = true
+        try XCTExpectFailure("Loop stores the remainder at its programmed end ahead of the next manager's history (AGENTS.md, Deleting the pump manager: still open)", options: options) {
+            try assertHostsCountThePumpsBasal(loop: loop, trio: trio, exceptCyclesHolding: [tempBStart])
+        }
     }
 
     /// The host holds the first manager's suspend once, closed at the resume, both keyed on their records.

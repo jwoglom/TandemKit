@@ -1,4 +1,3 @@
-import HealthKit
 import LoopKit
 @testable import TandemKit
 import XCTest
@@ -40,7 +39,7 @@ import XCTest
     private func enactTempBasal(_ manager: TandemPumpManager, unitsPerHour: Double, for duration: TimeInterval = .minutes(30)) -> PumpManagerError? {
         let finished = expectation(description: "enactTempBasal")
         var result: PumpManagerError?
-        manager.enactTempBasal(unitsPerHour: unitsPerHour, for: duration) {
+        manager.enactTempBasal(decisionId: nil, unitsPerHour: unitsPerHour, for: duration) {
             result = $0
             finished.fulfill()
         }
@@ -51,7 +50,7 @@ import XCTest
     private func enactBolus(_ manager: TandemPumpManager) -> PumpManagerError? {
         let finished = expectation(description: "enactBolus")
         var result: PumpManagerError?
-        manager.enactBolus(units: 1.0, activationType: .manualNoRecommendation) {
+        manager.enactBolus(decisionId: nil, units: 1.0, activationType: .manualNoRecommendation) {
             result = $0
             finished.fulfill()
         }
@@ -310,8 +309,8 @@ import XCTest
 
     private func syncLimits(_ manager: TandemPumpManager) -> Error? {
         let limits = DeliveryLimits(
-            maximumBasalRate: HKQuantity(unit: HKUnit.internationalUnit().unitDivided(by: .hour()), doubleValue: 4.2),
-            maximumBolus: HKQuantity(unit: .internationalUnit(), doubleValue: 9.5)
+            maximumBasalRate: LoopQuantity(unit: .internationalUnitsPerHour, doubleValue: 4.2),
+            maximumBolus: LoopQuantity(unit: .internationalUnit, doubleValue: 9.5)
         )
         let finished = expectation(description: "syncDeliveryLimits")
         var error: Error?

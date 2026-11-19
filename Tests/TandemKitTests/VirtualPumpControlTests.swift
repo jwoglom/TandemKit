@@ -167,6 +167,7 @@ final class VirtualPumpControlTests: XCTestCase {
                     endDate: start.addingTimeInterval(40),
                     value: 1.25,
                     unit: .units,
+                    decisionId: nil,
                     deliveredUnits: 1.2,
                     automatic: false
                 ),
@@ -181,6 +182,7 @@ final class VirtualPumpControlTests: XCTestCase {
                     endDate: start.addingTimeInterval(2100),
                     value: 0.45,
                     unit: .unitsPerHour,
+                    decisionId: nil,
                     automatic: true,
                     isMutable: true
                 ),

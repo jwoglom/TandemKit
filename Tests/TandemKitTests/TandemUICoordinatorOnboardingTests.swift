@@ -6,7 +6,7 @@ import UIKit
 import XCTest
 
 /// Who owns the pump manager a setup flow creates, and when the host is handed it (#603).
-@available(macOS 13.0, iOS 14.0, *) final class TandemUICoordinatorOnboardingTests: XCTestCase {
+@available(macOS 13.0, iOS 14.0, *) @MainActor final class TandemUICoordinatorOnboardingTests: XCTestCase {
     private final class OnboardingHost: PumpManagerOnboardingDelegate {
         var calls: [String] = []
 
@@ -45,6 +45,7 @@ import XCTest
             axisLine: .gray,
             axisLabel: .gray,
             grid: .gray,
+            presetTint: .purple,
             glucoseTint: .blue,
             insulinTint: .orange,
             carbTint: .green

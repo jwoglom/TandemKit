@@ -391,7 +391,7 @@ class TandemKitSettingsViewModel: ObservableObject {
     func stopTempRate() {
         isUpdatingPumpState = true
 
-        pumpManager?.enactTempBasal(unitsPerHour: 0, for: 0) { error in
+        pumpManager?.enactTempBasal(decisionId: nil, unitsPerHour: 0, for: 0) { error in
             if error != nil {
                 DispatchQueue.main.async {
                     self.isUpdatingPumpState = false
@@ -479,7 +479,7 @@ class TandemKitSettingsViewModel: ObservableObject {
     }
 
     func removePump() {
-        // Advance the flow. The coordinator's stepFinished runs prepareForDeactivation, which tears
+        // Advance the flow. The coordinator's stepFinished runs delete(), which tears
         // down the BLE transport (stopping auto-reconnect) and notifies the delegate — both required
         // for the pump to actually be removed rather than reconnect and re-persist its state.
         nextStep()

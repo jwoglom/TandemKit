@@ -43,7 +43,7 @@ enum VirtualPumpControl {
         }
     }
 
-    /// From `prepareForDeactivation`: the host is letting `manager` go, so no command reaches it
+    /// From `delete()`: the host is letting `manager` go, so no command reaches it
     /// again, whether or not something still holds it.
     static func detach(_ manager: TandemPumpManager) {
         lock.lock()
@@ -122,7 +122,7 @@ enum VirtualPumpControl {
             /// `applyOnboardingSettings`, as setup does once paired, with the settings the host
             /// gave the setup screen, which a seeded state stands in for.
             case applyOnboardingSettings
-            /// `enactBolus(units:activationType:)`, `automatic` choosing the activation type.
+            /// `enactBolus(decisionId:units:activationType:)`, `automatic` choosing the activation type.
             case bolus
             /// `cancelBolus`, as the bolus progress screen's cancel does.
             case cancelBolus
@@ -132,7 +132,7 @@ enum VirtualPumpControl {
             case syncBasalSchedule
             /// `syncPumpTime`, as the settings screen's Sync Time does: the pump's clock to the phone's.
             case syncPumpTime
-            /// `enactTempBasal(unitsPerHour:for:)`; a `duration` of 0 cancels, as hosts cancel.
+            /// `enactTempBasal(decisionId:unitsPerHour:for:)`; a `duration` of 0 cancels, as hosts cancel.
             case tempBasal
             case suspend
             case resume
@@ -144,7 +144,7 @@ enum VirtualPumpControl {
             case recordSiteChange
             /// `setFeatureFlag(_:enabled:)` with `featureFlag` and `enabled`, as the flags screen does.
             case setFeatureFlag
-            /// `prepareForDeactivation`, as the settings screen's remove does: the driver drops its link
+            /// `delete()`, as the settings screen's remove does: the driver drops its link
             /// and the host is told to let the manager go. Nothing sent afterwards reaches it.
             case deletePumpManager
             /// Every batch sent to the delegate after index `after`.
@@ -234,7 +234,7 @@ enum VirtualPumpControl {
             raw = event.raw
             title = event.title
             dose = event.dose
-            type = event.type.map(EventType.init)
+            type = event.type.flatMap(EventType.init)
             alarmType = event.alarmType
         }
 
@@ -247,7 +247,8 @@ enum VirtualPumpControl {
         case alarm, alarmClear, basal, bolus, prime, resume, rewind, suspend, tempBasal
         case replaceReservoir, replacePump, replaceInfusionSet
 
-        init(_ type: PumpEventType) {
+        /// Nil for a time zone sync, which the driver never reports.
+        init?(_ type: PumpEventType) {
             switch type {
             case .alarm: self = .alarm
             case .alarmClear: self = .alarmClear
@@ -261,6 +262,7 @@ enum VirtualPumpControl {
             case .replaceComponent(componentType: .reservoir): self = .replaceReservoir
             case .replaceComponent(componentType: .pump): self = .replacePump
             case .replaceComponent(componentType: .infusionSet): self = .replaceInfusionSet
+            case .timeZoneSync: return nil
             }
         }
 
@@ -407,7 +409,7 @@ enum VirtualPumpControl {
                 throw ControlError("bolus needs units")
             }
             let enacted = Completion<PumpManagerError?>()
-            manager.enactBolus(units: units, activationType: automatic ? .automatic : .manualNoRecommendation) {
+            manager.enactBolus(decisionId: nil, units: units, activationType: automatic ? .automatic : .manualNoRecommendation) {
                 enacted.finish($0)
             }
             if let error = try enacted.wait("enactBolus", timeout: 120) {
@@ -445,8 +447,11 @@ enum VirtualPumpControl {
 
         private static func deletePumpManager(_ manager: TandemPumpManager) throws {
             let deleted = Completion<Error?>()
-            manager.prepareForDeactivation { deleted.finish($0) }
-            if let error = try deleted.wait("prepareForDeactivation", timeout: 120) {
+            Task {
+                await manager.delete()
+                deleted.finish(nil)
+            }
+            if let error = try deleted.wait("delete", timeout: 120) {
                 throw error
             }
         }
@@ -477,7 +482,7 @@ enum VirtualPumpControl {
                 throw ControlError("tempBasal needs unitsPerHour and duration")
             }
             let enacted = Completion<PumpManagerError?>()
-            manager.enactTempBasal(unitsPerHour: unitsPerHour, for: duration) { enacted.finish($0) }
+            manager.enactTempBasal(decisionId: nil, unitsPerHour: unitsPerHour, for: duration) { enacted.finish($0) }
             if let error = try enacted.wait("enactTempBasal", timeout: 120) {
                 throw error
             }

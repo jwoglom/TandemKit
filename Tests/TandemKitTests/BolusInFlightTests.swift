@@ -49,7 +49,7 @@ import XCTest
     private func enactBolus(_ activationType: BolusActivationType = .manualNoRecommendation) -> PumpManagerError? {
         let finished = expectation(description: "enactBolus")
         var result: PumpManagerError?
-        manager.enactBolus(units: Self.units, activationType: activationType) {
+        manager.enactBolus(decisionId: nil, units: Self.units, activationType: activationType) {
             result = $0
             finished.fulfill()
         }
@@ -87,7 +87,7 @@ import XCTest
         bluetooth.onWrite = { message in
             guard message is BolusPermissionRequest, !enactedSecond else { return }
             enactedSecond = true
-            self.manager.enactBolus(units: Self.units, activationType: .automatic) {
+            self.manager.enactBolus(decisionId: nil, units: Self.units, activationType: .automatic) {
                 second = $0
                 secondFinished.fulfill()
             }

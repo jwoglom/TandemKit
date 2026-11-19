@@ -71,10 +71,14 @@ on the Doubles. A discrepancy that rounding explains never fails a command.
 `delegateQueue.async`. Loop opens them with `dispatchPrecondition(condition: .onQueue(queue))`, so
 a direct call from a driver queue crashes it, as a backfill tick reading
 `startDateToFilterNewPumpEvents` from the command queue did. `pumpDelegate.call` is a
-`queue.sync`, which deadlocks a caller already on the delegate queue.
+`queue.sync`, which deadlocks a caller already on the delegate queue. The exception is
+`pumpManagerWantsDeletion`, which is async and awaited off it, as LoopKit's default `delete()` does;
+`delete()` first takes a turn on the queue, so it follows every batch sent before it.
 
 Nothing goes out until the host has set both the delegate and its queue (`canNotifyDelegate`):
-`pumpDelegate.queue` reads `.main` until then, and Trio sets the delegate first.
+`pumpDelegate.queue` reads `.main` until then, and Trio sets the delegate first. Loop next-dev
+sets no queue and takes its pump calls on `.main`, so a delegate still without a queue
+`unsetDelegateQueueGrace` later is reported to on `.main`.
 `deliverStateMissedByTheDelegate` replays what was held once the second one lands, with the status
 but not `pumpManagerDidUpdateState`: Loop and Trio save `rawValue` on the main thread right after
 attaching, and a second save from their delegate queue races it (Trio's launch hung in a Thread
@@ -244,8 +248,8 @@ host queue, so its state stays behind its lock.
   caller's own change, so its callers settle the pending change first.
 
 ### Deleting the pump manager
-- `prepareForDeactivation` sends one replacing batch that finalizes every held dose before
-  `pumpManagerWillDeactivate` (#350): left mutable, the host's next replacing batch, from whichever
+- `delete()` sends one replacing batch that finalizes every held dose before
+  `pumpManagerWantsDeletion` (#350): left mutable, the host's next replacing batch, from whichever
   pump manager comes next, deletes what it holds. A Tandem pump keeps delivering after the app
   forgets it, so nothing is stopped and no `.suspend` is due. A pending delivery change is reported
   at detection first. The batch also carries a "Pump Removed" `.replaceComponent(.pump)` if the
@@ -267,8 +271,9 @@ host queue, so its state stays behind its lock.
   part, which the pump runs on to its programmed end, is cut at the deletion as a temp basal is: the
   share of its programmed amount up to then under its own `raw`, and the rest a finalized dose of its
   own to its programmed end under a new `raw`.
-- Still open: Loop leaves the remainder out of IOB from a boundary past its end that came with no
-  save (the next pump manager's empty batch) until that manager's next non-empty batch. Across a
+- Still open: Loop next-dev saves on every batch, empty ones included, so the remainder is stored to its
+  programmed end once that passes, before the next manager's history reports how the pump ran it, and
+  a report from that history starting before then is not stored (conformance K5). Across a
   segment change the remainder over-counts wherever the pump runs it below its highest rate; across two
   or more, a later manager's load reports the parts past the first again, which both hosts count too.
 
@@ -404,13 +409,34 @@ host queue, so its state stays behind its lock.
   differences went uncorrected (#563).
 - `enactTempBasal` decides whether a bolus is running by `bolusIsStillRunning`, not the progress
   reporter's elapsed-time estimate: a pump slower than the estimate is still delivering when it runs
-  out, and no reporter survives a relaunch (#347).
+  out (#347).
 - `enactBolus` refuses with `bolusIsRunning` while a bolus it started has not been seen to end
   (`isBolusInFlight`), and checks again inside its command job: a host's SMB enacted while a manual
   bolus was being initiated queued behind it and ran right after its `InitiateBolus`, and only the
   pump's permission nack stopped it (#504). Past the bolus's estimated end and its 30 s grace
   (`shouldDeferBolusSync`) it reads `CurrentBolusStatus` first, so a bolus that finished out of
   contact does not block the next; no answer still refuses.
+- The bolus state follows each host's display. Loop (and an unknown host, as LoopKit's guide has it)
+  shows "Starting Bolus" for `.initiating` only while the command goes out, and its progress and
+  cancel for `.inProgress`: so `.initiating` from before `BolusPermission`, `.inProgress` once the
+  pump accepts, `.noBolus` again if it refuses. Trio shows its Initiating state for `.initiating`
+  until the pump delivers: nothing while the command goes out, `.initiating` once the pump accepts,
+  `.inProgress` once it delivers (`holdsInitiatingUntilDelivery`).
+- The pump answers `requesting` for about `bolusInitiationDelay` before it delivers an accepted bolus,
+  and the read its `.bolusChange` asks for queued behind a sync for 28 s, so `enactBolus`'s job, once
+  the host has its answer, reads it about once a second (`followBolusToDeliveryStart`) and gives way
+  to a cancel. The progress count starts at the first read of it delivering. Only that bolus
+  delivering moves it on: whether the pump answers no bolus before starting one is unconfirmed.
+- A Mobi takes a cancel while `requesting`, which Loop offers, and stores nothing of the bolus:
+  `LastBolusStatus` keeps naming the one before. So a cancel finalizes at 0 U a bolus never seen
+  delivering whose last read, `requestingReadEvidenceWindow` or less before the pump confirmed the
+  cancel, was `requesting`, when `LastBolusStatus` then names an earlier bolus. Without that read an
+  earlier last bolus stays the unknown it was (#328). Under Loop the bolus is `.canceling` from the
+  call, since the cancel can wait seconds behind queued jobs and Loop put its tappable progress row
+  back on the next status push, and a second tap sent a second cancel; a failed cancel puts it back.
+- The progress reporter is rebuilt from the saved bolus at launch, counting from its delivery start:
+  Loop asks for one only when it first reads `.inProgress`, which after a relaunch comes before any
+  read of the pump. An unconfirmed bolus still gets none until the pump is seen delivering it.
 - A zero temp basal is always allowed, whatever the profile, sync or update state, since 0% of any
   profile is 0. Control-IQ, a running bolus and a duration the pump refuses still refuse it.
 - `enactTempBasal` refuses a temp outside 15 minutes to 72 hours before connecting: the pump
@@ -586,6 +612,23 @@ host queue, so its state stays behind its lock.
   change recorded. Backing out is wrong there: a Mobi took the recovery's `ExitChangeCartridgeMode`
   as the new cartridge being in, streamed detection, and refused change mode and both exits from
   then on.
+
+### Cartridge wizard screens
+- A pump notification takes a step over. On the five steps that watch for them (the change's
+  disconnect and replace steps, the tubing fill's disconnect, connect and fill steps) the list
+  replaces the graphic and the instructions, and the subtitle asks for it to be dismissed. An empty
+  list is not shown, so nothing on screen re-reads it: the first read gates the start
+  (`canStartChange`, `canStartFill`), and a refused `EnterFillTubingMode` reads again.
+- The tubing fill sends `EnterFillTubingMode` from its connect step, after the disconnect step, so
+  the tubing is on the cartridge before the pump will fill.
+- Yellow messages are pinned with the bottom action (`WizardWarning`), opaque because the step
+  scrolls beneath them. The tubing fill keeps its disconnect warning up with a notification to
+  dismiss: the pump still fills while its button is held.
+- The animations draw a Mobi, so they show unless the pump is known to be another model
+  (`MobiAppGraphic.suits`). `replace_cartridge` is not Tandem's:
+  `scripts/make-replace-cartridge-graphic.py` builds it from `remove_cartridge`, keeping the one
+  transparent index the source has. gifsicle and ImageMagick give each frame its own, and a decoder
+  that clears to the screen's background index then leaves specks where the cartridge was.
 
 ### Marker events
 Events with no dose, each in a `replacePendingEvents: false` batch under a `raw` of its kind and date.

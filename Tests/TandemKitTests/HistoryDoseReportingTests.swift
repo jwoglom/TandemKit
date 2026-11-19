@@ -134,7 +134,7 @@ import XCTest
         delegate.pumpEventBatches.flatMap(\.events).filter { $0.dose?.type == .bolus }
     }
 
-    private func commandedEntry(bolusId: Int, isFinalized: Bool) -> BolusReportLedger.Entry {
+    private func commandedEntry(bolusId: Int, isFinalized: Bool, decisionId: UUID? = nil) -> BolusReportLedger.Entry {
         BolusReportLedger.Entry(
             bolusId: bolusId,
             pumpSerial: Self.pumpSerial,
@@ -142,7 +142,8 @@ import XCTest
             raw: Data("bolus 1.0 live".utf8),
             eventDate: now.addingTimeInterval(-600),
             automatic: false,
-            isFinalized: isFinalized
+            isFinalized: isFinalized,
+            decisionId: decisionId
         )
     }
 
@@ -270,7 +271,7 @@ import XCTest
             automatic: false,
             isFinalized: false
         ))
-        let inFlight = DoseEntry(type: .bolus, startDate: date, value: 1.0, unit: .units, isMutable: true)
+        let inFlight = DoseEntry(type: .bolus, startDate: date, value: 1.0, unit: .units, decisionId: nil, isMutable: true)
         manager.emitPumpEvents(
             [NewPumpEvent(date: date, dose: inFlight, raw: raw, title: "Bolus", type: .bolus)],
             replacePendingEvents: false
@@ -375,6 +376,32 @@ import XCTest
         XCTAssertEqual(manager.state.bolusReportLedger.entry(bolusId: 52, pumpSerial: Self.pumpSerial)?.isFinalized, true)
     }
 
+    func testAppBolusFinalizedFromHistoryKeepsItsDecision() throws {
+        let decisionId = UUID()
+        let entry = commandedEntry(bolusId: 52, isFinalized: false, decisionId: decisionId)
+        manager.state.bolusReportLedger.record(entry)
+
+        report(quickBolusStart(bolusId: 52, units: 1.0, firstSequenceNum: 600, secondsAgo: 600)
+            + [bolusCompletion(bolusId: 52, delivered: 0.65, requested: 1.0, sequenceNum: 603, secondsAgo: 570)])
+
+        let event = try XCTUnwrap(reportedBoluses.first)
+        XCTAssertEqual(event.dose?.isMutable, false)
+        XCTAssertEqual(event.dose?.decisionId, decisionId)
+    }
+
+    func testABolusDecisionSurvivesARelaunchInTheLedger() throws {
+        let entry = commandedEntry(bolusId: 52, isFinalized: false, decisionId: UUID())
+
+        XCTAssertEqual(try XCTUnwrap(BolusReportLedger.Entry(rawValue: entry.rawValue)), entry)
+    }
+
+    func testALedgerEntrySavedWithoutADecisionStillDecodes() throws {
+        var raw = commandedEntry(bolusId: 52, isFinalized: false).rawValue
+        raw["decisionId"] = nil
+
+        XCTAssertNil(try XCTUnwrap(BolusReportLedger.Entry(rawValue: raw)).decisionId)
+    }
+
     func testAppBolusOrphanedByARelaunchIsFinalizedAndReleased() throws {
         manager.state.bolusReportLedger.record(commandedEntry(bolusId: 53, isFinalized: false))
         manager.state.bolusDose = UnfinalizedDose(
@@ -402,7 +429,7 @@ import XCTest
         manager.state.bolusReportLedger.record(entry)
         let finalized = NewPumpEvent(
             date: entry.eventDate,
-            dose: DoseEntry(type: .bolus, startDate: entry.eventDate, value: 1.0, unit: .units, deliveredUnits: 1.0),
+            dose: DoseEntry(type: .bolus, startDate: entry.eventDate, value: 1.0, unit: .units, decisionId: nil, deliveredUnits: 1.0),
             raw: entry.raw,
             title: "Bolus"
         )

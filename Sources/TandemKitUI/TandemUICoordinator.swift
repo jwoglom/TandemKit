@@ -1,3 +1,4 @@
+import Combine
 import LoopKit
 import LoopKitUI
 import SwiftUI
@@ -13,7 +14,6 @@ enum TandemScreen {
     case soundSettings
     case changeCartridge
     case fillTubing
-    case fillTubingAfterCartridgeChange
     case fillCannula
     case notifications
     case cgmSettings
@@ -177,10 +177,11 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
                 guard let self else { return }
                 self.completionDelegate?.completionNotifyingDidComplete(self)
             })
-            return hostingController(
-                rootView: view,
-                title: String(localized: "Setup Complete", comment: "Title for setup complete")
-            )
+            let controller = hostingController(rootView: view, title: TandemKitSetupCompleteViewModel.title(for: viewModel.step))
+            setupCompleteTitleObserver = viewModel.$step.sink { [weak controller] step in
+                controller?.navigationItem.title = TandemKitSetupCompleteViewModel.title(for: step)
+            }
+            return controller
         case .insulinType:
             let isOnboarded = pumpManager.isOnboarded
             let view = TandemKitInsulinType(
@@ -253,7 +254,7 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
             let viewModel = TandemKitChangeCartridgeViewModel(
                 pumpManager: pumpManager,
                 done: { [weak self] in self?.resetNavigationTo([.pumpSettings]) },
-                toFillTubing: { [weak self] in self?.navigateTo(.fillTubingAfterCartridgeChange) }
+                toFillTubing: { [weak self] in self?.navigateTo(.fillTubing) }
             )
 
             return hostingController(
@@ -262,12 +263,11 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
                 largeTitleDisplayMode: .never
             )
 
-        case .fillTubing, .fillTubingAfterCartridgeChange:
+        case .fillTubing:
             let viewModel = TandemKitFillTubingViewModel(
                 pumpManager: pumpManager,
                 done: { [weak self] in self?.resetNavigationTo([.pumpSettings]) },
-                toFillingCannula: { [weak self] in self?.navigateTo(.fillCannula) },
-                followsCartridgeChange: screen == .fillTubingAfterCartridgeChange
+                toFillingCannula: { [weak self] in self?.navigateTo(.fillCannula) }
             )
 
             return hostingController(
@@ -298,7 +298,7 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
             let viewModel = TandemKitCGMSettingsViewModel(pumpManager: pumpManager)
             return hostingController(
                 rootView: TandemKitCGMSettingsView(viewModel: viewModel),
-                title: String(localized: "CGM Settings", comment: "Label for CGM settings")
+                title: String(localized: "Mobi CGM settings", comment: "Title for Mobi CGM settings screen")
             )
 
         case .controlIQSettings:
@@ -397,10 +397,9 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
         } else {
             // Held to the end: Trio's sheet lets this flow go once its pump manager is nil, and then only
             // this call dismisses the sheet.
-            pumpManager.prepareForDeactivation { _ in
-                DispatchQueue.main.async {
-                    self.completionDelegate?.completionNotifyingDidComplete(self)
-                }
+            Task { @MainActor in
+                await self.pumpManager.delete()
+                self.completionDelegate?.completionNotifyingDidComplete(self)
             }
         }
     }
@@ -408,6 +407,7 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
     /// What the pump reported right after pairing, for the Load Pump History step.
     private(set) var setupDeliveryReading = SetupDeliveryReading()
     private(set) var loadsSetupHistory = false
+    private var setupCompleteTitleObserver: AnyCancellable?
 
     /// Before setup writes anything, so the readings are what the pump's last user left, and before the
     /// host has the manager, so it doses on none of the pump's history until the user has chosen.

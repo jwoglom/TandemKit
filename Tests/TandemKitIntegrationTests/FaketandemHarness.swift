@@ -261,10 +261,13 @@ final class FaketandemHarness {
         }
     }
 
-    /// The host deletes the pump manager: `prepareForDeactivation`, as Loop and Trio call it.
+    /// The host deletes the pump manager: `delete()`, as Loop and Trio call it.
     func deactivate(_ driver: Driver, timeout: TimeInterval = 40) throws {
         try tearDown(timeout: timeout) { done in
-            driver.manager.prepareForDeactivation { _ in done() }
+            Task {
+                await driver.manager.delete()
+                done()
+            }
         }
     }
 

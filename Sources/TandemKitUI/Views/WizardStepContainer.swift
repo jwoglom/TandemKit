@@ -1,3 +1,4 @@
+import LoopKitUI
 import SwiftUI
 
 /// Layout metrics shared by every screen in the change-cartridge / fill-tubing /
@@ -14,6 +15,8 @@ enum WizardLayout {
     static let cardPadding: CGFloat = 16
     /// Spacing between the stacked elements of a step.
     static let stepSpacing: CGFloat = 20
+    /// Width and height of a step's animation.
+    static let graphicSize: CGFloat = 180
 }
 
 extension View {
@@ -30,6 +33,64 @@ extension View {
     /// Applies the wizard's shared horizontal gutter.
     func wizardHorizontalPadding() -> some View {
         padding(.horizontal, WizardLayout.horizontalPadding)
+    }
+}
+
+/// A yellow message, pinned with the step's bottom action.
+struct WizardWarning: View {
+    @Environment(\.guidanceColors) private var guidanceColors
+    let text: String
+
+    var body: some View {
+        Label(text, systemImage: "exclamationmark.triangle.fill")
+            .foregroundColor(guidanceColors.warning)
+            .wizardCard(background: guidanceColors.warning.opacity(0.1))
+            // Opaque: the step's content scrolls underneath the pinned bottom area.
+            .background(
+                RoundedRectangle(cornerRadius: WizardLayout.cardCornerRadius).fill(Color(.systemBackground))
+            )
+    }
+}
+
+/// A step's animation: centred, at one size, the step's own spacing above and below.
+struct WizardGraphic: View {
+    let graphic: MobiAppGraphic
+
+    var body: some View {
+        MobiAppGraphicView(graphic: graphic)
+            .frame(width: WizardLayout.graphicSize, height: WizardLayout.graphicSize)
+            .frame(maxWidth: .infinity)
+    }
+}
+
+/// The pump's active notifications. A step shows it in place of its graphic and instructions.
+struct WizardNotificationsPanel: View {
+    @ObservedObject var viewModel: TandemKitNotificationsViewModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Notifications", comment: "Notifications section header")
+                    .font(.headline)
+                Spacer()
+                if !viewModel.isRefreshing {
+                    Button(action: { viewModel.refreshNotifications() }) {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(viewModel.notifications) { item in
+                    NotificationRow(
+                        item: item,
+                        onDismiss: { viewModel.dismissNotification(item) },
+                        backgroundColor: Color(UIColor.tertiarySystemGroupedBackground)
+                    )
+                }
+            }
+        }
+        .wizardCard(background: Color(.secondarySystemGroupedBackground))
     }
 }
 

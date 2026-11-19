@@ -21,12 +21,12 @@ description: >-
 # targets out of the build graph so nothing can decide to recompile them.
 #
 # The repository/revision defaults mirror the LoopKit submodule of the Trio that
-# ships TandemKit, nightscout/Trio feat/tandem-closed-beta, which is the real
+# ships TandemKit, nightscout/Trio feat/tandem, which is the real
 # source of truth -- Trio pulls its dependencies in as git submodules, and
 # TandemKit is one of them. Upstream
 # LoopKit/LoopKit is not interchangeable with Trio's loopandlearn fork:
-# upstream has no `Pluggable`, which TandemPumpManager conforms to. When Trio
-# bumps its LoopKit submodule, bump the revision here to match.
+# upstream has no `Pluggable`, which TandemPumpManager conforms to. macos.yml always passes that
+# Trio's submodule (trio_ref's on a manual run), so the pin is only the fallback for a caller that doesn't.
 inputs:
   derived-data-path:
     description: xcodebuild -derivedDataPath the frameworks are staged into.
@@ -41,13 +41,25 @@ inputs:
     description: Workspace directory holding the cached frameworks.
     default: LoopKitProducts
   loopkit-repository:
-    default: loopandlearn/LoopKit
+    description: Empty for loopandlearn/LoopKit.
+    default: ''
   loopkit-revision:
-    default: d52c298e3e3fe640e2ae1c5cef885da5daaa58cb
+    description: Empty for the pin.
+    default: ''
 
 runs:
   using: composite
   steps:
+    - name: Pick the LoopKit revision
+      id: pin
+      shell: bash
+      env:
+        REPOSITORY: ${{ inputs.loopkit-repository || 'loopandlearn/LoopKit' }}
+        REVISION: ${{ inputs.loopkit-revision || 'babddf04536c04c6852ee7c76a1905164ee9893d' }}
+      run: |
+        echo "repository=${REPOSITORY}" >> "${GITHUB_OUTPUT}"
+        echo "revision=${REVISION}" >> "${GITHUB_OUTPUT}"
+
     # Keyed on the pinned LoopKit revision and the Xcode version, and nothing
     # else -- those are the only two inputs to these frameworks. The key is
     # deliberately narrow so it stays a hit across branches and the ~hundreds
@@ -56,7 +68,7 @@ runs:
       uses: actions/cache@v6
       with:
         path: ${{ inputs.products-cache }}
-        key: ${{ runner.os }}-${{ runner.arch }}-xcode-${{ inputs.xcode-version }}-loopkit-frameworks-${{ inputs.loopkit-revision }}
+        key: ${{ runner.os }}-${{ runner.arch }}-xcode-${{ inputs.xcode-version }}-loopkit-frameworks-${{ steps.pin.outputs.revision }}
 
     # Don't trust the restore blindly: a partial or truncated cache entry
     # should fall back to a real build rather than fail the job at link time.
@@ -75,12 +87,12 @@ runs:
           echo "prebuilt=false" >> "${GITHUB_OUTPUT}"
         fi
 
-    - name: Checkout LoopKit at the pinned revision
+    - name: Checkout LoopKit at the picked revision
       if: steps.loopkit.outputs.prebuilt != 'true'
       uses: actions/checkout@v6
       with:
-        repository: ${{ inputs.loopkit-repository }}
-        ref: ${{ inputs.loopkit-revision }}
+        repository: ${{ steps.pin.outputs.repository }}
+        ref: ${{ steps.pin.outputs.revision }}
         path: LoopKit
         fetch-depth: 1
 

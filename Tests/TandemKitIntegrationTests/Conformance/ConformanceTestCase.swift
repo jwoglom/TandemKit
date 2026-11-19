@@ -183,7 +183,7 @@ class ConformanceTestCase: FaketandemIntegrationTestCase {
     ) throws -> PumpManagerError? {
         let manager = try XCTUnwrap(driver, "no driver").manager
         let box = ResultBox<PumpManagerError?>()
-        manager.enactBolus(units: units, activationType: activationType) { box.set($0) }
+        manager.enactBolus(decisionId: nil, units: units, activationType: activationType) { box.set($0) }
         let result = try box.wait("enactBolus completion", timeout: timeout ?? commandTimeout)
         drainDelegate()
         return result
@@ -201,7 +201,7 @@ class ConformanceTestCase: FaketandemIntegrationTestCase {
     func enactTempBasal(unitsPerHour: Double, duration: TimeInterval, timeout: TimeInterval? = nil) throws -> PumpManagerError? {
         let manager = try XCTUnwrap(driver, "no driver").manager
         let box = ResultBox<PumpManagerError?>()
-        manager.enactTempBasal(unitsPerHour: unitsPerHour, for: duration) { box.set($0) }
+        manager.enactTempBasal(decisionId: nil, unitsPerHour: unitsPerHour, for: duration) { box.set($0) }
         let result = try box.wait("enactTempBasal completion", timeout: timeout ?? commandTimeout)
         drainDelegate()
         return result

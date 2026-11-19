@@ -298,8 +298,11 @@ final class IdempotencyConformanceTests: ConformanceTestCase {
             )
         }
 
-        // Resume: the batch that reopens delivery must not purge anything still live either.
+        // Resume: the batch that reopens delivery must not purge anything still live either. Two seconds
+        // on: the driver dates a resume at least a second after its suspend, and one dated ahead of
+        // Loop's clock drops the stored open suspend, which Loop cannot store again under its identifier.
         // Counted before the resume: its qualifying event can report the resume ahead of the sync.
+        try clock.advanceBoth(seconds: 2)
         let beforeResume = allPumpEventBatches.count
         _ = try harness.client.resume()
         _ = try sync()

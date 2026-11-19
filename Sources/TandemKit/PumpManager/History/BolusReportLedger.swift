@@ -32,6 +32,8 @@ public struct BolusReportLedger: Equatable {
         /// An extended part's programmed end, on the phone's clock: its mutable dose ends there until
         /// BolexCompleted is read.
         public let programmedEndDate: Date?
+        /// History knows nothing of the dosing decision, and the bolus's report from it replaces the host's row.
+        public let decisionId: UUID?
 
         public init(
             bolusId: Int,
@@ -43,7 +45,8 @@ public struct BolusReportLedger: Equatable {
             automatic: Bool,
             isFinalized: Bool,
             units: Double? = nil,
-            programmedEndDate: Date? = nil
+            programmedEndDate: Date? = nil,
+            decisionId: UUID? = nil
         ) {
             self.bolusId = bolusId
             self.pumpSerial = pumpSerial
@@ -55,6 +58,7 @@ public struct BolusReportLedger: Equatable {
             self.isFinalized = isFinalized
             self.units = units
             self.programmedEndDate = programmedEndDate
+            self.decisionId = decisionId
         }
 
         /// An entry recorded before the serial was known matches any serial.
@@ -249,7 +253,8 @@ extension BolusReportLedger.Entry: RawRepresentable {
             automatic: rawValue["automatic"] as? Bool ?? false,
             isFinalized: rawValue["isFinalized"] as? Bool ?? false,
             units: rawValue["units"] as? Double,
-            programmedEndDate: (rawValue["programmedEndDate"] as? TimeInterval).map(Date.init(timeIntervalSinceReferenceDate:))
+            programmedEndDate: (rawValue["programmedEndDate"] as? TimeInterval).map(Date.init(timeIntervalSinceReferenceDate:)),
+            decisionId: (rawValue["decisionId"] as? String).flatMap(UUID.init(uuidString:))
         )
     }
 
@@ -266,6 +271,7 @@ extension BolusReportLedger.Entry: RawRepresentable {
         raw["pumpSerial"] = pumpSerial
         raw["units"] = units
         raw["programmedEndDate"] = programmedEndDate?.timeIntervalSinceReferenceDate
+        raw["decisionId"] = decisionId?.uuidString
         return raw
     }
 }

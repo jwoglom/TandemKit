@@ -19,41 +19,46 @@ struct TandemKitCGMSettingsView: View {
     @State private var activeAlert: CGMAlertType?
 
     var body: some View {
-        VStack(alignment: .leading) {
-            if viewModel.isFetching {
-                HStack {
-                    Spacer()
-                    ProgressView()
-                        .padding()
-                    Text("Loading CGM status...", comment: "Loading CGM status")
-                        .foregroundColor(.secondary)
-                    Spacer()
-                }
-                Spacer()
-            } else {
-                List {
-                    cgmStatusSection
+        List {
+            Section {
+                controlIQOnlyWarningCard
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
+            }
 
-                    if viewModel.cgmSessionState == .startPending {
-                        Section {
-                            Button(action: {
-                                activeAlert = .stopConfirmation
-                            }) {
-                                HStack {
-                                    Spacer()
-                                    Text("Stop Sensor", comment: "Button to stop sensor during startup")
-                                        .fontWeight(.semibold)
-                                        .foregroundColor(guidanceColors.critical)
-                                    Spacer()
-                                }
-                            }
-                            .disabled(viewModel.isLoading)
-                        }
+            if viewModel.isFetching {
+                Section {
+                    HStack {
+                        Spacer()
+                        ProgressView()
+                            .padding()
+                        Text("Loading CGM status...", comment: "Loading CGM status")
+                            .foregroundColor(.secondary)
+                        Spacer()
                     }
                 }
-                .listStyle(InsetGroupedListStyle())
+            } else {
+                cgmStatusSection
+
+                if viewModel.cgmSessionState == .startPending {
+                    Section {
+                        Button(action: {
+                            activeAlert = .stopConfirmation
+                        }) {
+                            HStack {
+                                Spacer()
+                                Text("Stop Sensor", comment: "Button to stop sensor during startup")
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(guidanceColors.critical)
+                                Spacer()
+                            }
+                        }
+                        .disabled(viewModel.isLoading)
+                    }
+                }
             }
         }
+        .listStyle(InsetGroupedListStyle())
         .onAppear {
             viewModel.fetchCGMStatus()
         }
@@ -85,6 +90,20 @@ struct TandemKitCGMSettingsView: View {
                 viewModel.commandError = nil
             }
         }
+    }
+
+    private var controlIQOnlyWarningCard: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundColor(guidanceColors.warning)
+                .font(.title2)
+            Text(
+                "These CGM options are used only by the Mobi pump when Control-IQ is active.",
+                comment: "Warning at the top of the Mobi CGM settings screen"
+            )
+            .font(.subheadline)
+        }
+        .wizardCard(background: guidanceColors.warning.opacity(0.1))
     }
 
     // MARK: - CGM Status Section

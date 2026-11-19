@@ -10,8 +10,8 @@ inputs:
     description: LoopWorkspace repository (must contain a TandemKit submodule at path TandemKit).
     default: LoopKit/LoopWorkspace
   ref:
-    description: Branch, tag or SHA of the LoopWorkspace repository.
-    default: feat/tandem-closed-beta
+    description: Branch, tag or SHA of the LoopWorkspace repository; empty for feat/tandem-next-dev.
+    default: ''
   token:
     description: Token that can read the LoopWorkspace repository, if it is private.
     default: ''
@@ -32,7 +32,7 @@ runs:
       uses: actions/checkout@v6
       with:
         repository: ${{ inputs.repository }}
-        ref: ${{ inputs.ref }}
+        ref: ${{ inputs.ref || 'feat/tandem-next-dev' }}
         path: loop
         submodules: false
         fetch-depth: 1
