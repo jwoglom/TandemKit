@@ -494,6 +494,104 @@ final class TimeChangeConformanceTests: ConformanceTestCase {
         trio.assertNoDuplicates()
     }
 
+    // MARK: - G7
+
+    /// The pump's date set two days ahead on the pump, past what the driver trusts of its clock, then a
+    /// bolus on the pump: reported at the instant the pump gave it, ended, and counted by both hosts.
+    func testG7_aBolusOnThePumpWhileItsDateIsTwoDaysAheadIsReportedWhenItWasGiven() throws {
+        let driver = try stageDriver(zone: Self.eastern)
+        let batchesBefore = allPumpEventBatches.count
+        try harness.client.setPumpTimeOnThePump(deltaSeconds: .days(2))
+        try clock.advanceBoth(seconds: .minutes(2), ticks: 2)
+        _ = try sync()
+        XCTAssertTrue(driver.manager.state.isPumpClockUntrusted, "two days is past the trust limit")
+
+        let pump = try pumpBolus(units: 0.5)
+        try clock.advanceBoth(seconds: .minutes(2), ticks: 2)
+        _ = try sync()
+        let report = try waitForEvent("the pump's bolus from its history", since: batchesBefore) {
+            $0.dose?.type == .bolus && $0.dose?.wasProgrammedByPumpUI == true
+        }
+        let dose = try XCTUnwrap(report.dose)
+        XCTExpectFailure("A dose stamped on a clock the driver does not trust is sent starting when it is read and ending on that clock") {
+            XCTAssertEqual(dose.startDate.timeIntervalSince(pump.start), 0, accuracy: 2, "when the pump gave it")
+            XCTAssertLessThanOrEqual(dose.endDate, clock.now.addingTimeInterval(1), "ended: \(dose)")
+        }
+
+        XCTAssertNoThrow(try syncPumpTime().get())
+        XCTAssertFalse(driver.manager.state.isPumpClockUntrusted)
+        try clock.advanceBoth(seconds: .minutes(5), ticks: 5)
+        _ = try sync()
+        try waitForBackfill(driver)
+        try XCTExpectFailure("Neither host is told again of a dose sent on a clock the driver did not trust") {
+            try assertHostsMatchThePump()
+        }
+    }
+
+    // MARK: - G8
+
+    /// The pump's date set two days behind on the pump, then a bolus on the pump: reported at the
+    /// instant the pump gave it once the app has set the pump's clock, and counted by both hosts.
+    func testG8_aBolusOnThePumpWhileItsDateIsTwoDaysBehindIsReportedOnceTheClockIsSet() throws {
+        let driver = try stageDriver(zone: Self.eastern)
+        let batchesBefore = allPumpEventBatches.count
+        try harness.client.setPumpTimeOnThePump(deltaSeconds: -.days(2))
+        try clock.advanceBoth(seconds: .minutes(2), ticks: 2)
+        _ = try sync()
+        XCTAssertTrue(driver.manager.state.isPumpClockUntrusted, "two days is past the trust limit")
+
+        let pump = try pumpBolus(units: 0.5)
+        try clock.advanceBoth(seconds: .minutes(2), ticks: 2)
+        _ = try sync()
+        try waitForBackfill(driver)
+        XCTAssertNoThrow(try syncPumpTime().get())
+        try clock.advanceBoth(seconds: .minutes(5), ticks: 5)
+        _ = try sync()
+        try waitForBackfill(driver)
+
+        let reports = eventsSince(batchesBefore).filter { $0.dose?.type == .bolus }
+        XCTAssertEqual(reports.count, 1, "\(reports.map(\.dose))")
+        XCTAssertEqual(reports.first?.dose?.startDate.timeIntervalSince(pump.start) ?? .infinity, 0, accuracy: 2, "when the pump gave it")
+        assertEveryDoseIsInOrder(since: batchesBefore)
+        try assertHostsMatchThePump()
+    }
+
+    // MARK: - G9
+
+    /// The pump's clock restarts at 2008-01-01 while paired, with no record of it, and the app sets it: a
+    /// bolus from before tracking stays unreported, and one given on the restarted clock is reported at its instant.
+    func testG9_nothingFromBeforeTrackingIsReportedAfterThePumpsClockRestartsAndIsSet() throws {
+        let driver = try stageDriver(zone: Self.eastern)
+        try stageBolusFromBeforeTracking(driver)
+        let batchesBefore = allPumpEventBatches.count
+        let wireZero = FaketandemClock.tandemEpochUnix - Double(TimeZone.current.secondsFromGMT(for: clock.now))
+        try clock.setSkew(seconds: wireZero + 180 - clock.now.timeIntervalSince1970)
+        try clock.advanceBoth(seconds: .minutes(2), ticks: 2)
+        _ = try sync()
+        XCTAssertTrue(driver.manager.state.isPumpClockUntrusted, "2008 is past the trust limit")
+
+        let pump = try pumpBolus(units: 0.5)
+        try clock.advanceBoth(seconds: .minutes(2), ticks: 2)
+        _ = try sync()
+        try waitForBackfill(driver)
+        XCTAssertNoThrow(try syncPumpTime().get())
+        try clock.advanceBoth(seconds: .minutes(5), ticks: 5)
+        _ = try sync()
+        try waitForBackfill(driver)
+
+        let serial = try XCTUnwrap(driver.manager.historyLogStoreSerial)
+        let reports = eventsSince(batchesBefore).filter { $0.dose?.type == .bolus }
+        let old = reports.filter { $0.raw == HistoryLogSyncIdentifier.bolus(pumpSerial: serial, bolusId: Self.untrackedBolusId) }
+        XCTExpectFailure("A bolus from before the driver tracked the pump is reported as given now once the app sets a clock that restarted") {
+            XCTAssertTrue(old.isEmpty, "\(old.map(\.dose))")
+        }
+        let given = reports.filter { $0.raw == HistoryLogSyncIdentifier.bolus(pumpSerial: serial, bolusId: pump.bolusId) }
+        XCTAssertEqual(given.count, 1, "\(given.map(\.dose))")
+        XCTAssertEqual(given.first?.dose?.startDate.timeIntervalSince(pump.start) ?? .infinity, 0, accuracy: 2, "when the pump gave it")
+        assertEveryDoseIsInOrder(since: batchesBefore)
+        try assertHostsMatchThePump()
+    }
+
     private static let dstZone = "America/New_York"
     private static let morningRate = 1.5
 }
