@@ -200,11 +200,7 @@ final class HistoryTimestampReconcilerTests: XCTestCase {
                 lipoMv: 0
             ),
             NewDayHistoryLog(pumpTimeSec: 0, sequenceNum: 102, commandedBasalRate: 0, featuresBitmask: 0, featureBitmaskIndex: 0),
-            ArmInitHistoryLog(cargo: HistoryLog.fillCargo(Bytes.combine(
-                HistoryLog.typeIdBytes(ArmInitHistoryLog.typeId),
-                Bytes.toUint32(212),
-                Bytes.toUint32(103)
-            ))),
+            ArmInitHistoryLog(pumpTimeSec: 212, sequenceNum: 103, version: 0, configABits: 0, configBBits: 0, numLogEntries: 0),
             record(219, 104),
             NewDayHistoryLog(pumpTimeSec: UInt32(4383 * day), sequenceNum: 105, commandedBasalRate: 0, featuresBitmask: 0, featureBitmaskIndex: 0),
             DateChangeHistoryLog(pumpTimeSec: UInt32(4383 * day + 219), sequenceNum: 106, datePrior: 0, dateAfter: 4383, rawRTCTime: 0),
