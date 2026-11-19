@@ -168,6 +168,21 @@ final class HistoryTimestampReconcilerTests: XCTestCase {
         XCTAssertEqual(reconciler.utcDate(pumpTimeSec: UInt32(6800 * day + 1000), sequenceNum: 1), pumpDate(6800 * day + 1000))
     }
 
+    func testATimeAndDateChangeBothStampedAtTheFinalTimeIsAllDatable() {
+        // Twelve hours east across midnight, as faketandem logs a clock set: TimeChanged first.
+        let reconciler = HistoryTimestampReconciler()
+        let final = 6801 * day + 10_572
+        reconciler.recordClockChanges(in: [
+            record(6800 * day + 53_000, 1),
+            TimeChangedHistoryLog(pumpTimeSec: UInt32(final), sequenceNum: 2, timePrior: 53_772_000, timeAfter: 10_572_000, rawRTC: 0),
+            DateChangeHistoryLog(pumpTimeSec: UInt32(final), sequenceNum: 3, datePrior: 6800, dateAfter: 6801, rawRTCTime: 0),
+            record(final + 60, 4)
+        ])
+
+        XCTAssertNil(reconciler.undatableThroughSequenceNum)
+        XCTAssertEqual(reconciler.utcDate(pumpTimeSec: UInt32(6800 * day + 53_000), sequenceNum: 1), pumpDate(6800 * day + 53_000 + 12 * 3600))
+    }
+
     func testRecordDatesLeaveOutUndatableRecords() {
         let logs = shelfModeWake()
         let dates = HistoryRecordDates(logs) { $0 }

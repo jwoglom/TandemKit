@@ -100,16 +100,17 @@ final class HistoryTimestampReconciler {
             if log is ArmInitHistoryLog || log is ShelfModeHistoryLog {
                 return log.sequenceNum
             }
-            // NewDay is stamped at the midnight it marks, which for a date change is the new date's,
-            // one record before the DateChange.
-            if !(log is NewDayHistoryLog) {
+            let delta = clockChangeDelta(of: log)
+            // A change record can carry its whole set's final stamp (faketandem writes TimeChanged then
+            // DateChange, both at it), and NewDay its new date's midnight, a record before the DateChange.
+            if delta == nil, !(log is NewDayHistoryLog) {
                 let stamp = Int(log.pumpTimeSec) + shift
                 if let laterStamp, stamp > laterStamp + clockStepTolerance {
                     return log.sequenceNum
                 }
                 laterStamp = stamp
             }
-            shift += clockChangeDelta(of: log) ?? 0
+            shift += delta ?? 0
         }
         return nil
     }
