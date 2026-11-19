@@ -142,7 +142,7 @@ final class PumpBasalTimelineTests: XCTestCase {
         var log = PumpLog()
         log.profile(0)
         log.profile(300)
-        log.timeChanged(400, by: 3600)
+        log.timeChanged(4000, by: 3600)
         log.profile(4200)
 
         let timeline = timeline(log) { $0.addingTimeInterval(-.hours(2)) }
