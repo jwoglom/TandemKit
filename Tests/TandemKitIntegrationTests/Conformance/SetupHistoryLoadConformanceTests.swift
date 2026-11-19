@@ -900,4 +900,407 @@ final class SetupHistoryLoadConformanceTests: ConformanceTestCase {
         let firstCycle = try XCTUnwrap(timeline.basalCycles.first { $0.start >= since })
         try assertHostsCountThePumpsBasal(from: firstCycle.start, loop, trio)
     }
+
+    // MARK: - L11
+
+    /// A pump in use with its clock 12 hours behind, as one set to the wrong half of the day: the load
+    /// reports both boluses of its six hours at the pump's times, and the app's later syncs change nothing.
+    func testL11_theLoadReadsItsWholeWindowOnAPumpWhoseClockIsHalfADayBehind() throws {
+        try pairing(at: 330)
+        try clock.setSkew(seconds: -.hours(12))
+        try runBasalCycle()
+        try run(to: minutes(90), logging: Self.inUseRecords)
+        try bolusOnThePump(units: 1.0)
+        try run(to: minutes(270), logging: Self.inUseRecords)
+        let laterBolusId = try bolusOnThePump(units: 2.0)
+        try run(to: minutes(330), logging: Self.inUseRecords)
+
+        let driver = try pairThisApp()
+        let since = try loadHistory(driver)
+        adopt(driver)
+        _ = try sync()
+        for _ in 0 ..< 7 {
+            try advance(to: clock.now.addingTimeInterval(.minutes(20)))
+            _ = try sync()
+        }
+        try waitForHistoryPass(driver)
+        XCTAssertTrue(driver.delegate.errors.isEmpty, "\(driver.delegate.errors)")
+        XCTAssertEqual(driver.delegate.clockAdjustments.first ?? 0, .hours(12), accuracy: 10, "moved forward what it was behind")
+
+        let serial = try XCTUnwrap(driver.manager.historyLogStoreSerial)
+        let later = hostEvents.filter { $0.raw == HistoryLogSyncIdentifier.bolus(pumpSerial: serial, bolusId: laterBolusId) }
+        XCTAssertEqual(later.count, 1, "the bolus an hour before pairing, in the first slice: \(later.map(\.dose))")
+        let (loop, trio) = hostOracles()
+        try XCTExpectFailure("The load stops at the first record stamped before its window on the clock setup replaced") {
+            try assertHostsHoldThePumpsBoluses(from: since, loop, trio, count: 2)
+        }
+    }
+
+    // MARK: - M: a pump out of shelf mode
+
+    private struct PutAwayPump {
+        /// The boluses the pump gave before it was put away, oldest first.
+        let bolusIds: [Int]
+        let extendedBolusId: Int
+        /// The last record it wrote before it was put away: its ShelfMode record, where it wrote one.
+        let lastSequenceBefore: Int
+        let wokenAt: Date
+        /// How far setup has to move the pump's clock forward.
+        let clockBehind: TimeInterval
+        /// A bolus on the pump between waking and pairing.
+        let bolusIdAfterWaking: Int?
+    }
+
+    private static let putAwayDays = 201.0
+    private static let awakeAsInTheField: TimeInterval = .hours(7) + .minutes(17) + 20
+    /// What a Mobi with a CGM and Control-IQ logs each 5 minutes besides its BasalDelivery record: at a
+    /// pump's record counts the walk backward takes several 255-record slices to reach the boluses.
+    private static let inUseRecords = [
+        "CgmStateChangeGx", "DexcomG7CGM", "ControlIQCycle", "ControlIQGlucoseModel", "ControlIQAutomatedInsulin",
+        "CgmStateChangeGx", "PumpDriveEvent", "PumpDriveEvent", "AamAnnunciation", "BatteryEstimateUpdate",
+    ]
+    /// And one stopped after a reset, with its alarm repeating.
+    private static let afterResetRecords = [
+        "CgmStateChangeGx", "AamAnnunciation", "AamAnnunciation", "BatteryEstimateUpdate", "IdpTimeDependentSegment", "AamAnnunciation",
+    ]
+
+    /// The pump to `date`, logging `records` each 5 minutes with the BasalDelivery record its cycle writes.
+    private func run(to date: Date, logging records: [String]) throws {
+        let batch: [[String: Any]] = records.map { ["type": $0, "seconds_ago": 0, "data": [String: Any]()] }
+        while clock.now < date {
+            try advance(to: min(date, clock.now.addingTimeInterval(Self.cycle)))
+            try harness.client.appendHistory(records: batch)
+        }
+    }
+
+    /// A Mobi used 201 days before on a right clock, its last bolus at minute 90 of that use, then
+    /// stopped and put away at `putAwayAt` minutes; awake for `awake` when paired, stopped unless it boluses.
+    private func stagePumpPutAway(
+        at putAwayAt: Double = 330,
+        shelfModeRecord: Bool = true,
+        clockRestarts: Bool = true,
+        awake: TimeInterval = SetupHistoryLoadConformanceTests.awakeAsInTheField,
+        bolusBeforePairing: TimeInterval? = nil
+    ) throws -> PutAwayPump {
+        try eraseHistory()
+        // The 2008 clock starts at 1 s: the emulator's clock leaves a wire reading of 0 out of its answer.
+        let on2008Clock: TimeInterval = clockRestarts ? 218 : 0
+        let pairedAt = Date()
+        let wokenAt = pairedAt.addingTimeInterval(-(on2008Clock + awake))
+
+        stagingStart = try clock.start(at: wokenAt.addingTimeInterval(-.days(Self.putAwayDays) - .minutes(putAwayAt)))
+        try runBasalCycle()
+        var bolusIds: [Int] = []
+        try run(to: minutes(5), logging: Self.inUseRecords)
+        bolusIds.append(try bolusOnThePump(units: 1.2))
+        try run(to: minutes(20), logging: Self.inUseRecords)
+        bolusIds.append(try bolusOnThePump(units: 2.4, stoppedAt: 0.35))
+        try run(to: minutes(30), logging: Self.inUseRecords)
+        let extendedBolusId = try bolusOnThePump(units: 1.8)
+        bolusIds.append(extendedBolusId)
+        try appendExtendedRequest(bolusId: extendedBolusId, standardPercent: 60, minutes: 120, options: 5)
+        try appendBolexActivated(bolusId: extendedBolusId, units: 1.2)
+        try run(to: minutes(60), logging: Self.inUseRecords)
+        bolusIds.append(try bolusOnThePump(units: 2.0))
+        try run(to: minutes(62), logging: Self.inUseRecords)
+        bolusIds.append(try bolusOnThePump(units: 2.0))
+        try run(to: minutes(90), logging: Self.inUseRecords)
+        bolusIds.append(try bolusOnThePump(units: 1.0))
+        if putAwayAt > 150 {
+            try run(to: minutes(150), logging: Self.inUseRecords)
+            try appendBolexCompleted(bolusId: extendedBolusId, delivered: 1.2, requested: 1.2)
+        }
+        try run(to: minutes(putAwayAt), logging: Self.inUseRecords)
+        var lastSequenceBefore = try harness.client.suspend(reason: "user").history.lastSequence
+        if shelfModeRecord {
+            lastSequenceBefore = try harness.client.appendHistory(type: "ShelfMode", secondsAgo: 0, data: [:]).history.lastSequence
+        }
+
+        // Off across the jump, or the cycle would write 201 days of BasalDelivery records.
+        try harness.client.setState(["basal_cycle_enabled": false])
+        let aligned = Date(timeIntervalSince1970: wokenAt.timeIntervalSince1970.rounded(.down))
+        if clockRestarts {
+            // A skew, not a clock set: the reset leaves no TimeChanged or DateChange record.
+            let wireZero = FaketandemClock.tandemEpochUnix - Double(TimeZone.current.secondsFromGMT(for: aligned))
+            stagingStart = try clock.start(at: aligned, skewSeconds: wireZero + 1 - aligned.timeIntervalSince1970)
+            try harness.client.setState(["time_since_reset": 0])
+            try harness.client.appendHistory(type: "NewDay", secondsAgo: 0, data: [:])
+            try clock.advanceBoth(seconds: 211)
+            try harness.client.appendHistory(records: ["ArmInit", "VersionInfo"].map { ["type": $0, "seconds_ago": 0, "data": [String: Any]()] })
+            try clock.advanceBoth(seconds: on2008Clock - 211)
+            // Set on the pump to 2020-01-01 as the field pump was, so setup's change is the second on record.
+            try harness.client.setPumpTimeOnThePump(deltaSeconds: .days(4383))
+            try harness.client.setPumpTimeOnThePump(deltaSeconds: -(on2008Clock + 1))
+        } else {
+            stagingStart = try clock.start(at: aligned)
+            try harness.client.appendHistory(type: "VersionInfo", secondsAgo: 0, data: [:])
+        }
+        try runBasalCycle()
+        let pairing = stagingStart.addingTimeInterval(on2008Clock + awake)
+        var bolusIdAfterWaking: Int?
+        if let bolusBeforePairing {
+            try harness.client.resume()
+            try run(to: pairing.addingTimeInterval(-bolusBeforePairing), logging: Self.afterResetRecords)
+            bolusIdAfterWaking = try bolusOnThePump(units: 1.5)
+        }
+        try run(to: pairing, logging: Self.afterResetRecords)
+
+        return PutAwayPump(
+            bolusIds: bolusIds,
+            extendedBolusId: extendedBolusId,
+            lastSequenceBefore: lastSequenceBefore,
+            wokenAt: aligned,
+            clockBehind: clock.now.timeIntervalSince(try pumpClockReading()),
+            bolusIdAfterWaking: bolusIdAfterWaking
+        )
+    }
+
+    /// The pump's clock as the driver decodes it, in the phone's zone.
+    private func pumpClockReading() throws -> Date {
+        let wire = Double(try harness.client.clock().pumpTimeSeconds)
+        return Date(timeIntervalSince1970: FaketandemClock.tandemEpochUnix + wire - Double(TimeZone.current.secondsFromGMT()))
+    }
+
+    private func historyReads(since mark: Int) throws -> [ClosedRange<Int>] {
+        try harness.requestLog(since: mark).compactMap { entry in
+            guard entry.isRequest, entry.message == "HistoryLogRequest",
+                  let top = entry.cargo?["startLog"]?.intValue,
+                  let count = entry.cargo?["numberOfLogs"]?.intValue,
+                  top >= 1
+            else { return nil }
+            // The request log reads the count byte as signed: 255 comes back as -1.
+            return max(1, top - (count < 0 ? count + 256 : max(count, 1)) + 1) ... top
+        }
+    }
+
+    private struct DayAfterSetup {
+        let driver: FaketandemHarness.Driver
+        let pairedAt: Date
+        /// Every slice of the pump's history the driver asked for from pairing on.
+        let historyReads: [ClosedRange<Int>]
+        /// What the host held once it had adopted the manager and synced.
+        let eventsAtAdoption: [NewPumpEvent]
+        let appBolusCount: Int
+    }
+
+    /// The host adopts the manager, the pump is resumed, the app gives an SMB and is relaunched within the
+    /// 7 hours the walk backward covers; then syncs for an hour per 255-record slice of the log, and an SMB.
+    private func runTheDayAfterSetup(_ setUp: FaketandemHarness.Driver, pairedAt: Date, logMark: Int, resumes: Bool = true) throws -> DayAfterSetup {
+        var driver = setUp
+        var mark = logMark
+        var reads: [ClosedRange<Int>] = []
+        func collectReads() throws {
+            reads += try historyReads(since: mark)
+            mark = try harness.client.snapshot().requestLog.lastSeq
+        }
+        func loop(to date: Date) throws {
+            while clock.now < date {
+                try advance(to: min(date, clock.now.addingTimeInterval(.minutes(20))))
+                _ = try sync()
+            }
+            try waitForHistoryPass(driver)
+            try collectReads()
+        }
+        func smb(units: Double) throws {
+            XCTAssertNil(try enactBolus(units: units, activationType: .automatic))
+            try advanceUntilBolusFinishes(bolusId: try XCTUnwrap(driver.manager.state.bolusDose?.bolusId))
+            _ = try sync()
+        }
+
+        adopt(driver)
+        _ = try sync()
+        try waitForHistoryPass(driver)
+        let eventsAtAdoption = hostEvents
+        try advance(to: pairedAt.addingTimeInterval(.minutes(4)))
+        if resumes {
+            XCTAssertNil(try resumeDelivery())
+        }
+        try loop(to: pairedAt.addingTimeInterval(.minutes(46)))
+        try smb(units: 0.3)
+        try loop(to: pairedAt.addingTimeInterval(.minutes(52)))
+        driver = try relaunch()
+        _ = try sync()
+
+        let slices = Int((Double(try harness.client.snapshot().history.lastSequence) / Double(HistoryBackfillPlanner.maxDeepSliceSize)).rounded(.up))
+        for hour in 1 ... slices + 1 {
+            try loop(to: pairedAt.addingTimeInterval(.minutes(52) + .hours(Double(hour))))
+        }
+        try smb(units: 0.25)
+        try loop(to: clock.now.addingTimeInterval(.minutes(20)))
+        return DayAfterSetup(driver: driver, pairedAt: pairedAt, historyReads: reads, eventsAtAdoption: eventsAtAdoption, appBolusCount: 2)
+    }
+
+    private func raws(ofBolusesBefore pump: PutAwayPump, _ driver: FaketandemHarness.Driver) throws -> Set<Data> {
+        let serial = try XCTUnwrap(driver.manager.historyLogStoreSerial)
+        return Set(pump.bolusIds.map { HistoryLogSyncIdentifier.bolus(pumpSerial: serial, bolusId: $0) }
+            + [HistoryLogSyncIdentifier.extendedBolus(pumpSerial: serial, bolusId: pump.extendedBolusId)])
+    }
+
+    private func assertNoHistoryIsReadFromBeforeThePumpWasPutAway(
+        _ pump: PutAwayPump,
+        _ day: DayAfterSetup,
+        expectedFailure: String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        XCTExpectFailure(expectedFailure) {
+            let below = day.historyReads.filter { $0.upperBound < pump.lastSequenceBefore }
+            XCTAssertTrue(below.isEmpty, "read from before record \(pump.lastSequenceBefore): \(below)", file: file, line: line)
+        }
+    }
+
+    /// `bolusCount` boluses from `start` are the pump's own since then: the app's, and one on the pump after it woke.
+    private func assertNoBolusFromBeforeThePumpWasPutAwayIsCounted(
+        _ pump: PutAwayPump,
+        _ day: DayAfterSetup,
+        from start: Date,
+        bolusCount: Int,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let old = try raws(ofBolusesBefore: pump, day.driver)
+        let reported = hostEvents.filter { old.contains($0.raw) }
+        let (loop, trio) = hostOracles()
+        let ledger = day.driver.manager.state.bolusReportLedger
+        try XCTExpectFailure("Boluses from before the pump was put away are reported to the host as given now") {
+            XCTAssertTrue(reported.isEmpty, "reported from before it was put away: \(reported.map(\.dose))", file: file, line: line)
+            let ahead = hostDoseEvents.filter { ($0.dose?.endDate ?? .distantPast) > clock.now.addingTimeInterval(.minutes(1)) && $0.dose?.isMutable == false }
+            XCTAssertTrue(ahead.isEmpty, "finalized doses ending after the phone's clock: \(ahead.map(\.dose))", file: file, line: line)
+            try assertHostsHoldThePumpsBoluses(from: start, loop, trio, count: bolusCount, file: file, line: line)
+        }
+        XCTExpectFailure("The bolus ledger keeps entries dated in the future and an extended part it never finalizes") {
+            let ahead = ledger.entries.filter { $0.eventDate > clock.now.addingTimeInterval(.minutes(1)) }
+            XCTAssertTrue(ahead.isEmpty, "ledger entries dated after the phone's clock: \(ahead.map(\.eventDate))", file: file, line: line)
+            XCTAssertTrue(ledger.heldExtendedParts.isEmpty, "\(ledger.heldExtendedParts)", file: file, line: line)
+        }
+    }
+
+    private static let readsPastShelfMode = "The walk backward reads on past the pump's ShelfMode record"
+
+    // MARK: - M1
+
+    /// A pump out of shelf mode, not loaded: setup sets its clock 6.9 years forward, the walk backward stops
+    /// at the ShelfMode record, and nothing the pump gave before it reaches the host however long the app runs.
+    func testM1_nothingFromBeforeShelfModeIsReportedAfterSetupSetsThePumpsClock() throws {
+        let pump = try stagePumpPutAway()
+        let pairedAt = clock.now
+        let logMark = try harness.client.snapshot().requestLog.lastSeq
+        let setUp = try pairThisApp()
+        XCTAssertEqual(setUp.manager.state.pumpClockOffset, 0, accuracy: 5, "setup set the pump's clock")
+        XCTAssertEqual(try pumpClockReading().timeIntervalSince(clock.now), 0, accuracy: 5, "the pump reads the phone's time")
+
+        let day = try runTheDayAfterSetup(setUp, pairedAt: pairedAt, logMark: logMark)
+        let adjustments = hostDelegates.flatMap(\.clockAdjustments)
+        XCTAssertEqual(adjustments.count, 1, "\(adjustments)")
+        XCTAssertEqual(adjustments.first ?? 0, pump.clockBehind, accuracy: 10, "moved forward what it was behind")
+        XCTAssertTrue(hostDelegates.allSatisfy(\.errors.isEmpty), "\(hostDelegates.map(\.errors))")
+
+        let appBoluses = hostDoseEvents.filter { $0.dose?.type == .bolus && $0.dose?.automatic == true && $0.dose?.isMutable == false }
+        XCTAssertEqual(Set(appBoluses.map(\.raw)).count, day.appBolusCount, "the app's boluses, finalized: \(appBoluses.map(\.dose))")
+        assertNoHistoryIsReadFromBeforeThePumpWasPutAway(pump, day, expectedFailure: Self.readsPastShelfMode)
+        try assertNoBolusFromBeforeThePumpWasPutAwayIsCounted(pump, day, from: pairedAt, bolusCount: day.appBolusCount)
+    }
+
+    // MARK: - M2
+
+    /// The same pump with the load chosen: it gave nothing in the load's six hours, so the load reports no
+    /// bolus, and nothing from before shelf mode follows it.
+    func testM2_loadingAPumpOutOfShelfModeReportsNothingFromBeforeIt() throws {
+        let pump = try stagePumpPutAway()
+        let pairedAt = clock.now
+        let logMark = try harness.client.snapshot().requestLog.lastSeq
+        let setUp = try pairThisApp()
+        try loadHistory(setUp)
+        XCTAssertEqual(loadSummary?.reportedBolusRecords, 0, "\(String(describing: loadSummary))")
+
+        let day = try runTheDayAfterSetup(setUp, pairedAt: pairedAt, logMark: logMark)
+        XCTAssertTrue(hostDelegates.allSatisfy(\.errors.isEmpty), "\(hostDelegates.map(\.errors))")
+        assertNoHistoryIsReadFromBeforeThePumpWasPutAway(pump, day, expectedFailure: Self.readsPastShelfMode)
+        try assertNoBolusFromBeforeThePumpWasPutAwayIsCounted(pump, day, from: pairedAt, bolusCount: day.appBolusCount)
+    }
+
+    // MARK: - M3
+
+    /// Paired five minutes after waking, shelved half an hour after its last bolus: the ShelfMode record
+    /// and the boluses before it come in the first slice setup reads, and none is reported.
+    func testM3_bolusesInTheSliceThatHoldsTheShelfModeRecordAreNotReported() throws {
+        let pump = try stagePumpPutAway(at: 120, awake: .minutes(5))
+        let pairedAt = clock.now
+        let logMark = try harness.client.snapshot().requestLog.lastSeq
+        let setUp = try pairThisApp()
+        let day = try runTheDayAfterSetup(setUp, pairedAt: pairedAt, logMark: logMark)
+        XCTAssertTrue(
+            day.historyReads.first.map { $0.contains(pump.lastSequenceBefore) } == true,
+            "setup's first slice holds the ShelfMode record: \(day.historyReads.prefix(2))"
+        )
+        let old = try raws(ofBolusesBefore: pump, day.driver)
+        XCTExpectFailure("Boluses in the slice that holds the ShelfMode record are reported at setup as given now") {
+            let atSetup = day.eventsAtAdoption.filter { old.contains($0.raw) }
+            XCTAssertTrue(atSetup.isEmpty, "reported when the host adopted the manager: \(atSetup.map(\.dose))")
+        }
+        assertNoHistoryIsReadFromBeforeThePumpWasPutAway(pump, day, expectedFailure: Self.readsPastShelfMode)
+        try assertNoBolusFromBeforeThePumpWasPutAwayIsCounted(pump, day, from: pairedAt, bolusCount: day.appBolusCount)
+    }
+
+    // MARK: - M4
+
+    /// The pump resumed on its screen after waking and a bolus on it four hours before pairing, on the
+    /// clock setup then sets: the load reports it at the pump's time, and nothing from before shelf mode.
+    func testM4_theLoadReportsABolusGivenAfterWakingOnTheClockSetupSets() throws {
+        let pump = try stagePumpPutAway(bolusBeforePairing: .hours(4))
+        let pairedAt = clock.now
+        let logMark = try harness.client.snapshot().requestLog.lastSeq
+        let setUp = try pairThisApp()
+        try loadHistory(setUp)
+        let serial = try XCTUnwrap(setUp.manager.historyLogStoreSerial)
+        let raw = HistoryLogSyncIdentifier.bolus(pumpSerial: serial, bolusId: try XCTUnwrap(pump.bolusIdAfterWaking))
+        let day = try runTheDayAfterSetup(setUp, pairedAt: pairedAt, logMark: logMark, resumes: false)
+
+        XCTExpectFailure("The load stops at the first record stamped before its window on the clock setup replaced") {
+            XCTAssertTrue(day.eventsAtAdoption.contains { $0.raw == raw }, "the load reported the bolus given after waking")
+        }
+        let pumpBolus = try XCTUnwrap(try timeline().boluses.first { $0.bolusId == pump.bolusIdAfterWaking })
+        let reports = hostEvents.filter { $0.raw == raw }
+        XCTAssertEqual(reports.count, 1, "reported once: \(reports.map(\.dose))")
+        XCTAssertEqual(reports.first?.dose?.startDate.timeIntervalSince(try XCTUnwrap(pumpBolus.start)) ?? .infinity, 0, accuracy: 2, "at the pump's time")
+        assertNoHistoryIsReadFromBeforeThePumpWasPutAway(pump, day, expectedFailure: Self.readsPastShelfMode)
+        try assertNoBolusFromBeforeThePumpWasPutAwayIsCounted(pump, day, from: pump.wokenAt, bolusCount: day.appBolusCount + 1)
+    }
+
+    // MARK: - M5
+
+    /// A clock that restarts with no ShelfMode record: nothing from before the restart is dated after
+    /// what followed it, so none of it reaches the host.
+    func testM5_nothingFromBeforeAClockRestartWithNoShelfModeRecordIsReported() throws {
+        let pump = try stagePumpPutAway(shelfModeRecord: false)
+        let pairedAt = clock.now
+        let logMark = try harness.client.snapshot().requestLog.lastSeq
+        let setUp = try pairThisApp()
+        let day = try runTheDayAfterSetup(setUp, pairedAt: pairedAt, logMark: logMark)
+        try assertNoBolusFromBeforeThePumpWasPutAwayIsCounted(pump, day, from: pairedAt, bolusCount: day.appBolusCount)
+    }
+
+    // MARK: - M6
+
+    /// A pump stored 201 days with its clock kept: nothing from before is reported, its dates being right,
+    /// and the walk backward reads no deeper as the store prunes the record it stopped at.
+    func testM6_theWalkReadsNoDeeperWhenTheStorePrunesTheRecordItStoppedAt() throws {
+        let pump = try stagePumpPutAway(shelfModeRecord: false, clockRestarts: false, awake: .minutes(30))
+        let pairedAt = clock.now
+        let logMark = try harness.client.snapshot().requestLog.lastSeq
+        let setUp = try pairThisApp()
+        let day = try runTheDayAfterSetup(setUp, pairedAt: pairedAt, logMark: logMark)
+        XCTAssertTrue(hostDelegates.allSatisfy(\.errors.isEmpty), "\(hostDelegates.map(\.errors))")
+
+        let old = try raws(ofBolusesBefore: pump, day.driver)
+        let reported = hostEvents.filter { old.contains($0.raw) }
+        XCTAssertTrue(reported.isEmpty, "\(reported.map(\.dose))")
+        let (loop, trio) = hostOracles()
+        try assertHostsHoldThePumpsBoluses(from: pairedAt, loop, trio, count: day.appBolusCount)
+        assertNoHistoryIsReadFromBeforeThePumpWasPutAway(
+            pump,
+            day,
+            expectedFailure: "The walk backward reads a slice deeper each time the store prunes the record it stopped at"
+        )
+    }
 }

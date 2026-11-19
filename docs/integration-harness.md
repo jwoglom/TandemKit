@@ -462,6 +462,13 @@ simulator withdraws its services, so the driver sees its next request fail rathe
 - **No extended bolus is delivered.** faketandem's bolus runs only an up-front part. Conformance D13
   and group J (`ExtendedBolusConformanceTests`) append the records a pump writes for one
   (`ExtendedBolusHistory.swift`), so nothing checks that the emulator would write them in that order.
+- **No reset.** Conformance group M stages a pump out of shelf mode by skewing the clock to
+  2008-01-01 and zeroing `time_since_reset`; the emulator keeps its last bolus through that, so
+  setup's reading shows one where a Mobi that had reset answered none. No assertion reads it.
+- **`GET /api/clock` leaves `pump_time_seconds` out while the pump's clock reads 0**, which
+  `FaketandemClock` cannot decode. Group M starts its 2008 clock at 1 s.
+- **The request log gives `HistoryLogRequest`'s `numberOfLogs` as pumpX2 reads it, a signed byte**,
+  so a 255-record request is logged as -1. Group M's `historyReads` adds 256 back.
 
 One behaviour is opt-in: faketandem runs the pump's 5-minute basal cycle, and follows profile
 segment boundaries, only with `basal_cycle_enabled` (faketandem README "Basal cycle"). Conformance
