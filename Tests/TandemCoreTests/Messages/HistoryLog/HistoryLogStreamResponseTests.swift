@@ -287,4 +287,25 @@ final class HistoryLogStreamResponseTests: XCTestCase {
     private func javaBytes(_ bytes: [Int8]) -> Data {
         Data(bytes.map { UInt8(bitPattern: $0) })
     }
+
+    func testDescriptionListsEachHistoryLogsFields() {
+        let response = HistoryLogStreamResponse(cargo: Data(hexadecimalString:
+            "036122116f037a224a542d00b03b7a22d600000000000000000000000d106f037a2249542d003a1c5c0398c19303e4f54fd4000000000e1030f5792248542d00261a0000261a0000e2f54fd400000000"
+        )!)
+
+        XCTAssertTrue(response.description.contains(
+            "ControlRequestHistoryLog(cargo=22116f037a224a542d00b03b7a22d60000000000000000000000, requestTimestamp=578436016, requestOpCode=214)"
+        ), response.description)
+        XCTAssertTrue(response.description.contains("TimeChangedHistoryLog(cargo="), response.description)
+        XCTAssertTrue(response.description.contains("DateChangeHistoryLog(cargo="), response.description)
+    }
+
+    func testDescriptionOfHistoryLogWithoutItsOwnFallsBackToHeaderFields() {
+        let log = HistoryLogParser.parse(Data([0xFE, 0x0F, 1, 0, 0, 0, 2, 0, 0, 0]) + Data(count: 16))
+
+        XCTAssertEqual(
+            "UnknownHistoryLog(typeId=4094, pumpTimeSec=1, sequenceNum=2, cargo=fe0f010000000200000000000000000000000000000000000000)",
+            "\(log)"
+        )
+    }
 }

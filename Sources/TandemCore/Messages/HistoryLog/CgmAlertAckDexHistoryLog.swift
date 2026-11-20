@@ -59,7 +59,7 @@ public class CgmAlertAckDexHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "CgmAlertAckDexHistoryLog(cargo=\(cargo.hexadecimalString), alertId=\(alertId), alert=\(String(describing: alert)), sensorType=\(sensorType), ackSource=\(ackSource))"
     }
 }

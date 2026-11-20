@@ -84,7 +84,7 @@ public class IdpBolusHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "IdpBolusHistoryLog(cargo=\(cargo.hexadecimalString), idp=\(idp), modification=\(modification), bolusStatus=\(bolusStatus), insulinDuration=\(insulinDuration), maxBolusSize=\(maxBolusSize), bolusEntryType=\(bolusEntryType))"
     }
 }

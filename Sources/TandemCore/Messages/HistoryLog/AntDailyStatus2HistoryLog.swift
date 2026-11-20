@@ -61,7 +61,7 @@ public class AntDailyStatus2HistoryLog: HistoryLog {
 
 
 
-    public var description: String {
+    override public var description: String {
         "AntDailyStatus2HistoryLog(cargo=\(cargo.hexadecimalString), pumpControlState=\(pumpControlState), sensorType=\(sensorType))"
     }
 }

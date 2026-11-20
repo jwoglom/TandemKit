@@ -61,7 +61,7 @@ public class BolexActivatedHistoryLog: HistoryLog {
         BolusRequestedMsg2HistoryLog.SelectedIOBType(rawValue: selectedIob)
     }
 
-    public var description: String {
+    override public var description: String {
         "BolexActivatedHistoryLog(cargo=\(cargo.hexadecimalString), bolusId=\(bolusId), selectedIob=\(selectedIob), selectedIobType=\(String(describing: selectedIobType)), iob=\(iob), bolexSize=\(bolexSize))"
     }
 }

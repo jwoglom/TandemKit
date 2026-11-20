@@ -1,7 +1,7 @@
 import Foundation
 
 /// Base class representing a single 26-byte history log entry.
-open class HistoryLog {
+open class HistoryLog: CustomStringConvertible {
     public static let length = 26
 
     public let cargo: Data
@@ -27,6 +27,9 @@ open class HistoryLog {
         return ret
     }
 
+    open var description: String {
+        "\(type(of: self))(typeId=\(typeId), pumpTimeSec=\(pumpTimeSec), sequenceNum=\(sequenceNum), cargo=\(cargo.hexadecimalString))"
+    }
 
     /// Returns a copy of this log whose header high nibble (top 4 bits of the little-endian
     /// uint16 at cargo offset 0) is set to `headerHighNibble`.

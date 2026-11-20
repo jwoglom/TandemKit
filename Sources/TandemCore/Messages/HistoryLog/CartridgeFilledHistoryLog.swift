@@ -43,7 +43,7 @@ public class CartridgeFilledHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "CartridgeFilledHistoryLog(cargo=\(cargo.hexadecimalString), insulinDisplay=\(insulinDisplay), insulinActual=\(insulinActual))"
     }
 }

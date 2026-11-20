@@ -33,7 +33,7 @@ public class BolusPermissionRequestHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "BolusPermissionRequestHistoryLog(cargo=\(cargo.hexadecimalString), requestTimestamp=\(requestTimestamp))"
     }
 }

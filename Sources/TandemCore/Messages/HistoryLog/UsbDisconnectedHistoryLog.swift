@@ -32,7 +32,7 @@ public class UsbDisconnectedHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "UsbDisconnectedHistoryLog(cargo=\(cargo.hexadecimalString), negotiatedCurrentmA=\(negotiatedCurrentmA))"
     }
 }

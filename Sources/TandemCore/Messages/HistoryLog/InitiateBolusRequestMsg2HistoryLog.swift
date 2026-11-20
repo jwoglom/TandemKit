@@ -79,7 +79,7 @@ public class InitiateBolusRequestMsg2HistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "InitiateBolusRequestMsg2HistoryLog(cargo=\(cargo.hexadecimalString), transactionId=\(transactionId), bolusId=\(bolusId), correctionVolume=\(correctionVolume), extendedVolume=\(extendedVolume), bolusCarbs=\(bolusCarbs), bolusBG=\(bolusBG))"
     }
 }

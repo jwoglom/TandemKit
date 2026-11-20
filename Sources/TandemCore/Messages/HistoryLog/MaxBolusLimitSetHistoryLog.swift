@@ -38,7 +38,7 @@ public class MaxBolusLimitSetHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "MaxBolusLimitSetHistoryLog(cargo=\(cargo.hexadecimalString), maxBolusMilliunits=\(maxBolusMilliunits), previousMaxBolusMilliunits=\(previousMaxBolusMilliunits))"
     }
 }

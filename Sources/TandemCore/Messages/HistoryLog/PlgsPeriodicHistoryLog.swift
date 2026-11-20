@@ -184,7 +184,7 @@ public class PlgsPeriodicHistoryLog: HistoryLog {
         Status.fromId(Int(status))
     }
 
-    public var description: String {
+    override public var description: String {
         "PlgsPeriodicHistoryLog(cargo=\(cargo.hexadecimalString), timestamp=\(timestamp), fmr=\(fmr), pgv=\(pgv), fmrStatus=\(fmrStatus), pgvValid=\(pgvValid), ruleState=\(ruleState), hoMinState=\(hoMinState), status=\(status))"
     }
 }

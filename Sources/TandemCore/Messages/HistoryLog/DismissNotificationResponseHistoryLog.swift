@@ -65,7 +65,7 @@ public class DismissNotificationResponseHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "DismissNotificationResponseHistoryLog(cargo=\(cargo.hexadecimalString), responseOpCode=\(responseOpCode), unknown11=\(unknown11), status=\(status), unknownTail=\(unknownTail.hexadecimalString))"
     }
 }

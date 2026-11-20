@@ -21,7 +21,7 @@ public class BasalIqSettingsChangeHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "BasalIqSettingsChangeHistoryLog(cargo=\(cargo.hexadecimalString))"
     }
 }

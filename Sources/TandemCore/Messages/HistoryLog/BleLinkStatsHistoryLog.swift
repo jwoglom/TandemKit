@@ -73,7 +73,7 @@ public class BleLinkStatsHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "BleLinkStatsHistoryLog(cargo=\(cargo.hexadecimalString), minimum=\(minimum), maximum=\(maximum), unknown12=\(unknown12), unknown13=\(unknown13), unknown14=\(unknown14), unknown15=\(unknown15), unknown16=\(unknown16), unknown18=\(unknown18), intervalSeconds=\(intervalSeconds))"
     }
 }

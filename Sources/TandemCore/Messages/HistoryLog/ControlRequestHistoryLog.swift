@@ -41,7 +41,7 @@ public class ControlRequestHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "ControlRequestHistoryLog(cargo=\(cargo.hexadecimalString), requestTimestamp=\(requestTimestamp), requestOpCode=\(requestOpCode))"
     }
 }

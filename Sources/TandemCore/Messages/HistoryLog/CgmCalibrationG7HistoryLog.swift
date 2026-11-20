@@ -27,7 +27,7 @@ public class CgmCalibrationG7HistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "CgmCalibrationG7HistoryLog(cargo=\(cargo.hexadecimalString), bg=\(bg))"
     }
 }

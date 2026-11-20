@@ -70,7 +70,7 @@ public class ReservoirEstimateHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "ReservoirEstimateHistoryLog(cargo=\(cargo.hexadecimalString), insulinDelivered=\(insulinDelivered), insulinRemaining=\(insulinRemaining), displayedInsulinRemaining=\(displayedInsulinRemaining), driveCounter=\(driveCounter))"
     }
 }

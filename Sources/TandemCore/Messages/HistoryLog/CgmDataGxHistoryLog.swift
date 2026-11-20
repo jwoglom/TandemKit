@@ -83,7 +83,7 @@ public class CgmDataGxHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "CgmDataGxHistoryLog(cargo=\(cargo.hexadecimalString), status=\(status), type=\(type), rate=\(rate), rssi=\(rssi), value=\(value), timestamp=\(timestamp), transmitterTimestamp=\(transmitterTimestamp))"
     }
 }

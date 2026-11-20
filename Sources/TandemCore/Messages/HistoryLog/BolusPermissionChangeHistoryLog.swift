@@ -58,7 +58,7 @@ public class BolusPermissionChangeHistoryLog: HistoryLog {
         BolusPermissionChangeReasonResponse.ChangeReason(rawValue: changeReasonId)
     }
 
-    public var description: String {
+    override public var description: String {
         "BolusPermissionChangeHistoryLog(cargo=\(cargo.hexadecimalString), bolusId=\(bolusId), unknownU8At12=\(unknownU8At12), unknownU8At13=\(unknownU8At13), changeReasonId=\(changeReasonId))"
     }
 }

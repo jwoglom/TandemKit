@@ -69,7 +69,7 @@ public class CgmStartSessionHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "CgmStartSessionHistoryLog(cargo=\(cargo.hexadecimalString), currentTransmitterTime=\(currentTransmitterTime), sessionStartTime=\(sessionStartTime), sessionDuration=\(sessionDuration))"
     }
 }

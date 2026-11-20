@@ -75,7 +75,7 @@ public class CgmJoinSessionFsl2HistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "CgmJoinSessionFsl2HistoryLog(cargo=\(cargo.hexadecimalString), sessionStartTime=\(sessionStartTime), sessionJoinTime=\(sessionJoinTime), sessionDuration=\(sessionDuration), sessionJoinReason=\(sessionJoinReason))"
     }
 }

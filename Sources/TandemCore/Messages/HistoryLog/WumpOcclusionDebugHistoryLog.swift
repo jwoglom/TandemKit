@@ -21,7 +21,7 @@ public class WumpOcclusionDebugHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "WumpOcclusionDebugHistoryLog(cargo=\(cargo.hexadecimalString))"
     }
 }

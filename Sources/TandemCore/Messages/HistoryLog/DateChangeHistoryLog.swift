@@ -57,7 +57,7 @@ public class DateChangeHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "DateChangeHistoryLog(cargo=\(cargo.hexadecimalString), datePrior=\(datePrior), dateAfter=\(dateAfter), rawRTCTime=\(rawRTCTime))"
     }
 }

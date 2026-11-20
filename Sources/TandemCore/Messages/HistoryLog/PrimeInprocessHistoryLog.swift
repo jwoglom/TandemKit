@@ -21,7 +21,7 @@ public class PrimeInprocessHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "PrimeInprocessHistoryLog(cargo=\(cargo.hexadecimalString))"
     }
 }

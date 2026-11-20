@@ -31,7 +31,7 @@ public class ReminderActivatedHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "ReminderActivatedHistoryLog(cargo=\(cargo.hexadecimalString), reminderId=\(reminderId))"
     }
 }

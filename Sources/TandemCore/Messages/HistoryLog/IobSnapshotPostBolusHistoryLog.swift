@@ -83,7 +83,7 @@ public class IobSnapshotPostBolusHistoryLog: HistoryLog {
         BolusRequestedMsg2HistoryLog.SelectedIOBType(rawValue: selectedIob)
     }
 
-    public var description: String {
+    override public var description: String {
         "IobSnapshotPostBolusHistoryLog(cargo=\(cargo.hexadecimalString), bolusId=\(bolusId), unknownU8At12=\(unknownU8At12), selectedIob=\(selectedIob), mudaliarIob=\(mudaliarIob), swan6hrIob=\(swan6hrIob), unknownFloatAt22=\(unknownFloatAt22))"
     }
 }

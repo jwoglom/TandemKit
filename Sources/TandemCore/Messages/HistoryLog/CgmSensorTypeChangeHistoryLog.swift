@@ -21,7 +21,7 @@ public class CgmSensorTypeChangeHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "CgmSensorTypeChangeHistoryLog(cargo=\(cargo.hexadecimalString))"
     }
 }

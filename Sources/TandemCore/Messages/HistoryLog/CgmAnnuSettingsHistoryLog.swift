@@ -21,7 +21,7 @@ public class CgmAnnuSettingsHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "CgmAnnuSettingsHistoryLog(cargo=\(cargo.hexadecimalString))"
     }
 }

@@ -127,7 +127,7 @@ public class ControlIQPcmChangeHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "ControlIQPcmChangeHistoryLog(cargo=\(cargo.hexadecimalString), currentPcm=\(currentPcm), previousPcm=\(previousPcm), pumpSuspendedRaw=\(pumpSuspendedRaw), calculationAvailableRaw=\(calculationAvailableRaw), cgmAvailableRaw=\(cgmAvailableRaw), closedLoopPreferredRaw=\(closedLoopPreferredRaw), sufficientClosedLoopParamsRaw=\(sufficientClosedLoopParamsRaw))"
     }
 }

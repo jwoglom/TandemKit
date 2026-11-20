@@ -65,7 +65,7 @@ public class DataLogCorruptionHistoryLog: HistoryLog {
         Reason(rawValue: reason)
     }
 
-    public var description: String {
+    override public var description: String {
         "DataLogCorruptionHistoryLog(cargo=\(cargo.hexadecimalString), block=\(block), reason=\(reason))"
     }
 }

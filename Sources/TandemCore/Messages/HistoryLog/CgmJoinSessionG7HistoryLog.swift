@@ -42,7 +42,7 @@ public class CgmJoinSessionG7HistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "CgmJoinSessionG7HistoryLog(cargo=\(cargo.hexadecimalString), cgmTimestamp=\(cgmTimestamp), sessionSignature=\(sessionSignature))"
     }
 }

@@ -241,7 +241,7 @@ public class BolusDeliveryHistoryLog: HistoryLog {
         }
     }
 
-    public var description: String {
+    override public var description: String {
         "BolusDeliveryHistoryLog(cargo=\(cargo.hexadecimalString), bolusID=\(bolusID), bolusDeliveryStatus=\(bolusDeliveryStatus), bolusDeliveryStatusEnum=\(String(describing: bolusDeliveryStatusEnum)), bolusTypeBitmask=\(bolusTypeBitmask), bolusSourceEnum=\(String(describing: bolusSourceEnum)), bolusSource=\(bolusSource), remoteId=\(remoteId), requestedNow=\(requestedNow), requestedLater=\(requestedLater), correction=\(correction), extendedDurationRequested=\(extendedDurationRequested), deliveredTotal=\(deliveredTotal))"
     }
 }

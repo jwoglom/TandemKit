@@ -38,7 +38,7 @@ public class CgmDataSampleHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "CgmDataSampleHistoryLog(cargo=\(cargo.hexadecimalString), status=\(status), value=\(value))"
     }
 }

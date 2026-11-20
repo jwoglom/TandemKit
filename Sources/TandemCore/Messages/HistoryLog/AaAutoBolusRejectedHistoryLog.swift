@@ -21,7 +21,7 @@ public class AaAutoBolusRejectedHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "AaAutoBolusRejectedHistoryLog(cargo=\(cargo.hexadecimalString))"
     }
 }

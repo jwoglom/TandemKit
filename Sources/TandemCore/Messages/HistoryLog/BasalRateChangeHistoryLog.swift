@@ -90,7 +90,7 @@ public class BasalRateChangeHistoryLog: HistoryLog {
         ChangeType(rawValue: changeTypeId)
     }
 
-    public var description: String {
+    override public var description: String {
         "BasalRateChangeHistoryLog(cargo=\(cargo.hexadecimalString), commandBasalRate=\(commandBasalRate), baseBasalRate=\(baseBasalRate), maxBasalRate=\(maxBasalRate), insulinDeliveryProfile=\(insulinDeliveryProfile), changeType=\(String(describing: changeType)), changeTypeId=\(changeTypeId))"
     }
 }

@@ -61,7 +61,7 @@ public class NewDayHistoryLog: HistoryLog {
             .compactMap { PumpFeaturesV2Response.SupportedFeatureIndex(rawValue: $0) })
     }
 
-    public var description: String {
+    override public var description: String {
         "NewDayHistoryLog(cargo=\(cargo.hexadecimalString), commandedBasalRate=\(commandedBasalRate), featuresBitmask=\(featuresBitmask), featureBitmaskIndex=\(featureBitmaskIndex))"
     }
 }

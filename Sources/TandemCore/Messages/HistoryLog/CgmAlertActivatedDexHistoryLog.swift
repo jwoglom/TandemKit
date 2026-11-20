@@ -91,7 +91,7 @@ public class CgmAlertActivatedDexHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "CgmAlertActivatedDexHistoryLog(cargo=\(cargo.hexadecimalString), alertId=\(alertId), alert=\(String(describing: alert)), sensorType=\(sensorType), faultLocatorData=\(faultLocatorData), param1=\(param1), param2=\(param2))"
     }
 }

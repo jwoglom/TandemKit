@@ -36,7 +36,7 @@ public class HypoMinimizerResumeHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "HypoMinimizerResumeHistoryLog(cargo=\(cargo.hexadecimalString), reason=\(reason))"
     }
 }

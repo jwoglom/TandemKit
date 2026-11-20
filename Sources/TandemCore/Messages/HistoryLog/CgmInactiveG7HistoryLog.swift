@@ -21,7 +21,7 @@ public class CgmInactiveG7HistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "CgmInactiveG7HistoryLog(cargo=\(cargo.hexadecimalString))"
     }
 }

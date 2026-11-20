@@ -21,7 +21,7 @@ public class AaTdiEstChangeHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "AaTdiEstChangeHistoryLog(cargo=\(cargo.hexadecimalString))"
     }
 }

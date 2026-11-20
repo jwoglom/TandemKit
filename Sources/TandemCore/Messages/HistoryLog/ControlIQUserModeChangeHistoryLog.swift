@@ -165,7 +165,7 @@ public class ControlIQUserModeChangeHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "ControlIQUserModeChangeHistoryLog(cargo=\(cargo.hexadecimalString), currentUserMode=\(currentUserMode), previousUserMode=\(previousUserMode), requestedActionRaw=\(requestedActionRaw), sleepStartedByGuiRaw=\(sleepStartedByGuiRaw), activeSleepSchedule=\(activeSleepSchedule), exerciseStoppedByTimerRaw=\(exerciseStoppedByTimerRaw), exerciseChoiceRaw=\(exerciseChoiceRaw), exerciseTime=\(exerciseTime), eatingSoonStoppedByTimerRaw=\(eatingSoonStoppedByTimerRaw))"
     }
 }

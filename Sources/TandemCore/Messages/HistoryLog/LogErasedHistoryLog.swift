@@ -39,7 +39,7 @@ public class LogErasedHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "LogErasedHistoryLog(cargo=\(cargo.hexadecimalString), numErased=\(numErased))"
     }
 }

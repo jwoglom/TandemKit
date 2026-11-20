@@ -46,7 +46,7 @@ public class VersionsAHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "VersionsAHistoryLog(cargo=\(cargo.hexadecimalString), armPartNumber=\(armPartNumber), armSwVersion=\(armSwVersion), blePartNumber=\(blePartNumber), bleSwVersion=\(bleSwVersion))"
     }
 }

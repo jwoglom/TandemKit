@@ -56,7 +56,7 @@ public class TubingFilledHistoryLog: HistoryLog {
         CompletionStatus(rawValue: Int(completionStatusRaw))
     }
 
-    public var description: String {
+    override public var description: String {
         "TubingFilledHistoryLog(cargo=\(cargo.hexadecimalString), primeSize=\(primeSize), completionStatusRaw=\(completionStatusRaw), position=\(position))"
     }
 }

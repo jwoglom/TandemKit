@@ -21,7 +21,7 @@ public class WumpCartridgeFilledHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "WumpCartridgeFilledHistoryLog(cargo=\(cargo.hexadecimalString))"
     }
 }

@@ -21,7 +21,7 @@ public class CgmUnexpectedGeAlertHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "CgmUnexpectedGeAlertHistoryLog(cargo=\(cargo.hexadecimalString))"
     }
 }

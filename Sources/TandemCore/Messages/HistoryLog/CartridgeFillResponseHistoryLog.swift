@@ -65,7 +65,7 @@ public class CartridgeFillResponseHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "CartridgeFillResponseHistoryLog(cargo=\(cargo.hexadecimalString), responseOpCode=\(responseOpCode), unknown11=\(unknown11), status=\(status), unknownTail=\(unknownTail.hexadecimalString))"
     }
 }

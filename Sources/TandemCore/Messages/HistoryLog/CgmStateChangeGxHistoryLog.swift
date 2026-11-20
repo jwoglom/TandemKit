@@ -103,7 +103,7 @@ public class CgmStateChangeGxHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "CgmStateChangeGxHistoryLog(cargo=\(cargo.hexadecimalString), previousStateId=\(previousStateId), stateId=\(stateId), eventId=\(eventId), unknown11=\(unknown11), unknown15=\(unknown15), unknown18=\(unknown18), unknown23=\(unknown23))"
     }
 }

@@ -92,7 +92,7 @@ public class CgmAlertActivatedHistoryLog: HistoryLog {
         CGMAlertStatusResponse.CGMAlert(rawValue: Int(alertId))
     }
 
-    public var description: String {
+    override public var description: String {
         "CgmAlertActivatedHistoryLog(cargo=\(cargo.hexadecimalString), alertId=\(alertId), alert=\(String(describing: alert)), faultLocatorData=\(faultLocatorData), param1=\(param1), param2=\(param2))"
     }
 }

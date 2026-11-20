@@ -27,7 +27,7 @@ public class MalfunctionAckHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "MalfunctionAckHistoryLog(cargo=\(cargo.hexadecimalString), malfId=\(malfId))"
     }
 }

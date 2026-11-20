@@ -43,7 +43,7 @@ public class BolusPermissionResponseHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "BolusPermissionResponseHistoryLog(cargo=\(cargo.hexadecimalString), bolusId=\(bolusId), unknownU8At14=\(unknownU8At14), unknownU8At15=\(unknownU8At15))"
     }
 }

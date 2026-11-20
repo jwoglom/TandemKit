@@ -38,7 +38,7 @@ public class MaxBasalLimitSetHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "MaxBasalLimitSetHistoryLog(cargo=\(cargo.hexadecimalString), maxHourlyBasalMilliunits=\(maxHourlyBasalMilliunits), previousMaxHourlyBasalMilliunits=\(previousMaxHourlyBasalMilliunits))"
     }
 }

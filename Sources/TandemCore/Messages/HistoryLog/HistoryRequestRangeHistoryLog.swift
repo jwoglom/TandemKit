@@ -53,7 +53,7 @@ public class HistoryRequestRangeHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "HistoryRequestRangeHistoryLog(cargo=\(cargo.hexadecimalString), unknown10=\(unknown10), minStartLog=\(minStartLog), maxStartLog=\(maxStartLog), unknown22=\(unknown22), unknown24=\(unknown24))"
     }
 }

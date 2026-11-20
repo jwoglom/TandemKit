@@ -47,7 +47,7 @@ public class VersionInfoHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "VersionInfoHistoryLog(cargo=\(cargo.hexadecimalString), version=\(version), configABits=\(configABits), configBBits=\(configBBits), armCrc=\(armCrc))"
     }
 }

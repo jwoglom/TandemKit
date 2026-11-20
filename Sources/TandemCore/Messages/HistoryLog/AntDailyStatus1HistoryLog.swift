@@ -197,7 +197,7 @@ public class AntDailyStatus1HistoryLog: HistoryLog {
         SleepEatSegmentType.fromId(sleepEatSegmentType3)
     }
 
-    public var description: String {
+    override public var description: String {
         "AntDailyStatus1HistoryLog(cargo=\(cargo.hexadecimalString), closedLoopPreferred=\(closedLoopPreferred), totalDailyInsulinUnits=\(totalDailyInsulinUnits), glycemicGoal=\(glycemicGoal), priorTherapy=\(priorTherapy), sleepEatSegmentStartTime0=\(sleepEatSegmentStartTime0), sleepEatSegmentStartTime1=\(sleepEatSegmentStartTime1), sleepEatSegmentStartTime2=\(sleepEatSegmentStartTime2), sleepEatSegmentStartTime3=\(sleepEatSegmentStartTime3), sleepEatSegmentType0=\(sleepEatSegmentType0), sleepEatSegmentType1=\(sleepEatSegmentType1), sleepEatSegmentType2=\(sleepEatSegmentType2), sleepEatSegmentType3=\(sleepEatSegmentType3))"
     }
 }

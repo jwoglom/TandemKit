@@ -69,7 +69,7 @@ public class InitiateBolusRequestMsg3HistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "InitiateBolusRequestMsg3HistoryLog(cargo=\(cargo.hexadecimalString), transactionId=\(transactionId), bolusId=\(bolusId), bolusIOB=\(bolusIOB), extendedSeconds=\(extendedSeconds), extended3=\(extended3))"
     }
 }

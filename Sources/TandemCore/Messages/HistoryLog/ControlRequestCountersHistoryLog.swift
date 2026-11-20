@@ -48,7 +48,7 @@ public class ControlRequestCountersHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "ControlRequestCountersHistoryLog(cargo=\(cargo.hexadecimalString), controlRequestCount=\(controlRequestCount), unknown14=\(unknown14), unknown18=\(unknown18), unknown22=\(unknown22))"
     }
 }

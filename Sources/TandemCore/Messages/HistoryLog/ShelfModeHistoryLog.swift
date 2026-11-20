@@ -78,7 +78,7 @@ public class ShelfModeHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "ShelfModeHistoryLog(cargo=\(cargo.hexadecimalString), msecSinceReset=\(msecSinceReset), lipoIbc=\(lipoIbc), lipoAbc=\(lipoAbc), lipoCurrent=\(lipoCurrent), lipoRemCap=\(lipoRemCap), lipoMv=\(lipoMv))"
     }
 }

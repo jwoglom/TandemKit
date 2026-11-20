@@ -31,7 +31,7 @@ public class CgmBleCalibrationEvtG7HistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "CgmBleCalibrationEvtG7HistoryLog(cargo=\(cargo.hexadecimalString), isCalibrationAccepted=\(isCalibrationAccepted))"
     }
 }

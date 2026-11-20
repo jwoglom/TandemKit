@@ -112,7 +112,7 @@ public class BolusRequestedMsg1HistoryLog: HistoryLog {
         case REMOTE = 3
     }
 
-    public var description: String {
+    override public var description: String {
         "BolusRequestedMsg1HistoryLog(cargo=\(cargo.hexadecimalString), bolusId=\(bolusId), bolusTypeId=\(bolusTypeId), correctionBolusIncluded=\(correctionBolusIncluded), carbAmount=\(carbAmount), bg=\(bg), iob=\(iob), carbRatio=\(carbRatio))"
     }
 }

@@ -82,7 +82,7 @@ public class BolusRequestedMsg3HistoryLog: HistoryLog {
         (spare & 0xFF) != 0
     }
 
-    public var description: String {
+    override public var description: String {
         "BolusRequestedMsg3HistoryLog(cargo=\(cargo.hexadecimalString), bolusId=\(bolusId), spare=\(spare), foodBolusSize=\(foodBolusSize), correctionBolusSize=\(correctionBolusSize), totalBolusSize=\(totalBolusSize))"
     }
 }

@@ -77,7 +77,7 @@ public class AlertActivatedHistoryLog: HistoryLog {
         AlertStatusResponse.AlertResponseType(rawValue: Int(alertId))
     }
 
-    public var description: String {
+    override public var description: String {
         "AlertActivatedHistoryLog(cargo=\(cargo.hexadecimalString), alertResponseType=\(String(describing: alertResponseType)), alertId=\(alertId), faultLocatorData=\(faultLocatorData), param1=\(param1), param2=\(param2))"
     }
 }

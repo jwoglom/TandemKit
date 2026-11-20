@@ -38,7 +38,7 @@ public class CgmPairingCodeG7HistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "CgmPairingCodeG7HistoryLog(cargo=\(cargo.hexadecimalString), pairingCode=\(pairingCode))"
     }
 }

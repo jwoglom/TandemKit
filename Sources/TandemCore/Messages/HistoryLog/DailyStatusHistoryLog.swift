@@ -120,7 +120,7 @@ public class DailyStatusHistoryLog: HistoryLog {
         WeightUnit(rawValue: weightUnit)
     }
 
-    public var description: String {
+    override public var description: String {
         "DailyStatusHistoryLog(cargo=\(cargo.hexadecimalString), sensorType=\(sensorType), userMode=\(userMode), pumpControlState=\(pumpControlState), weightUnit=\(weightUnit), weight=\(weight), currentTdiPop=\(currentTdiPop))"
     }
 }

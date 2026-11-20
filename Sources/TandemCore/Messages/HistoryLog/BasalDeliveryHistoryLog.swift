@@ -114,7 +114,7 @@ public class BasalDeliveryHistoryLog: HistoryLog {
     /// Typed view of `commandedRateSource`, or `nil` for an unrecognised value.
     public var commandedRateSourceEnum: CommandedRateSource? { CommandedRateSource(rawValue: commandedRateSource) }
 
-    public var description: String {
+    override public var description: String {
         "BasalDeliveryHistoryLog(cargo=\(cargo.hexadecimalString), commandedRateSource=\(commandedRateSource), commandedRateSourceEnum=\(String(describing: commandedRateSourceEnum)), basalDeliveryFlags=\(basalDeliveryFlags), commandedRate=\(commandedRate), profileBasalRate=\(profileBasalRate), algorithmRate=\(algorithmRate), tempRate=\(tempRate))"
     }
 }

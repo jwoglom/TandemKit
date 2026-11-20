@@ -218,7 +218,7 @@ public class CgmDataFsl2HistoryLog: HistoryLog {
     @available(*, deprecated, renamed: "egvTimestamp")
     public var timestamp: UInt32 { egvTimestamp }
 
-    public var description: String {
+    override public var description: String {
         "CgmDataFsl2HistoryLog(cargo=\(cargo.hexadecimalString), glucoseValueStatusRaw=\(glucoseValueStatusRaw), cgmDataTypeRaw=\(cgmDataTypeRaw), rate=\(rate), algorithmStateRaw=\(algorithmStateRaw), rssi=\(rssi), currentGlucoseDisplayValue=\(currentGlucoseDisplayValue), egvTimestamp=\(egvTimestamp), egvInfoBitmaskRaw=\(egvInfoBitmaskRaw), interval=\(interval))"
     }
 }

@@ -120,7 +120,7 @@ public class CgmStopSessionHistoryLog: HistoryLog {
         SessionStopReason.fromId(sessionStopReasonRaw)
     }
 
-    public var description: String {
+    override public var description: String {
         "CgmStopSessionHistoryLog(cargo=\(cargo.hexadecimalString), currentTransmitterTime=\(currentTransmitterTime), sessionStartTime=\(sessionStartTime), sessionStopTime=\(sessionStopTime), sessionStopReasonRaw=\(sessionStopReasonRaw), sessionDuration=\(sessionDuration))"
     }
 }

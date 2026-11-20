@@ -58,7 +58,7 @@ public class TempRateActivatedHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "TempRateActivatedHistoryLog(cargo=\(cargo.hexadecimalString), percent=\(percent), durationMilliseconds=\(durationMilliseconds), tempRateId=\(tempRateId))"
     }
 }

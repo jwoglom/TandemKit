@@ -27,7 +27,7 @@ public class AlertAckHistoryLog: HistoryLog {
         )
     }
 
-    public var description: String {
+    override public var description: String {
         "AlertAckHistoryLog(cargo=\(cargo.hexadecimalString), alertId=\(alertId))"
     }
 }

@@ -54,7 +54,7 @@ public class ControlIQFeaturesHistoryLog: HistoryLog {
         PumpFeaturesV2Response.ControlIqFeatureType.fromBitmask(controlIqFeaturesBitmask)
     }
 
-    public var description: String {
+    override public var description: String {
         "ControlIQFeaturesHistoryLog(cargo=\(cargo.hexadecimalString), controlIqFeaturesBitmask=\(controlIqFeaturesBitmask), unknownTail=\(unknownTail.hexadecimalString))"
     }
 }

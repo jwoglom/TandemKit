@@ -80,7 +80,7 @@ public class BolusCompletedHistoryLog: HistoryLog {
         LastBolusStatusAbstractResponse.BolusStatus(rawValue: completionStatusId)
     }
 
-    public var description: String {
+    override public var description: String {
         "BolusCompletedHistoryLog(cargo=\(cargo.hexadecimalString), completionStatus=\(String(describing: completionStatus)), completionStatusId=\(completionStatusId), bolusId=\(bolusId), iob=\(iob), insulinDelivered=\(insulinDelivered), insulinRequested=\(insulinRequested))"
     }
 }

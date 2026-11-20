@@ -99,7 +99,7 @@ public class TempAdjustmentActivatedHistoryLog: HistoryLog {
         RequestedAdjustmentType.fromId(requestedAdjustmentType)
     }
 
-    public var description: String {
+    override public var description: String {
         "TempAdjustmentActivatedHistoryLog(cargo=\(cargo.hexadecimalString), requestedPercent=\(requestedPercent), tempBasalPercent=\(tempBasalPercent), duration=\(duration), requestedAdjustmentType=\(requestedAdjustmentType), tempRateId=\(tempRateId))"
     }
 }
