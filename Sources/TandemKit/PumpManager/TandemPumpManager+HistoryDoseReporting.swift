@@ -67,11 +67,6 @@ extension TandemPumpManager {
             else {
                 continue
             }
-            // A pump record dated ahead of the phone was misdated; reported, the host would take it as given now.
-            guard dose.startDate <= self.now.addingTimeInterval(HostDoseDates.startAheadTolerance) else {
-                logger.error("Not reporting a history bolus dated \(dose.startDate), ahead of the phone's \(self.now)")
-                continue
-            }
             let bolusId = Int(decoded.identifier)
             switch decoded.scheme {
             case .bolus:

@@ -406,9 +406,9 @@ host queue, so its state stays behind its lock.
   by stamp took that record each hour, and the walk, finding no boundary, read a slice deeper each time.
 - The newest undatable record the walk finds among the clock records is saved
   (`HistoryBackfillState.undatableThroughSequenceNum`), so the walk reads nothing at or below it and no
-  pass reports from it (`TickOutcome.reportableRange`), across relaunches. A history bolus dated ahead
-  of the phone is not reported. A bolus delivered before a reset that history had not yet read stays
-  out of IOB, and so does one before any `ArmInit`, whether or not that reboot lost the clock.
+  pass reports from it (`TickOutcome.reportableRange`), across relaunches. A bolus delivered before a
+  reset that history had not yet read stays out of IOB, and so does one before any `ArmInit`, whether
+  or not that reboot lost the clock.
 - Still open: a boundary that trails the live reads to the last history pass (#353). Loop's
   `DoseStore` stores nothing while the boundary is at or behind the end of the newest finalized
   basal it holds, and leaves out of IOB a dose that ended before the boundary and was not stored, so

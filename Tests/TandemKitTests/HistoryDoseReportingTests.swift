@@ -879,15 +879,4 @@ import XCTest
             "read at or below the ShelfMode record after a relaunch: \(reads.map { ($0.startLog, $0.numberOfLogs) })"
         )
     }
-
-    func testAHistoryBolusDatedAheadOfThePhoneIsNotReported() {
-        // Stamped two hours ahead of a pump clock the manager reads as matching the phone's.
-        pumpClockAhead = 7200
-        let logs = quickBolusStart(bolusId: 72, units: 1.0, firstSequenceNum: 900, secondsAgo: 300)
-            + [bolusCompletion(bolusId: 72, delivered: 1.0, requested: 1.0, sequenceNum: 903, secondsAgo: 240)]
-
-        report(logs)
-
-        XCTAssertTrue(reportedBoluses.isEmpty)
-    }
 }
