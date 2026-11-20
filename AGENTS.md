@@ -390,6 +390,13 @@ host queue, so its state stays behind its lock.
   Pump dates decode with the phone's current UTC offset, so `pumpClockOffset` moves by any change in
   it since the clock was read (`pumpTimeCheckUTCOffset`): a phone zone change between syncs does not
   misdate history (#482).
+- A `TimeChanged` or `DateChange` is carried back only along the clock it changed. The clock ends at
+  an `ArmInitHistoryLog` or `ShelfModeHistoryLog` record, or where a stamp runs back further than the
+  changes after it explain, and every record through it (`undatableThroughSequenceNum`) is left
+  undated and read by no pass (`HistoryRecordDates.logs`). A Mobi woke from shelf mode at 2008, and
+  setup's clock write moved the previous use's boluses 2,512 days ahead, which the host stored as
+  given at the time they were read. Each pass reads `HistoryTimestampReconciler.clockHistoryTypes`
+  with its own types.
 - Still open: a boundary that trails the live reads to the last history pass (#353). Loop's
   `DoseStore` stores nothing while the boundary is at or behind the end of the newest finalized
   basal it holds, and leaves out of IOB a dose that ended before the boundary and was not stored, so

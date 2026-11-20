@@ -459,17 +459,16 @@ extension TandemPumpManager {
             return batch
         }
 
-        let stored: [HistoryLog]
+        let dates: HistoryRecordDates
         do {
-            stored = try historyLogStore.logs(pumpSerial: serial.rawValue, in: covered)
+            dates = try historyRecordDates(historyLogStore.logs(pumpSerial: serial.rawValue, in: covered)
                 .map { $0.parsed() }
-                .sorted { $0.sequenceNum < $1.sequenceNum }
+                .sorted { $0.sequenceNum < $1.sequenceNum })
         } catch {
             logger.error("Could not read the history log store for delivery transitions: \(error)")
             return batch
         }
-
-        let dates = historyRecordDates(stored)
+        let stored = dates.logs
 
         let now = self.now
         let floor = now.addingTimeInterval(-DeliveryTransitionLedger.retention)

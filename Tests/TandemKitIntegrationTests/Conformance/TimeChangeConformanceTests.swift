@@ -582,14 +582,146 @@ final class TimeChangeConformanceTests: ConformanceTestCase {
         let serial = try XCTUnwrap(driver.manager.historyLogStoreSerial)
         let reports = eventsSince(batchesBefore).filter { $0.dose?.type == .bolus }
         let old = reports.filter { $0.raw == HistoryLogSyncIdentifier.bolus(pumpSerial: serial, bolusId: Self.untrackedBolusId) }
-        XCTExpectFailure("A bolus from before the driver tracked the pump is reported as given now once the app sets a clock that restarted") {
-            XCTAssertTrue(old.isEmpty, "\(old.map(\.dose))")
-        }
+        XCTAssertTrue(old.isEmpty, "\(old.map(\.dose))")
         let given = reports.filter { $0.raw == HistoryLogSyncIdentifier.bolus(pumpSerial: serial, bolusId: pump.bolusId) }
         XCTAssertEqual(given.count, 1, "\(given.map(\.dose))")
         XCTAssertEqual(given.first?.dose?.startDate.timeIntervalSince(pump.start) ?? .infinity, 0, accuracy: 2, "when the pump gave it")
         assertEveryDoseIsInOrder(since: batchesBefore)
         try assertHostsMatchThePump()
+    }
+
+    // MARK: - G10 to G20: a clock change the background pass reads
+
+    /// A pump bolus the driver reads in range; out of range a bolus before `change` and one after it.
+    /// Back in range it syncs, the app sets the pump's clock if it disagrees with the phone's, and an
+    /// hour of the loop follows. A known failure to report a bolus at its instant is given with its reason.
+    private func runAClockChangeOutOfRange(
+        _ change: PumpClockChange,
+        beforeChangeFails: String? = nil,
+        afterChangeFails: String? = nil
+    ) throws {
+        let driver = try stageDriver(zone: change.zoneBefore)
+        let batchesBefore = allPumpEventBatches.count
+        let read = try pumpBolus(units: 0.5)
+        try clock.advanceBoth(seconds: .minutes(2), ticks: 2)
+        _ = try sync()
+        try waitForBackfill(driver)
+
+        try radioOff(driver)
+        try clock.advanceBoth(seconds: .minutes(5), ticks: 5)
+        let beforeChange = try pumpBolus(units: 1.0)
+        try clock.advanceBoth(seconds: .minutes(5), ticks: 5)
+        try change.apply(on: harness.client, clock: clock, phone: phone)
+        try clock.advanceBoth(seconds: .minutes(5), ticks: 5)
+        let afterChange = try pumpBolus(units: 1.5)
+        try clock.advanceBoth(seconds: .minutes(2), ticks: 2)
+        try radioOn()
+        _ = try sync()
+        try waitForBackfill(driver)
+        if abs(driver.manager.state.pumpClockOffset) > 60 {
+            XCTAssertNoThrow(try syncPumpTime().get())
+        }
+        for _ in 0 ..< 3 {
+            try clock.advanceBoth(seconds: .minutes(20), ticks: 20)
+            _ = try sync()
+        }
+        try waitForBackfill(driver)
+
+        XCTAssertEqual(driver.manager.state.pumpClockOffset, 0, accuracy: 2, "the pump reads the phone's time")
+        let serial = try XCTUnwrap(driver.manager.historyLogStoreSerial)
+        assertReportedOnce(read, "read before the change", serial: serial, since: batchesBefore)
+        try expectingFailure(beforeChangeFails) {
+            assertReportedOnce(beforeChange, "given out of range before the change", serial: serial, since: batchesBefore)
+        }
+        try expectingFailure(afterChangeFails) {
+            assertReportedOnce(afterChange, "given after the change", serial: serial, since: batchesBefore)
+        }
+        assertEveryDoseIsInOrder(since: batchesBefore)
+        try expectingFailure([beforeChangeFails, afterChangeFails].compactMap { $0 }.first) {
+            try assertHostsMatchThePump()
+        }
+    }
+
+    private func expectingFailure(_ reason: String?, _ body: () throws -> Void) throws {
+        if let reason {
+            try XCTExpectFailure(reason, failingBlock: body)
+        } else {
+            try body()
+        }
+    }
+
+    private static let readOnAnUntrustedClock =
+        "A bolus read while the pump's clock is more than a day off the phone's is reported dated when it is read (G7)"
+    private static let fromBeforeAReset =
+        "A record from before a pump reset is left undated, so a bolus given out of range before one is never reported"
+
+    private func assertReportedOnce(
+        _ bolus: (bolusId: Int, start: Date),
+        _ label: String,
+        serial: HistoryLogSyncIdentifier.PumpSerial,
+        since count: Int,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        let raw = HistoryLogSyncIdentifier.bolus(pumpSerial: serial, bolusId: bolus.bolusId)
+        let starts = Set(eventsSince(count).filter { $0.raw == raw }.compactMap { $0.dose?.startDate })
+        XCTAssertEqual(starts.count, 1, "the bolus \(label), under one start: \(starts.sorted())", file: file, line: line)
+        XCTAssertEqual(
+            starts.first?.timeIntervalSince(bolus.start) ?? .infinity,
+            0,
+            accuracy: 2,
+            "the bolus \(label), at the instant the pump gave it",
+            file: file,
+            line: line
+        )
+    }
+
+    func testG10_bolusesEitherSideOfASpringForwardSetOnThePumpAreReportedWhenGiven() throws {
+        try runAClockChangeOutOfRange(.dstForward)
+    }
+
+    func testG11_bolusesEitherSideOfAFallBackSetOnThePumpAreReportedWhenGiven() throws {
+        try runAClockChangeOutOfRange(.dstBack)
+    }
+
+    func testG12_bolusesEitherSideOfATripThreeHoursEastAreReportedWhenGiven() throws {
+        try runAClockChangeOutOfRange(.threeHoursEast)
+    }
+
+    func testG13_bolusesEitherSideOfATripThreeHoursWestAreReportedWhenGiven() throws {
+        try runAClockChangeOutOfRange(.threeHoursWest)
+    }
+
+    func testG14_bolusesEitherSideOfATripTwelveHoursEastAreReportedWhenGiven() throws {
+        try runAClockChangeOutOfRange(.twelveHoursEast)
+    }
+
+    func testG15_bolusesEitherSideOfATripTwelveHoursWestAreReportedWhenGiven() throws {
+        try runAClockChangeOutOfRange(.twelveHoursWest)
+    }
+
+    func testG16_bolusesEitherSideOfThePumpSet73HoursAheadAreReportedWhenGiven() throws {
+        try runAClockChangeOutOfRange(
+            .seventyThreeHoursAhead,
+            beforeChangeFails: Self.readOnAnUntrustedClock,
+            afterChangeFails: Self.readOnAnUntrustedClock
+        )
+    }
+
+    func testG17_bolusesEitherSideOfThePumpSet73HoursBehindAreReportedWhenGiven() throws {
+        try runAClockChangeOutOfRange(.seventyThreeHoursBehind)
+    }
+
+    func testG18_bolusesEitherSideOfAResetTo2008AreReportedWhenGiven() throws {
+        try runAClockChangeOutOfRange(.resetTo2008, beforeChangeFails: Self.fromBeforeAReset)
+    }
+
+    func testG19_bolusesEitherSideOfAResetTo2020AreReportedWhenGiven() throws {
+        try runAClockChangeOutOfRange(.resetTo2020, beforeChangeFails: Self.fromBeforeAReset)
+    }
+
+    func testG20_bolusesEitherSideOfAnUnrecordedJumpTo2035AreReportedWhenGiven() throws {
+        try runAClockChangeOutOfRange(.jumpTo2035, afterChangeFails: Self.readOnAnUntrustedClock)
     }
 
     private static let dstZone = "America/New_York"

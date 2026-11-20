@@ -199,6 +199,39 @@ final class HistoryToDoseMapperTests: XCTestCase {
         XCTAssertTrue(events.isEmpty)
     }
 
+    func testBolusFromBeforeAShelfModeWakeIsNotMapped() throws {
+        let day = 86400
+        let events = map([
+            BolusActivatedHistoryLog(pumpTimeSec: UInt32(6600 * day + 36000), sequenceNum: 100, bolusId: 7, selectedIob: 0, iob: 0, bolusSize: 2),
+            BolusCompletedHistoryLog(
+                pumpTimeSec: UInt32(6600 * day + 36300),
+                sequenceNum: 101,
+                completionStatusId: 0,
+                bolusId: 7,
+                iob: 2,
+                insulinDelivered: 2,
+                insulinRequested: 2
+            ),
+            // Woken at 2008, moved to 2020 by the firmware, then set by setup.
+            DateChangeHistoryLog(pumpTimeSec: UInt32(4383 * day + 219), sequenceNum: 102, datePrior: 0, dateAfter: 4383, rawRTCTime: 0),
+            DateChangeHistoryLog(pumpTimeSec: UInt32(6800 * day + 3819), sequenceNum: 103, datePrior: 4383, dateAfter: 6800, rawRTCTime: 0),
+            TimeChangedHistoryLog(pumpTimeSec: UInt32(6800 * day + 50000), sequenceNum: 104, timePrior: 3_819_000, timeAfter: 50_000_000, rawRTC: 0),
+            BolusActivatedHistoryLog(pumpTimeSec: UInt32(6800 * day + 50100), sequenceNum: 105, bolusId: 8, selectedIob: 0, iob: 0, bolusSize: 1),
+            BolusCompletedHistoryLog(
+                pumpTimeSec: UInt32(6800 * day + 50400),
+                sequenceNum: 106,
+                completionStatusId: 0,
+                bolusId: 8,
+                iob: 1,
+                insulinDelivered: 1,
+                insulinRequested: 1
+            )
+        ])
+
+        XCTAssertEqual(events.map(\.raw), [HistoryLogSyncIdentifier.bolus(pumpSerial: serial, bolusId: 8)])
+        XCTAssertEqual(try XCTUnwrap(events.first?.dose).startDate, pumpDate(6800 * day + 50100))
+    }
+
     // MARK: - Extended boluses (#424)
 
     private func bolexActivation(bolusId: Int, units: Float, at pumpTimeSec: UInt32, sequenceNum: UInt32) -> BolexActivatedHistoryLog {
@@ -248,7 +281,7 @@ final class HistoryToDoseMapperTests: XCTestCase {
             BolusCompletedHistoryLog(
                 pumpTimeSec: 1040,
                 sequenceNum: 3,
-                completionStatusId: 3,
+                completionStatusId: 0,
                 bolusId: 12,
                 iob: 1,
                 insulinDelivered: 1,
@@ -346,7 +379,7 @@ final class HistoryToDoseMapperTests: XCTestCase {
             BolusCompletedHistoryLog(
                 pumpTimeSec: 1055,
                 sequenceNum: 3,
-                completionStatusId: 3,
+                completionStatusId: 0,
                 bolusId: 20,
                 iob: 0.75,
                 insulinDelivered: 0.75,
@@ -390,7 +423,7 @@ final class HistoryToDoseMapperTests: XCTestCase {
             BolusCompletedHistoryLog(
                 pumpTimeSec: 1000,
                 sequenceNum: 2,
-                completionStatusId: 3,
+                completionStatusId: 0,
                 bolusId: 18,
                 iob: 0.05,
                 insulinDelivered: 0.05,

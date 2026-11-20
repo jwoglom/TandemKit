@@ -27,7 +27,7 @@ final class HistoryToDoseMapper {
         insulinType: InsulinType?,
         isCommandedBolus: (Int) -> Bool
     ) -> [NewPumpEvent] {
-        let sortedLogs = logs.sorted { $0.sequenceNum < $1.sequenceNum }
+        let sortedLogs = logs.filter(dates.isDatable).sorted { $0.sequenceNum < $1.sequenceNum }
 
         let controlIqTriggeredBolusIds = Self.controlIqTriggeredBolusIds(in: sortedLogs)
         let extendedDurations = Self.extendedDurations(in: sortedLogs)

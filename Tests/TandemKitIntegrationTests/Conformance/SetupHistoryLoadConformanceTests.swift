@@ -23,10 +23,12 @@ final class SetupHistoryLoadConformanceTests: ConformanceTestCase {
     private var hostDelegatesFrom = 0
     private var otherAppState: [String: Any]?
     private var stagingStart = Date.distantPast
+    private var phone: PhoneTimeZone!
 
     override func setUpWithError() throws {
         try super.setUpWithError()
         continueAfterFailure = true
+        phone = PhoneTimeZone()
         try harness.client.setState(["bolus_rate_units_per_second": Self.bolusRate])
         stagingStart = clock.now
     }
@@ -40,6 +42,8 @@ final class SetupHistoryLoadConformanceTests: ConformanceTestCase {
             }
         }
         try super.tearDownWithError()
+        phone?.restore()
+        phone = nil
     }
 
     // MARK: - The pump's past
@@ -936,6 +940,124 @@ final class SetupHistoryLoadConformanceTests: ConformanceTestCase {
         }
     }
 
+    // MARK: - L12 to L22: a clock change in the window the load reads
+
+    /// A bolus on the pump an hour before `change` and one an hour after it, an hour before this app
+    /// pairs and loads; then an hour of the host's loop. A known failure to report the bolus before the change is
+    /// given with its reason.
+    private func runALoadAcross(_ change: PumpClockChange, beforeChangeFails: String? = nil) throws {
+        phone.set(change.zoneBefore)
+        try eraseHistory()
+        try pairing(at: 240)
+        try runBasalCycle()
+        try at(60)
+        let beforeChangeId = try bolusOnThePump(units: 1.0)
+        let beforeChange = (bolusId: beforeChangeId, start: minutes(60))
+        try at(120)
+        try change.apply(on: harness.client, clock: clock, phone: phone)
+        try at(180)
+        let afterChangeId = try bolusOnThePump(units: 1.5)
+        let afterChange = (bolusId: afterChangeId, start: minutes(180))
+        try at(240)
+
+        let driver = try pairThisApp()
+        let since = try loadHistory(driver)
+        adopt(driver)
+        _ = try sync()
+        try waitForHistoryPass(driver)
+        try syncEveryCycle(until: 300)
+        try waitForHistoryPass(driver)
+
+        XCTAssertTrue(driver.delegate.errors.isEmpty, "\(driver.delegate.errors)")
+        XCTAssertEqual(driver.manager.state.pumpClockOffset, 0, accuracy: 5, "setup set the pump's clock")
+        let serial = try XCTUnwrap(driver.manager.historyLogStoreSerial)
+        try expectingFailure(beforeChangeFails) {
+            assertReportedOnce(beforeChange, "before the change", serial: serial)
+        }
+        assertReportedOnce(afterChange, "after the change", serial: serial)
+        let (loop, trio) = hostOracles()
+        assertNoDuplicates(loop, trio, "loaded across a clock change")
+        try expectingFailure(beforeChangeFails) {
+            try assertHostsHoldThePumpsBoluses(from: since, loop, trio, count: 2)
+        }
+    }
+
+    private func expectingFailure(_ reason: String?, _ body: () throws -> Void) throws {
+        if let reason {
+            try XCTExpectFailure(reason, failingBlock: body)
+        } else {
+            try body()
+        }
+    }
+
+    private static let fromBeforeAReset = "A record from before a pump reset is left undated, so a bolus before one is never reported"
+    private static let fromBeforeAJumpAhead =
+        "A record from before an unrecorded jump ahead takes the change that sets the clock back, which dates it years early"
+
+    private func assertReportedOnce(
+        _ bolus: (bolusId: Int, start: Date),
+        _ label: String,
+        serial: HistoryLogSyncIdentifier.PumpSerial,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        let raw = HistoryLogSyncIdentifier.bolus(pumpSerial: serial, bolusId: bolus.bolusId)
+        let starts = Set(hostEvents.filter { $0.raw == raw }.compactMap { $0.dose?.startDate })
+        XCTAssertEqual(starts.count, 1, "the bolus \(label), under one start: \(starts.sorted())", file: file, line: line)
+        XCTAssertEqual(
+            starts.first?.timeIntervalSince(bolus.start) ?? .infinity,
+            0,
+            accuracy: 2,
+            "the bolus \(label), at the instant the pump gave it",
+            file: file,
+            line: line
+        )
+    }
+
+    func testL12_theLoadReportsBolusesEitherSideOfASpringForwardWhenGiven() throws {
+        try runALoadAcross(.dstForward)
+    }
+
+    func testL13_theLoadReportsBolusesEitherSideOfAFallBackWhenGiven() throws {
+        try runALoadAcross(.dstBack)
+    }
+
+    func testL14_theLoadReportsBolusesEitherSideOfATripThreeHoursEastWhenGiven() throws {
+        try runALoadAcross(.threeHoursEast)
+    }
+
+    func testL15_theLoadReportsBolusesEitherSideOfATripThreeHoursWestWhenGiven() throws {
+        try runALoadAcross(.threeHoursWest)
+    }
+
+    func testL16_theLoadReportsBolusesEitherSideOfATripTwelveHoursEastWhenGiven() throws {
+        try runALoadAcross(.twelveHoursEast)
+    }
+
+    func testL17_theLoadReportsBolusesEitherSideOfATripTwelveHoursWestWhenGiven() throws {
+        try runALoadAcross(.twelveHoursWest)
+    }
+
+    func testL18_theLoadReportsBolusesEitherSideOfThePumpSet73HoursAheadWhenGiven() throws {
+        try runALoadAcross(.seventyThreeHoursAhead)
+    }
+
+    func testL19_theLoadReportsBolusesEitherSideOfThePumpSet73HoursBehindWhenGiven() throws {
+        try runALoadAcross(.seventyThreeHoursBehind)
+    }
+
+    func testL20_theLoadReportsBolusesEitherSideOfAResetTo2008WhenGiven() throws {
+        try runALoadAcross(.resetTo2008, beforeChangeFails: Self.fromBeforeAReset)
+    }
+
+    func testL21_theLoadReportsBolusesEitherSideOfAResetTo2020WhenGiven() throws {
+        try runALoadAcross(.resetTo2020, beforeChangeFails: Self.fromBeforeAReset)
+    }
+
+    func testL22_theLoadReportsBolusesEitherSideOfAnUnrecordedJumpTo2035WhenGiven() throws {
+        try runALoadAcross(.jumpTo2035, beforeChangeFails: Self.fromBeforeAJumpAhead)
+    }
+
     // MARK: - M: a pump out of shelf mode
 
     private struct PutAwayPump {
@@ -1162,17 +1284,13 @@ final class SetupHistoryLoadConformanceTests: ConformanceTestCase {
         let reported = hostEvents.filter { old.contains($0.raw) }
         let (loop, trio) = hostOracles()
         let ledger = day.driver.manager.state.bolusReportLedger
-        try XCTExpectFailure("Boluses from before the pump was put away are reported to the host as given now") {
-            XCTAssertTrue(reported.isEmpty, "reported from before it was put away: \(reported.map(\.dose))", file: file, line: line)
-            let ahead = hostDoseEvents.filter { ($0.dose?.endDate ?? .distantPast) > clock.now.addingTimeInterval(.minutes(1)) && $0.dose?.isMutable == false }
-            XCTAssertTrue(ahead.isEmpty, "finalized doses ending after the phone's clock: \(ahead.map(\.dose))", file: file, line: line)
-            try assertHostsHoldThePumpsBoluses(from: start, loop, trio, count: bolusCount, file: file, line: line)
-        }
-        XCTExpectFailure("The bolus ledger keeps entries dated in the future and an extended part it never finalizes") {
-            let ahead = ledger.entries.filter { $0.eventDate > clock.now.addingTimeInterval(.minutes(1)) }
-            XCTAssertTrue(ahead.isEmpty, "ledger entries dated after the phone's clock: \(ahead.map(\.eventDate))", file: file, line: line)
-            XCTAssertTrue(ledger.heldExtendedParts.isEmpty, "\(ledger.heldExtendedParts)", file: file, line: line)
-        }
+        XCTAssertTrue(reported.isEmpty, "reported from before it was put away: \(reported.map(\.dose))", file: file, line: line)
+        let ahead = hostDoseEvents.filter { ($0.dose?.endDate ?? .distantPast) > clock.now.addingTimeInterval(.minutes(1)) && $0.dose?.isMutable == false }
+        XCTAssertTrue(ahead.isEmpty, "finalized doses ending after the phone's clock: \(ahead.map(\.dose))", file: file, line: line)
+        try assertHostsHoldThePumpsBoluses(from: start, loop, trio, count: bolusCount, file: file, line: line)
+        let ledgerAhead = ledger.entries.filter { $0.eventDate > clock.now.addingTimeInterval(.minutes(1)) }
+        XCTAssertTrue(ledgerAhead.isEmpty, "ledger entries dated after the phone's clock: \(ledgerAhead.map(\.eventDate))", file: file, line: line)
+        XCTAssertTrue(ledger.heldExtendedParts.isEmpty, "\(ledger.heldExtendedParts)", file: file, line: line)
     }
 
     private static let readsPastShelfMode = "The walk backward reads on past the pump's ShelfMode record"
@@ -1234,10 +1352,8 @@ final class SetupHistoryLoadConformanceTests: ConformanceTestCase {
             "setup's first slice holds the ShelfMode record: \(day.historyReads.prefix(2))"
         )
         let old = try raws(ofBolusesBefore: pump, day.driver)
-        XCTExpectFailure("Boluses in the slice that holds the ShelfMode record are reported at setup as given now") {
-            let atSetup = day.eventsAtAdoption.filter { old.contains($0.raw) }
-            XCTAssertTrue(atSetup.isEmpty, "reported when the host adopted the manager: \(atSetup.map(\.dose))")
-        }
+        let atSetup = day.eventsAtAdoption.filter { old.contains($0.raw) }
+        XCTAssertTrue(atSetup.isEmpty, "reported when the host adopted the manager: \(atSetup.map(\.dose))")
         assertNoHistoryIsReadFromBeforeThePumpWasPutAway(pump, day, expectedFailure: Self.readsPastShelfMode)
         try assertNoBolusFromBeforeThePumpWasPutAwayIsCounted(pump, day, from: pairedAt, bolusCount: day.appBolusCount)
     }

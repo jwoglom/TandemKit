@@ -41,8 +41,8 @@ extension TandemPumpManager {
         let logs: [HistoryLog]
         do {
             logs = try historyLogStore.logs(pumpSerial: serial.rawValue, in: covered)
+                .filter { Self.bolusHistoryTypes.contains($0.typeId) || HistoryTimestampReconciler.clockHistoryTypes.contains($0.typeId) }
                 .map { $0.parsed() }
-                .filter(Self.isReportedBolusInput)
         } catch {
             logger.error("Could not read the history log store for dose reporting: \(error)")
             return
@@ -51,9 +51,10 @@ extension TandemPumpManager {
         state.bolusReportLedger.prune(now: now)
         let ledger = state.bolusReportLedger
 
+        let dates = historyRecordDates(logs)
         let events = HistoryToDoseMapper().mapToEvents(
-            logs,
-            dates: historyRecordDates(logs),
+            dates.logs,
+            dates: dates,
             pumpSerial: serial,
             insulinType: state.insulinType,
             isCommandedBolus: { ledger.entry(bolusId: $0, pumpSerial: serial.rawValue)?.origin == .commanded }
@@ -108,16 +109,14 @@ extension TandemPumpManager {
         notifyDelegateStateUpdated()
     }
 
-    private static func isReportedBolusInput(_ log: HistoryLog) -> Bool {
-        switch log {
-        case is BolusActivatedHistoryLog, is BolusCompletedHistoryLog, is BolusDeliveryHistoryLog,
-             is BolusRequestedMsg2HistoryLog, is BolexActivatedHistoryLog, is BolexCompletedHistoryLog,
-             is TimeChangedHistoryLog, is DateChangeHistoryLog:
-            return true
-        default:
-            return false
-        }
-    }
+    private static let bolusHistoryTypes = [
+        BolusActivatedHistoryLog.typeId,
+        BolusCompletedHistoryLog.typeId,
+        BolusDeliveryHistoryLog.typeId,
+        BolusRequestedMsg2HistoryLog.typeId,
+        BolexActivatedHistoryLog.typeId,
+        BolexCompletedHistoryLog.typeId
+    ]
 
     private func historyBolusReport(
         _ event: NewPumpEvent,
