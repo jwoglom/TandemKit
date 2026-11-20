@@ -39,6 +39,18 @@ enum FaketandemPairingState: String, Codable {
     }
 }
 
+/// What a scenario replay delivered (`pkg/harness/scenario.go` `ScenarioResult`), its boluses oldest first.
+struct FaketandemScenarioResult: Decodable {
+    struct Bolus: Decodable {
+        let bolusId: Int
+        let deliveredUnits: Double
+        /// The true instant it started, with no skew or zone.
+        let start: Date
+    }
+
+    let boluses: [Bolus]
+}
+
 /// One history-log record as the harness API reports it (`pkg/harness/history.go`
 /// `historyEntrySnapshot`).
 ///
@@ -699,6 +711,16 @@ final class FaketandemClient {
         }
         let body = try decode(send("POST", "/api/state/history/bulk", json: ["records": records]), as: Body.self)
         return body.firstSequence ... body.lastSequence
+    }
+
+    /// Replays one of the emulator's built-in scenarios (`pkg/harness/scenarios`) over the pump's past, ending
+    /// now; refused while a driver is connected, a bolus or temp rate runs, or delivery is suspended.
+    @discardableResult
+    func applyScenario(preset: String) throws -> FaketandemScenarioResult {
+        struct Body: Decodable {
+            let scenario: FaketandemScenarioResult
+        }
+        return try decode(send("POST", "/api/state/scenario", json: ["preset": preset]), as: Body.self).scenario
     }
 
     /// Empties the pump's history log; the next record is sequence 1.
