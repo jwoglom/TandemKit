@@ -935,9 +935,7 @@ final class SetupHistoryLoadConformanceTests: ConformanceTestCase {
         let later = hostEvents.filter { $0.raw == HistoryLogSyncIdentifier.bolus(pumpSerial: serial, bolusId: laterBolusId) }
         XCTAssertEqual(later.count, 1, "the bolus an hour before pairing, in the first slice: \(later.map(\.dose))")
         let (loop, trio) = hostOracles()
-        try XCTExpectFailure("The load stops at the first record stamped before its window on the clock setup replaced") {
-            try assertHostsHoldThePumpsBoluses(from: since, loop, trio, count: 2)
-        }
+        try assertHostsHoldThePumpsBoluses(from: since, loop, trio, count: 2)
     }
 
     // MARK: - L12 to L22: a clock change in the window the load reads
@@ -1258,16 +1256,19 @@ final class SetupHistoryLoadConformanceTests: ConformanceTestCase {
             + [HistoryLogSyncIdentifier.extendedBolus(pumpSerial: serial, bolusId: pump.extendedBolusId)])
     }
 
+    /// With `savesTheFloor`, the walk saved the record its clock records cannot date, at or above the last before.
     private func assertNoHistoryIsReadFromBeforeThePumpWasPutAway(
         _ pump: PutAwayPump,
         _ day: DayAfterSetup,
-        expectedFailure: String,
+        savesTheFloor: Bool = true,
         file: StaticString = #filePath,
         line: UInt = #line
     ) {
-        XCTExpectFailure(expectedFailure) {
-            let below = day.historyReads.filter { $0.upperBound < pump.lastSequenceBefore }
-            XCTAssertTrue(below.isEmpty, "read from before record \(pump.lastSequenceBefore): \(below)", file: file, line: line)
+        let below = day.historyReads.filter { $0.upperBound < pump.lastSequenceBefore }
+        XCTAssertTrue(below.isEmpty, "read from before record \(pump.lastSequenceBefore): \(below)", file: file, line: line)
+        if savesTheFloor {
+            let floor = day.driver.manager.state.historyBackfill?.undatableThroughSequenceNum.map(Int.init) ?? 0
+            XCTAssertGreaterThanOrEqual(floor, pump.lastSequenceBefore, "the saved undatable floor", file: file, line: line)
         }
     }
 
@@ -1293,8 +1294,6 @@ final class SetupHistoryLoadConformanceTests: ConformanceTestCase {
         XCTAssertTrue(ledger.heldExtendedParts.isEmpty, "\(ledger.heldExtendedParts)", file: file, line: line)
     }
 
-    private static let readsPastShelfMode = "The walk backward reads on past the pump's ShelfMode record"
-
     // MARK: - M1
 
     /// A pump out of shelf mode, not loaded: setup sets its clock 6.9 years forward, the walk backward stops
@@ -1315,7 +1314,7 @@ final class SetupHistoryLoadConformanceTests: ConformanceTestCase {
 
         let appBoluses = hostDoseEvents.filter { $0.dose?.type == .bolus && $0.dose?.automatic == true && $0.dose?.isMutable == false }
         XCTAssertEqual(Set(appBoluses.map(\.raw)).count, day.appBolusCount, "the app's boluses, finalized: \(appBoluses.map(\.dose))")
-        assertNoHistoryIsReadFromBeforeThePumpWasPutAway(pump, day, expectedFailure: Self.readsPastShelfMode)
+        assertNoHistoryIsReadFromBeforeThePumpWasPutAway(pump, day)
         try assertNoBolusFromBeforeThePumpWasPutAwayIsCounted(pump, day, from: pairedAt, bolusCount: day.appBolusCount)
     }
 
@@ -1333,7 +1332,7 @@ final class SetupHistoryLoadConformanceTests: ConformanceTestCase {
 
         let day = try runTheDayAfterSetup(setUp, pairedAt: pairedAt, logMark: logMark)
         XCTAssertTrue(hostDelegates.allSatisfy(\.errors.isEmpty), "\(hostDelegates.map(\.errors))")
-        assertNoHistoryIsReadFromBeforeThePumpWasPutAway(pump, day, expectedFailure: Self.readsPastShelfMode)
+        assertNoHistoryIsReadFromBeforeThePumpWasPutAway(pump, day)
         try assertNoBolusFromBeforeThePumpWasPutAwayIsCounted(pump, day, from: pairedAt, bolusCount: day.appBolusCount)
     }
 
@@ -1354,7 +1353,7 @@ final class SetupHistoryLoadConformanceTests: ConformanceTestCase {
         let old = try raws(ofBolusesBefore: pump, day.driver)
         let atSetup = day.eventsAtAdoption.filter { old.contains($0.raw) }
         XCTAssertTrue(atSetup.isEmpty, "reported when the host adopted the manager: \(atSetup.map(\.dose))")
-        assertNoHistoryIsReadFromBeforeThePumpWasPutAway(pump, day, expectedFailure: Self.readsPastShelfMode)
+        assertNoHistoryIsReadFromBeforeThePumpWasPutAway(pump, day)
         try assertNoBolusFromBeforeThePumpWasPutAwayIsCounted(pump, day, from: pairedAt, bolusCount: day.appBolusCount)
     }
 
@@ -1372,14 +1371,12 @@ final class SetupHistoryLoadConformanceTests: ConformanceTestCase {
         let raw = HistoryLogSyncIdentifier.bolus(pumpSerial: serial, bolusId: try XCTUnwrap(pump.bolusIdAfterWaking))
         let day = try runTheDayAfterSetup(setUp, pairedAt: pairedAt, logMark: logMark, resumes: false)
 
-        XCTExpectFailure("The load stops at the first record stamped before its window on the clock setup replaced") {
-            XCTAssertTrue(day.eventsAtAdoption.contains { $0.raw == raw }, "the load reported the bolus given after waking")
-        }
+        XCTAssertTrue(day.eventsAtAdoption.contains { $0.raw == raw }, "the load reported the bolus given after waking")
         let pumpBolus = try XCTUnwrap(try timeline().boluses.first { $0.bolusId == pump.bolusIdAfterWaking })
         let reports = hostEvents.filter { $0.raw == raw }
         XCTAssertEqual(reports.count, 1, "reported once: \(reports.map(\.dose))")
         XCTAssertEqual(reports.first?.dose?.startDate.timeIntervalSince(try XCTUnwrap(pumpBolus.start)) ?? .infinity, 0, accuracy: 2, "at the pump's time")
-        assertNoHistoryIsReadFromBeforeThePumpWasPutAway(pump, day, expectedFailure: Self.readsPastShelfMode)
+        assertNoHistoryIsReadFromBeforeThePumpWasPutAway(pump, day)
         try assertNoBolusFromBeforeThePumpWasPutAwayIsCounted(pump, day, from: pump.wokenAt, bolusCount: day.appBolusCount + 1)
     }
 
@@ -1413,10 +1410,6 @@ final class SetupHistoryLoadConformanceTests: ConformanceTestCase {
         XCTAssertTrue(reported.isEmpty, "\(reported.map(\.dose))")
         let (loop, trio) = hostOracles()
         try assertHostsHoldThePumpsBoluses(from: pairedAt, loop, trio, count: day.appBolusCount)
-        assertNoHistoryIsReadFromBeforeThePumpWasPutAway(
-            pump,
-            day,
-            expectedFailure: "The walk backward reads a slice deeper each time the store prunes the record it stopped at"
-        )
+        assertNoHistoryIsReadFromBeforeThePumpWasPutAway(pump, day, savesTheFloor: false)
     }
 }

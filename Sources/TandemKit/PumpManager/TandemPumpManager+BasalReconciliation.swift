@@ -96,7 +96,7 @@ extension TandemPumpManager {
         pumpSerial serial: HistoryLogSyncIdentifier.PumpSerial,
         into batch: inout HistoryReportBatch
     ) {
-        guard let covered = outcome.sessionCovered else { return }
+        guard let covered = outcome.reportableRange else { return }
         let now = self.now
         let reporting = state.featureFlags.basalHistoryReporting
         state.reportedBasal.prune(now: now)
@@ -111,24 +111,22 @@ extension TandemPumpManager {
             now.addingTimeInterval(-BolusReportLedger.reportingHorizon)
         )
 
-        let dates: HistoryRecordDates
+        let history: (logs: [HistoryLog], dates: HistoryRecordDates)
         let gaps: [ClosedRange<UInt32>]
         do {
-            let since = Dates.fromInstantToJan12008EpochSeconds(floor.addingTimeInterval(state.pumpClockOffset - Self.basalHistoryLookback))
-            dates = try historyRecordDates(historyLogStore.logs(
-                pumpSerial: serial.rawValue,
+            history = try datedHistory(
                 ofTypes: Self.basalHistoryTypes + HistoryTimestampReconciler.clockHistoryTypes,
-                sincePumpTimeSec: UInt32(clamping: Int64(max(0, since)))
+                in: covered,
+                since: floor.addingTimeInterval(-Self.basalHistoryLookback),
+                pumpSerial: serial
             )
-            .filter { covered.contains($0.sequenceNum) }
-            .map { $0.parsed() })
-            gaps = try dates.logs.first.map { try historyLogStore.missingRanges(pumpSerial: serial.rawValue, in: $0.sequenceNum ... covered.upperBound) } ?? []
+            gaps = try history.logs.first.map { try historyLogStore.missingRanges(pumpSerial: serial.rawValue, in: $0.sequenceNum ... covered.upperBound) } ?? []
         } catch {
             logger.error("Could not read the history log store for basal reconciliation: \(error)")
             return
         }
+        let (logs, dates) = history
 
-        let logs = dates.logs
         let timeline = PumpBasalTimeline(
             logs: logs,
             date: dates.phoneDate(of:),

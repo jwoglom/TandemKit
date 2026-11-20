@@ -816,4 +816,67 @@ import XCTest
         }
         XCTAssertEqual(bluetooth.sent(HistoryLogStatusRequest.self).count, 3, "The dropped request runs once the first tick ends")
     }
+
+    // MARK: - Shelf mode
+
+    /// The pump's previous use, a ShelfMode record, its clock restarted at 2008, then setup's clock write,
+    /// whose change would put the old bolus decades ahead.
+    private func historyAcrossShelfMode() -> [HistoryLog] {
+        let previousUse = nowPumpTimeSec - UInt32(TimeInterval.days(200))
+        let written = nowPumpTimeSec - 600
+        let restarted: UInt32 = 1000
+        return quickBolusStart(bolusId: 70, units: 2.0, firstSequenceNum: 1, secondsAgo: nowPumpTimeSec - previousUse)
+            + [
+                bolusCompletion(bolusId: 70, delivered: 2.0, requested: 2.0, sequenceNum: 4, secondsAgo: nowPumpTimeSec - previousUse - 60),
+                ShelfModeHistoryLog(
+                    pumpTimeSec: previousUse + 3600,
+                    sequenceNum: 5,
+                    msecSinceReset: 0,
+                    lipoIbc: 0,
+                    lipoAbc: 0,
+                    lipoCurrent: 0,
+                    lipoRemCap: 0,
+                    lipoMv: 0
+                ),
+                // Stamped on the clock it set, the restarted time of day on the new date.
+                DateChangeHistoryLog(pumpTimeSec: written / 86400 * 86400 + restarted, sequenceNum: 6, datePrior: 0, dateAfter: written / 86400, rawRTCTime: 0),
+                TimeChangedHistoryLog(
+                    pumpTimeSec: written,
+                    sequenceNum: 7,
+                    timePrior: restarted * 1000,
+                    timeAfter: (written % 86400) * 1000,
+                    rawRTC: 0
+                ),
+            ]
+            + quickBolusStart(bolusId: 71, units: 1.0, firstSequenceNum: 8, secondsAgo: 300)
+            + [bolusCompletion(bolusId: 71, delivered: 1.0, requested: 1.0, sequenceNum: 11, secondsAgo: 240)]
+    }
+
+    func testABolusFromBeforeShelfModeIsNotReportedAndOneAfterTheClockWriteIs() throws {
+        stubPump(serving: historyAcrossShelfMode())
+
+        runTick()
+
+        XCTAssertEqual(manager.state.historyBackfill?.undatableThroughSequenceNum, 5)
+        XCTAssertEqual(reportedBoluses.map(\.raw), [HistoryLogSyncIdentifier.bolus(pumpSerial: serial, bolusId: 71)])
+        XCTAssertNil(manager.state.bolusReportLedger.entry(bolusId: 70, pumpSerial: Self.pumpSerial))
+    }
+
+    func testABolusFromBeforeShelfModeStaysUnreportedAfterARelaunch() throws {
+        stubPump(serving: historyAcrossShelfMode())
+        runTick()
+
+        let readBefore = bluetooth.sent(HistoryLogRequest.self).count
+        manager = makeManager(state: manager.state)
+        stubPump(serving: historyAcrossShelfMode())
+        runTick()
+
+        XCTAssertFalse(reportedBoluses.contains { $0.raw == HistoryLogSyncIdentifier.bolus(pumpSerial: serial, bolusId: 70) })
+        let reads = bluetooth.sent(HistoryLogRequest.self).dropFirst(readBefore)
+        XCTAssertFalse(reads.isEmpty)
+        XCTAssertTrue(
+            reads.allSatisfy { Int($0.startLog) - max($0.numberOfLogs, 1) + 1 > 5 },
+            "read at or below the ShelfMode record after a relaunch: \(reads.map { ($0.startLog, $0.numberOfLogs) })"
+        )
+    }
 }

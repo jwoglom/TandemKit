@@ -163,18 +163,33 @@ final class HistoryLogStoreTests: XCTestCase {
         }
     }
 
-    func testLogsForTypesSincePumpTime() {
+    func testLogsForTypesInASequenceRange() {
         forEachStore { store, label in
             try store.insert([
                 makeLog(sequenceNum: 1, typeId: 20, pumpTimeSec: 1000),
-                makeLog(sequenceNum: 2, typeId: 20, pumpTimeSec: 2000),
-                makeLog(sequenceNum: 3, typeId: 21, pumpTimeSec: 3000),
-                makeLog(sequenceNum: 4, typeId: 22, pumpTimeSec: 4000)
+                makeLog(sequenceNum: 2, typeId: 20, pumpTimeSec: 9000),
+                makeLog(sequenceNum: 3, typeId: 21, pumpTimeSec: 10),
+                makeLog(sequenceNum: 4, typeId: 22, pumpTimeSec: 4000),
+                makeLog(sequenceNum: 5, typeId: 20, pumpTimeSec: 5000)
             ])
 
-            let matching = try store.logs(pumpSerial: pumpA, ofTypes: [20, 21], sincePumpTimeSec: 2000)
-            XCTAssertEqual(matching.map(\.sequenceNum), [2, 3], label)
-            XCTAssertEqual(try store.logs(pumpSerial: pumpA, ofTypes: [], sincePumpTimeSec: 0), [], label)
+            let matching = try store.logs(pumpSerial: pumpA, ofTypes: [20, 21], in: 2 ... 4)
+            XCTAssertEqual(matching.map(\.sequenceNum), [2, 3], "selected by sequence number, whatever the stamps: \(label)")
+            XCTAssertEqual(try store.logs(pumpSerial: pumpA, ofTypes: [], in: 0 ... 10), [], label)
+        }
+    }
+
+    func testLowestSequenceNumReceivedSince() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        forEachStore { store, label in
+            try store.insert([
+                makeLog(sequenceNum: 10, receivedAt: now),
+                makeLog(sequenceNum: 5, receivedAt: now.addingTimeInterval(.hours(1))),
+                makeLog(sequenceNum: 20, receivedAt: now.addingTimeInterval(-.hours(1)))
+            ])
+
+            XCTAssertEqual(try store.lowestSequenceNum(pumpSerial: pumpA, receivedSince: now), 5, label)
+            XCTAssertNil(try store.lowestSequenceNum(pumpSerial: pumpA, receivedSince: now.addingTimeInterval(.hours(2))), label)
         }
     }
 
@@ -249,7 +264,7 @@ final class HistoryLogStoreTests: XCTestCase {
             ])
 
             XCTAssertNil(try store.prunedBelowSequenceNum(pumpSerial: pumpA), label)
-            XCTAssertEqual(try store.prune(pumpSerial: pumpA, beforePumpTimeSec: 3000), 2, label)
+            XCTAssertEqual(try store.prune(pumpSerial: pumpA, belowSequenceNum: 3), 2, label)
 
             XCTAssertEqual(try store.count(pumpSerial: pumpA), 1, label)
             XCTAssertEqual(try store.oldest(pumpSerial: pumpA)?.sequenceNum, 3, label)
@@ -264,7 +279,7 @@ final class HistoryLogStoreTests: XCTestCase {
                 makeLog(sequenceNum: 2, pumpTimeSec: 2000),
                 makeLog(sequenceNum: 5, pumpTimeSec: 5000)
             ])
-            try store.prune(pumpSerial: pumpA, beforePumpTimeSec: 3000)
+            try store.prune(pumpSerial: pumpA, belowSequenceNum: 3)
 
             // 1-2 were pruned deliberately; only the genuine hole at 3-4 is worth re-fetching.
             XCTAssertEqual(try store.missingRanges(pumpSerial: pumpA, in: 1 ... 5), [3 ... 4], label)
@@ -273,9 +288,9 @@ final class HistoryLogStoreTests: XCTestCase {
 
     func testPruneIsANoOpWhenNothingIsOldEnough() {
         forEachStore { store, label in
-            try store.insert([makeLog(sequenceNum: 1, pumpTimeSec: 5000)])
+            try store.insert([makeLog(sequenceNum: 2, pumpTimeSec: 5000)])
 
-            XCTAssertEqual(try store.prune(pumpSerial: pumpA, beforePumpTimeSec: 1000), 0, label)
+            XCTAssertEqual(try store.prune(pumpSerial: pumpA, belowSequenceNum: 2), 0, label)
             XCTAssertEqual(try store.count(pumpSerial: pumpA), 1, label)
             XCTAssertNil(try store.prunedBelowSequenceNum(pumpSerial: pumpA), label)
         }
@@ -287,30 +302,30 @@ final class HistoryLogStoreTests: XCTestCase {
                 makeLog(sequenceNum: 1, pumpTimeSec: 1000),
                 makeLog(sequenceNum: 2, pumpTimeSec: 2000)
             ])
-            try store.prune(pumpSerial: pumpA, beforePumpTimeSec: 3000)
+            try store.prune(pumpSerial: pumpA, belowSequenceNum: 3)
             XCTAssertEqual(try store.prunedBelowSequenceNum(pumpSerial: pumpA), 3, label)
 
             // Re-inserting an already-pruned entry and pruning a narrower window must not lower it.
             try store.insert([makeLog(sequenceNum: 1, pumpTimeSec: 1000)])
-            try store.prune(pumpSerial: pumpA, beforePumpTimeSec: 1500)
+            try store.prune(pumpSerial: pumpA, belowSequenceNum: 2)
             XCTAssertEqual(try store.prunedBelowSequenceNum(pumpSerial: pumpA), 3, label)
         }
     }
 
     func testPruneExpiredUsesNinetyDayRetention() {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
-        func pumpTime(daysAgo: Double) -> UInt32 {
-            UInt32(Dates.fromInstantToJan12008EpochSeconds(now.addingTimeInterval(-.days(daysAgo))))
+        func received(daysAgo: Double) -> Date {
+            now.addingTimeInterval(-.days(daysAgo))
         }
 
         XCTAssertEqual(HistoryLogRetention.default, .days(90))
 
         forEachStore { store, label in
             try store.insert([
-                makeLog(sequenceNum: 1, pumpTimeSec: pumpTime(daysAgo: 120)),
-                makeLog(sequenceNum: 2, pumpTimeSec: pumpTime(daysAgo: 91)),
-                makeLog(sequenceNum: 3, pumpTimeSec: pumpTime(daysAgo: 89)),
-                makeLog(sequenceNum: 4, pumpTimeSec: pumpTime(daysAgo: 1))
+                makeLog(sequenceNum: 1, receivedAt: received(daysAgo: 120)),
+                makeLog(sequenceNum: 2, receivedAt: received(daysAgo: 91)),
+                makeLog(sequenceNum: 3, receivedAt: received(daysAgo: 89)),
+                makeLog(sequenceNum: 4, receivedAt: received(daysAgo: 1))
             ])
 
             XCTAssertEqual(try store.pruneExpired(pumpSerial: pumpA, now: now), 2, label)
@@ -319,6 +334,55 @@ final class HistoryLogStoreTests: XCTestCase {
                 [3, 4],
                 label
             )
+            XCTAssertEqual(try store.prunedBelowSequenceNum(pumpSerial: pumpA), 3, label)
+        }
+    }
+
+    /// After a clock reset a record written minutes ago carries a stamp years old (a field log's read
+    /// 2020 for records from that morning); pruned by stamp, the walk's boundary went every hour.
+    func testPruneExpiredKeepsWhatWasJustReadWhateverItsStamp() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        forEachStore { store, label in
+            try store.insert([
+                makeLog(sequenceNum: 1, pumpTimeSec: 0, receivedAt: now.addingTimeInterval(-.minutes(5))),
+                makeLog(sequenceNum: 2, pumpTimeSec: 378_691_200, receivedAt: now.addingTimeInterval(-.minutes(5)))
+            ])
+
+            XCTAssertEqual(try store.pruneExpired(pumpSerial: pumpA, now: now), 0, label)
+            XCTAssertEqual(try store.count(pumpSerial: pumpA), 2, label)
+            XCTAssertNil(try store.prunedBelowSequenceNum(pumpSerial: pumpA), label)
+        }
+    }
+
+    /// The walk reads older records after newer ones, so an old record read recently keeps everything above it.
+    func testPruneExpiredKeepsEverythingAboveTheOldestRecentRead() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        forEachStore { store, label in
+            try store.insert([
+                makeLog(sequenceNum: 1, receivedAt: now.addingTimeInterval(-.days(200))),
+                makeLog(sequenceNum: 2, receivedAt: now.addingTimeInterval(-.days(1))),
+                makeLog(sequenceNum: 3, receivedAt: now.addingTimeInterval(-.days(100))),
+                makeLog(sequenceNum: 4, receivedAt: now.addingTimeInterval(-.days(100)))
+            ])
+
+            XCTAssertEqual(try store.pruneExpired(pumpSerial: pumpA, now: now), 1, label)
+            XCTAssertEqual(try store.logs(pumpSerial: pumpA, in: 0 ... UInt32.max).map(\.sequenceNum), [2, 3, 4], label)
+            XCTAssertEqual(try store.missingRanges(pumpSerial: pumpA, in: 1 ... 4), [], label)
+        }
+    }
+
+    func testPruneExpiredWithNothingRecentPrunesEverythingAndKeepsTheWatermark() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        forEachStore { store, label in
+            try store.insert([
+                makeLog(sequenceNum: 7, receivedAt: now.addingTimeInterval(-.days(200))),
+                makeLog(sequenceNum: 8, receivedAt: now.addingTimeInterval(-.days(100)))
+            ])
+
+            XCTAssertEqual(try store.pruneExpired(pumpSerial: pumpA, now: now), 2, label)
+            XCTAssertEqual(try store.count(pumpSerial: pumpA), 0, label)
+            XCTAssertEqual(try store.prunedBelowSequenceNum(pumpSerial: pumpA), 9, label)
+            XCTAssertEqual(try store.missingRanges(pumpSerial: pumpA, in: 1 ... 8), [], label)
         }
     }
 
@@ -326,7 +390,7 @@ final class HistoryLogStoreTests: XCTestCase {
         forEachStore { store, label in
             try store.insert([makeLog(pumpSerial: pumpA, sequenceNum: 1, pumpTimeSec: 1000)])
             try store.insert([makeLog(pumpSerial: pumpB, sequenceNum: 1)])
-            try store.prune(pumpSerial: pumpA, beforePumpTimeSec: 2000)
+            try store.prune(pumpSerial: pumpA, belowSequenceNum: 2)
 
             try store.deleteAll(pumpSerial: pumpA)
 

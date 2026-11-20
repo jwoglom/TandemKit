@@ -212,34 +212,27 @@ extension TandemPumpManager {
     }
 
     private func pumpRecordCount(ofTypes typeIds: [Int], since: Date) -> Int {
-        guard let serial = historyLogStoreSerial else {
+        guard let serial = historyLogStoreSerial, let range = reportableHistoryRange else {
             return 0
         }
-        let pumpSince = Dates.fromInstantToJan12008EpochSeconds(since.addingTimeInterval(state.pumpClockOffset))
         do {
-            return try historyLogStore.logs(
-                pumpSerial: serial.rawValue,
-                ofTypes: typeIds,
-                sincePumpTimeSec: UInt32(clamping: Int(max(0, pumpSince)))
-            ).count
+            return try datedHistory(ofTypes: typeIds, in: range, since: since, pumpSerial: serial).logs.count
         } catch {
             logger.warning("Could not count the pump's records for setup: \(error)")
             return 0
         }
     }
 
-    /// The share of the window from `since` to the pump's clock now that the session's store spans.
+    /// The share of the window from `since` to now that the session's store spans.
     func setupHistoryLoadProgress(since: Date) -> Double {
-        guard let span = historyBackfillCoordinator.sessionPumpTimeSpan() else {
+        guard let span = historyBackfillCoordinator.sessionPhoneTimeSpan() else {
             return 0
         }
-        let pumpSince = since.addingTimeInterval(state.pumpClockOffset)
-        let pumpNow = now.addingTimeInterval(state.pumpClockOffset)
-        let window = pumpNow.timeIntervalSince(pumpSince)
+        let window = now.timeIntervalSince(since)
         guard window > 0 else {
             return 0
         }
-        let covered = span.upperBound.timeIntervalSince(max(span.lowerBound, pumpSince))
+        let covered = span.upperBound.timeIntervalSince(max(span.lowerBound, since))
         return min(max(covered / window, 0), 1)
     }
 

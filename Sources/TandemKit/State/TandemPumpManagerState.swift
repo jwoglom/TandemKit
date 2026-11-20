@@ -730,7 +730,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
             lines += debugSection("historyBackfill", [
                 "* pumpSerial: \(historyBackfill.pumpSerial)",
                 "* watermark: \(debugValue(historyBackfill.watermark))",
-                "* firstSeenFloor: \(debugValue(historyBackfill.firstSeenFloor))"
+                "* firstSeenFloor: \(debugValue(historyBackfill.firstSeenFloor))",
+                "* undatableThroughSequenceNum: \(debugValue(historyBackfill.undatableThroughSequenceNum))"
             ])
         } else {
             lines.append("* historyBackfill: nil")

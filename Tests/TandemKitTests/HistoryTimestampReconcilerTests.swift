@@ -203,6 +203,8 @@ final class HistoryTimestampReconcilerTests: XCTestCase {
         XCTAssertEqual(dates.undatableThroughSequenceNum, 103)
         XCTAssertEqual(dates.logs.map(\.sequenceNum), logs.map(\.sequenceNum).filter { $0 > 103 })
         XCTAssertEqual(dates.phoneDate(of: logs[0]), .distantPast)
+        XCTAssertNil(dates.pumpDate(pumpTimeSec: logs[0].pumpTimeSec, sequenceNum: logs[0].sequenceNum))
+        XCTAssertEqual(dates.pumpDate(pumpTimeSec: 219, sequenceNum: 104), pumpDate(6800 * day + 219 + 46181))
     }
 
     private let day = 86400

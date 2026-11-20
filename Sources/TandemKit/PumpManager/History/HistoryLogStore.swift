@@ -23,7 +23,7 @@ public enum HistoryLogStoreError: Error {
 }
 
 public enum HistoryLogRetention {
-    /// How far back pump history is kept before `pruneExpired` removes it.
+    /// How long the store keeps what it was given before `pruneExpired` removes it.
     ///
     /// 90 days covers the pump's own history depth for reporting and export purposes while keeping
     /// the SQLite file to a few tens of MB. Dose reconciliation only ever looks back hours, so this
@@ -63,9 +63,12 @@ public protocol HistoryLogStore: AnyObject {
     /// Entries within `range`, ordered by sequence number ascending.
     func logs(pumpSerial: UInt32, in range: ClosedRange<UInt32>) throws -> [StoredHistoryLog]
 
-    /// Entries of the given types at or after a pump-clock timestamp, ordered by sequence number
-    /// ascending. Used to re-derive doses over a window without re-reading the pump.
-    func logs(pumpSerial: UInt32, ofTypes typeIds: [Int], sincePumpTimeSec: UInt32) throws -> [StoredHistoryLog]
+    /// Entries of the given types within `range`, ordered by sequence number ascending. No query takes a
+    /// pump time: a stamp is on whatever clock the pump ran then, so records are dated (`HistoryRecordDates`).
+    func logs(pumpSerial: UInt32, ofTypes typeIds: [Int], in range: ClosedRange<UInt32>) throws -> [StoredHistoryLog]
+
+    /// Lowest sequence number among entries this driver stored at or after `date`, on the phone's clock.
+    func lowestSequenceNum(pumpSerial: UInt32, receivedSince date: Date) throws -> UInt32?
 
     /// Lowest-sequence entry stored for a pump.
     func oldest(pumpSerial: UInt32) throws -> StoredHistoryLog?
@@ -83,10 +86,10 @@ public protocol HistoryLogStore: AnyObject {
     /// gap there is expected and must not trigger a re-fetch. `nil` when nothing has been pruned.
     func prunedBelowSequenceNum(pumpSerial: UInt32) throws -> UInt32?
 
-    /// Delete entries older than a pump-clock timestamp and advance the retention watermark.
+    /// Delete every entry below `belowSequenceNum` and advance the retention watermark to it.
     /// - Returns: the number of entries deleted.
     @discardableResult
-    func prune(pumpSerial: UInt32, beforePumpTimeSec: UInt32) throws -> Int
+    func prune(pumpSerial: UInt32, belowSequenceNum: UInt32) throws -> Int
 
     /// Delete everything for one pump, or for every pump when `pumpSerial` is nil. Also clears the
     /// retention watermark, so a subsequent fetch treats the pump as never read.
@@ -118,20 +121,21 @@ public extension HistoryLogStore {
         return HistoryLogSequenceGaps.missingRanges(present: present, in: clamped)
     }
 
-    /// Apply the retention policy, deleting entries whose pump-clock time is older than `retention`.
-    /// - Returns: the number of entries deleted.
+    /// Deletes everything below the oldest entry stored within `retention`, or everything if none was. By when
+    /// it was stored, since a stamp after a clock reset reads years old; by sequence number, so the watermark claims nothing kept.
     @discardableResult
     func pruneExpired(
         pumpSerial: UInt32,
         retention: TimeInterval = HistoryLogRetention.default,
         now: Date = Date()
     ) throws -> Int {
-        let cutoff = Dates.fromInstantToJan12008EpochSeconds(now.addingTimeInterval(-retention))
-        // A cutoff at or before the pump epoch (2008-01-01) can't expire anything.
-        guard cutoff > 0 else {
+        if let keepFrom = try lowestSequenceNum(pumpSerial: pumpSerial, receivedSince: now.addingTimeInterval(-retention)) {
+            return try prune(pumpSerial: pumpSerial, belowSequenceNum: keepFrom)
+        }
+        guard let newest = try newest(pumpSerial: pumpSerial)?.sequenceNum else {
             return 0
         }
-        return try prune(pumpSerial: pumpSerial, beforePumpTimeSec: UInt32(min(cutoff, TimeInterval(UInt32.max))))
+        return try prune(pumpSerial: pumpSerial, belowSequenceNum: newest == .max ? newest : newest + 1)
     }
 }
 

@@ -286,8 +286,9 @@ host queue, so its state stays behind its lock.
   while basal reporting is on.
 - The host's `startDateToFilterNewPumpEvents` bounds neither the walk nor reporting (#345): Trio
   returns `lastEventDate - 15min` and drops nothing itself, so it would bound the walk minutes into
-  the past and drop a pump-UI bolus found one sync late. `HistoryBackfillState.firstSeenFloor` alone
-  bounds how deep the walk reads; `HistoryBackfillPlanner.emitFloor` bounds reporting.
+  the past and drop a pump-UI bolus found one sync late. `HistoryBackfillState.firstSeenFloor` bounds
+  by date how deep the walk reads, and the undatable floor and the store's retention watermark by
+  sequence number; `HistoryBackfillPlanner.emitFloor` bounds reporting.
 - Suspends, resumes and temp basal ends the pump made on its own (#333, #331). Neither host revises
   one once told: Trio keeps a row per (timestamp, type) and Loop never counts a non-bolus dose older
   than its last finished basal (#354). So the first report carries the pump's date, and reaches the
@@ -397,6 +398,17 @@ host queue, so its state stays behind its lock.
   setup's clock write moved the previous use's boluses 2,512 days ahead, which the host stored as
   given at the time they were read. Each pass reads `HistoryTimestampReconciler.clockHistoryTypes`
   with its own types.
+- A record's raw stamp is never compared with a phone date: it is on whatever clock the pump ran when
+  it wrote it, which after a reset reads years old. The store has no query by pump time
+  (`datedHistory` takes a sequence range and filters by phone date), prunes by sequence number below
+  the oldest record it was given within its retention, and the walk keeps where it stopped as a
+  sequence range plus the phone date of its oldest record, dated when read. A field log's hourly prune
+  by stamp took that record each hour, and the walk, finding no boundary, read a slice deeper each time.
+- The newest undatable record the walk finds among the clock records is saved
+  (`HistoryBackfillState.undatableThroughSequenceNum`), so the walk reads nothing at or below it and no
+  pass reports from it (`TickOutcome.reportableRange`), across relaunches. A bolus delivered before a
+  reset that history had not yet read stays out of IOB, and so does one before any `ArmInit`, whether
+  or not that reboot lost the clock.
 - Still open: a boundary that trails the live reads to the last history pass (#353). Loop's
   `DoseStore` stores nothing while the boundary is at or behind the end of the newest finalized
   basal it holds, and leaves out of IOB a dose that ended before the boundary and was not stored, so
