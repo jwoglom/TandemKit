@@ -278,6 +278,7 @@ class LoopTestCase: FaketandemIntegrationTestCase {
             in: doses,
             predicted.filter(\.isScheduleFill),
             scheduleChanges: try store.basalScheduleChangeDates(),
+            colliding: oracle.collidingDoses(syncIdentifier:),
             file: file,
             line: line
         )
@@ -357,10 +358,14 @@ class LoopTestCase: FaketandemIntegrationTestCase {
     /// by milliseconds. A split there is joined back into one piece before comparing. When the change
     /// falls in the second the piece began, both halves share a key and the later one overwrites the
     /// earlier, so the piece starts at the change instead.
+    ///
+    /// Any two pieces starting in one second share a key (a replaced temp's gap and a cancel's tail, say), and
+    /// which Loop keeps follows the order of its saves, so its piece may be any the oracle was offered.
     private func assertSameScheduleFill(
         in doses: [LoopCachedDose],
         _ predicted: [LoopCachedDose],
         scheduleChanges: [Date],
+        colliding: (String) -> [DoseEntry],
         file: StaticString,
         line: UInt
     ) {
@@ -374,6 +379,15 @@ class LoopTestCase: FaketandemIntegrationTestCase {
             return XCTFail("schedule fill counts differ\n\(report)", file: file, line: line)
         }
         for (actual, expected) in zip(fill, predicted) {
+            let isACollidingPiece = actual.syncIdentifier == expected.syncIdentifier && !actual.isDeleted &&
+                colliding(actual.syncIdentifier).contains {
+                    abs($0.startDate.timeIntervalSince(actual.startDate)) < 1e-3 &&
+                        abs($0.endDate.timeIntervalSince(actual.endDate)) < 1e-3 &&
+                        $0.isMutable == actual.isMutable
+                }
+            if isACollidingPiece {
+                continue
+            }
             let startsAtAScheduleChange = actual.syncIdentifier == expected.syncIdentifier &&
                 actual.startDate > expected.startDate &&
                 scheduleChanges.contains { abs($0.timeIntervalSince(actual.startDate)) < 1e-3 }

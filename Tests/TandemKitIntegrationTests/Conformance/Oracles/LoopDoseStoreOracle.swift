@@ -75,6 +75,9 @@ final class LoopDoseStoreOracle: DoseOracle {
 
     private(set) var pumpEvents: [PumpEventRow] = []
     private(set) var cachedDoses: [StoredDose] = []
+    /// Every dose offered under each `syncIdentifier`, one per start. Two schedule-fill pieces that start in
+    /// one second share a key, and which Loop keeps depends on the order of its saves.
+    private var dosesOffered: [String: [DoseEntry]] = [:]
     /// `DoseStore.lastPumpEventsReconciliation` (DS:680).
     private(set) var lastReconciliation: Date?
     /// `DoseStore.pumpEventQueryAfterDate` (DS:747-754).
@@ -530,6 +533,7 @@ final class LoopDoseStoreOracle: DoseOracle {
             // HKQS:73-77 — or a 0 U bolus, whose mutable copy stays deleted: Loop's end state for a dose
             // that never happened.
             if entry.type == .bolus, entry.unitsInDeliverableIncrements <= .ulpOfOne { continue }
+            noteOffered(entry, syncIdentifier: syncIdentifier)
 
             // IDS:455-459 — a mutable object with the same provenance + syncIdentifier is updated,
             // which also un-deletes it (CIDO:245 `deletedAt = nil`).
@@ -554,6 +558,23 @@ final class LoopDoseStoreOracle: DoseOracle {
         }
         // IDS:469-473 — anything still marked deleted at this point is logged as "Delete"; that is the
         // report-or-delete rule taking effect for doses the batch stopped sending.
+    }
+
+    /// The doses offered under `syncIdentifier` that started at different times, any of which Loop may hold; empty
+    /// when every offer was the same dose.
+    func collidingDoses(syncIdentifier: String) -> [DoseEntry] {
+        let offered = dosesOffered[syncIdentifier] ?? []
+        return offered.count > 1 ? offered : []
+    }
+
+    private func noteOffered(_ entry: DoseEntry, syncIdentifier: String) {
+        var offered = dosesOffered[syncIdentifier] ?? []
+        if let index = offered.firstIndex(where: { abs($0.startDate.timeIntervalSince(entry.startDate)) < 1e-3 }) {
+            offered[index] = entry
+        } else {
+            offered.append(entry)
+        }
+        dosesOffered[syncIdentifier] = offered
     }
 
     /// CIDO:232-253 `update(from:)`.
