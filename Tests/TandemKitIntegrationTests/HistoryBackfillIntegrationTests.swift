@@ -513,9 +513,9 @@ final class HistoryBackfillIntegrationTests: ConformanceTestCase {
         trio.assertNoDuplicates()
     }
 
-    /// faketandem's `reboot-kept-clock`: a reboot that keeps the clock writes an ArmInit record, which the driver
-    /// takes as a reset, so the pump bolus given before it, dated right, never reaches the host.
-    func testABolusBeforeARebootThatKeptTheClockReachesTheHost() throws {
+    /// faketandem's `reboot-kept-clock`: an ArmInit record is a reset whether or not the reboot kept the clock, so
+    /// nothing before it is reported, however right its date.
+    func testNothingBeforeARebootReachesTheHostEvenWhenTheRebootKeptTheClock() throws {
         let scenario = try harness.client.applyScenario(preset: "reboot-kept-clock")
         let driver = try stageDriver(trackingSince: clock.now.addingTimeInterval(-.hours(6)))
         let afterReboot = try XCTUnwrap(scenario.boluses.last)
@@ -524,8 +524,10 @@ final class HistoryBackfillIntegrationTests: ConformanceTestCase {
         }
 
         try assertReportedOnceWhenGiven(afterReboot, driver)
-        try XCTExpectFailure("A record before an ArmInit is left undated whether or not the reboot kept the clock (AGENTS.md)") {
-            try assertReportedOnceWhenGiven(scenario.boluses[1], driver)
+        for before in scenario.boluses.dropLast() {
+            let raw = try bolusRaw(before, driver)
+            XCTAssertFalse(eventsSince(0).contains { $0.raw == raw }, "bolus \(before.bolusId) from before the reboot was reported")
         }
+        XCTAssertNotNil(driver.manager.state.historyBackfill?.undatableThroughSequenceNum, "the reboot's ArmInit record is saved as the floor")
     }
 }
