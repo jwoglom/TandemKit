@@ -386,7 +386,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         } else {
             historyBackfill = nil
         }
-        historyBeforePairing = (rawValue["historyBeforePairing"] as? String).flatMap(HistoryBeforePairing.init(rawValue:)) ?? .read
+        historyBeforePairing = (rawValue["historyBeforePairing"] as? HistoryBeforePairing.RawValue).flatMap(HistoryBeforePairing.init(rawValue:)) ?? .read
 
         if let ledgerRaw = rawValue["bolusReportLedger"] as? BolusReportLedger.RawValue,
            let ledger = BolusReportLedger(rawValue: ledgerRaw)
@@ -730,7 +730,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
             "* lastBasalStatusDate: \(debugValue(lastBasalStatusDate))",
             "* basalRateMismatchDetectedAt: \(debugValue(basalRateMismatchDetectedAt))",
             "* basalProfileUpdateFailed: \(basalProfileUpdateFailed)",
-            "* historyBeforePairing: \(historyBeforePairing.rawValue)"
+            "* historyBeforePairing: \(historyBeforePairing)"
         ]
         if let historyBackfill {
             lines += debugSection("historyBackfill", [
@@ -738,7 +738,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
                 "* watermark: \(debugValue(historyBackfill.watermark))",
                 "* firstSeenFloor: \(debugValue(historyBackfill.firstSeenFloor))",
                 "* undatableThroughSequenceNum: \(debugValue(historyBackfill.undatableThroughSequenceNum))",
-                "* pairedThroughSequenceNum: \(debugValue(historyBackfill.pairedThroughSequenceNum))"
+                "* preServiceThroughSequenceNum: \(debugValue(historyBackfill.preServiceThroughSequenceNum))",
+                "* serviceStartDate: \(debugValue(historyBackfill.serviceStartDate))"
             ])
         } else {
             lines.append("* historyBackfill: nil")
@@ -1148,14 +1149,40 @@ extension DeliveryTransitionLedger {
     }
 }
 
-public enum HistoryBeforePairing: String {
+public enum HistoryBeforePairing: Equatable, RawRepresentable {
     /// A manager not paired through setup, or set up by a build without the floor: read as before.
     case read
     /// Setup is pairing: the next history status read takes the pump's newest record as the floor.
     case held
     case floored
-    /// Setup's history load lifted the floor.
-    case loaded
+    /// Setup's history load runs from `since`; once it has read its window, `through` is the last record before it.
+    case loaded(through: UInt32?, since: Date)
+
+    public typealias RawValue = [String: Any]
+
+    public init?(rawValue: RawValue) {
+        switch rawValue["state"] as? String {
+        case "read": self = .read
+        case "held": self = .held
+        case "floored": self = .floored
+        case "loaded":
+            guard let since = rawValue["since"] as? TimeInterval else { return nil }
+            self = .loaded(through: rawValue["through"] as? UInt32, since: Date(timeIntervalSinceReferenceDate: since))
+        default: return nil
+        }
+    }
+
+    public var rawValue: RawValue {
+        switch self {
+        case .read: return ["state": "read"]
+        case .held: return ["state": "held"]
+        case .floored: return ["state": "floored"]
+        case let .loaded(through, since):
+            var raw: RawValue = ["state": "loaded", "since": since.timeIntervalSinceReferenceDate]
+            raw["through"] = through
+            return raw
+        }
+    }
 }
 
 extension TandemPumpManagerState {

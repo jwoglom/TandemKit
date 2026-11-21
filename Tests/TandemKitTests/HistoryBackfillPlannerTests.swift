@@ -545,9 +545,9 @@ final class HistoryBackfillPlannerTests: XCTestCase {
         XCTAssertEqual(restored, original)
     }
 
-    func testReadableRangeStartsAboveTheHigherOfThePairingAndUndatableFloors() {
+    func testReadableRangeStartsAboveTheHigherOfThePreServiceAndUndatableFloors() {
         var state = bookkeeping(watermark: 2000)
-        state.pairedThroughSequenceNum = 170
+        state.preServiceThroughSequenceNum = 170
         XCTAssertEqual(state.readable(100 ... 200), 171 ... 200)
 
         state.raiseUndatableThrough(to: 150)
@@ -557,27 +557,28 @@ final class HistoryBackfillPlannerTests: XCTestCase {
         XCTAssertNil(state.readable(100 ... 170))
     }
 
-    func testAnErasedLogDropsThePairingFloor() {
+    func testAnErasedLogDropsThePreServiceFloor() {
         var state = bookkeeping(watermark: 900)
-        state.pairedThroughSequenceNum = 800
+        state.preServiceThroughSequenceNum = 800
 
-        XCTAssertNil(state.resettingWatermarkIfAbove(lastSequenceNum: 50).pairedThroughSequenceNum)
-        XCTAssertEqual(state.resettingWatermarkIfAbove(lastSequenceNum: 950).pairedThroughSequenceNum, 800)
+        XCTAssertNil(state.resettingWatermarkIfAbove(lastSequenceNum: 50).preServiceThroughSequenceNum)
+        XCTAssertEqual(state.resettingWatermarkIfAbove(lastSequenceNum: 950).preServiceThroughSequenceNum, 800)
     }
 
-    func testAReplacementPumpHasNoPairingFloor() {
+    func testAReplacementPumpHasNoPreServiceFloor() {
         var state = bookkeeping(watermark: 900)
-        state.pairedThroughSequenceNum = 800
+        state.preServiceThroughSequenceNum = 800
 
-        XCTAssertNil(state.matching(pumpSerial: serial + 1).pairedThroughSequenceNum)
+        XCTAssertNil(state.matching(pumpSerial: serial + 1).preServiceThroughSequenceNum)
     }
 
-    func testThePairingFloorSurvivesARawValueRoundTrip() throws {
+    func testThePreServiceFloorSurvivesARawValueRoundTrip() throws {
         var original = bookkeeping(watermark: 240)
-        original.pairedThroughSequenceNum = 200
+        original.preServiceThroughSequenceNum = 200
+        original.serviceStartDate = Date(timeIntervalSinceReferenceDate: 5678)
 
         let restored = try XCTUnwrap(HistoryBackfillState(rawValue: original.rawValue))
-        XCTAssertEqual(restored.pairedThroughSequenceNum, 200)
+        XCTAssertEqual(restored.preServiceThroughSequenceNum, 200)
         XCTAssertEqual(restored, original)
     }
 }

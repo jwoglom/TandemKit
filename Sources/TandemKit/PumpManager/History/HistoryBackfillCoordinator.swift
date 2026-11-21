@@ -36,7 +36,7 @@ final class HistoryBackfillCoordinator {
                 || bookkeeping.unreadableThroughSequenceNum.map { Int64(covered.lowerBound) <= Int64($0) + 1 } == true
         }
 
-        /// The session's span above the undatable and pairing floors: all a pass may date or report.
+        /// The session's span above the undatable and pre-service floors: all a pass may date or report.
         var reportableRange: ClosedRange<UInt32>? {
             sessionCovered.flatMap(bookkeeping.readable)
         }
@@ -170,7 +170,7 @@ final class HistoryBackfillCoordinator {
                 )
                 self.forgetSessionCoverage(pumpSerial: serial)
             }
-            self.applyHistoryBeforePairing(to: &bookkeeping, status: status)
+            self.applyHistoryBeforePairing(to: &bookkeeping, status: status, now: now)
 
             let emitFloor = HistoryBackfillPlanner.emitFloor(
                 bookkeeping: bookkeeping,
@@ -449,7 +449,7 @@ final class HistoryBackfillCoordinator {
         return oldest <= HistoryBackfillPlanner.deepFetchTarget(firstSeenFloor: bookkeeping.firstSeenFloor, now: now)
     }
 
-    /// Nothing at or below the undatable or pairing floor is read, nor below what the store has pruned: read again,
+    /// Nothing at or below the undatable or pre-service floor is read, nor below what the store has pruned: read again,
     /// it would be pruned at the next pass and the walk would go a slice deeper each time.
     private func lowestReadable(bookkeeping: HistoryBackfillState, pumpSerial serial: HistoryLogSyncIdentifier.PumpSerial) -> UInt32 {
         let prunedBelow: UInt32?
@@ -463,9 +463,9 @@ final class HistoryBackfillCoordinator {
         return max(readable, prunedBelow ?? 0)
     }
 
-    /// Takes the pairing floor at the first status read after setup pairs, or drops it once setup's load
-    /// lifts it. Re-applied every tick: a tick that began before the lift saves the floor it started with.
-    private func applyHistoryBeforePairing(to bookkeeping: inout HistoryBackfillState, status: HistoryLogStatusResponse) {
+    /// Takes the pre-service floor at the first status read after setup pairs, or the one setup's load
+    /// leaves. Re-applied every tick: a tick that began before the load saves the floor it started with.
+    private func applyHistoryBeforePairing(to bookkeeping: inout HistoryBackfillState, status: HistoryLogStatusResponse, now: Date) {
         guard let pumpManager else {
             return
         }
@@ -475,9 +475,11 @@ final class HistoryBackfillCoordinator {
                 return
             }
             logger.info("Pump history through #\(status.lastSequenceNum) is from before setup paired the pump; none of it is read unless setup loads it")
-            bookkeeping.pairedThroughSequenceNum = status.lastSequenceNum
-        case .loaded:
-            bookkeeping.pairedThroughSequenceNum = nil
+            bookkeeping.preServiceThroughSequenceNum = status.lastSequenceNum
+            bookkeeping.serviceStartDate = now
+        case let .loaded(through, since):
+            bookkeeping.preServiceThroughSequenceNum = through
+            bookkeeping.serviceStartDate = since
         case .read, .floored:
             break
         }

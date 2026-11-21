@@ -370,6 +370,13 @@ import XCTest
 
     // MARK: - History from before pairing
 
+    private var lowestRecordsRequested: [UInt32] {
+        bluetooth.sent(HistoryLogRequest.self).map { request in
+            let count = UInt32(max(request.numberOfLogs, 1))
+            return request.startLog >= count ? request.startLog - count + 1 : 0
+        }
+    }
+
     func testADeclinedLoadReadsNothingFromBeforePairingEvenWhereItsDateWouldBeReported() {
         // Dated inside a ledger tracking from before the bolus, so only the pairing floor keeps it out.
         manager.state.bolusReportLedger = BolusReportLedger(trackingSince: Date().addingTimeInterval(-10 * 3600))
@@ -382,7 +389,7 @@ import XCTest
 
         XCTAssertTrue(bluetooth.sent(HistoryLogRequest.self).isEmpty)
         XCTAssertTrue(reportedBoluses.isEmpty)
-        XCTAssertEqual(manager.state.historyBackfill?.pairedThroughSequenceNum, 3)
+        XCTAssertEqual(manager.state.historyBackfill?.preServiceThroughSequenceNum, 3)
     }
 
     func testAPumpBolusAfterPairingIsReportedWhenTheLoadIsDeclined() throws {
@@ -397,7 +404,7 @@ import XCTest
         adoptByHost()
 
         XCTAssertEqual(reportedBoluses.map(\.raw), [HistoryLogSyncIdentifier.bolus(pumpSerial: serial, bolusId: 71)])
-        XCTAssertTrue(bluetooth.sent(HistoryLogRequest.self).allSatisfy { $0.startLog >= 4 })
+        XCTAssertTrue(lowestRecordsRequested.allSatisfy { $0 >= 4 }, "\(lowestRecordsRequested)")
     }
 
     func testTheLoadReadsAndReportsHistoryFromBeforePairingThatSetupHeld() throws {
@@ -409,8 +416,36 @@ import XCTest
         adoptByHost()
 
         XCTAssertEqual(reportedBoluses.map(\.raw), [HistoryLogSyncIdentifier.bolus(pumpSerial: serial, bolusId: 70)])
-        XCTAssertEqual(manager.state.historyBeforePairing, .loaded)
-        XCTAssertNil(manager.state.historyBackfill?.pairedThroughSequenceNum)
+        guard case .loaded(through: nil, since: _) = manager.state.historyBeforePairing else {
+            return XCTFail("\(manager.state.historyBeforePairing)")
+        }
+    }
+
+    func testTheLoadLeavesItsWindowAsASequenceFloorThatHoldsAcrossARelaunch() throws {
+        manager.holdHistoryBeforePairing()
+        let history = pumpBolus(bolusId: 60, units: 2.0, firstSequenceNum: 1, secondsAgo: 8 * 3600)
+            + pumpBolus(bolusId: 61, units: 1.5, firstSequenceNum: 4, secondsAgo: 3 * 3600)
+        stubPump(serving: history)
+        runTick()
+
+        XCTAssertNil(load())
+        guard case let .loaded(through, since) = manager.state.historyBeforePairing else {
+            return XCTFail("\(manager.state.historyBeforePairing)")
+        }
+        XCTAssertEqual(through, 3, "the last record before the window")
+        runTick()
+        XCTAssertEqual(manager.state.historyBackfill?.preServiceThroughSequenceNum, 3)
+        XCTAssertEqual(manager.state.historyBackfill?.serviceStartDate, since)
+
+        manager = TandemPumpManager(state: TandemPumpManagerState(rawValue: manager.state.rawValue), bluetooth: bluetooth)
+        bluetooth.resetRecordedTraffic()
+        stubPump(serving: history)
+        runTick()
+        adoptByHost()
+
+        XCTAssertFalse(lowestRecordsRequested.isEmpty)
+        XCTAssertTrue(lowestRecordsRequested.allSatisfy { $0 > 3 }, "\(lowestRecordsRequested)")
+        XCTAssertFalse(reportedBoluses.contains { $0.raw == HistoryLogSyncIdentifier.bolus(pumpSerial: serial, bolusId: 60) })
     }
 
     func testTheLoadBeforeAnyHistoryReadTakesNoPairingFloor() throws {
@@ -421,7 +456,7 @@ import XCTest
         adoptByHost()
 
         XCTAssertEqual(reportedBoluses.count, 1)
-        XCTAssertNil(manager.state.historyBackfill?.pairedThroughSequenceNum)
+        XCTAssertNil(manager.state.historyBackfill?.preServiceThroughSequenceNum)
     }
 
     func testAnOnboardedManagerDoesNotHoldHistory() {
@@ -432,7 +467,7 @@ import XCTest
         XCTAssertEqual(manager.state.historyBeforePairing, .read)
     }
 
-    func testTheReadAfterPairingTakesThePairingFloor() throws {
+    func testTheReadAfterPairingTakesThePreServiceFloor() throws {
         manager.holdHistoryBeforePairing()
         stubPumpBeforeSetup(
             pumpClockAhead: 0,
@@ -444,10 +479,10 @@ import XCTest
         _ = readDelivery()
 
         let deadline = Date().addingTimeInterval(10)
-        while manager.state.historyBackfill?.pairedThroughSequenceNum == nil, Date() < deadline {
-            Thread.sleep(forTimeInterval: 0.05)
+        while manager.state.historyBackfill?.preServiceThroughSequenceNum == nil, Date() < deadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
         }
-        XCTAssertEqual(manager.state.historyBackfill?.pairedThroughSequenceNum, 40)
+        XCTAssertEqual(manager.state.historyBackfill?.preServiceThroughSequenceNum, 40)
         XCTAssertEqual(manager.state.historyBeforePairing, .floored)
         XCTAssertTrue(bluetooth.sent(HistoryLogRequest.self).isEmpty)
     }

@@ -516,7 +516,7 @@ import XCTest
         XCTAssertTrue(requestedRanges().allSatisfy { $0.lowerBound > 20 })
     }
 
-    // MARK: - Pairing floor
+    // MARK: - Pre-service floor
 
     private func minuteApartHistory(count: UInt32) -> [HistoryLog] {
         (1 ... count).map { log(sequenceNum: $0, ageSeconds: (count - $0) * 60) }
@@ -530,13 +530,13 @@ import XCTest
         let outcome = try XCTUnwrap(runTick())
 
         XCTAssertTrue(requestedRanges().isEmpty, "read \(requestedRanges())")
-        XCTAssertEqual(manager.state.historyBackfill?.pairedThroughSequenceNum, 600)
+        XCTAssertEqual(manager.state.historyBackfill?.preServiceThroughSequenceNum, 600)
         XCTAssertEqual(manager.state.historyBeforePairing, .floored)
         XCTAssertTrue(outcome.isDeepBackfillComplete)
         XCTAssertNil(outcome.reportableRange)
     }
 
-    func testAfterThePairingFloorOnlyRecordsWrittenSinceAreRead() throws {
+    func testAfterThePreServiceFloorOnlyRecordsWrittenSinceAreRead() throws {
         setPumpSerial()
         manager.state.historyBeforePairing = .held
         stubHistory(serving: minuteApartHistory(count: 600))
@@ -552,7 +552,7 @@ import XCTest
         XCTAssertTrue(outcome.reachesPumpStart)
     }
 
-    func testAfterARelaunchNothingAtOrBelowThePairingFloorIsRead() throws {
+    func testAfterARelaunchNothingAtOrBelowThePreServiceFloorIsRead() throws {
         setPumpSerial()
         manager.state.historyBeforePairing = .held
         stubHistory(serving: minuteApartHistory(count: 600))
@@ -567,22 +567,36 @@ import XCTest
         XCTAssertEqual(requestedRanges(), [601 ... 610])
     }
 
-    func testSetupsHistoryLoadLiftsThePairingFloor() throws {
+    func testSetupsHistoryLoadLiftsThePreServiceFloorWhileItReads() throws {
         setPumpSerial()
         manager.state.historyBeforePairing = .held
         let history = minuteApartHistory(count: 600)
         stubHistory(serving: history)
         _ = try XCTUnwrap(runTick())
 
-        manager.state.historyBeforePairing = .loaded
+        manager.state.historyBeforePairing = .loaded(through: nil, since: Date().addingTimeInterval(-.hours(6)))
         bluetooth.resetRecordedTraffic()
         stubHistory(serving: history)
         let outcome = try XCTUnwrap(runTick())
 
-        XCTAssertNil(manager.state.historyBackfill?.pairedThroughSequenceNum)
+        XCTAssertNil(manager.state.historyBackfill?.preServiceThroughSequenceNum)
         XCTAssertTrue(outcome.isDeepBackfillComplete)
         // The lookback reaches record 180.
         XCTAssertLessThanOrEqual(try XCTUnwrap(outcome.sessionCovered?.lowerBound), 180)
+    }
+
+    func testTheFloorTheLoadLeavesBoundsTheWalk() throws {
+        setPumpSerial()
+        let since = Date().addingTimeInterval(-.hours(6))
+        manager.state.historyBeforePairing = .loaded(through: 400, since: since)
+        stubHistory(serving: minuteApartHistory(count: 600))
+
+        let outcome = try XCTUnwrap(runTick())
+
+        XCTAssertTrue(requestedRanges().allSatisfy { $0.lowerBound > 400 }, "read \(requestedRanges())")
+        XCTAssertEqual(outcome.reportableRange?.lowerBound, 401)
+        XCTAssertEqual(manager.state.historyBackfill?.preServiceThroughSequenceNum, 400)
+        XCTAssertEqual(manager.state.historyBackfill?.serviceStartDate, since)
     }
 
     func testAnEmptyLogAtPairingTakesNoFloor() throws {
@@ -592,17 +606,17 @@ import XCTest
 
         _ = try XCTUnwrap(runTick())
 
-        XCTAssertNil(manager.state.historyBackfill?.pairedThroughSequenceNum)
+        XCTAssertNil(manager.state.historyBackfill?.preServiceThroughSequenceNum)
         XCTAssertEqual(manager.state.historyBeforePairing, .floored)
     }
 
-    func testAManagerNotPairedBySetupTakesNoPairingFloor() throws {
+    func testAManagerNotPairedBySetupTakesNoPreServiceFloor() throws {
         setPumpSerial()
         stubHistory(serving: minuteApartHistory(count: 600))
 
         let outcome = try XCTUnwrap(runTick())
 
-        XCTAssertNil(outcome.bookkeeping.pairedThroughSequenceNum)
+        XCTAssertNil(outcome.bookkeeping.preServiceThroughSequenceNum)
         XCTAssertEqual(manager.state.historyBeforePairing, .read)
         XCTAssertFalse(requestedRanges().isEmpty)
     }

@@ -29,27 +29,33 @@ public struct HistoryBackfillState: Equatable {
     /// below it is read, dated or reported. Saved, since a relaunch empties the store the walk stops on.
     public var undatableThroughSequenceNum: UInt32?
 
-    /// The pump's newest record when setup paired it (`TandemPumpManagerState.historyBeforePairing`). Nothing at
-    /// or below it is read unless setup's history load lifts it.
-    public var pairedThroughSequenceNum: UInt32?
+    /// The newest record from before this manager took the pump into service (`TandemPumpManagerState.historyBeforePairing`):
+    /// the pump's newest at pairing, or the last before setup's load window. Nothing at or below it is read or reported.
+    public var preServiceThroughSequenceNum: UInt32?
+
+    /// The phone time `preServiceThroughSequenceNum` stands for: the pairing read, or the load window's start.
+    /// Kept for the record; the sequence number alone decides what is read.
+    public var serviceStartDate: Date?
 
     public init(
         pumpSerial: UInt32,
         watermark: UInt32? = nil,
         firstSeenFloor: Date? = nil,
         undatableThroughSequenceNum: UInt32? = nil,
-        pairedThroughSequenceNum: UInt32? = nil
+        preServiceThroughSequenceNum: UInt32? = nil,
+        serviceStartDate: Date? = nil
     ) {
         self.pumpSerial = pumpSerial
         self.watermark = watermark
         self.firstSeenFloor = firstSeenFloor
         self.undatableThroughSequenceNum = undatableThroughSequenceNum
-        self.pairedThroughSequenceNum = pairedThroughSequenceNum
+        self.preServiceThroughSequenceNum = preServiceThroughSequenceNum
+        self.serviceStartDate = serviceStartDate
     }
 
-    /// The higher of the undatable floor and the pairing floor: nothing at or below it is read or reported.
+    /// The higher of the undatable and pre-service floors: nothing at or below it is read or reported.
     public var unreadableThroughSequenceNum: UInt32? {
-        [undatableThroughSequenceNum, pairedThroughSequenceNum].compactMap { $0 }.max()
+        [undatableThroughSequenceNum, preServiceThroughSequenceNum].compactMap { $0 }.max()
     }
 
     /// `range` above both floors, nil if nothing in it is.
@@ -117,7 +123,8 @@ public struct HistoryBackfillState: Equatable {
         var reset = self
         reset.watermark = nil
         reset.undatableThroughSequenceNum = nil
-        reset.pairedThroughSequenceNum = nil
+        reset.preServiceThroughSequenceNum = nil
+        reset.serviceStartDate = nil
         return reset
     }
 }
@@ -142,7 +149,8 @@ extension HistoryBackfillState: RawRepresentable {
             watermark: rawValue["watermark"] as? UInt32,
             firstSeenFloor: floor.map { Date(timeIntervalSinceReferenceDate: $0) },
             undatableThroughSequenceNum: rawValue["undatableThroughSequenceNum"] as? UInt32,
-            pairedThroughSequenceNum: rawValue["pairedThroughSequenceNum"] as? UInt32
+            preServiceThroughSequenceNum: rawValue["preServiceThroughSequenceNum"] as? UInt32,
+            serviceStartDate: (rawValue["serviceStartDate"] as? TimeInterval).map { Date(timeIntervalSinceReferenceDate: $0) }
         )
     }
 
@@ -151,7 +159,8 @@ extension HistoryBackfillState: RawRepresentable {
         raw["watermark"] = watermark
         raw["firstSeenFloor"] = firstSeenFloor?.timeIntervalSinceReferenceDate
         raw["undatableThroughSequenceNum"] = undatableThroughSequenceNum
-        raw["pairedThroughSequenceNum"] = pairedThroughSequenceNum
+        raw["preServiceThroughSequenceNum"] = preServiceThroughSequenceNum
+        raw["serviceStartDate"] = serviceStartDate?.timeIntervalSinceReferenceDate
         return raw
     }
 }

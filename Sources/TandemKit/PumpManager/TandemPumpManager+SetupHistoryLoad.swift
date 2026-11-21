@@ -173,7 +173,7 @@ extension TandemPumpManager {
         let since = now.addingTimeInterval(-Self.setupHistoryLoadWindow)
         logger.info("Loading pump history since \(since) for setup")
         if state.historyBeforePairing != .read {
-            state.historyBeforePairing = .loaded
+            state.historyBeforePairing = .loaded(through: nil, since: since)
         }
         state.bolusReportLedger.reportHistory(since: since)
         state.reportedBasal.reportHistory(since: since)
@@ -192,6 +192,12 @@ extension TandemPumpManager {
 
         runSetupHistoryLoadTick(failures: 0) { error in
             timer.cancel()
+            // Not after a failed load: what it read may stop short of the window, and a floor there would hide the rest.
+            if error == nil, case .loaded = self.state.historyBeforePairing {
+                let through = self.newestRecord(before: since)
+                self.logger.info("Pump history through #\(String(describing: through)) is from before the load's window; none of it is read again")
+                self.state.historyBeforePairing = .loaded(through: through, since: since)
+            }
             // Behind a reading already under way, so none lands after the last.
             progressQueue.async {
                 if let error {
@@ -203,6 +209,21 @@ extension TandemPumpManager {
                 progress(1)
                 completion(.success(summary))
             }
+        }
+    }
+
+    /// The newest record the session holds dated before `since`. Dates only rise with sequence numbers on one clock,
+    /// so every record after it, read or in a gap, is in the window.
+    func newestRecord(before since: Date) -> UInt32? {
+        guard let serial = historyLogStoreSerial, let range = reportableHistoryRange else {
+            return nil
+        }
+        do {
+            let dates = try historyRecordDates(historyLogStore.logs(pumpSerial: serial.rawValue, in: range).map { $0.parsed() })
+            return dates.logs.filter { dates.phoneDate(of: $0) < since }.map(\.sequenceNum).max()
+        } catch {
+            logger.warning("Could not read the history log store for the load's window: \(error)")
+            return nil
         }
     }
 
