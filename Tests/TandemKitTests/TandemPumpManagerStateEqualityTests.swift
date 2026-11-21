@@ -80,6 +80,8 @@ final class TandemPumpManagerStateEqualityTests: XCTestCase {
             ("basalProfileUpdateFailed", { $0.basalProfileUpdateFailed = false }),
             ("historyBackfill", { $0.historyBackfill?.advanceWatermark(through: 5000) }),
             ("historyBeforePairing", { $0.historyBeforePairing = .loaded(through: 7, since: t0) }),
+            ("pumpClockAnchors", { $0.pumpClockAnchors.record(PumpClockAnchor(sequenceNum: 9000, pumpTimeSec: 600_000_000, phoneDate: later), pumpSerial: 1) }),
+            ("heldHistory", { $0.heldHistory.update(examined: [], held: [Data([0x30]): 0], now: later) }),
             ("bolusReportLedger", { $0.bolusReportLedger.markFinalized(raw: Data([0x20, 0x04]), units: 1) }),
             ("reportedBasal", { $0.reportedBasal.prune(now: later.addingTimeInterval(.days(3))) }),
             ("reportedBasal.reconciledThrough", { $0.reportedBasal.reconcile(through: 5000) }),
@@ -138,6 +140,7 @@ final class TandemPumpManagerStateEqualityTests: XCTestCase {
             ("lastNotificationUpdate", { $0.lastNotificationUpdate = nil }),
             ("issuedAlertIdentifiers", { $0.issuedAlertIdentifiers.remove("alert-7") }),
             ("pumpClockSkewAlertIssued", { $0.pumpClockSkewAlertIssued = false }),
+            ("heldHistoryAlertIssued", { $0.heldHistoryAlertIssued = false }),
             ("reportedPumpAlarmIdentifiers", { $0.reportedPumpAlarmIdentifiers = [] }),
             ("forwardCGMAlerts", { $0.forwardCGMAlerts = false }),
             ("lastSiteChangeDate", { $0.lastSiteChangeDate = nil }),
@@ -202,6 +205,8 @@ final class TandemPumpManagerStateEqualityTests: XCTestCase {
             serviceStartDate: t0.addingTimeInterval(-.hours(6))
         )
         state.historyBeforePairing = .floored
+        state.pumpClockAnchors.record(PumpClockAnchor(sequenceNum: 4321, pumpTimeSec: 590_000_000, phoneDate: t0), pumpSerial: pumpSerial)
+        state.heldHistory.update(examined: [], held: [Data([0x20, 0x09]): 0], now: t0)
         state.bolusReportLedger = BolusReportLedger(
             trackingSince: t0.addingTimeInterval(-.hours(48)),
             entries: [
@@ -287,6 +292,7 @@ final class TandemPumpManagerStateEqualityTests: XCTestCase {
         state.lastNotificationUpdate = t0
         state.issuedAlertIdentifiers = ["alarm-2", "alert-7"]
         state.pumpClockSkewAlertIssued = true
+        state.heldHistoryAlertIssued = true
         state.reportedPumpAlarmIdentifiers = ["alarm.occlusion.2"]
         state.forwardCGMAlerts = true
         state.lastSiteChangeDate = t0.addingTimeInterval(-.hours(50))

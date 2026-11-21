@@ -65,8 +65,7 @@ extension TandemPumpManager {
             where activated.sequenceNum <= trackedAfter && setOverBluetooth.contains(activated.tempRateId)
         {
             let raw = HistoryLogSyncIdentifier.tempRate(pumpSerial: serial, tempRateId: activated.tempRateId)
-            let start = dates.phoneDate(of: activated)
-            guard start >= floor, !state.reportedBasal.rows.contains(where: { $0.raw == raw }) else { continue }
+            guard let start = dates.date(of: activated), start >= floor, !state.reportedBasal.rows.contains(where: { $0.raw == raw }) else { continue }
             let percent = Int(activated.percent.rounded())
             let temp = UnfinalizedDose(
                 tempRate: roundToSupportedBasalRate(unitsPerHour: pumpScheduledBasalRate(at: start) * Double(percent) / 100),
@@ -125,7 +124,23 @@ extension TandemPumpManager {
             logger.error("Could not read the history log store for basal reconciliation: \(error)")
             return
         }
-        let (logs, dates) = history
+        let dates = history.dates
+        // A held record has no place in the timeline. The pass waits for a later one to date it while its
+        // insulin may still act, since `reconciledThrough` would otherwise pass its cycles for good.
+        let heldRecords = history.logs.filter(dates.isHeld)
+        let heldCycles = heldRecords.filter { $0 is BasalDeliveryHistoryLog && dates.latestPossibleDate(of: $0).map { $0 >= floor } ?? false }
+        let heldRaws = heldCycles.map { HistoryLogSyncIdentifier.logSequence(pumpSerial: serial, sequenceNum: $0.sequenceNum) }
+        noteHeldHistory(
+            examined: Set(history.logs.filter { $0 is BasalDeliveryHistoryLog }.map { HistoryLogSyncIdentifier.logSequence(pumpSerial: serial, sequenceNum: $0.sequenceNum) }),
+            held: Dictionary(uniqueKeysWithValues: heldRaws.map { ($0, 0) }),
+            what: "BasalDelivery record(s)"
+        )
+        guard !heldRaws.contains(where: { state.heldHistory.isHolding($0, now: now) }) else {
+            logger.warning("Basal reconciliation waits for \(heldRaws.count) BasalDelivery record(s) no pump clock reading dates")
+            return
+        }
+        let heldThrough = heldRecords.map(\.sequenceNum).max()
+        let logs = heldThrough.map { heldThrough in history.logs.filter { $0.sequenceNum > heldThrough } } ?? history.logs
 
         let timeline = PumpBasalTimeline(
             logs: logs,

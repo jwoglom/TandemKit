@@ -247,6 +247,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
     var loggedBasalProblems = Set<UInt32>()
     /// The `undatableThroughSequenceNum`s logged this session. Command queue only.
     var loggedUndatableHistory = Set<UInt32>()
+    /// The last sync's read of the pump's clock, which a history tick begun right after it starts from. Command queue only.
+    var lastPumpClockReading: PumpClockReading?
     /// Command queue only.
     var basalResidualDays = BasalReconciler.ResidualDays()
     /// How many history passes each store gap has held basal reconciliation back. Command queue only.
@@ -2140,6 +2142,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
+            self.recordPumpClockAnchorBeforeSettingTheClock()
             // Read first: setup writes the clock before any sync has measured it.
             let offset = self.bluetooth.write(TimeSinceResetRequest()).map { $0.currentTimeDate.timeIntervalSince(self.now) }
                 ?? (self.state.currentPumpTime == nil ? nil : self.state.pumpClockOffset)
@@ -2165,6 +2168,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
+            // Read on the clock just replaced.
+            self.lastPumpClockReading = nil
             if let offset {
                 self.reportPumpClockAdjustment(by: -offset)
             } else {

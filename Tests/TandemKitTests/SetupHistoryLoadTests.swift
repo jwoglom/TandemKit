@@ -16,6 +16,7 @@ import XCTest
     override func setUp() {
         super.setUp()
         bluetooth = StubPumpBluetooth()
+        bluetooth.stubPumpClock()
         var state = TandemPumpManagerState(rawValue: [:])
         state.featureFlags[.historyBackfill] = true
         state.featureFlags[.historyDoseReporting] = true

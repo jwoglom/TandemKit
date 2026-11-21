@@ -19,6 +19,7 @@ import XCTest
     override func setUp() {
         super.setUp()
         bluetooth = StubPumpBluetooth()
+        bluetooth.stubPumpClock()
         manager = makeManager(state: Self.reportingEnabledState())
     }
 
@@ -878,5 +879,210 @@ import XCTest
             reads.allSatisfy { Int($0.startLog) - max($0.numberOfLogs, 1) + 1 > 5 },
             "read at or below the ShelfMode record after a relaunch: \(reads.map { ($0.startLog, $0.numberOfLogs) })"
         )
+    }
+
+    // MARK: - Dating by the pump's clock
+
+    private func reportedBolus(_ bolusId: Int) -> NewPumpEvent? {
+        reportedBoluses.first { $0.raw == HistoryLogSyncIdentifier.bolus(pumpSerial: serial, bolusId: bolusId) }
+    }
+
+    private func pumpBolus(_ bolusId: Int, firstSequenceNum: UInt32, secondsAgo: UInt32 = 300) -> [HistoryLog] {
+        quickBolusStart(bolusId: bolusId, units: 1.0, firstSequenceNum: firstSequenceNum, secondsAgo: secondsAgo)
+            + [bolusCompletion(bolusId: bolusId, delivered: 1.0, requested: 1.0, sequenceNum: firstSequenceNum + 3, secondsAgo: secondsAgo - 60)]
+    }
+
+    private func anchor(_ sequenceNum: UInt32, secondsAgo: TimeInterval = 0, pumpAhead: Int = 0) -> PumpClockAnchor {
+        PumpClockAnchor(
+            sequenceNum: sequenceNum,
+            pumpTimeSec: UInt32(Int(phoneNowPumpTimeSec) - Int(secondsAgo) + pumpAhead),
+            phoneDate: now.addingTimeInterval(-secondsAgo)
+        )
+    }
+
+    func testABolusOnAPumpClockTwoDaysAheadIsReportedWhenThePumpGaveItAndEnded() throws {
+        setPumpClock(ahead: 2 * 86400)
+
+        report(pumpBolus(72, firstSequenceNum: 900))
+
+        let dose = try XCTUnwrap(reportedBolus(72)?.dose)
+        XCTAssertEqual(dose.startDate.timeIntervalSince(now), -286, accuracy: 2)
+        XCTAssertEqual(dose.endDate.timeIntervalSince(now), -240, accuracy: 2)
+        XCTAssertTrue(manager.state.heldHistory.entries.isEmpty)
+    }
+
+    func testABolusOnAPumpClockTwoDaysBehindIsReportedWhenThePumpGaveIt() throws {
+        manager.state.pumpClockAnchors.record(anchor(910, pumpAhead: -2 * 86400), pumpSerial: Self.pumpSerial)
+
+        report(pumpBolus(73, firstSequenceNum: 900, secondsAgo: 2 * 86400 + 300))
+
+        let dose = try XCTUnwrap(reportedBolus(73)?.dose)
+        XCTAssertEqual(dose.startDate.timeIntervalSince(now), -286, accuracy: 2)
+    }
+
+    func testAHistoryBolusStampedAheadOfThePumpsClockIsHeldNotReported() {
+        // Stamped two hours ahead of a pump clock the manager reads as matching the phone's.
+        pumpClockAhead = 7200
+
+        report(pumpBolus(74, firstSequenceNum: 900))
+
+        XCTAssertTrue(delegate.pumpEventBatches.isEmpty)
+        XCTAssertNil(manager.state.bolusReportLedger.entry(bolusId: 74, pumpSerial: Self.pumpSerial), "unhandled, so a later pass can report it")
+        XCTAssertEqual(manager.state.heldHistory.entries.map(\.raw), [HistoryLogSyncIdentifier.bolus(pumpSerial: serial, bolusId: 74)])
+    }
+
+    func testABolusTheHostAlreadyCountsIsNotHeldWhenItsHistoryCannotBeDated() {
+        manager.state.bolusReportLedger.record(commandedEntry(bolusId: 85, isFinalized: false))
+        pumpClockAhead = 7200
+
+        report(pumpBolus(85, firstSequenceNum: 900))
+
+        XCTAssertTrue(delegate.pumpEventBatches.isEmpty, "not finalized from a record with no date")
+        XCTAssertTrue(manager.state.heldHistory.entries.isEmpty)
+    }
+
+    func testAHeldBolusIsReportedAndLeavesTheHeldListOnceAPassDatesIt() throws {
+        pumpClockAhead = 7200
+        let logs = pumpBolus(75, firstSequenceNum: 900)
+        report(logs)
+        XCTAssertEqual(manager.state.heldHistory.entries.count, 1)
+
+        manager.state.pumpClockAnchors.record(anchor(910, pumpAhead: 7200), pumpSerial: Self.pumpSerial)
+        report(logs)
+
+        let dose = try XCTUnwrap(reportedBolus(75)?.dose)
+        XCTAssertEqual(dose.startDate.timeIntervalSince(now), -286, accuracy: 2)
+        XCTAssertTrue(manager.state.heldHistory.entries.isEmpty)
+    }
+
+    func testBolusesEitherSideOfAClockJumpThePumpDidNotRecordAreEachReportedWhenGiven() throws {
+        let jump = 3000 * 86400
+        manager.state.pumpClockAnchors.record(anchor(899, secondsAgo: 1200), pumpSerial: Self.pumpSerial)
+        manager.state.pumpClockAnchors.record(anchor(920, pumpAhead: jump), pumpSerial: Self.pumpSerial)
+        pumpClockAhead = 0
+        let before = pumpBolus(76, firstSequenceNum: 900, secondsAgo: 900)
+        pumpClockAhead = UInt32(jump)
+        let after = pumpBolus(77, firstSequenceNum: 910, secondsAgo: 300)
+
+        report(before + after)
+
+        XCTAssertEqual(try XCTUnwrap(reportedBolus(76)?.dose).startDate.timeIntervalSince(now), -886, accuracy: 2)
+        XCTAssertEqual(try XCTUnwrap(reportedBolus(77)?.dose).startDate.timeIntervalSince(now), -286, accuracy: 2)
+        XCTAssertTrue(manager.state.heldHistory.entries.isEmpty)
+    }
+
+    func testAHeldBolusRaisesAnAlertAfterFifteenMinutesAndRetractsItOnceDated() {
+        // `now` is as old as the test run; the alert goes by the manager's clock.
+        let now = manager.now
+        let raw = HistoryLogSyncIdentifier.bolus(pumpSerial: serial, bolusId: 78)
+        manager.state.heldHistory.update(examined: [raw], held: [raw: 0], now: now.addingTimeInterval(-.minutes(14)))
+        manager.reconcileHeldHistoryAlert()
+        delegateQueue.sync {}
+        XCTAssertFalse(manager.isHistoryHeldTooLong)
+        XCTAssertFalse(manager.state.heldHistoryAlertIssued)
+
+        manager.state.heldHistory = HeldHistoryLedger()
+        manager.state.heldHistory.update(examined: [raw], held: [raw: 0], now: now.addingTimeInterval(-.minutes(16)))
+        manager.reconcileHeldHistoryAlert()
+        delegateQueue.sync {}
+        delegate.waitForAlerts { !self.delegate.issuedAlerts.isEmpty }
+        XCTAssertEqual(delegate.issuedAlerts.map(\.identifier.alertIdentifier), [TandemPumpManager.heldHistoryAlertIdentifier])
+        XCTAssertTrue(manager.isHistoryHeldTooLong)
+
+        manager.state.heldHistory.update(examined: [raw], held: [:], now: now)
+        manager.reconcileHeldHistoryAlert()
+        delegateQueue.sync {}
+        delegate.waitForAlerts { !self.delegate.retractedAlerts.isEmpty }
+        XCTAssertEqual(delegate.retractedAlerts.map(\.alertIdentifier), [TandemPumpManager.heldHistoryAlertIdentifier])
+    }
+
+    // MARK: - The clock either side of a tick's history read
+
+    private func outcome(reading logs: [HistoryLog], clock: HistoryBackfillCoordinator.TickOutcome.ClockRead) -> HistoryBackfillCoordinator.TickOutcome {
+        manager.storeHistoryLogs(logs, now: now)
+        let sequences = logs.map(\.sequenceNum)
+        let range = sequences.min()! ... sequences.max()!
+        return HistoryBackfillCoordinator.TickOutcome(
+            bookkeeping: HistoryBackfillState(pumpSerial: Self.pumpSerial, watermark: range.upperBound),
+            rangesRead: [range],
+            sessionCovered: range,
+            isDeepBackfillComplete: true,
+            emitFloor: now.addingTimeInterval(-BolusReportLedger.reportingHorizon),
+            startedAt: now,
+            pumpSequenceRange: range,
+            clock: clock
+        )
+    }
+
+    private func reportAfterATick(reading logs: [HistoryLog], clock: HistoryBackfillCoordinator.TickOutcome.ClockRead) {
+        manager.reportHistoryDoses(after: outcome(reading: logs, clock: clock), now: now)
+        delegateQueue.sync {}
+    }
+
+    func testATickWhoseClockReadsAgreeSavesItsAnchorAndDatesByIt() throws {
+        let twoDays = 2 * 86400
+        pumpClockAhead = UInt32(twoDays)
+        bluetooth.stubPumpClock(ahead: TimeInterval(twoDays))
+
+        reportAfterATick(reading: pumpBolus(79, firstSequenceNum: 900), clock: .anchor(anchor(903, pumpAhead: twoDays)))
+
+        XCTAssertEqual(manager.state.pumpClockAnchors.anchors, [anchor(903, pumpAhead: twoDays)])
+        XCTAssertEqual(try XCTUnwrap(reportedBolus(79)?.dose).startDate.timeIntervalSince(now), -286, accuracy: 2)
+    }
+
+    func testNothingIsDatedWhenThePumpsClockMovedWhileItsHistoryWasRead() {
+        bluetooth.stubPumpClock(ahead: 3600)
+
+        reportAfterATick(reading: pumpBolus(80, firstSequenceNum: 900), clock: .anchor(anchor(903)))
+
+        XCTAssertTrue(delegate.pumpEventBatches.isEmpty)
+        XCTAssertTrue(manager.state.pumpClockAnchors.anchors.isEmpty)
+        XCTAssertNil(manager.state.bolusReportLedger.entry(bolusId: 80, pumpSerial: Self.pumpSerial))
+        XCTAssertNotNil(manager.reconciliationLog.passes.last?.skipped)
+    }
+
+    func testNothingIsDatedWhenThePumpDoesNotGiveItsClockBeforeOrAfterItsHistory() {
+        bluetooth.stub(TimeSinceResetRequest.self) { _ in nil }
+        let logs = pumpBolus(81, firstSequenceNum: 900)
+
+        reportAfterATick(reading: logs, clock: .unanswered)
+        reportAfterATick(reading: logs, clock: .anchor(anchor(903)))
+
+        XCTAssertTrue(delegate.pumpEventBatches.isEmpty)
+        XCTAssertTrue(manager.state.pumpClockAnchors.anchors.isEmpty)
+        XCTAssertEqual(manager.reconciliationLog.passes.filter { $0.skipped != nil }.count, 2)
+    }
+
+    func testAPassTheClockCheckSkippedReportsTheBolusOnTheNextTick() throws {
+        let logs = pumpBolus(82, firstSequenceNum: 900)
+        reportAfterATick(reading: logs, clock: .unanswered)
+        XCTAssertNil(reportedBolus(82))
+
+        reportAfterATick(reading: logs, clock: .anchor(anchor(903)))
+
+        XCTAssertNotNil(reportedBolus(82))
+    }
+
+    func testABackfillTickReadsThePumpsClockBeforeAndAfterItsHistory() throws {
+        bluetooth.stubPumpClock(ahead: 2 * 86400)
+        pumpClockAhead = 2 * 86400
+        stubPump(serving: pumpBolus(83, firstSequenceNum: 1))
+
+        runTick()
+
+        XCTAssertEqual(bluetooth.sent(TimeSinceResetRequest.self).count, 2)
+        XCTAssertEqual(manager.state.pumpClockAnchors.anchors.map(\.sequenceNum), [4])
+        XCTAssertEqual(try XCTUnwrap(reportedBolus(83)?.dose).startDate.timeIntervalSince(now), -286, accuracy: 3)
+    }
+
+    func testATickBegunRightAfterASyncsClockReadReadsTheClockOnceMore() throws {
+        bluetooth.stubPumpClock()
+        manager.fetchTimeSinceReset()
+        stubPump(serving: pumpBolus(84, firstSequenceNum: 1))
+
+        runTick()
+
+        XCTAssertEqual(bluetooth.sent(TimeSinceResetRequest.self).count, 2, "the sync's read, and one after the history")
+        XCTAssertNotNil(reportedBolus(84))
     }
 }

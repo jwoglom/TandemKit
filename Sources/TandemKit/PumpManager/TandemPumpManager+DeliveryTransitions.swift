@@ -199,11 +199,11 @@ extension TandemPumpManager {
         )
     }
 
-    func historyTickFailed(startedAt: Date) {
-        reconciliationLog.recordSkippedPass(startedAt: startedAt, reason: "Pump history could not be read", at: now)
+    func historyTickFailed(startedAt: Date, reason: String = "Pump history could not be read") {
+        reconciliationLog.recordSkippedPass(startedAt: startedAt, reason: reason, at: now)
         bluetooth.ensureConnected { _ in
             if let pending = self.state.deliveryTransitions.pending, startedAt >= pending.detectedAt {
-                self.logger.warning("Pump history could not be read; reporting the \(pending.observed) seen at \(pending.detectedAt) at detection")
+                self.logger.warning("\(reason); reporting the \(pending.observed) seen at \(pending.detectedAt) at detection")
                 self.reportTransition(pending)
             }
             if !self.isAwaitingHistory {
@@ -490,6 +490,8 @@ extension TandemPumpManager {
         }
 
         var records: [PumpTransition] = []
+        var examined = Set<Data>()
+        var held: [Data: TimeInterval] = [:]
         for log in stored {
             let kind: DeliveryTransitionLedger.Kind
             switch log {
@@ -500,11 +502,21 @@ extension TandemPumpManager {
             default:
                 continue
             }
-            let date = dates.phoneDate(of: log)
-            if state.deliveryTransitions.isTracked(sequenceNum: log.sequenceNum, date: date) {
-                records.append(PumpTransition(sequenceNum: log.sequenceNum, kind: kind, date: date))
+            // A held record counts as tracked by the latest it can have been written, so one surely too old is not held.
+            guard let latestPossible = dates.latestPossibleDate(of: log), latestPossible >= floor,
+                  state.deliveryTransitions.isTracked(sequenceNum: log.sequenceNum, date: latestPossible)
+            else {
+                continue
+            }
+            let raw = HistoryLogSyncIdentifier.logSequence(pumpSerial: serial, sequenceNum: log.sequenceNum)
+            examined.insert(raw)
+            if dates.isHeld(log) {
+                held[raw] = 0
+            } else {
+                records.append(PumpTransition(sequenceNum: log.sequenceNum, kind: kind, date: latestPossible))
             }
         }
+        noteHeldHistory(examined: examined, held: held, what: "suspend or resume record(s)")
         records.removeAll { $0.date < floor || $0.date > now.addingTimeInterval(tolerance) }
         if let pending = state.deliveryTransitions.pending {
             datePendingRecord(of: pending, in: &records)
@@ -656,7 +668,9 @@ extension TandemPumpManager {
         else {
             return nil
         }
-        let date = dates.phoneDate(of: completed)
+        guard let date = dates.date(of: completed) else {
+            return nil
+        }
         let scheduledEnd = dose.estimatedEndDate
         // One that ran out ran its whole programmed duration; its record is off that end only by clock error.
         let ranOut = completed.timeLeft == 0 && abs(date.timeIntervalSince(scheduledEnd)) <= Self.transitionMatchTolerance

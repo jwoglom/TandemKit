@@ -69,9 +69,14 @@ final class HistoryTimestampReconciler {
 
     /// Apply the cumulative delta of every clock change recorded after `sequenceNum`.
     private func adjustedPumpTimeSec(_ pumpTimeSec: UInt32, sequenceNum: UInt32) -> Int {
+        Int(pumpTimeSec) + recordedDeltaSec(after: sequenceNum, through: .max)
+    }
+
+    /// The clock changes recorded after record `lower` and no later than record `upper`, summed.
+    func recordedDeltaSec(after lower: UInt32, through upper: UInt32) -> Int {
         clockChangeDeltas
-            .filter { $0.sequenceNum > sequenceNum }
-            .reduce(Int(pumpTimeSec)) { $0 + $1.deltaSec }
+            .filter { lower < $0.sequenceNum && $0.sequenceNum <= upper }
+            .reduce(0) { $0 + $1.deltaSec }
     }
 
     private static func clockChangeDelta(of log: HistoryLog) -> Int? {
@@ -124,21 +129,39 @@ final class HistoryTimestampReconciler {
     }
 }
 
-/// Every date a history pass takes from a record, on the phone's clock: past the pump clock changes
-/// among `logs`, then by the pump clock offset (`TandemPumpManager.hostDate(forPumpDate:)`). One per
-/// pass; a reconciler shared across passes would apply each clock change once per pass.
+/// Dates a pass's records on the phone's clock, each by its age on the pump's at the anchors either side of it.
+/// One per pass; a reconciler shared across passes would apply each clock change once per pass.
 struct HistoryRecordDates {
+    enum Placement: Equatable {
+        case dated(Date)
+        /// On no clock the anchors either side of it agree on. It was written by `notAfter`.
+        case held(notAfter: Date)
+    }
+
+    /// A date this far past the anchor above its record is not that record's.
+    static let tolerance = TandemPumpManagerState.pumpClockStepThreshold
+    /// Two clocks that both place a record are told apart only when they differ by more than this.
+    static let ambiguityLimit = TandemPumpManagerState.pumpClockSkewThreshold
+
     /// The records given, less those through `undatableThroughSequenceNum`. A pass works from these alone.
     let logs: [HistoryLog]
     let undatableThroughSequenceNum: UInt32?
     private let reconciler = HistoryTimestampReconciler()
+    private let anchors: [PumpClockAnchor]
+    private let now: Date?
     private let hostDate: (Date) -> Date
 
-    init(_ logs: [HistoryLog], hostDate: @escaping (Date) -> Date) {
+    /// - Parameters:
+    ///   - anchors: Oldest first.
+    ///   - now: The phone's time, which no record is dated past. Nil leaves a date unchecked.
+    ///   - hostDate: With no anchor, takes a date on the pump's clock as it runs now to the phone's.
+    init(_ logs: [HistoryLog], anchors: [PumpClockAnchor] = [], now: Date? = nil, hostDate: @escaping (Date) -> Date) {
         reconciler.recordClockChanges(in: logs)
         let undatableThrough = reconciler.undatableThroughSequenceNum
         undatableThroughSequenceNum = undatableThrough
         self.logs = undatableThrough.map { undatableThrough in logs.filter { $0.sequenceNum > undatableThrough } } ?? logs
+        self.anchors = anchors
+        self.now = now
         self.hostDate = hostDate
     }
 
@@ -146,14 +169,98 @@ struct HistoryRecordDates {
         reconciler.isDatable(sequenceNum: log.sequenceNum)
     }
 
-    /// A record outside `logs` dates to `distantPast`, below every pass's reporting floor, so a caller
-    /// that missed the filter still reports nothing from it.
+    func isHeld(_ log: HistoryLog) -> Bool {
+        if case .held = placement(pumpTimeSec: log.pumpTimeSec, sequenceNum: log.sequenceNum) {
+            return true
+        }
+        return false
+    }
+
+    /// A record outside `logs` dates to `distantPast`, below every pass's reporting floor, and a held one to
+    /// `distantFuture`, ahead of the phone: a caller that missed either filter still reports nothing from it.
     func phoneDate(of log: HistoryLog) -> Date {
         phoneDate(pumpTimeSec: log.pumpTimeSec, sequenceNum: log.sequenceNum)
     }
 
     func phoneDate(pumpTimeSec: UInt32, sequenceNum: UInt32) -> Date {
-        pumpDate(pumpTimeSec: pumpTimeSec, sequenceNum: sequenceNum).map(hostDate) ?? .distantPast
+        switch placement(pumpTimeSec: pumpTimeSec, sequenceNum: sequenceNum) {
+        case let .dated(date)?:
+            return date
+        case .held?:
+            return .distantFuture
+        case nil:
+            return .distantPast
+        }
+    }
+
+    /// The latest a record can have been written: its date, or for a held one the anchor above it. Nil if undatable.
+    func latestPossibleDate(of log: HistoryLog) -> Date? {
+        switch placement(pumpTimeSec: log.pumpTimeSec, sequenceNum: log.sequenceNum) {
+        case let .dated(date)?:
+            return date
+        case let .held(notAfter)?:
+            return notAfter
+        case nil:
+            return nil
+        }
+    }
+
+    /// Nil for a record that is held or undatable.
+    func date(of log: HistoryLog) -> Date? {
+        if case let .dated(date) = placement(pumpTimeSec: log.pumpTimeSec, sequenceNum: log.sequenceNum) {
+            return date
+        }
+        return nil
+    }
+
+    /// On the clock of the anchor above the record or of the one below; where the pump's own records do not
+    /// explain how the two differ, on whichever puts it between them. Nil through `undatableThroughSequenceNum`.
+    func placement(pumpTimeSec: UInt32, sequenceNum: UInt32) -> Placement? {
+        guard reconciler.isDatable(sequenceNum: sequenceNum) else {
+            return nil
+        }
+        let upper = anchors.first { $0.sequenceNum >= sequenceNum }
+        let lower = anchors.last { $0.sequenceNum < sequenceNum }
+        let byUpper = upper.map { anchor -> Date in
+            let carried = Int(pumpTimeSec) + reconciler.recordedDeltaSec(after: sequenceNum, through: anchor.sequenceNum)
+            return anchor.phoneDate.addingTimeInterval(TimeInterval(carried - Int(anchor.pumpTimeSec)))
+        }
+        let byLower = lower.map { anchor -> Date in
+            let carriedBack = Int(pumpTimeSec) - reconciler.recordedDeltaSec(after: anchor.sequenceNum, through: sequenceNum)
+            return anchor.phoneDate.addingTimeInterval(TimeInterval(carriedBack - Int(anchor.pumpTimeSec)))
+        }
+
+        let notAfter = upper?.phoneDate ?? now
+        let latest = notAfter?.addingTimeInterval(Self.tolerance) ?? .distantFuture
+        let held = Placement.held(notAfter: notAfter ?? .distantFuture)
+        func placed(_ date: Date) -> Placement {
+            date <= latest ? .dated(date) : held
+        }
+
+        switch (byUpper, byLower) {
+        case (nil, nil):
+            return placed(pumpDate(pumpTimeSec: pumpTimeSec, sequenceNum: sequenceNum).map(hostDate) ?? .distantPast)
+        case let (date?, nil), let (nil, date?):
+            return placed(date)
+        case let (byUpper?, byLower?):
+            let apart = abs(byUpper.timeIntervalSince(byLower))
+            guard apart > Self.tolerance, let lower else {
+                return placed(byUpper)
+            }
+            // Only between two clocks: a stamp before the anchor below it on one clock is just an early stamp.
+            let earliest = lower.phoneDate.addingTimeInterval(-Self.tolerance)
+            switch (earliest <= byUpper && byUpper <= latest, earliest <= byLower && byLower <= latest) {
+            case (true, false):
+                return .dated(byUpper)
+            case (false, true):
+                return .dated(byLower)
+            case (true, true):
+                // The later date counts more of its insulin as still acting; further apart, neither is safe to pick.
+                return apart <= Self.ambiguityLimit ? .dated(max(byUpper, byLower)) : held
+            case (false, false):
+                return held
+            }
+        }
     }
 
     /// On the pump's clock as it runs now, which `TandemPumpManager.hostDate(forPumpDate:)` takes; nil
@@ -165,7 +272,12 @@ struct HistoryRecordDates {
 
 extension TandemPumpManager {
     func historyRecordDates(_ logs: [HistoryLog]) -> HistoryRecordDates {
-        let dates = HistoryRecordDates(logs) { [weak self] in self?.hostDate(forPumpDate: $0) ?? $0 }
+        let offset = state.pumpClockOffset
+        let dates = HistoryRecordDates(
+            logs,
+            anchors: state.pumpClockAnchors.anchors(pumpSerial: historyLogStoreSerial?.rawValue),
+            now: now
+        ) { $0.addingTimeInterval(-offset) }
         if let undatableThrough = dates.undatableThroughSequenceNum, loggedUndatableHistory.insert(undatableThrough).inserted {
             logger.warning("Pump history through #\(undatableThrough) is on a clock lost to a reset or shelf mode; none of it is dated or reported")
         }

@@ -130,6 +130,18 @@ extension TandemPumpManager {
             )
         }
 
+        // The host's insulin on board is missing what the pump's history could not be dated to report.
+        if isHistoryHeldTooLong {
+            return PumpStatusHighlight(
+                localizedMessage: String(
+                    localized: "Pump Event Not Counted",
+                    comment: "Status highlight that something in the pump's history could not be dated, so the app has not counted it and insulin on board may be too low."
+                ),
+                imageName: "exclamationmark.circle.fill",
+                state: .critical
+            )
+        }
+
         // Before the suspend, reservoir and Control-IQ highlights, because it means the basal rates
         // the app shows are not what the pump is running.
         if state.basalProfileUpdateStatus == .failed {

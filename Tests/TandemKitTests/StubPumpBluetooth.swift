@@ -54,6 +54,15 @@ final class StubPumpBluetooth: PumpBluetoothConnection {
         lock.unlock()
     }
 
+    /// Answers every read of the pump's clock with the phone's time by `now`, `ahead` seconds on, as a pump
+    /// whose clock runs. A history tick dates nothing without two reads that agree.
+    func stubPumpClock(ahead: TimeInterval = 0, now: @escaping () -> Date = { Date() }) {
+        stub(TimeSinceResetRequest.self) { _ in
+            let pumpTime = Dates.fromInstantToJan12008EpochSeconds(now().addingTimeInterval(ahead))
+            return TimeSinceResetResponse(currentTime: UInt32(pumpTime), pumpTimeSinceReset: 100_000)
+        }
+    }
+
     /// Answers successive `requestType` writes with `responses` in order. Once the queue is drained
     /// the fixed stub for that type (if any) takes over.
     func enqueue(_ requestType: Message.Type, responses: [Message?]) {

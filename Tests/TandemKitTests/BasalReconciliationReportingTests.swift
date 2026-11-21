@@ -163,6 +163,32 @@ import XCTest
         XCTAssertEqual(events.count, 6, "a second pass reports nothing")
     }
 
+    func testCyclesNoClockReadingDatesAreNotCorrectedUntilOneDatesThem() {
+        enableReporting()
+        let log = controlIQHour()
+        // The pump's clock read an hour behind where every record's stamp puts it.
+        manager.state.pumpClockAnchors.record(
+            PumpClockAnchor(sequenceNum: 5000, pumpTimeSec: PumpBasalHistory.origin - 3600, phoneDate: clock.now),
+            pumpSerial: Self.pumpSerial
+        )
+
+        pass(log)
+
+        XCTAssertTrue(events.isEmpty)
+        XCTAssertEqual(manager.state.heldHistory.entries.count, 12)
+        XCTAssertNil(manager.state.reportedBasal.reconciledThrough)
+
+        manager.state.pumpClockAnchors = PumpClockAnchors()
+        manager.state.pumpClockAnchors.record(
+            PumpClockAnchor(sequenceNum: 5000, pumpTimeSec: PumpBasalHistory.origin + 7200, phoneDate: clock.now),
+            pumpSerial: Self.pumpSerial
+        )
+        pass(log)
+
+        XCTAssertEqual(events.count, 6)
+        XCTAssertTrue(manager.state.heldHistory.entries.isEmpty)
+    }
+
     func testChunksFromBeforeTrackingAreCorrectedOnceSetupLoadsHistory() {
         enableReporting()
         manager.state.reportedBasal = ReportedBasalLedger(trackingSince: clock.now)
