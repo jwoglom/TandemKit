@@ -1866,6 +1866,37 @@ import XCTest
         XCTAssertFalse(ledger.isHandled(sequenceNum: 150))
     }
 
+    private func detectedSuspend(at date: Date, sequenceNum: UInt32? = nil) -> DeliveryTransitionLedger.Entry {
+        DeliveryTransitionLedger.Entry(kind: .suspend, date: date, earliest: date, latest: date, sequenceNum: sequenceNum, isReported: true)
+    }
+
+    func testAnOpenSuspendReportedAtDetectionIsClaimedByTheEarlierRecordOfItsStop() {
+        var ledger = DeliveryTransitionLedger()
+        ledger.record(detectedSuspend(at: minutes(30)))
+
+        XCTAssertTrue(ledger.claimOpenSuspend(from: minutes(5), sequenceNum: 12))
+        XCTAssertTrue(ledger.isHandled(sequenceNum: 12))
+        XCTAssertFalse(ledger.claimOpenSuspend(from: minutes(5), sequenceNum: 13), "claimed once")
+    }
+
+    func testASuspendTheHostWasToldOfAResumeAfterIsNotClaimed() {
+        var ledger = DeliveryTransitionLedger()
+        ledger.record(detectedSuspend(at: minutes(30)))
+        ledger.record(DeliveryTransitionLedger.Entry(kind: .resume, date: minutes(40), earliest: minutes(40), latest: minutes(40), sequenceNum: nil, isReported: true))
+
+        XCTAssertFalse(ledger.claimOpenSuspend(from: minutes(5), sequenceNum: 12))
+    }
+
+    func testASuspendReportedBeforeTheRecordOrUnderARecordIsNotClaimed() {
+        var ledger = DeliveryTransitionLedger()
+        ledger.record(detectedSuspend(at: minutes(3)))
+        XCTAssertFalse(ledger.claimOpenSuspend(from: minutes(5), sequenceNum: 12), "reported before the record")
+
+        ledger = DeliveryTransitionLedger()
+        ledger.record(detectedSuspend(at: minutes(30), sequenceNum: 9))
+        XCTAssertFalse(ledger.claimOpenSuspend(from: minutes(5), sequenceNum: 12), "already under a record")
+    }
+
     func testLedgerRoundTripsThroughRawValue() {
         var ledger = DeliveryTransitionLedger(
             pumpSerial: Self.pumpSerial,

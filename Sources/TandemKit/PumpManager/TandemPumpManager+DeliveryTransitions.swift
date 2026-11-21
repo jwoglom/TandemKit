@@ -540,6 +540,11 @@ extension TandemPumpManager {
                     }
                     continue
                 }
+                // A suspension the pump was in before the pairing floor, reported at detection, read once setup's load lifts it.
+                if record.sequenceNum == records.last?.sequenceNum,
+                   state.deliveryTransitions.claimOpenSuspend(from: record.date, sequenceNum: record.sequenceNum) {
+                    continue
+                }
                 // Trio takes a trailing suspend as lasting until now; Loop keeps only the later of
                 // two suspends in a row.
                 guard resume != nil || isSuspendedNow, hostTransition(before: record.date)?.kind != .suspend else {

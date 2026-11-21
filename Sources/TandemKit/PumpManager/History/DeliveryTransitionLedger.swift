@@ -156,6 +156,18 @@ public struct DeliveryTransitionLedger: Equatable {
         return true
     }
 
+    /// Claims for a pump suspend record the host's last report, when that is a suspend at or after the record
+    /// with no record of its own: nothing resumed it since, so it is the same suspension.
+    public mutating func claimOpenSuspend(from date: Date, sequenceNum: UInt32) -> Bool {
+        guard let index = entries.lastIndex(where: \.isReported), entries[index].kind == .suspend,
+              entries[index].sequenceNum == nil, entries[index].date >= date
+        else {
+            return false
+        }
+        entries[index].sequenceNum = sequenceNum
+        return true
+    }
+
     public func lastReported(before date: Date) -> Entry? {
         entries.last { $0.isReported && $0.date < date }
     }

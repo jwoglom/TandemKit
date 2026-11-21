@@ -149,6 +149,8 @@ host queue, so its state stays behind its lock.
   identities, one still running finished at its programmed end as a deleted manager left it. A
   suspension the pump is already in when a manager first reads it is reported at detection, before
   the load could date it, but under its `PumpingSuspended` record when the session's store holds it.
+  Below the pre-service floor the store does not, so a load that reads the record later gives it to
+  that suspend (`claimOpenSuspend`) instead of reporting a second, as nothing resumed the pump between.
 - Still reported twice: what a build without these identities reported, a suspend or resume reported
   at detection because history could not be read in time, a bolus or temp whose id was not past the
   last minted, and a temp set on the pump that a manager adopted under its `tempRateId`, whose cycles

@@ -509,6 +509,8 @@ final class HistoryBackfillCoordinator {
         bookkeeping.raiseUndatableThrough(to: undatable)
     }
 
+    private static let clockChangeTypes: Set<Int> = [TimeChangedHistoryLog.typeId, DateChangeHistoryLog.typeId]
+
     /// Dates the oldest readable record this session holds, after every read: a slice deeper moves it,
     /// and a clock change read since moves its date.
     private func dateSessionOldest(bookkeeping: HistoryBackfillState) {
@@ -519,7 +521,14 @@ final class HistoryBackfillCoordinator {
         }
         let lowest: UInt32?
         do {
-            lowest = try pumpManager.historyLogStore.sequenceNumbers(pumpSerial: serial.rawValue, in: readable).first
+            let store = pumpManager.historyLogStore
+            // A clock change's own stamp is not on the clock it sits on, and setup's clock write is the first
+            // thing after the pairing floor: dated by it, the walk took itself as days deep.
+            lowest = try store.sequenceNumbers(pumpSerial: serial.rawValue, in: readable).first { sequenceNum in
+                try store.logs(pumpSerial: serial.rawValue, in: sequenceNum ... sequenceNum).first.map {
+                    !Self.clockChangeTypes.contains($0.typeId)
+                } ?? false
+            }
         } catch {
             logger.warning("Could not read the oldest history log of this session's span: \(error)")
             return
