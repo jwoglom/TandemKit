@@ -544,4 +544,40 @@ final class HistoryBackfillPlannerTests: XCTestCase {
         XCTAssertEqual(restored.undatableThroughSequenceNum, 200)
         XCTAssertEqual(restored, original)
     }
+
+    func testReadableRangeStartsAboveTheHigherOfThePairingAndUndatableFloors() {
+        var state = bookkeeping(watermark: 2000)
+        state.pairedThroughSequenceNum = 170
+        XCTAssertEqual(state.readable(100 ... 200), 171 ... 200)
+
+        state.raiseUndatableThrough(to: 150)
+        XCTAssertEqual(state.readable(100 ... 200), 171 ... 200)
+        state.raiseUndatableThrough(to: 180)
+        XCTAssertEqual(state.readable(100 ... 200), 181 ... 200)
+        XCTAssertNil(state.readable(100 ... 170))
+    }
+
+    func testAnErasedLogDropsThePairingFloor() {
+        var state = bookkeeping(watermark: 900)
+        state.pairedThroughSequenceNum = 800
+
+        XCTAssertNil(state.resettingWatermarkIfAbove(lastSequenceNum: 50).pairedThroughSequenceNum)
+        XCTAssertEqual(state.resettingWatermarkIfAbove(lastSequenceNum: 950).pairedThroughSequenceNum, 800)
+    }
+
+    func testAReplacementPumpHasNoPairingFloor() {
+        var state = bookkeeping(watermark: 900)
+        state.pairedThroughSequenceNum = 800
+
+        XCTAssertNil(state.matching(pumpSerial: serial + 1).pairedThroughSequenceNum)
+    }
+
+    func testThePairingFloorSurvivesARawValueRoundTrip() throws {
+        var original = bookkeeping(watermark: 240)
+        original.pairedThroughSequenceNum = 200
+
+        let restored = try XCTUnwrap(HistoryBackfillState(rawValue: original.rawValue))
+        XCTAssertEqual(restored.pairedThroughSequenceNum, 200)
+        XCTAssertEqual(restored, original)
+    }
 }

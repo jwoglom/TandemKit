@@ -197,6 +197,7 @@ class TandemKitScanViewModel: ObservableObject {
 
         currentPhase = .pairing
 
+        pumpManager.holdHistoryBeforePairing()
         pumpManager.pairPump(code: devicePinCode, peripheral: peripheral) { error in
             if let error {
                 self.onPairFailure(error: error)

@@ -65,6 +65,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
     /// events for. Persisted so a relaunch resumes an incremental read instead of re-walking the
     /// pump's whole history into an empty session store.
     public var historyBackfill: HistoryBackfillState?
+    /// Whether this manager may read what the pump wrote before setup paired it.
+    public var historyBeforePairing: HistoryBeforePairing = .read
     public var bolusReportLedger = BolusReportLedger(trackingSince: Date())
     public var reportedBasal = ReportedBasalLedger(trackingSince: Date())
     /// The last temp basal `raw` minted from the pump's `tempRateId`; see `tempBasalEventRaw`.
@@ -215,6 +217,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
               lhs.basalRateMismatchDetectedAt == rhs.basalRateMismatchDetectedAt,
               lhs.basalProfileUpdateFailed == rhs.basalProfileUpdateFailed,
               lhs.historyBackfill == rhs.historyBackfill,
+              lhs.historyBeforePairing == rhs.historyBeforePairing,
               lhs.bolusReportLedger == rhs.bolusReportLedger,
               lhs.reportedBasal == rhs.reportedBasal,
               lhs.lastTempRateEventRaw == rhs.lastTempRateEventRaw,
@@ -383,6 +386,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         } else {
             historyBackfill = nil
         }
+        historyBeforePairing = (rawValue["historyBeforePairing"] as? String).flatMap(HistoryBeforePairing.init(rawValue:)) ?? .read
 
         if let ledgerRaw = rawValue["bolusReportLedger"] as? BolusReportLedger.RawValue,
            let ledger = BolusReportLedger(rawValue: ledgerRaw)
@@ -620,6 +624,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         if let historyBackfill {
             raw["historyBackfill"] = historyBackfill.rawValue
         }
+        raw["historyBeforePairing"] = historyBeforePairing.rawValue
 
         raw["bolusReportLedger"] = bolusReportLedger.rawValue
         raw["reportedBasal"] = reportedBasal.rawValue
@@ -724,14 +729,16 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
             "* lastBatteryReading: \(debugValue(lastBatteryReading.map(\.debugDescription)))",
             "* lastBasalStatusDate: \(debugValue(lastBasalStatusDate))",
             "* basalRateMismatchDetectedAt: \(debugValue(basalRateMismatchDetectedAt))",
-            "* basalProfileUpdateFailed: \(basalProfileUpdateFailed)"
+            "* basalProfileUpdateFailed: \(basalProfileUpdateFailed)",
+            "* historyBeforePairing: \(historyBeforePairing.rawValue)"
         ]
         if let historyBackfill {
             lines += debugSection("historyBackfill", [
                 "* pumpSerial: \(historyBackfill.pumpSerial)",
                 "* watermark: \(debugValue(historyBackfill.watermark))",
                 "* firstSeenFloor: \(debugValue(historyBackfill.firstSeenFloor))",
-                "* undatableThroughSequenceNum: \(debugValue(historyBackfill.undatableThroughSequenceNum))"
+                "* undatableThroughSequenceNum: \(debugValue(historyBackfill.undatableThroughSequenceNum))",
+                "* pairedThroughSequenceNum: \(debugValue(historyBackfill.pairedThroughSequenceNum))"
             ])
         } else {
             lines.append("* historyBackfill: nil")
@@ -1138,6 +1145,27 @@ extension DeliveryTransitionLedger {
             "* interruptedTemp: \(debugValue(interruptedTemp?.debugDescription))"
         ]
         return fields
+    }
+}
+
+public enum HistoryBeforePairing: String {
+    /// A manager not paired through setup, or set up by a build without the floor: read as before.
+    case read
+    /// Setup is pairing: the next history status read takes the pump's newest record as the floor.
+    case held
+    case floored
+    /// Setup's history load lifted the floor.
+    case loaded
+}
+
+extension TandemPumpManagerState {
+    /// Called through `state`'s `_modify`, so a load that lifts the floor while a tick takes it is not lost.
+    mutating func takeHistoryBeforePairing() -> HistoryBeforePairing {
+        let request = historyBeforePairing
+        if request == .held {
+            historyBeforePairing = .floored
+        }
+        return request
     }
 }
 

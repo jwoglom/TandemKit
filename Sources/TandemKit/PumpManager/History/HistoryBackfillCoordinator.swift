@@ -33,10 +33,10 @@ final class HistoryBackfillCoordinator {
         var reachesPumpStart: Bool {
             guard let covered = sessionCovered, let range = pumpSequenceRange else { return false }
             return covered.lowerBound <= range.lowerBound
-                || bookkeeping.undatableThroughSequenceNum.map { Int64(covered.lowerBound) <= Int64($0) + 1 } == true
+                || bookkeeping.unreadableThroughSequenceNum.map { Int64(covered.lowerBound) <= Int64($0) + 1 } == true
         }
 
-        /// The session's span above the undatable floor: all a pass may date or report.
+        /// The session's span above the undatable and pairing floors: all a pass may date or report.
         var reportableRange: ClosedRange<UInt32>? {
             sessionCovered.flatMap(bookkeeping.readable)
         }
@@ -161,7 +161,7 @@ final class HistoryBackfillCoordinator {
             // A pump holding less than has been read from it had its log erased and its counter
             // restarted; drop the stale read position and the session's view of the old
             // numbering.
-            let bookkeeping = reconciled.resettingWatermarkIfAbove(lastSequenceNum: status.lastSequenceNum)
+            var bookkeeping = reconciled.resettingWatermarkIfAbove(lastSequenceNum: status.lastSequenceNum)
             if bookkeeping.watermark != reconciled.watermark {
                 self.logger.warning(
                     "Pump history log restarted below the watermark " +
@@ -170,6 +170,7 @@ final class HistoryBackfillCoordinator {
                 )
                 self.forgetSessionCoverage(pumpSerial: serial)
             }
+            self.applyHistoryBeforePairing(to: &bookkeeping, status: status)
 
             let emitFloor = HistoryBackfillPlanner.emitFloor(
                 bookkeeping: bookkeeping,
@@ -448,7 +449,7 @@ final class HistoryBackfillCoordinator {
         return oldest <= HistoryBackfillPlanner.deepFetchTarget(firstSeenFloor: bookkeeping.firstSeenFloor, now: now)
     }
 
-    /// Nothing at or below the undatable floor is read, nor below what the store has pruned: read again,
+    /// Nothing at or below the undatable or pairing floor is read, nor below what the store has pruned: read again,
     /// it would be pruned at the next pass and the walk would go a slice deeper each time.
     private func lowestReadable(bookkeeping: HistoryBackfillState, pumpSerial serial: HistoryLogSyncIdentifier.PumpSerial) -> UInt32 {
         let prunedBelow: UInt32?
@@ -458,8 +459,28 @@ final class HistoryBackfillCoordinator {
             logger.warning("Could not read the history log store's retention watermark: \(error)")
             prunedBelow = nil
         }
-        let datable = bookkeeping.undatableThroughSequenceNum.map { $0 == .max ? $0 : $0 + 1 } ?? 0
-        return max(datable, prunedBelow ?? 0)
+        let readable = bookkeeping.unreadableThroughSequenceNum.map { $0 == .max ? $0 : $0 + 1 } ?? 0
+        return max(readable, prunedBelow ?? 0)
+    }
+
+    /// Takes the pairing floor at the first status read after setup pairs, or drops it once setup's load
+    /// lifts it. Re-applied every tick: a tick that began before the lift saves the floor it started with.
+    private func applyHistoryBeforePairing(to bookkeeping: inout HistoryBackfillState, status: HistoryLogStatusResponse) {
+        guard let pumpManager else {
+            return
+        }
+        switch pumpManager.state.takeHistoryBeforePairing() {
+        case .held:
+            guard status.numEntries > 0 else {
+                return
+            }
+            logger.info("Pump history through #\(status.lastSequenceNum) is from before setup paired the pump; none of it is read unless setup loads it")
+            bookkeeping.pairedThroughSequenceNum = status.lastSequenceNum
+        case .loaded:
+            bookkeeping.pairedThroughSequenceNum = nil
+        case .read, .floored:
+            break
+        }
     }
 
     /// Raises the saved floor to the newest ShelfMode or ArmInit record read. A stamp running back is left

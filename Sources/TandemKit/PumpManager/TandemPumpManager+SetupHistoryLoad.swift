@@ -99,6 +99,15 @@ extension TandemPumpManager {
         state.featureFlags.historyBackfill && state.featureFlags.historyDoseReporting
     }
 
+    /// Called before setup pairs a pump. A history load the user declines leaves everything the pump wrote
+    /// before pairing unread: the first history status read after it floors the walk at the pump's newest record.
+    public func holdHistoryBeforePairing() {
+        guard !state.onboarded else {
+            return
+        }
+        state.historyBeforePairing = .held
+    }
+
     /// Run once pairing is done and before setup writes anything, so it reads what the pump was doing
     /// for its last user.
     public func readDeliveryForSetup(completion: @escaping (SetupDeliveryReading) -> Void) {
@@ -109,6 +118,10 @@ extension TandemPumpManager {
                 return
             }
             self.fetchPumpInformation()
+            // Takes the pairing floor now, not at the setup sync: a pump-screen bolus while the user chooses is after it.
+            if self.state.historyBeforePairing == .held {
+                self.historyBackfillCoordinator.runTick()
+            }
             self.fetchTimeSinceReset()
             // The IOB opcode is known only once the pump has answered a Control-IQ read.
             self.fetchControlIQStatus()
@@ -159,6 +172,9 @@ extension TandemPumpManager {
     ) {
         let since = now.addingTimeInterval(-Self.setupHistoryLoadWindow)
         logger.info("Loading pump history since \(since) for setup")
+        if state.historyBeforePairing != .read {
+            state.historyBeforePairing = .loaded
+        }
         state.bolusReportLedger.reportHistory(since: since)
         state.reportedBasal.reportHistory(since: since)
         state.deliveryTransitions.reportHistory(since: since)
