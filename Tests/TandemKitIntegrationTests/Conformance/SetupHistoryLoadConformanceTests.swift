@@ -177,10 +177,14 @@ final class SetupHistoryLoadConformanceTests: ConformanceTestCase {
 
     /// As TandemKitUI runs it up to the history load: pairing, the reading of the pump the Load Pump
     /// History step shows, then `TandemKitSetupCompleteViewModel`'s Control-IQ turned off if the pump
-    /// runs it, the onboarding writes and a sync, with no host.
-    private func pairThisApp() throws -> FaketandemHarness.Driver {
+    /// runs it, the onboarding writes and a sync, with no host. Without `holdsHistory`, as a build before
+    /// the scan step held the pump's history did.
+    private func pairThisApp(holdsHistory: Bool = true) throws -> FaketandemHarness.Driver {
         hostDelegatesFrom = delegates.count
         let driver = startDriver(state: try appState(), attachDelegate: false)
+        if holdsHistory {
+            driver.manager.holdHistoryBeforePairing()
+        }
         try harness.pair(driver)
         _ = try readDeliveryForSetup()
         let controlIQ = ResultBox<Bool>()
@@ -1056,6 +1060,83 @@ final class SetupHistoryLoadConformanceTests: ConformanceTestCase {
         try runALoadAcross(.jumpTo2035, beforeChangeFails: Self.fromBeforeAJumpAhead)
     }
 
+    // MARK: - L23
+
+    /// The pump in use, not loaded: from pairing on, through a pump-screen bolus and a relaunch, no
+    /// `HistoryLogRequest` asks for a record the pump wrote before pairing, and the boundary is saved.
+    func testL23_withoutTheLoadNoRecordFromBeforePairingIsReadThroughARelaunch() throws {
+        _ = try stagePumpInUse()
+        let pairedAt = clock.now
+        let lastBeforePairing = try harness.client.snapshot().history.lastSequence
+        let logMark = try harness.client.snapshot().requestLog.lastSeq
+        let setUp = try pairThisApp()
+        let lastAfterSetup = try harness.client.snapshot().history.lastSequence
+        adopt(setUp)
+        _ = try sync()
+        try syncEveryCycle(until: 404)
+        try bolusOnThePump(units: 1.0)
+        try syncEveryCycle(until: 412)
+        let driver = try relaunch()
+        _ = try sync()
+        try syncEveryCycle(until: 440)
+        try waitForHistoryPass(driver)
+
+        let reads = try historyReads(since: logMark)
+        XCTAssertFalse(reads.isEmpty, "the pump's history after pairing is read")
+        let early = reads.filter { $0.lowerBound <= lastBeforePairing }
+        XCTAssertTrue(early.isEmpty, "read records from before pairing, through \(lastBeforePairing): \(early)")
+        let backfill = try XCTUnwrap(driver.manager.state.historyBackfill)
+        let floor = try XCTUnwrap(backfill.preServiceThroughSequenceNum.map(Int.init))
+        XCTAssertTrue((lastBeforePairing ... lastAfterSetup).contains(floor), "the pump's newest record at pairing: \(floor)")
+        XCTAssertEqual(backfill.serviceStartDate?.timeIntervalSince(pairedAt) ?? .infinity, 0, accuracy: 120)
+
+        let (loop, trio) = hostOracles()
+        assertNoDuplicates(loop, trio, "not loaded")
+        try assertHostsHoldThePumpsBoluses(from: pairedAt, loop, trio, count: 1)
+    }
+
+    // MARK: - L24
+
+    /// The pump in use, loaded: the load keeps the newest record it dated before its window as the
+    /// boundary, and from then on, through a relaunch, no `HistoryLogRequest` asks for a record at or below it.
+    func testL24_theLoadKeepsItsWindowAsTheBoundaryThroughARelaunch() throws {
+        _ = try stagePumpInUse()
+        let setUp = try pairThisApp()
+        let since = try loadHistory(setUp)
+        guard case let .loaded(through, loadedSince) = setUp.manager.state.historyBeforePairing else {
+            return XCTFail("\(setUp.manager.state.historyBeforePairing)")
+        }
+        XCTAssertEqual(loadedSince.timeIntervalSince(since), 0, accuracy: 2)
+        let boundary = try XCTUnwrap(through.map(Int.init), "the load kept a boundary")
+        let cycles = try timeline().basalCycles
+        let lastCycleBefore = try XCTUnwrap(cycles.last { $0.start < since })
+        let firstCycleIn = try XCTUnwrap(cycles.first { $0.start >= since })
+        XCTAssertTrue(
+            (lastCycleBefore.sequence ..< firstCycleIn.sequence).contains(boundary),
+            "between the last BasalDelivery record before the window, \(lastCycleBefore.sequence), and the first in it, \(firstCycleIn.sequence): \(boundary)"
+        )
+
+        adopt(setUp)
+        _ = try sync()
+        let logMark = try harness.client.snapshot().requestLog.lastSeq
+        try syncEveryCycle(until: 404)
+        let driver = try relaunch()
+        _ = try sync()
+        try syncEveryCycle(until: 420)
+        try waitForHistoryPass(driver)
+
+        XCTAssertEqual(driver.manager.state.historyBackfill?.preServiceThroughSequenceNum.map(Int.init), boundary)
+        XCTAssertEqual(driver.manager.state.historyBackfill?.serviceStartDate?.timeIntervalSince(since) ?? .infinity, 0, accuracy: 2)
+        let reads = try historyReads(since: logMark)
+        XCTAssertFalse(reads.isEmpty, "the relaunch reads the pump's history again")
+        let below = reads.filter { $0.lowerBound <= boundary }
+        XCTAssertTrue(below.isEmpty, "read at or below the boundary \(boundary): \(below)")
+
+        let (loop, trio) = hostOracles()
+        assertNoDuplicates(loop, trio, "loaded, then relaunched")
+        try assertHostsHoldThePumpsBoluses(from: since, loop, trio, count: 4)
+    }
+
     // MARK: - M: a pump out of shelf mode
 
     private struct PutAwayPump {
@@ -1256,7 +1337,8 @@ final class SetupHistoryLoadConformanceTests: ConformanceTestCase {
             + [HistoryLogSyncIdentifier.extendedBolus(pumpSerial: serial, bolusId: pump.extendedBolusId)])
     }
 
-    /// With `savesTheFloor`, the walk saved the record its clock records cannot date, at or above the last before.
+    /// With `savesTheFloor`, the walk saved a floor at or above the last record before: the one its clock records
+    /// cannot date, or the pump's newest at pairing.
     private func assertNoHistoryIsReadFromBeforeThePumpWasPutAway(
         _ pump: PutAwayPump,
         _ day: DayAfterSetup,
@@ -1267,8 +1349,8 @@ final class SetupHistoryLoadConformanceTests: ConformanceTestCase {
         let below = day.historyReads.filter { $0.upperBound < pump.lastSequenceBefore }
         XCTAssertTrue(below.isEmpty, "read from before record \(pump.lastSequenceBefore): \(below)", file: file, line: line)
         if savesTheFloor {
-            let floor = day.driver.manager.state.historyBackfill?.undatableThroughSequenceNum.map(Int.init) ?? 0
-            XCTAssertGreaterThanOrEqual(floor, pump.lastSequenceBefore, "the saved undatable floor", file: file, line: line)
+            let floor = day.driver.manager.state.historyBackfill?.unreadableThroughSequenceNum.map(Int.init) ?? 0
+            XCTAssertGreaterThanOrEqual(floor, pump.lastSequenceBefore, "the saved floor", file: file, line: line)
         }
     }
 
@@ -1338,13 +1420,14 @@ final class SetupHistoryLoadConformanceTests: ConformanceTestCase {
 
     // MARK: - M3
 
-    /// Paired five minutes after waking, shelved half an hour after its last bolus: the ShelfMode record
-    /// and the boluses before it come in the first slice setup reads, and none is reported.
+    /// Paired five minutes after waking, shelved half an hour after its last bolus, by a manager that does
+    /// not hold the pump's history: the ShelfMode record and the boluses before it come in the first slice
+    /// setup reads, and none is reported.
     func testM3_bolusesInTheSliceThatHoldsTheShelfModeRecordAreNotReported() throws {
         let pump = try stagePumpPutAway(at: 120, awake: .minutes(5))
         let pairedAt = clock.now
         let logMark = try harness.client.snapshot().requestLog.lastSeq
-        let setUp = try pairThisApp()
+        let setUp = try pairThisApp(holdsHistory: false)
         let day = try runTheDayAfterSetup(setUp, pairedAt: pairedAt, logMark: logMark)
         XCTAssertTrue(
             day.historyReads.first.map { $0.contains(pump.lastSequenceBefore) } == true,
@@ -1395,13 +1478,14 @@ final class SetupHistoryLoadConformanceTests: ConformanceTestCase {
 
     // MARK: - M6
 
-    /// A pump stored 201 days with its clock kept: nothing from before is reported, its dates being right,
-    /// and the walk backward reads no deeper as the store prunes the record it stopped at.
+    /// A pump stored 201 days with its clock kept, paired by a manager that does not hold its history:
+    /// nothing from before is reported, its dates being right, and the walk backward reads no deeper as the
+    /// store prunes the record it stopped at.
     func testM6_theWalkReadsNoDeeperWhenTheStorePrunesTheRecordItStoppedAt() throws {
         let pump = try stagePumpPutAway(shelfModeRecord: false, clockRestarts: false, awake: .minutes(30))
         let pairedAt = clock.now
         let logMark = try harness.client.snapshot().requestLog.lastSeq
-        let setUp = try pairThisApp()
+        let setUp = try pairThisApp(holdsHistory: false)
         let day = try runTheDayAfterSetup(setUp, pairedAt: pairedAt, logMark: logMark)
         XCTAssertTrue(hostDelegates.allSatisfy(\.errors.isEmpty), "\(hostDelegates.map(\.errors))")
 
