@@ -9,6 +9,7 @@ import XCTest
             state: TandemPumpManagerState(rawValue: [:]),
             bluetooth: StubPumpBluetooth()
         )
+        manager.setFeatureFlag(.controlIQSupport, enabled: false)
         manager.state.controlIQWeightLbs = 154
         manager.state.controlIQTotalDailyInsulin = 42
 
@@ -108,7 +109,6 @@ import XCTest
             state: TandemPumpManagerState(rawValue: [:]),
             bluetooth: StubPumpBluetooth()
         )
-        manager.setFeatureFlag(.controlIQSupport, enabled: true)
 
         let viewModel = makeSettingsViewModel(manager)
 
@@ -116,7 +116,7 @@ import XCTest
         XCTAssertTrue(viewModel.quickBolusButtonSupportEnabled)
     }
 
-    func testSettingsViewModelHidesTheControlIQAndCGMRowsByDefaultAndShowsTheQuickBolusRow() {
+    func testSettingsViewModelShowsTheControlIQAndQuickBolusRowsByDefault() {
         let manager = TandemPumpManager(
             state: TandemPumpManagerState(rawValue: [:]),
             bluetooth: StubPumpBluetooth()
@@ -124,7 +124,7 @@ import XCTest
 
         let viewModel = makeSettingsViewModel(manager)
 
-        XCTAssertFalse(viewModel.controlIQSupportEnabled)
+        XCTAssertTrue(viewModel.controlIQSupportEnabled)
         XCTAssertTrue(viewModel.quickBolusButtonSupportEnabled)
     }
 
@@ -133,6 +133,7 @@ import XCTest
             state: TandemPumpManagerState(rawValue: [:]),
             bluetooth: StubPumpBluetooth()
         )
+        manager.setFeatureFlag(.controlIQSupport, enabled: false)
         XCTAssertFalse(makeSettingsViewModel(manager).showsAlgorithmStatus)
 
         manager.setFeatureFlag(.controlIQSupport, enabled: true)
