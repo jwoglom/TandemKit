@@ -44,7 +44,7 @@ enum HostDoseDates {
             endDate: end,
             value: isTemp ? dose.unitsPerHour : dose.programmedUnits,
             unit: isTemp ? .unitsPerHour : .units,
-            decisionId: dose.decisionId,
+            doseId: dose.decisionId,
             deliveredUnits: deliveredUnits,
             description: dose.description,
             syncIdentifier: dose.syncIdentifier,

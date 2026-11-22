@@ -834,6 +834,16 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     public func enactBolus(
+        doseId: UUID,
+        units: Double,
+        activationType: BolusActivationType,
+        completion: @escaping (_ error: PumpManagerError?) -> Void
+    ) {
+        enactBolus(decisionId: doseId, units: units, activationType: activationType, completion: completion)
+    }
+
+    /// `decisionId` is the host's `doseId`; nil for a dose no host asked for (the virtual pump's).
+    func enactBolus(
         decisionId: UUID?,
         units: Double,
         activationType: BolusActivationType,
@@ -1252,6 +1262,16 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     public func enactTempBasal(
+        doseId: UUID,
+        unitsPerHour: Double,
+        for duration: TimeInterval,
+        completion: @escaping (_ error: PumpManagerError?) -> Void
+    ) {
+        enactTempBasal(decisionId: doseId, unitsPerHour: unitsPerHour, for: duration, completion: completion)
+    }
+
+    /// `decisionId` is the host's `doseId`; nil for a temp no host asked for (TandemKit's own settings).
+    func enactTempBasal(
         decisionId: UUID?,
         unitsPerHour: Double,
         for duration: TimeInterval,
