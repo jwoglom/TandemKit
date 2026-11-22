@@ -179,7 +179,7 @@ extension TandemPumpManager {
     ///   yet (e.g. a qualifying event racing app launch), recording an alarm as issued without
     ///   having delivered it would silence that alarm on every later pass. Instead the whole
     ///   pass is deferred untouched, so the next fetch delivers it.
-    /// - `notify` runs on the single serialized delegate queue, so concurrent reconciles
+    /// - `notify` runs its blocks one at a time, in order, so concurrent reconciles
     ///   (sync-driven on the command queue vs. settings-driven on the main thread) cannot
     ///   interleave their read-modify-writes of `issuedAlertIdentifiers` and lose updates.
     func reconcileLoopKitAlerts() {

@@ -143,14 +143,12 @@ extension TandemLogger {
         guard let pumpManager = Self.pumpManager, pumpManager.canNotifyDelegate else { return }
         let identifier = pumpManager.logDeviceIdentifier
 
-        pumpManager.pumpDelegate.notify { delegate in
-            delegate?.deviceManager(
-                pumpManager,
-                logEventForDeviceIdentifier: identifier,
-                type: .delegate,
-                message: "[\(level)] \(msg)",
-                completion: nil
-            )
-        }
+        pumpManager.pumpManagerDelegate?.deviceManager(
+            pumpManager,
+            logEventForDeviceIdentifier: identifier,
+            type: .delegate,
+            message: "[\(level)] \(msg)",
+            completion: nil
+        )
     }
 }

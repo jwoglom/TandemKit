@@ -55,8 +55,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
         let replacePendingEvents: Bool
     }
 
-    /// `pumpDelegate.notify` hops onto a queue that is `.main` until the host sets one, so the
-    /// decision to hold rather than send has to be made synchronously.
+    /// `pumpDelegate.notify` runs its block later, so the decision to hold rather than send is made
+    /// synchronously.
     private var pendingPumpEventBatches: [PendingPumpEventBatch] = []
     private let pendingPumpEventLock = NSLock()
     /// What was held when setup's first history load started, so a Try Again counts what the failed
@@ -292,25 +292,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
     #endif
 
-    public var delegateQueue: DispatchQueue! {
-        get {
-            pumpDelegate.queue
-        }
-        set {
-            pumpDelegate.queue = newValue
-            hasDelegateQueue = newValue != nil
-            deliverStateMissedByTheDelegate()
-        }
-    }
-
-    /// `pumpDelegate.queue` reads back as `.main` until the host sets one, and the host asserts its
-    /// delegate methods run on its own queue, so this cannot be inferred from the holder. Also set
-    /// once a host that never sets one is taken to want `.main` (`adoptMainQueueIfTheHostSetNone`).
-    private var hasDelegateQueue = false
-
-    /// Long enough for a host that sets its queue right after the delegate (Trio) to have done so.
-    static let unsetDelegateQueueGrace: TimeInterval = 1
-
     private static func makeStatus(from state: TandemPumpManagerState) -> PumpManagerStatus {
         PumpManagerStatus(
             timeZone: TimeZone.current,
@@ -463,13 +444,13 @@ public class TandemPumpManager: PumpManager, Pluggable {
         oldState = TandemPumpManagerState(rawValue: current.rawValue)
         publishLock.unlock()
 
-        // Until the host sets its queue this would land on `.main`; attaching sends the status then.
-        if canNotifyDelegate, let delegate = pumpManagerDelegate {
-            pumpDelegate.queue.async { [weak self] in
-                guard let self = self else { return }
+        // Attaching sends the status that went out before the host adopted the manager.
+        if canNotifyDelegate {
+            pumpDelegate.notify { [weak self] delegate in
+                guard let self, let delegate else { return }
 
                 if includingState {
-                    delegate.pumpManagerDidUpdateState(self)
+                    await delegate.pumpManagerDidUpdateState(self)
                 }
                 delegate.pumpManager(self, didUpdate: status, oldStatus: oldStatus)
             }
@@ -491,9 +472,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     private func notifyPumpManagerDelegateOfError(_ error: PumpCommError) {
-        guard let delegate = pumpManagerDelegate, let queue = delegateQueue else { return }
-        queue.async {
-            delegate.pumpManager(self, didError: PumpManagerError.communication(error))
+        guard canNotifyDelegate else { return }
+        pumpDelegate.notify { delegate in
+            await delegate?.pumpManager(self, didError: PumpManagerError.communication(error))
         }
     }
 
@@ -564,34 +545,18 @@ public class TandemPumpManager: PumpManager, Pluggable {
         set {
             pumpDelegate.delegate = newValue
             deliverStateMissedByTheDelegate()
-            if newValue != nil, !hasDelegateQueue {
-                DispatchQueue.main.asyncAfter(deadline: .now() + Self.unsetDelegateQueueGrace) { [weak self] in
-                    self?.adoptMainQueueIfTheHostSetNone()
-                }
-            }
         }
     }
 
-    /// Loop next-dev sets no pump delegate queue and takes its calls on `.main`, where the holder
-    /// sends them. Holding reports for a queue that never comes left Loop dosing without counting
-    /// what it delivered.
-    private func adoptMainQueueIfTheHostSetNone() {
-        guard pumpDelegate.delegate != nil, !hasDelegateQueue else { return }
-        logger.info("The host set no delegate queue; reporting to it on the main queue")
-        hasDelegateQueue = true
-        deliverStateMissedByTheDelegate()
-    }
-
     /// Catches the host up on what only gets pushed once, since the manager reads the pump before
-    /// the host adopts it. Called from both setters — the host sets them one after the other (Trio
-    /// sets the delegate first) and `notify` needs both — so whichever lands second does the work.
+    /// the host adopts it.
     private func deliverStateMissedByTheDelegate() {
-        guard pumpDelegate.delegate != nil, hasDelegateQueue else { return }
+        guard canNotifyDelegate else { return }
 
         TandemLogger.pumpManager = self
         bluetooth.pumpManagerWasAdopted()
         // Not pumpManagerDidUpdateState: Loop and Trio save rawValue on the main thread right after
-        // attaching, and its save from their delegate queue races that one.
+        // attaching, and a save from this call races that one.
         notifyDelegate(includingState: false)
         flushPendingPumpEvents()
         flushPendingReservoirReading()
@@ -2218,11 +2183,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
         telemetryScheduler.cancelAll()
         finalizeHeldDosesForDeactivation()
 
-        // A turn on the delegate queue, behind the batches above, so the host stores them before deleting.
-        let delegate = await withCheckedContinuation { (continuation: CheckedContinuation<PumpManagerDelegate?, Never>) in
-            pumpDelegate.notify { continuation.resume(returning: $0) }
-        }
-        await delegate?.pumpManagerWantsDeletion(self)
+        // Behind the batches above, so the host stores them before deleting.
+        await pumpDelegate.notify { _ in }.value
+        await pumpManagerDelegate?.pumpManagerWantsDeletion(self)
     }
 
     /// A setup flow left before the host was handed the manager (#603). Nothing owns it from here, so
@@ -3172,7 +3135,7 @@ extension TandemPumpManager {
 
         pumpDelegate.notify { delegate in
             for adjustment in adjustments {
-                delegate?.pumpManager(self, didAdjustPumpClockBy: adjustment)
+                await delegate?.pumpManager(self, didAdjustPumpClockBy: adjustment)
             }
         }
     }
@@ -3187,10 +3150,9 @@ extension TandemPumpManager {
         deliverPumpEventBatches(batches)
     }
 
-    /// The host asserts its delegate methods run on the queue it set, so a delegate without a
-    /// queue is not somewhere events can be sent. Also whether a host has adopted the manager at all.
+    /// Whether a host has adopted the manager.
     var canNotifyDelegate: Bool {
-        pumpDelegate.delegate != nil && hasDelegateQueue
+        pumpDelegate.delegate != nil
     }
 
     private func deliverPumpEventBatches(_ batches: [PendingPumpEventBatch]) {
@@ -3210,17 +3172,22 @@ extension TandemPumpManager {
                     hostNow: self.clock.now,
                     from: self
                 )
-                let completion: (Error?) -> Void = { VirtualPumpControl.delegateDidFinish(logged, error: $0, from: self) }
+                let finished: (Error?) -> Void = { VirtualPumpControl.delegateDidFinish(logged, error: $0, from: self) }
                 #else
-                let completion: (Error?) -> Void = { _ in }
+                let finished: (Error?) -> Void = { _ in }
                 #endif
-                delegate.pumpManager(
-                    self,
-                    hasNewPumpEvents: batch.events,
-                    lastReconciliation: batch.lastReconciliation,
-                    replacePendingEvents: batch.replacePendingEvents,
-                    completion: completion
-                )
+                do {
+                    try await delegate.pumpManager(
+                        self,
+                        hasNewPumpEvents: batch.events,
+                        lastReconciliation: batch.lastReconciliation,
+                        replacePendingEvents: batch.replacePendingEvents
+                    )
+                    finished(nil)
+                } catch {
+                    self.logger.error("The host failed to store \(batch.events.count) pump event(s): \(error.localizedDescription)")
+                    finished(error)
+                }
             }
         }
     }

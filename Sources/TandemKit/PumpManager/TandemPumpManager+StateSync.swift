@@ -129,7 +129,7 @@ extension TandemPumpManager {
         case let previous? where previous != serial:
             logger.warning("A different pump is paired; reporting a pump replacement")
             emitPumpEvents([NewPumpEvent.pumpReplacement(date: now)], replacePendingEvents: false)
-            pumpDelegate.notify { $0?.pumpManagerPumpWasReplaced(self) }
+            pumpDelegate.notify { await $0?.pumpManagerPumpWasReplaced(self) }
         default:
             break
         }
@@ -653,7 +653,7 @@ extension TandemPumpManager {
             return
         }
 
-        // Cleared here, not on the delegate queue: every batch flushes, and several can go out before it runs.
+        // Cleared here, not in the delegate call: every batch flushes, and several can go out before it runs.
         state.lastReservoirReadingNeedsReport = false
         pumpDelegate.notify { delegate in
             guard let delegate = delegate else {
@@ -666,12 +666,11 @@ extension TandemPumpManager {
 
             self.logger.info("Reporting \(String(format: "%.2f", reading.unitVolume)) U to the host app")
 
-            delegate.pumpManager(
-                self,
-                didReadReservoirValue: reading.unitVolume,
-                at: reading.startDate,
-                completion: { _ in }
-            )
+            do {
+                _ = try await delegate.pumpManager(self, didReadReservoirValue: reading.unitVolume, at: reading.startDate)
+            } catch {
+                self.logger.error("The host failed to store the reservoir reading: \(error.localizedDescription)")
+            }
             self.notifyDelegateStateUpdated()
         }
     }
