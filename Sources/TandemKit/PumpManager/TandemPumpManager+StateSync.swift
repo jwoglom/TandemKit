@@ -644,18 +644,27 @@ extension TandemPumpManager {
         return units
     }
 
-    /// `didReadReservoirValue` is the reservoir's only channel to the host and nothing re-derives
-    /// it, so a call made with no delegate attached — the pairing sync runs before the host adopts
-    /// the manager — would strand the host on a stale value. Hold the reading for the flush below
-    /// instead.
-    func reportReservoirReading(_ reading: ReservoirValue) {
+    /// Sends the last reading once `lastReconciliation` covers it: Loop counts whole-unit reservoir drops
+    /// in place of pump events after its boundary. Nothing re-sends it, so it stays held until a delegate attaches.
+    func flushPendingReservoirReading() {
+        guard canNotifyDelegate, state.lastReservoirReadingNeedsReport, let reading = state.lastReservoirReading,
+              let boundary = state.lastReconciliation, reading.startDate <= boundary
+        else {
+            return
+        }
+
+        // Cleared here, not on the delegate queue: every batch flushes, and several can go out before it runs.
+        state.lastReservoirReadingNeedsReport = false
         pumpDelegate.notify { delegate in
             guard let delegate = delegate else {
                 self.logger.warning("No pump delegate; holding reservoir reading until one attaches")
+                if self.state.lastReservoirReading?.startDate == reading.startDate {
+                    self.state.lastReservoirReadingNeedsReport = true
+                }
                 return
             }
 
-            self.logger.debug("Reporting \(String(format: "%.2f", reading.unitVolume)) U to the host app")
+            self.logger.info("Reporting \(String(format: "%.2f", reading.unitVolume)) U to the host app")
 
             delegate.pumpManager(
                 self,
@@ -663,25 +672,8 @@ extension TandemPumpManager {
                 at: reading.startDate,
                 completion: { _ in }
             )
-
-            // A reading taken since stays held for its own flush.
-            if self.state.lastReservoirReading?.startDate == reading.startDate {
-                self.state.lastReservoirReadingNeedsReport = false
-            }
             self.notifyDelegateStateUpdated()
         }
-    }
-
-    /// Sends the last reading once `lastReconciliation` covers it: Loop counts whole-unit reservoir drops
-    /// in place of pump events after its boundary. A pump bolus holds the host's boundary back for exactly that.
-    func flushPendingReservoirReading() {
-        guard state.lastReservoirReadingNeedsReport, let reading = state.lastReservoirReading,
-              let boundary = state.lastReconciliation, reading.startDate <= boundary
-        else {
-            return
-        }
-
-        reportReservoirReading(reading)
     }
 
     func fetchBatteryStatus() {

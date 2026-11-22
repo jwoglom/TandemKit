@@ -196,9 +196,11 @@ host queue, so its state stays behind its lock.
   throttle. A bolus the sync defers to, which the host already counts, stands in for its read.
 - A reservoir reading reaches the host only once `lastReconciliation` covers it, after the batch
   that carries the boundary: past its boundary, Loop's `DoseStore` counts whole-unit reservoir drops
-  in place of pump events, which made IOB alternate. After a sync whose delivery reads went
-  unanswered the host has nothing newer than its boundary, so Loop's 15-minute pump data check stops
-  it dosing instead of counting reservoir drops. `reconciliationBoundary`'s hold for a pump bolus
+  in place of pump events, which made IOB alternate. Every batch sends a held reading its boundary
+  now covers, not only a sync's: a bolus's end moves the boundary and throttles the next sync, which
+  left the readings taken during the bolus minutes behind the pump's in Trio. After a sync whose
+  delivery reads went unanswered the host has nothing newer than its boundary, so Loop's 15-minute
+  pump data check stops it dosing instead of counting reservoir drops. `reconciliationBoundary`'s hold for a pump bolus
   (#353) is behind the reading on purpose, and the gate is the driver's own boundary. Trio doses on
   neither.
 

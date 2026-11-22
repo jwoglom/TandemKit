@@ -188,4 +188,68 @@ import XCTest
         XCTAssertEqual(delegate.reservoirReadings.map(\.units), [90])
         XCTAssertFalse(relaunched.state.lastReservoirReadingNeedsReport)
     }
+
+    func testAReadingTakenDuringABolusIsReportedWhenTheBolusEndsWithoutASync() throws {
+        let clock = ManualClock(Date(timeIntervalSinceReferenceDate: 800_000_000))
+        var state = TandemPumpManagerState(rawValue: [:])
+        state.featureFlags[.historyBackfill] = false
+        state.pumpState.pumpSerial = 123_456
+        state.insulinType = .novolog
+        state.basalRateSchedule = BasalRateSchedule(dailyItems: [RepeatingScheduleValue(startTime: 0, value: 1.0)])!
+        state.basalDose = UnfinalizedDose(basalRate: 1.0, insulinType: .novolog, startDate: clock.now)
+        state.hasSyncedBasalRateSchedule = true
+        manager = TandemPumpManager(state: state, bluetooth: bluetooth, clock: clock)
+        bluetooth.stubBasalPump(profileMilliunits: 1000, tempRateId: 41)
+        let delegate = MockPumpManagerDelegate()
+        delegate.journalClock = clock
+        let queue = attachDelegate(delegate)
+
+        let bolusId = 4100
+        bluetooth.stub(BolusPermissionRequest.self, with: BolusPermissionResponse(status: 0, bolusId: bolusId, nackReasonId: 0))
+        bluetooth.stub(InitiateBolusRequest.self, with: InitiateBolusResponse(status: 0, bolusId: bolusId, statusTypeId: 0))
+        let enacted = expectation(description: "enactBolus")
+        manager.enactBolus(decisionId: nil, units: 3.4, activationType: .manualNoRecommendation) { error in
+            XCTAssertNil(error)
+            enacted.fulfill()
+        }
+        wait(for: [enacted], timeout: 5)
+        queue.sync {}
+
+        clock.advance(by: 60)
+        bluetooth.stub(InsulinStatusRequest.self, with: InsulinStatusResponse(currentInsulinAmount: 17, isEstimate: 0, insulinLowAmount: 20))
+        manager.fetchReservoirStatus()
+        queue.sync {}
+        XCTAssertTrue(delegate.reservoirReadings.isEmpty, "Past the boundary until the bolus ends")
+
+        clock.advance(by: 60)
+        bluetooth.stub(CurrentBolusStatusRequest.self, with: CurrentBolusStatusResponse(
+            statusId: 0, bolusId: 0, timestamp: 0, requestedVolume: 3400, bolusSourceId: 0, bolusTypeBitmask: 0
+        ))
+        bluetooth.stub(LastBolusStatusRequest.self, with: LastBolusStatusResponse(
+            status: 0, bolusId: bolusId, timestamp: 0, deliveredVolume: 3400,
+            bolusStatusId: 0, bolusSourceId: 0, bolusTypeBitmask: 0, extendedBolusDuration: 0
+        ))
+        manager.fetchBolusStatus(fromSync: false)
+        queue.sync {}
+
+        XCTAssertEqual(delegate.reservoirReadings.map(\.units), [17])
+        XCTAssertTrue(delegate.reservoirReadingsAheadOfTheBoundary.isEmpty)
+        XCTAssertFalse(manager.state.lastReservoirReadingNeedsReport)
+    }
+
+    func testABatchSentBeforeTheDelegateQueueRunsDoesNotReportTheReadingTwice() {
+        let delegate = MockPumpManagerDelegate()
+        let queue = attachDelegate(delegate)
+        stubReservoir(units: 140)
+        manager.fetchReservoirStatus()
+        manager.state.lastReconciliation = Date()
+
+        queue.suspend()
+        manager.reportReconciliationBoundary()
+        manager.reportReconciliationBoundary()
+        queue.resume()
+        queue.sync {}
+
+        XCTAssertEqual(delegate.reservoirReadings.map(\.units), [140])
+    }
 }
