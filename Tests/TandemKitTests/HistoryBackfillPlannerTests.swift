@@ -544,4 +544,41 @@ final class HistoryBackfillPlannerTests: XCTestCase {
         XCTAssertEqual(restored.undatableThroughSequenceNum, 200)
         XCTAssertEqual(restored, original)
     }
+
+    func testReadableRangeStartsAboveTheHigherOfThePreServiceAndUndatableFloors() {
+        var state = bookkeeping(watermark: 2000)
+        state.preServiceThroughSequenceNum = 170
+        XCTAssertEqual(state.readable(100 ... 200), 171 ... 200)
+
+        state.raiseUndatableThrough(to: 150)
+        XCTAssertEqual(state.readable(100 ... 200), 171 ... 200)
+        state.raiseUndatableThrough(to: 180)
+        XCTAssertEqual(state.readable(100 ... 200), 181 ... 200)
+        XCTAssertNil(state.readable(100 ... 170))
+    }
+
+    func testAnErasedLogDropsThePreServiceFloor() {
+        var state = bookkeeping(watermark: 900)
+        state.preServiceThroughSequenceNum = 800
+
+        XCTAssertNil(state.resettingWatermarkIfAbove(lastSequenceNum: 50).preServiceThroughSequenceNum)
+        XCTAssertEqual(state.resettingWatermarkIfAbove(lastSequenceNum: 950).preServiceThroughSequenceNum, 800)
+    }
+
+    func testAReplacementPumpHasNoPreServiceFloor() {
+        var state = bookkeeping(watermark: 900)
+        state.preServiceThroughSequenceNum = 800
+
+        XCTAssertNil(state.matching(pumpSerial: serial + 1).preServiceThroughSequenceNum)
+    }
+
+    func testThePreServiceFloorSurvivesARawValueRoundTrip() throws {
+        var original = bookkeeping(watermark: 240)
+        original.preServiceThroughSequenceNum = 200
+        original.serviceStartDate = Date(timeIntervalSinceReferenceDate: 5678)
+
+        let restored = try XCTUnwrap(HistoryBackfillState(rawValue: original.rawValue))
+        XCTAssertEqual(restored.preServiceThroughSequenceNum, 200)
+        XCTAssertEqual(restored, original)
+    }
 }

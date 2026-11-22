@@ -331,6 +331,8 @@ oracles. `SetupHistoryLoadConformanceTests`.
 | L10 | An hour of Control-IQ before pairing, still on when paired | Setup turns it off; one automatic correction per Control-IQ BasalDelivery record off the schedule; both hosts count the pump's basal |
 | L11 | A pump in use with its clock 12 hours behind, a bolus on its screen four hours before pairing and one an hour before; loaded, then 140 minutes of syncs | One clock adjustment, of the 12 hours; the later bolus, which setup's first 255-record slice holds, once; both hosts hold both boluses. The load dates the oldest record it has read by setup's clock change, not by its stamp on the clock setup replaced, so it reads on to the earlier bolus |
 | L12–L22 | Four hours before pairing a bolus on the pump's screen, an hour later one of G's clock changes, an hour later another bolus; paired an hour after that and loaded, then an hour of syncs | Setup leaves the pump on the phone's time; each bolus reported under one start, at the pump's; no duplicates in either host; both hosts hold both boluses. Strict expected failures, with the hosts holding both: L20 and L21's bolus before the reset, left undated; L22's bolus before the jump, which the change setting the clock back nine years dates before the reporting floor |
+| L23 | L1's pump, not loaded; then a bolus on the pump, a relaunch and half an hour of syncs | No `HistoryLogRequest` asks for a record the pump wrote before pairing; the saved boundary is the pump's newest record at pairing, dated at pairing; the later bolus once in each host |
+| L24 | L1's pump, loaded; then syncs, a relaunch and more syncs | The load keeps as its boundary a record between the last BasalDelivery record before its window and the first in it, dated at the window's start; after it, through the relaunch, no `HistoryLogRequest` asks for a record at or below it; the window's four boluses once in each host |
 
 ## M. A pump out of shelf mode
 
@@ -341,7 +343,9 @@ clock at 2008-01-01 and no `TimeChanged` or `DateChange` record for the reset, s
 2020-01-01, and stopped since. Setup sets its clock, 6.9 years forward. The host adopts the manager,
 the pump is resumed, the app gives an SMB and is relaunched 52 minutes after pairing, inside the 7
 hours the walk backward covers, then syncs for an hour per 255-record slice of the log and gives a
-second SMB. M3 to M6 each change one thing about that pump. `SetupHistoryLoadConformanceTests`.
+second SMB. M3 to M6 each change one thing about that pump. Setup holds the pump's history from before
+pairing (AGENTS.md "Setup history load"), except in M3 and M6, which pair as a build before that did, so the
+walk still reaches the records they test. `SetupHistoryLoadConformanceTests`.
 
 The store used to prune records stamped over 90 days before the phone's clock, which took the record
 the walk backward stopped at, so each hour it read a slice deeper, past the `ShelfMode` record and into
@@ -354,7 +358,7 @@ at the phone's time.
 
 | ID | Scenario | Assert |
 |---|---|---|
-| M1 | The pump above, not loaded | Setup sets the pump's clock and the host is told one adjustment, of what it was behind; the app's two boluses once each; nothing the pump gave before shelf mode reaches either host, and no finalized dose ends after the phone's clock; the bolus ledger holds no entry dated after the phone's clock and no extended part left mutable; no `HistoryLogRequest` asks only for records below the `ShelfMode` record, and the saved undatable floor is at or above it |
+| M1 | The pump above, not loaded | Setup sets the pump's clock and the host is told one adjustment, of what it was behind; the app's two boluses once each; nothing the pump gave before shelf mode reaches either host, and no finalized dose ends after the phone's clock; the bolus ledger holds no entry dated after the phone's clock and no extended part left mutable; no `HistoryLogRequest` asks only for records below the `ShelfMode` record, and the saved floor, undatable or pre-service, is at or above it |
 | M2 | The same pump with the load chosen | The load reports no bolus; M1's assertions |
 | M3 | Shelved half an hour after its last bolus and paired five minutes after waking, so the first slice setup reads holds the `ShelfMode` record and the boluses before it | Setup's first `HistoryLogRequest` covers the `ShelfMode` record, and none of the old boluses is among what the host holds once it has adopted the manager and synced; M1's assertions |
 | M4 | The pump resumed on its screen after waking and a bolus on it four hours before pairing, on the clock setup then sets; loaded | The load reports that bolus, once, at the pump's time; M1's assertions, the hosts holding that bolus and the app's two from the pump's waking |

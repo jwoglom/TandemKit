@@ -33,10 +33,10 @@ final class HistoryBackfillCoordinator {
         var reachesPumpStart: Bool {
             guard let covered = sessionCovered, let range = pumpSequenceRange else { return false }
             return covered.lowerBound <= range.lowerBound
-                || bookkeeping.undatableThroughSequenceNum.map { Int64(covered.lowerBound) <= Int64($0) + 1 } == true
+                || bookkeeping.unreadableThroughSequenceNum.map { Int64(covered.lowerBound) <= Int64($0) + 1 } == true
         }
 
-        /// The session's span above the undatable floor: all a pass may date or report.
+        /// The session's span above the undatable and pre-service floors: all a pass may date or report.
         var reportableRange: ClosedRange<UInt32>? {
             sessionCovered.flatMap(bookkeeping.readable)
         }
@@ -161,7 +161,7 @@ final class HistoryBackfillCoordinator {
             // A pump holding less than has been read from it had its log erased and its counter
             // restarted; drop the stale read position and the session's view of the old
             // numbering.
-            let bookkeeping = reconciled.resettingWatermarkIfAbove(lastSequenceNum: status.lastSequenceNum)
+            var bookkeeping = reconciled.resettingWatermarkIfAbove(lastSequenceNum: status.lastSequenceNum)
             if bookkeeping.watermark != reconciled.watermark {
                 self.logger.warning(
                     "Pump history log restarted below the watermark " +
@@ -170,6 +170,7 @@ final class HistoryBackfillCoordinator {
                 )
                 self.forgetSessionCoverage(pumpSerial: serial)
             }
+            self.applyHistoryBeforePairing(to: &bookkeeping, status: status, now: now)
 
             let emitFloor = HistoryBackfillPlanner.emitFloor(
                 bookkeeping: bookkeeping,
@@ -448,7 +449,7 @@ final class HistoryBackfillCoordinator {
         return oldest <= HistoryBackfillPlanner.deepFetchTarget(firstSeenFloor: bookkeeping.firstSeenFloor, now: now)
     }
 
-    /// Nothing at or below the undatable floor is read, nor below what the store has pruned: read again,
+    /// Nothing at or below the undatable or pre-service floor is read, nor below what the store has pruned: read again,
     /// it would be pruned at the next pass and the walk would go a slice deeper each time.
     private func lowestReadable(bookkeeping: HistoryBackfillState, pumpSerial serial: HistoryLogSyncIdentifier.PumpSerial) -> UInt32 {
         let prunedBelow: UInt32?
@@ -458,8 +459,30 @@ final class HistoryBackfillCoordinator {
             logger.warning("Could not read the history log store's retention watermark: \(error)")
             prunedBelow = nil
         }
-        let datable = bookkeeping.undatableThroughSequenceNum.map { $0 == .max ? $0 : $0 + 1 } ?? 0
-        return max(datable, prunedBelow ?? 0)
+        let readable = bookkeeping.unreadableThroughSequenceNum.map { $0 == .max ? $0 : $0 + 1 } ?? 0
+        return max(readable, prunedBelow ?? 0)
+    }
+
+    /// Takes the pre-service floor at the first status read after setup pairs, or the one setup's load
+    /// leaves. Re-applied every tick: a tick that began before the load saves the floor it started with.
+    private func applyHistoryBeforePairing(to bookkeeping: inout HistoryBackfillState, status: HistoryLogStatusResponse, now: Date) {
+        guard let pumpManager else {
+            return
+        }
+        switch pumpManager.state.takeHistoryBeforePairing() {
+        case .held:
+            guard status.numEntries > 0 else {
+                return
+            }
+            logger.info("Pump history through #\(status.lastSequenceNum) is from before setup paired the pump; none of it is read unless setup loads it")
+            bookkeeping.preServiceThroughSequenceNum = status.lastSequenceNum
+            bookkeeping.serviceStartDate = now
+        case let .loaded(through, since):
+            bookkeeping.preServiceThroughSequenceNum = through
+            bookkeeping.serviceStartDate = since
+        case .read, .floored:
+            break
+        }
     }
 
     /// Raises the saved floor to the newest ShelfMode or ArmInit record read. A stamp running back is left
@@ -486,6 +509,8 @@ final class HistoryBackfillCoordinator {
         bookkeeping.raiseUndatableThrough(to: undatable)
     }
 
+    private static let clockChangeTypes: Set<Int> = [TimeChangedHistoryLog.typeId, DateChangeHistoryLog.typeId]
+
     /// Dates the oldest readable record this session holds, after every read: a slice deeper moves it,
     /// and a clock change read since moves its date.
     private func dateSessionOldest(bookkeeping: HistoryBackfillState) {
@@ -496,7 +521,14 @@ final class HistoryBackfillCoordinator {
         }
         let lowest: UInt32?
         do {
-            lowest = try pumpManager.historyLogStore.sequenceNumbers(pumpSerial: serial.rawValue, in: readable).first
+            let store = pumpManager.historyLogStore
+            // A clock change's own stamp is not on the clock it sits on, and setup's clock write is the first
+            // thing after the pairing floor: dated by it, the walk took itself as days deep.
+            lowest = try store.sequenceNumbers(pumpSerial: serial.rawValue, in: readable).first { sequenceNum in
+                try store.logs(pumpSerial: serial.rawValue, in: sequenceNum ... sequenceNum).first.map {
+                    !Self.clockChangeTypes.contains($0.typeId)
+                } ?? false
+            }
         } catch {
             logger.warning("Could not read the oldest history log of this session's span: \(error)")
             return

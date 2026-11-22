@@ -118,6 +118,18 @@ host queue, so its state stays behind its lock.
   another host's app boluses from the pump's own, so a pump moved between Loop, Trio and Tandem's app
   arrived with the insulin it had just given missing from IOB (#607). Setup therefore offers to load
   the pump's history.
+- What a manager may read of the pump's history starts at a sequence number, not a date: a date is
+  only as right as the clock arithmetic behind it, which a field log's shelf-mode records got 2,512
+  days wrong, and the date floor let them through. Setup's scan step holds the history
+  (`holdHistoryBeforePairing`), and the first history status read after pairing, which
+  `readDeliveryForSetup` asks for before setup writes anything, saves the pump's newest record
+  (`HistoryBackfillState.preServiceThroughSequenceNum`). Nothing at or below it is read or reported.
+  A load lifts it while it reads, then leaves the newest record it dated before its window as the floor
+  (`historyBeforePairing`), so its window is decided once and no later re-dating moves it; a failed load
+  leaves none, since what it read may stop short of the window. `serviceStartDate` keeps the phone time
+  each floor stands for, and nothing decides on it. Every tick re-applies the floor setup chose, since a
+  tick begun before the choice saves the floor it started with. A manager not paired by setup (set up
+  before, the integration harness, the virtual pump) reads as before.
 - The Load Pump History step shows the pump's readings whatever they are, none included: a Mobi that
   had reset answered with no last bolus, and another gave one 40 s old by a clock 31 h behind, which
   `hostDate` does not correct past `pumpClockOffsetTrustLimit`. So the last bolus is dated by its age
@@ -137,6 +149,8 @@ host queue, so its state stays behind its lock.
   identities, one still running finished at its programmed end as a deleted manager left it. A
   suspension the pump is already in when a manager first reads it is reported at detection, before
   the load could date it, but under its `PumpingSuspended` record when the session's store holds it.
+  Below the pre-service floor the store does not, so a load that reads the record later gives it to
+  that suspend (`claimOpenSuspend`) instead of reporting a second, as nothing resumed the pump between.
 - Still reported twice: what a build without these identities reported, a suspend or resume reported
   at detection because history could not be read in time, a bolus or temp whose id was not past the
   last minted, and a temp set on the pump that a manager adopted under its `tempRateId`, whose cycles
@@ -287,8 +301,8 @@ host queue, so its state stays behind its lock.
 - The host's `startDateToFilterNewPumpEvents` bounds neither the walk nor reporting (#345): Trio
   returns `lastEventDate - 15min` and drops nothing itself, so it would bound the walk minutes into
   the past and drop a pump-UI bolus found one sync late. `HistoryBackfillState.firstSeenFloor` bounds
-  by date how deep the walk reads, and the undatable floor and the store's retention watermark by
-  sequence number; `HistoryBackfillPlanner.emitFloor` bounds reporting.
+  by date how deep the walk reads, and the undatable and pre-service floors and the store's retention
+  watermark by sequence number; `HistoryBackfillPlanner.emitFloor` bounds reporting.
 - Suspends, resumes and temp basal ends the pump made on its own (#333, #331). Neither host revises
   one once told: Trio keeps a row per (timestamp, type) and Loop never counts a non-bolus dose older
   than its last finished basal (#354). So the first report carries the pump's date, and reaches the

@@ -516,6 +516,153 @@ import XCTest
         XCTAssertTrue(requestedRanges().allSatisfy { $0.lowerBound > 20 })
     }
 
+    // MARK: - Pre-service floor
+
+    private func minuteApartHistory(count: UInt32) -> [HistoryLog] {
+        (1 ... count).map { log(sequenceNum: $0, ageSeconds: (count - $0) * 60) }
+    }
+
+    func testWhileSetupHoldsHistoryTheFirstTickReadsNothingAndSavesTheFloor() throws {
+        setPumpSerial()
+        manager.state.historyBeforePairing = .held
+        stubHistory(serving: minuteApartHistory(count: 600))
+
+        let outcome = try XCTUnwrap(runTick())
+
+        XCTAssertTrue(requestedRanges().isEmpty, "read \(requestedRanges())")
+        XCTAssertEqual(manager.state.historyBackfill?.preServiceThroughSequenceNum, 600)
+        XCTAssertEqual(manager.state.historyBeforePairing, .floored)
+        XCTAssertTrue(outcome.isDeepBackfillComplete)
+        XCTAssertNil(outcome.reportableRange)
+    }
+
+    func testAfterThePreServiceFloorOnlyRecordsWrittenSinceAreRead() throws {
+        setPumpSerial()
+        manager.state.historyBeforePairing = .held
+        stubHistory(serving: minuteApartHistory(count: 600))
+        _ = try XCTUnwrap(runTick())
+
+        bluetooth.resetRecordedTraffic()
+        stubHistory(serving: minuteApartHistory(count: 610))
+        let outcome = try XCTUnwrap(runTick())
+
+        XCTAssertEqual(requestedRanges(), [601 ... 610])
+        XCTAssertEqual(outcome.reportableRange, 601 ... 610)
+        XCTAssertTrue(outcome.isDeepBackfillComplete)
+        XCTAssertTrue(outcome.reachesPumpStart)
+    }
+
+    func testAfterARelaunchNothingAtOrBelowThePreServiceFloorIsRead() throws {
+        setPumpSerial()
+        manager.state.historyBeforePairing = .held
+        stubHistory(serving: minuteApartHistory(count: 600))
+        _ = try XCTUnwrap(runTick())
+
+        manager = TandemPumpManager(state: TandemPumpManagerState(rawValue: manager.state.rawValue), bluetooth: bluetooth)
+        coordinator = HistoryBackfillCoordinator(pumpManager: manager)
+        bluetooth.resetRecordedTraffic()
+        stubHistory(serving: minuteApartHistory(count: 610))
+        _ = try XCTUnwrap(runTick())
+
+        XCTAssertEqual(requestedRanges(), [601 ... 610])
+    }
+
+    func testSetupsHistoryLoadLiftsThePreServiceFloorWhileItReads() throws {
+        setPumpSerial()
+        manager.state.historyBeforePairing = .held
+        let history = minuteApartHistory(count: 600)
+        stubHistory(serving: history)
+        _ = try XCTUnwrap(runTick())
+
+        manager.state.historyBeforePairing = .loaded(through: nil, since: Date().addingTimeInterval(-.hours(6)))
+        bluetooth.resetRecordedTraffic()
+        stubHistory(serving: history)
+        let outcome = try XCTUnwrap(runTick())
+
+        XCTAssertNil(manager.state.historyBackfill?.preServiceThroughSequenceNum)
+        XCTAssertTrue(outcome.isDeepBackfillComplete)
+        // The lookback reaches record 180.
+        XCTAssertLessThanOrEqual(try XCTUnwrap(outcome.sessionCovered?.lowerBound), 180)
+    }
+
+    func testTheFloorTheLoadLeavesBoundsTheWalk() throws {
+        setPumpSerial()
+        let since = Date().addingTimeInterval(-.hours(6))
+        manager.state.historyBeforePairing = .loaded(through: 400, since: since)
+        stubHistory(serving: minuteApartHistory(count: 600))
+
+        let outcome = try XCTUnwrap(runTick())
+
+        XCTAssertTrue(requestedRanges().allSatisfy { $0.lowerBound > 400 }, "read \(requestedRanges())")
+        XCTAssertEqual(outcome.reportableRange?.lowerBound, 401)
+        XCTAssertEqual(manager.state.historyBackfill?.preServiceThroughSequenceNum, 400)
+        XCTAssertEqual(manager.state.historyBackfill?.serviceStartDate, since)
+    }
+
+    /// Records a minute apart up to now on a clock three days ahead, then setup's write setting it back: a
+    /// TimeChanged and a DateChange stamped on the new clock, which the DateChange's delta dates three days old.
+    private func historyWrittenAheadThenSetBack(count: UInt32) -> [HistoryLog] {
+        let ahead: UInt32 = 3 * 86400
+        let records: [HistoryLog] = (1 ... count).map { log(sequenceNum: $0, ageSeconds: (count - $0) * 60) }.map { record in
+            BolusActivatedHistoryLog(
+                pumpTimeSec: record.pumpTimeSec + ahead,
+                sequenceNum: record.sequenceNum,
+                bolusId: Int(record.sequenceNum),
+                selectedIob: 0,
+                iob: 0,
+                bolusSize: 1.0
+            )
+        }
+        return records + [
+            TimeChangedHistoryLog(pumpTimeSec: basePumpTimeSec, sequenceNum: count + 1, timePrior: 0, timeAfter: 0, rawRTC: 0),
+            DateChangeHistoryLog(pumpTimeSec: basePumpTimeSec, sequenceNum: count + 2, datePrior: 1003, dateAfter: 1000, rawRTCTime: 0),
+        ]
+    }
+
+    func testSetupsClockWriteAboveThePreServiceFloorDoesNotEndTheLoadsWalk() throws {
+        setPumpSerial()
+        manager.state.historyBeforePairing = .held
+        let history = historyWrittenAheadThenSetBack(count: 600)
+        stubHistory(serving: Array(history.prefix(600)))
+        _ = try XCTUnwrap(runTick())
+
+        bluetooth.resetRecordedTraffic()
+        stubHistory(serving: history)
+        _ = try XCTUnwrap(runTick())
+        XCTAssertEqual(requestedRanges(), [601 ... 602])
+
+        manager.state.historyBeforePairing = .loaded(through: nil, since: Date().addingTimeInterval(-.hours(6)))
+        bluetooth.resetRecordedTraffic()
+        stubHistory(serving: history)
+        let outcome = try XCTUnwrap(runTick())
+
+        XCTAssertTrue(outcome.isDeepBackfillComplete)
+        // The lookback reaches record 180.
+        XCTAssertLessThanOrEqual(try XCTUnwrap(outcome.sessionCovered?.lowerBound), 180, "read \(requestedRanges())")
+    }
+
+    func testAnEmptyLogAtPairingTakesNoFloor() throws {
+        setPumpSerial()
+        manager.state.historyBeforePairing = .held
+        bluetooth.stub(HistoryLogStatusRequest.self, with: HistoryLogStatusResponse(numEntries: 0, firstSequenceNum: 0, lastSequenceNum: 0))
+
+        _ = try XCTUnwrap(runTick())
+
+        XCTAssertNil(manager.state.historyBackfill?.preServiceThroughSequenceNum)
+        XCTAssertEqual(manager.state.historyBeforePairing, .floored)
+    }
+
+    func testAManagerNotPairedBySetupTakesNoPreServiceFloor() throws {
+        setPumpSerial()
+        stubHistory(serving: minuteApartHistory(count: 600))
+
+        let outcome = try XCTUnwrap(runTick())
+
+        XCTAssertNil(outcome.bookkeeping.preServiceThroughSequenceNum)
+        XCTAssertEqual(manager.state.historyBeforePairing, .read)
+        XCTAssertFalse(requestedRanges().isEmpty)
+    }
+
     // MARK: - Floors
 
     /// The regression this whole separation exists for.

@@ -79,6 +79,7 @@ final class TandemPumpManagerStateEqualityTests: XCTestCase {
             ("basalRateMismatchDetectedAt", { $0.basalRateMismatchDetectedAt = nil }),
             ("basalProfileUpdateFailed", { $0.basalProfileUpdateFailed = false }),
             ("historyBackfill", { $0.historyBackfill?.advanceWatermark(through: 5000) }),
+            ("historyBeforePairing", { $0.historyBeforePairing = .loaded(through: 7, since: t0) }),
             ("bolusReportLedger", { $0.bolusReportLedger.markFinalized(raw: Data([0x20, 0x04]), units: 1) }),
             ("reportedBasal", { $0.reportedBasal.prune(now: later.addingTimeInterval(.days(3))) }),
             ("reportedBasal.reconciledThrough", { $0.reportedBasal.reconcile(through: 5000) }),
@@ -196,8 +197,11 @@ final class TandemPumpManagerStateEqualityTests: XCTestCase {
             pumpSerial: pumpSerial,
             watermark: 4321,
             firstSeenFloor: t0.addingTimeInterval(-.hours(24)),
-            undatableThroughSequenceNum: 4000
+            undatableThroughSequenceNum: 4000,
+            preServiceThroughSequenceNum: 4100,
+            serviceStartDate: t0.addingTimeInterval(-.hours(6))
         )
+        state.historyBeforePairing = .floored
         state.bolusReportLedger = BolusReportLedger(
             trackingSince: t0.addingTimeInterval(-.hours(48)),
             entries: [
