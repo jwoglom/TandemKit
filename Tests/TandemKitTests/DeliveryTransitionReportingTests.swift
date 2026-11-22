@@ -21,7 +21,9 @@ import XCTest
     override func setUp() {
         super.setUp()
         bluetooth = StubPumpBluetooth()
-        clock = ManualClock(start)
+        let clock = ManualClock(start)
+        self.clock = clock
+        bluetooth.stubPumpClock { clock.now }
         manager = makeManager(state: Self.backfillState(start: start))
     }
 
@@ -260,6 +262,27 @@ import XCTest
         XCTAssertEqual(events.map(\.date), [minutes(5), minutes(15)])
         XCTAssertEqual(batches.last?.replacePendingEvents, false, "nothing the host holds open is being finished")
         XCTAssertEqual(manager.state.basalDose.type, .basal)
+    }
+
+    func testASuspendAndResumeNoClockReadingDatesAreHeldUntilOneDoes() {
+        observe(0)
+        advance(to: minutes(30))
+        observe(0)
+        // Stamped two hours ahead of a pump clock the manager reads as matching the phone's.
+        pass([suspended(at: minutes(5), pumpAhead: 7200), resumed(at: minutes(15).addingTimeInterval(7200))])
+
+        XCTAssertTrue(events.isEmpty)
+        XCTAssertEqual(manager.state.heldHistory.entries.count, 2)
+
+        manager.state.pumpClockAnchors.record(
+            PumpClockAnchor(sequenceNum: nextSequenceNum, pumpTimeSec: pumpTimeSec(minutes(30), pumpAhead: 7200), phoneDate: minutes(30)),
+            pumpSerial: Self.pumpSerial
+        )
+        pass([])
+
+        XCTAssertEqual(events.map(\.dose?.type), [.suspend, .resume])
+        XCTAssertEqual(events.map(\.date), [minutes(5), minutes(15)])
+        XCTAssertTrue(manager.state.heldHistory.entries.isEmpty)
     }
 
     func testAResumeDuringAnOutageAfterAnAppSuspendIsReportedAsAResume() throws {

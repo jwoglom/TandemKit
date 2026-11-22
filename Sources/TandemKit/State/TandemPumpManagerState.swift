@@ -67,6 +67,10 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
     public var historyBackfill: HistoryBackfillState?
     /// Whether this manager may read what the pump wrote before setup paired it.
     public var historyBeforePairing: HistoryBeforePairing = .read
+    /// Readings of the pump's clock beside its newest history record, which date every history record.
+    public var pumpClockAnchors = PumpClockAnchors()
+    /// History events no pass could date, which the host has not been told of.
+    public var heldHistory = HeldHistoryLedger()
     public var bolusReportLedger = BolusReportLedger(trackingSince: Date())
     public var reportedBasal = ReportedBasalLedger(trackingSince: Date())
     /// The last temp basal `raw` minted from the pump's `tempRateId`; see `tempBasalEventRaw`.
@@ -179,6 +183,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
     public var issuedAlertIdentifiers: Set<String> = []
     /// Persisted, like `issuedAlertIdentifiers`, so a relaunch retracts the alert rather than re-issuing it.
     public var pumpClockSkewAlertIssued = false
+    public var heldHistoryAlertIssued = false
     /// `stableIdentifier`s of the alarms and malfunctions reported as `.alarm` pump events and not yet
     /// cleared. Persisted so a relaunch neither reports a standing alarm again nor misses its clearing.
     public var reportedPumpAlarmIdentifiers: Set<String> = []
@@ -218,6 +223,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
               lhs.basalProfileUpdateFailed == rhs.basalProfileUpdateFailed,
               lhs.historyBackfill == rhs.historyBackfill,
               lhs.historyBeforePairing == rhs.historyBeforePairing,
+              lhs.pumpClockAnchors == rhs.pumpClockAnchors,
+              lhs.heldHistory == rhs.heldHistory,
               lhs.bolusReportLedger == rhs.bolusReportLedger,
               lhs.reportedBasal == rhs.reportedBasal,
               lhs.lastTempRateEventRaw == rhs.lastTempRateEventRaw,
@@ -270,6 +277,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
               lhs.lastNotificationUpdate == rhs.lastNotificationUpdate,
               lhs.issuedAlertIdentifiers == rhs.issuedAlertIdentifiers,
               lhs.pumpClockSkewAlertIssued == rhs.pumpClockSkewAlertIssued,
+              lhs.heldHistoryAlertIssued == rhs.heldHistoryAlertIssued,
               lhs.reportedPumpAlarmIdentifiers == rhs.reportedPumpAlarmIdentifiers,
               lhs.forwardCGMAlerts == rhs.forwardCGMAlerts,
               lhs.lastSiteChangeDate == rhs.lastSiteChangeDate,
@@ -326,6 +334,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         notificationCount = rawValue["notificationCount"] as? Int
         issuedAlertIdentifiers = Set(rawValue["issuedAlertIdentifiers"] as? [String] ?? [])
         pumpClockSkewAlertIssued = rawValue["pumpClockSkewAlertIssued"] as? Bool ?? false
+        heldHistoryAlertIssued = rawValue["heldHistoryAlertIssued"] as? Bool ?? false
         reportedPumpAlarmIdentifiers = Set(rawValue["reportedPumpAlarmIdentifiers"] as? [String] ?? [])
         forwardCGMAlerts = rawValue["forwardCGMAlerts"] as? Bool ?? false
         currentPumpTime = rawValue["currentPumpTime"] as? Date
@@ -387,6 +396,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
             historyBackfill = nil
         }
         historyBeforePairing = (rawValue["historyBeforePairing"] as? HistoryBeforePairing.RawValue).flatMap(HistoryBeforePairing.init(rawValue:)) ?? .read
+        pumpClockAnchors = (rawValue["pumpClockAnchors"] as? PumpClockAnchors.RawValue).flatMap(PumpClockAnchors.init(rawValue:)) ?? PumpClockAnchors()
+        heldHistory = (rawValue["heldHistory"] as? HeldHistoryLedger.RawValue).flatMap(HeldHistoryLedger.init(rawValue:)) ?? HeldHistoryLedger()
 
         if let ledgerRaw = rawValue["bolusReportLedger"] as? BolusReportLedger.RawValue,
            let ledger = BolusReportLedger(rawValue: ledgerRaw)
@@ -584,6 +595,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         raw["lastNotificationUpdate"] = lastNotificationUpdate?.timeIntervalSinceReferenceDate
         raw["issuedAlertIdentifiers"] = Array(issuedAlertIdentifiers).sorted()
         raw["pumpClockSkewAlertIssued"] = pumpClockSkewAlertIssued
+        raw["heldHistoryAlertIssued"] = heldHistoryAlertIssued
         raw["reportedPumpAlarmIdentifiers"] = Array(reportedPumpAlarmIdentifiers).sorted()
         raw["forwardCGMAlerts"] = forwardCGMAlerts
         raw["lastSiteChangeDate"] = lastSiteChangeDate
@@ -625,6 +637,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
             raw["historyBackfill"] = historyBackfill.rawValue
         }
         raw["historyBeforePairing"] = historyBeforePairing.rawValue
+        raw["pumpClockAnchors"] = pumpClockAnchors.rawValue
+        raw["heldHistory"] = heldHistory.rawValue
 
         raw["bolusReportLedger"] = bolusReportLedger.rawValue
         raw["reportedBasal"] = reportedBasal.rawValue
@@ -730,7 +744,9 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
             "* lastBasalStatusDate: \(debugValue(lastBasalStatusDate))",
             "* basalRateMismatchDetectedAt: \(debugValue(basalRateMismatchDetectedAt))",
             "* basalProfileUpdateFailed: \(basalProfileUpdateFailed)",
-            "* historyBeforePairing: \(historyBeforePairing)"
+            "* historyBeforePairing: \(historyBeforePairing)",
+            "* pumpClockAnchors: \(pumpClockAnchors.anchors.map { "#\($0.sequenceNum) pump \($0.pumpTimeSec) at \($0.phoneDate)" })",
+            "* heldHistory: \(heldHistory.entries.map { "\($0.raw.hexadecimalString) since \($0.firstHeldAt)" })"
         ]
         if let historyBackfill {
             lines += debugSection("historyBackfill", [
@@ -797,6 +813,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
             "* lastNotificationUpdate: \(debugValue(lastNotificationUpdate))",
             "* issuedAlertIdentifiers: \(issuedAlertIdentifiers.sorted())",
             "* pumpClockSkewAlertIssued: \(pumpClockSkewAlertIssued)",
+            "* heldHistoryAlertIssued: \(heldHistoryAlertIssued)",
             "* reportedPumpAlarmIdentifiers: \(reportedPumpAlarmIdentifiers.sorted())",
             "* forwardCGMAlerts: \(forwardCGMAlerts)",
             "* lastSiteChangeDate: \(debugValue(lastSiteChangeDate))",

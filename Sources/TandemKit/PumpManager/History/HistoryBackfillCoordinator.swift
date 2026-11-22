@@ -23,6 +23,15 @@ final class HistoryBackfillCoordinator {
         var startedAt: Date = .distantPast
         /// The pump's first and last sequence numbers when the tick began.
         var pumpSequenceRange: ClosedRange<UInt32>?
+        var clock = ClockRead.notTaken
+
+        enum ClockRead: Equatable {
+            /// The pump's clock as the tick began, beside its newest record then.
+            case anchor(PumpClockAnchor)
+            case unanswered
+            /// An empty log has no record to stand an anchor beside, and none to date.
+            case notTaken
+        }
 
         /// Whether the store holds the pump's log up to where it stood when the tick began.
         var readsThroughPumpEnd: Bool {
@@ -171,6 +180,9 @@ final class HistoryBackfillCoordinator {
                 self.forgetSessionCoverage(pumpSerial: serial)
             }
             self.applyHistoryBeforePairing(to: &bookkeeping, status: status, now: now)
+            let clock: TickOutcome.ClockRead = status.numEntries == 0
+                ? .notTaken
+                : pumpManager.readPumpClockAnchor(atSequenceNum: status.lastSequenceNum).map { .anchor($0) } ?? .unanswered
 
             let emitFloor = HistoryBackfillPlanner.emitFloor(
                 bookkeeping: bookkeeping,
@@ -193,7 +205,8 @@ final class HistoryBackfillCoordinator {
                     isDeepBackfillComplete: true,
                     emitFloor: emitFloor,
                     startedAt: now,
-                    pumpSequenceRange: pumpRange
+                    pumpSequenceRange: pumpRange,
+                    clock: clock
                 ))
                 return
             }
@@ -217,7 +230,8 @@ final class HistoryBackfillCoordinator {
                     isDeepBackfillComplete: plan.isDeepBackfillComplete,
                     emitFloor: emitFloor,
                     startedAt: now,
-                    pumpSequenceRange: pumpRange
+                    pumpSequenceRange: pumpRange,
+                    clock: clock
                 ))
                 return
             }
@@ -239,7 +253,8 @@ final class HistoryBackfillCoordinator {
                         } ?? false),
                     emitFloor: emitFloor,
                     startedAt: now,
-                    pumpSequenceRange: pumpRange
+                    pumpSequenceRange: pumpRange,
+                    clock: clock
                 ))
             }
         }
@@ -558,7 +573,15 @@ final class HistoryBackfillCoordinator {
             }
             let clock = try store.logs(pumpSerial: serial.rawValue, ofTypes: HistoryTimestampReconciler.clockHistoryTypes, in: sequenceNum ... upper)
             let dates = pumpManager.historyRecordDates(clock.map { $0.parsed() })
-            return dates.phoneDate(pumpTimeSec: record.pumpTimeSec, sequenceNum: record.sequenceNum)
+            switch dates.placement(pumpTimeSec: record.pumpTimeSec, sequenceNum: record.sequenceNum) {
+            case let .dated(date)?:
+                return date
+            case let .held(notAfter)?:
+                // The latest it can be, so the walk stops no sooner than it would knowing its date.
+                return notAfter
+            case nil:
+                return nil
+            }
         } catch {
             logger.warning("Could not date history log \(sequenceNum): \(error)")
             return nil

@@ -401,10 +401,38 @@ host queue, so its state stays behind its lock.
       finalized row, but Trio's IOB cuts one at the next row and does not resume it; Loop counts no
       basal older than its last finished one and ignores them.
     - H from a suspend: nothing.
-- Every date a history pass takes from a record goes through `HistoryRecordDates.phoneDate(of:)`.
-  Pump dates decode with the phone's current UTC offset, so `pumpClockOffset` moves by any change in
-  it since the clock was read (`pumpTimeCheckUTCOffset`): a phone zone change between syncs does not
-  misdate history (#482).
+- Every date a history pass takes from a record goes through `HistoryRecordDates`, which dates it by
+  its age on the pump's own clock: the phone's time at a clock read, less that read's pump time less
+  the record's stamp, all in the pump's own seconds, which have no zone (#482). That holds however far
+  off the pump's clock is. `hostDate`, which stops correcting past `pumpClockOffsetTrustLimit`, dated a
+  bolus given on a clock two days ahead two days ahead, and it reached the host starting when it was
+  read and ending days out.
+  - A clock read stands beside the pump's newest record then (`PumpClockAnchor`, in
+    `state.pumpClockAnchors`): every record through it was written by then, every later one after. A
+    tick takes one with its history status read, reusing a sync's read under
+    `pumpClockReadingReuseWindow` old, and its passes run only once a second read after the history
+    agrees with it (`confirmPumpClockAnchor`). A clock set between the history read and a lone clock
+    read would misdate everything by the change, for good, since neither host revises a date; a bad
+    read (#503) disagrees with a good one the same way. No answer, or two that disagree, and the tick
+    dates and reports nothing; the next does. `writePumpTime` takes an anchor before it sets the clock.
+  - A record is dated from the anchor above it and from the one below. Where the two differ by more
+    than the pump's clock-change records between them explain, the clock jumped unrecorded, and the
+    record is on whichever clock puts it between the two anchors. On both, it takes the later date if
+    they are within `ambiguityLimit` (more of its insulin still acting), and is otherwise held; on
+    neither it is held, and so is any record dated past the anchor above it. Of a run of anchors on one
+    untouched clock only the first and last are kept, so the two around a change are the nearest taken.
+  - A held record is never reported, as given now or otherwise: it dates to `distantFuture`, and each
+    pass keeps what it would have reported under its `raw` in `state.heldHistory`, where it stays
+    unhandled until a later pass dates it. Held `warningDelay`, it raises a LoopKit alert and a status
+    highlight, since the host's IOB is missing it; `insulinActionWindow` after it was first held (after
+    an extended part's programmed end) it stops warning. Basal reconciliation waits while a
+    BasalDelivery record is held and unexpired, since `reconciledThrough` would pass its cycles for
+    good, then works only from the records after it.
+  - With no anchor yet (the walk's own dating inside a manager's first tick) a record is dated by
+    `pumpClockOffset`, with no limit. Still open: a jump the pump did not record that falls before a
+    manager's first anchor, or between two anchors whose bracket is wider than the jump, and a
+    clock-change record below the session's span while the anchors either side of it are kept, which
+    reads as an unrecorded jump.
 - A `TimeChanged` or `DateChange` is carried back only along the clock it changed. The clock ends at
   an `ArmInitHistoryLog` or `ShelfModeHistoryLog` record, or where a stamp runs back further than the
   changes after it explain, and every record through it (`undatableThroughSequenceNum`) is left

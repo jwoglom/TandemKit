@@ -17,6 +17,12 @@ extension TandemPumpManager {
                 self.reconciliationLog.recordSkippedPass(startedAt: outcome.startedAt, reason: error.localizedDescription, at: self.now)
                 return
             }
+            if let reason = self.confirmPumpClockAnchor(of: outcome, pumpSerial: serial) {
+                self.logger.warning("Dating no pump history this tick: \(reason)")
+                self.historyTickFailed(startedAt: outcome.startedAt, reason: reason)
+                self.reconcileHeldHistoryAlert()
+                return
+            }
             self.reconciliationLog.begin(outcome, at: self.now)
             var batch = self.reportHistoryDeliveryTransitions(after: outcome, pumpSerial: serial)
             self.reconciliationLog.current?.transitionsReported = batch.events.count
@@ -26,6 +32,7 @@ extension TandemPumpManager {
                 self.reportHistoryBoluses(in: covered, pumpSerial: serial, floor: outcome.emitFloor, now: now)
             }
             self.reconciliationLog.end(at: self.now)
+            self.reconcileHeldHistoryAlert()
             if !self.isAwaitingHistory {
                 self.releaseHistoryWaiters()
             }
@@ -52,17 +59,37 @@ extension TandemPumpManager {
 
         let dates = historyRecordDates(logs)
         let events = HistoryToDoseMapper().mapToEvents(
-            dates.logs,
+            // Held, but written before the floor whichever clock it is on: too old to report, so nothing to hold.
+            dates.logs.filter { log in !dates.isHeld(log) || dates.latestPossibleDate(of: log).map { $0 >= floor } ?? false },
             dates: dates,
             pumpSerial: serial,
             insulinType: state.insulinType,
             isCommandedBolus: { ledger.entry(bolusId: $0, pumpSerial: serial.rawValue)?.origin == .commanded }
         )
 
+        // A record no clock reading dates is ahead of the phone; held, its bolus is never sent as given now.
+        let latest = now.addingTimeInterval(HostDoseDates.startAheadTolerance)
+        var undated = Set<Data>()
+        var held: [Data: TimeInterval] = [:]
+        for event in events {
+            guard let dose = event.dose, dose.type == .bolus, let decoded = HistoryLogSyncIdentifier.decode(event.raw),
+                  dose.startDate > latest || (!dose.isMutable && dose.endDate > latest)
+            else {
+                continue
+            }
+            undated.insert(event.raw)
+            // One the host already counts, from the live path or an earlier pass, is missing from nothing.
+            let part: BolusReportLedger.Part = decoded.scheme == .extendedBolus ? .extended : .standard
+            if ledger.entry(bolusId: Int(decoded.identifier), pumpSerial: serial.rawValue, part: part) == nil {
+                held[event.raw] = dose.isMutable ? dose.endDate.timeIntervalSince(dose.startDate) : 0
+            }
+        }
+        noteHeldHistory(examined: Set(events.map(\.raw)), held: held, what: "bolus(es)")
+
         var reports: [NewPumpEvent] = []
         var finalizesHeldDose = false
         for event in events {
-            guard let dose = event.dose, dose.type == .bolus, dose.startDate >= floor,
+            guard let dose = event.dose, dose.type == .bolus, dose.startDate >= floor, !undated.contains(event.raw),
                   let decoded = HistoryLogSyncIdentifier.decode(event.raw)
             else {
                 continue

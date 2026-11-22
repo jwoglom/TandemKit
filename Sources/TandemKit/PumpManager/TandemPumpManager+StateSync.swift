@@ -11,6 +11,7 @@ extension TandemPumpManager {
         let timeSinceReset = response.pumpTimeSinceReset
         let currentPumpTime = response.currentTimeDate
         let checkedAt = now
+        lastPumpClockReading = PumpClockReading(pumpTimeSec: response.currentTime, phoneDate: checkedAt)
         // The same pump, not reset since: another's clock, or a reset one's, says nothing of a step.
         let previousShift = state.currentPumpTime != nil && state.pumpState.timeSinceReset.map { timeSinceReset >= $0 } == true
             ? state.pumpWallClockShift
