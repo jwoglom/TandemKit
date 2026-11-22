@@ -4,7 +4,7 @@ import XCTest
 @available(macOS 13.0, iOS 14.0, *) final class TandemKitFeatureFlagsViewModelTests: XCTestCase {
     /// The screen hides the flag list behind a triple tap unless a flag is off its default, so a
     /// choice the user made can never be left unreachable.
-    func testTheFlagListIsShownWithoutTheTripleTapOnceAFlagIsOn() {
+    func testTheFlagListIsShownWithoutTheTripleTapOnceAFlagIsTurnedOff() {
         let manager = TandemPumpManager(
             state: TandemPumpManagerState(rawValue: [:]),
             bluetooth: StubPumpBluetooth()
@@ -12,18 +12,7 @@ import XCTest
 
         XCTAssertFalse(TandemKitFeatureFlagsViewModel(pumpManager: manager).hasFlagOffItsDefault)
 
-        manager.setFeatureFlag(.controlIQSupport, enabled: true)
-
-        XCTAssertTrue(TandemKitFeatureFlagsViewModel(pumpManager: manager).hasFlagOffItsDefault)
-    }
-
-    func testTheFlagListIsShownWithoutTheTripleTapOnceADefaultOnFlagIsTurnedOff() {
-        let manager = TandemPumpManager(
-            state: TandemPumpManagerState(rawValue: [:]),
-            bluetooth: StubPumpBluetooth()
-        )
-
-        manager.setFeatureFlag(.historyBackfill, enabled: false)
+        manager.setFeatureFlag(.controlIQSupport, enabled: false)
 
         XCTAssertTrue(TandemKitFeatureFlagsViewModel(pumpManager: manager).hasFlagOffItsDefault)
     }

@@ -6,18 +6,18 @@ import XCTest
 @available(macOS 13.0, iOS 14.0, *) final class TandemFeatureFlagsTests: XCTestCase {
     // MARK: - Defaults
 
-    func testControlIQSupportIsOffUntilSomeoneTurnsItOn() {
+    func testControlIQSupportIsOnUntilSomeoneTurnsItOff() {
         let flags = TandemFeatureFlags.default
 
-        XCTAssertFalse(flags.controlIQSupport)
-        XCTAssertFalse(flags[.controlIQSupport])
+        XCTAssertTrue(flags.controlIQSupport)
+        XCTAssertTrue(flags[.controlIQSupport])
         XCTAssertFalse(flags.isOverridden(.controlIQSupport))
     }
 
-    func testManualTempBasalSupportIsOffUntilSomeoneTurnsItOn() {
+    func testManualTempBasalSupportIsOnUntilSomeoneTurnsItOff() {
         let flags = TandemFeatureFlags.default
 
-        XCTAssertFalse(flags.manualTempBasalSupport)
+        XCTAssertTrue(flags.manualTempBasalSupport)
         XCTAssertFalse(flags.isOverridden(.manualTempBasalSupport))
     }
 
@@ -62,7 +62,7 @@ import XCTest
 
     func testClearingAnOverrideReturnsTheFlagToItsDefault() {
         var flags = TandemFeatureFlags.default
-        flags[.controlIQSupport] = true
+        flags[.controlIQSupport] = false
         XCTAssertTrue(flags.isOverridden(.controlIQSupport))
 
         flags.clear(.controlIQSupport)
@@ -79,17 +79,17 @@ import XCTest
 
     func testExplicitChoiceRoundTrips() throws {
         var flags = TandemFeatureFlags.default
-        flags[.controlIQSupport] = true
+        flags[.controlIQSupport] = false
 
         let restored = try XCTUnwrap(TandemFeatureFlags(rawValue: flags.rawValue))
 
-        XCTAssertTrue(restored.controlIQSupport)
+        XCTAssertFalse(restored.controlIQSupport)
         XCTAssertTrue(restored.isOverridden(.controlIQSupport))
     }
 
     func testTurningAFlagBackOffIsItselfPersisted() throws {
-        // Explicitly off must stay distinguishable from never-set, or a flag that later defaults
-        // to on would switch back on for someone who turned it off.
+        // Explicitly off must stay distinguishable from never-set, or a flag that defaults to on
+        // would switch back on for someone who turned it off.
         var flags = TandemFeatureFlags.default
         flags[.controlIQSupport] = false
 
@@ -102,36 +102,36 @@ import XCTest
 
     func testFlagsFromANewerBuildArePreserved() throws {
         let restored = try XCTUnwrap(TandemFeatureFlags(rawValue: [
-            "controlIQSupport": true,
+            "controlIQSupport": false,
             "someFutureFlag": true
         ]))
 
         XCTAssertEqual(restored.rawValue["someFutureFlag"] as? Bool, true)
-        XCTAssertTrue(restored.controlIQSupport)
+        XCTAssertFalse(restored.controlIQSupport)
     }
 
     func testNonBooleanValuesAreIgnoredRatherThanTrapping() throws {
         let restored = try XCTUnwrap(TandemFeatureFlags(rawValue: ["controlIQSupport": "yes please"]))
 
         XCTAssertFalse(restored.isOverridden(.controlIQSupport))
-        XCTAssertFalse(restored.controlIQSupport)
+        XCTAssertTrue(restored.controlIQSupport)
     }
 
     // MARK: - Manager state persistence
 
     func testFlagsSurviveAManagerStateRoundTrip() {
         var state = TandemPumpManagerState(rawValue: [:])
-        state.featureFlags[.controlIQSupport] = true
+        state.featureFlags[.controlIQSupport] = false
 
         let restored = TandemPumpManagerState(rawValue: state.rawValue)
 
-        XCTAssertTrue(restored.featureFlags.controlIQSupport)
+        XCTAssertFalse(restored.featureFlags.controlIQSupport)
     }
 
     func testStateFromABuildWithoutFeatureFlagsDecodesToDefaults() {
         let state = TandemPumpManagerState(rawValue: [:])
 
-        XCTAssertFalse(state.featureFlags.controlIQSupport)
+        XCTAssertTrue(state.featureFlags.controlIQSupport)
         XCTAssertNil(state.rawValue["featureFlags"])
     }
 
@@ -143,14 +143,14 @@ import XCTest
             bluetooth: StubPumpBluetooth()
         )
 
-        XCTAssertFalse(manager.isFeatureEnabled(.controlIQSupport))
-
-        manager.setFeatureFlag(.controlIQSupport, enabled: true)
-
         XCTAssertTrue(manager.isFeatureEnabled(.controlIQSupport))
-        XCTAssertTrue(manager.state.featureFlags.controlIQSupport)
+
+        manager.setFeatureFlag(.controlIQSupport, enabled: false)
+
+        XCTAssertFalse(manager.isFeatureEnabled(.controlIQSupport))
+        XCTAssertFalse(manager.state.featureFlags.controlIQSupport)
 
         let restored = TandemPumpManagerState(rawValue: manager.state.rawValue)
-        XCTAssertTrue(restored.featureFlags.controlIQSupport)
+        XCTAssertFalse(restored.featureFlags.controlIQSupport)
     }
 }
