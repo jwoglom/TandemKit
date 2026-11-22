@@ -1,7 +1,6 @@
 import Foundation
 
-/// Switches for driver features that are still being validated, persisted in
-/// `TandemPumpManagerState`.
+/// Switches for optional driver features, persisted in `TandemPumpManagerState`.
 ///
 /// A flag decides what the app offers or enforces; it never describes what the pump is doing. The
 /// Control-IQ dosing guards and the state sync that flips `useControlIQ` on when the pump reports
@@ -31,22 +30,20 @@ public struct TandemFeatureFlags: RawRepresentable, Equatable {
         /// told. While off the comparison still runs, with `historyBackfill`, and only logs.
         case basalHistoryReporting
 
-        /// Shows "Set temp basal" in the pump's settings, to set or stop a temp basal by hand. Off
-        /// until the hardware test plan's temp basal checks have run on a pump.
+        /// Shows "Set temp basal" in the pump's settings, to set or stop a temp basal by hand.
         case manualTempBasalSupport
 
         public var id: String { rawValue }
 
         public var defaultValue: Bool {
             switch self {
-            case .quickBolusButtonSupport,
+            case .controlIQSupport,
+                 .manualTempBasalSupport,
+                 .quickBolusButtonSupport,
                  .historyBackfill,
                  .historyDoseReporting,
                  .basalHistoryReporting:
                 return true
-            case .controlIQSupport,
-                 .manualTempBasalSupport:
-                return false
             }
         }
 
