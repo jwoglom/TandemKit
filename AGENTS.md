@@ -1,7 +1,6 @@
 ## Reference material
 - See [docs/ARCHITECTURE_ANALYSIS.md](docs/ARCHITECTURE_ANALYSIS.md) for deeper implementation notes.
 - [docs/integration-harness.md](docs/integration-harness.md): the `TandemKitIntegrationTests` target, which runs the real driver against the faketandem emulator (`scripts/integration-test.sh`), and the emulator gaps it currently works around.
-- [docs/hardware-test-plan.md](docs/hardware-test-plan.md): the manual procedure on a real pump, including the quick bolus and Control-IQ configurations, and the firmware behaviour only a pump can confirm.
 
 ## Comments
 **Default to no comment.** Most code needs none. Before writing one, ask what a reader who has the
@@ -724,6 +723,5 @@ integration scenarios.
 - **Delivery-uncertainty recovery.** `deliveryIsUncertain` is set only for an unconfirmed bolus,
   which the next read of the pump settles on its own; `deliveryUncertaintyRecoveryViewController`
   returns the general `TandemUICoordinator`, and there is no dedicated recovery screen.
-- **Hardware validation.** [docs/hardware-test-plan.md](docs/hardware-test-plan.md) is the manual
-  procedure for the t:slim X2 and the Mobi, but no run of it is recorded, so which pump firmware
+- **Hardware validation.** No run on a t:slim X2 or a Mobi is recorded, so which pump firmware
   versions work is unknown.
