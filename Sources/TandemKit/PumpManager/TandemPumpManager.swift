@@ -737,7 +737,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
             if readBolusState, readBasalState {
                 self.state.lastReconciliation = self.now
                 self.reportPendingDoses()
-                self.flushPendingReservoirReading()
             } else {
                 self.logger.error("Sync got no answer to its bolus or basal status read; leaving lastSync where it was")
             }
@@ -3090,6 +3089,9 @@ extension TandemPumpManager {
             lastReconciliation: reconciliationBoundary,
             replacePendingEvents: replacePendingEvents
         ))
+        // A bolus's end moves the boundary and skips the next sync, so the readings taken while it ran
+        // would otherwise wait out the poll throttle.
+        flushPendingReservoirReading()
     }
 
     /// `lastReconciliation` as the host is given it. Loop takes delivery up to it as accounted for, so
