@@ -31,22 +31,20 @@ public struct TandemFeatureFlags: RawRepresentable, Equatable {
         /// told. While off the comparison still runs, with `historyBackfill`, and only logs.
         case basalHistoryReporting
 
-        /// Shows "Set temp basal" in the pump's settings, to set or stop a temp basal by hand. Off
-        /// until the hardware test plan's temp basal checks have run on a pump.
+        /// Shows "Set temp basal" in the pump's settings, to set or stop a temp basal by hand.
         case manualTempBasalSupport
 
         public var id: String { rawValue }
 
         public var defaultValue: Bool {
             switch self {
-            case .quickBolusButtonSupport,
+            case .controlIQSupport,
+                 .quickBolusButtonSupport,
                  .historyBackfill,
                  .historyDoseReporting,
-                 .basalHistoryReporting:
-                return true
-            case .controlIQSupport,
+                 .basalHistoryReporting,
                  .manualTempBasalSupport:
-                return false
+                return true
             }
         }
 

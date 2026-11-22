@@ -9,6 +9,7 @@ import XCTest
             state: TandemPumpManagerState(rawValue: [:]),
             bluetooth: StubPumpBluetooth()
         )
+        manager.setFeatureFlag(.controlIQSupport, enabled: false)
         manager.state.controlIQWeightLbs = 154
         manager.state.controlIQTotalDailyInsulin = 42
 
@@ -103,29 +104,31 @@ import XCTest
         XCTAssertFalse(ViewModel.isUnanswered(ControlIQConfigurationError.weightNotSet))
     }
 
-    func testSettingsViewModelReportsTheFlagsWhenTheyAreOn() {
+    func testSettingsViewModelShowsTheControlIQManualTempBasalAndQuickBolusRowsByDefault() {
         let manager = TandemPumpManager(
             state: TandemPumpManagerState(rawValue: [:]),
             bluetooth: StubPumpBluetooth()
         )
-        manager.setFeatureFlag(.controlIQSupport, enabled: true)
 
         let viewModel = makeSettingsViewModel(manager)
 
         XCTAssertTrue(viewModel.controlIQSupportEnabled)
+        XCTAssertTrue(viewModel.manualTempBasalSupportEnabled)
         XCTAssertTrue(viewModel.quickBolusButtonSupportEnabled)
     }
 
-    func testSettingsViewModelHidesTheControlIQAndCGMRowsByDefaultAndShowsTheQuickBolusRow() {
+    func testSettingsViewModelHidesTheControlIQAndManualTempBasalRowsWhileTheirFlagsAreOff() {
         let manager = TandemPumpManager(
             state: TandemPumpManagerState(rawValue: [:]),
             bluetooth: StubPumpBluetooth()
         )
+        manager.setFeatureFlag(.controlIQSupport, enabled: false)
+        manager.setFeatureFlag(.manualTempBasalSupport, enabled: false)
 
         let viewModel = makeSettingsViewModel(manager)
 
         XCTAssertFalse(viewModel.controlIQSupportEnabled)
-        XCTAssertTrue(viewModel.quickBolusButtonSupportEnabled)
+        XCTAssertFalse(viewModel.manualTempBasalSupportEnabled)
     }
 
     func testSettingsViewModelShowsTheAlgorithmStatusOnlyWithTheControlIQFlagOn() {
@@ -133,6 +136,7 @@ import XCTest
             state: TandemPumpManagerState(rawValue: [:]),
             bluetooth: StubPumpBluetooth()
         )
+        manager.setFeatureFlag(.controlIQSupport, enabled: false)
         XCTAssertFalse(makeSettingsViewModel(manager).showsAlgorithmStatus)
 
         manager.setFeatureFlag(.controlIQSupport, enabled: true)
