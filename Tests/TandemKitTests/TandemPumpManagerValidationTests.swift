@@ -396,15 +396,13 @@ import XCTest
         XCTAssertFalse(TandemPumpManager.tempBasalReadbackMatches(status(profile: 1460, current: 1460, bitmask: 0), percent: 100))
     }
 
-    private func makeReadbackManager(bluetooth: StubPumpBluetooth) -> (TandemPumpManager, MockPumpManagerDelegate, DispatchQueue) {
+    private func makeReadbackManager(bluetooth: StubPumpBluetooth) -> (TandemPumpManager, MockPumpManagerDelegate) {
         let manager = makeUnsyncedManager(bluetooth: bluetooth)
         manager.state.hasSyncedBasalRateSchedule = true
         let delegate = MockPumpManagerDelegate()
-        let queue = DispatchQueue(label: "temp-basal-readback-test")
         manager.pumpManagerDelegate = delegate
-        manager.delegateQueue = queue
-        queue.sync {}
-        return (manager, delegate, queue)
+        manager.waitForDelegateCalls()
+        return (manager, delegate)
     }
 
     private func reportedTempBasalRates(_ delegate: MockPumpManagerDelegate) -> [Double] {
@@ -414,10 +412,10 @@ import XCTest
     func testTempBasalIsReportedWhenThePumpRunsTheCommandedRate() {
         let bluetooth = StubPumpBluetooth()
         bluetooth.stubBasalPump(profileMilliunits: 1000)
-        let (manager, delegate, queue) = makeReadbackManager(bluetooth: bluetooth)
+        let (manager, delegate) = makeReadbackManager(bluetooth: bluetooth)
 
         XCTAssertNil(enactTempBasal(manager, unitsPerHour: 1.5, for: .minutes(30)))
-        queue.sync {}
+        manager.waitForDelegateCalls()
 
         XCTAssertEqual(reportedTempBasalRates(delegate), [1.5])
         XCTAssertEqual(manager.state.basalDose.tempPercent, 150)
@@ -429,10 +427,10 @@ import XCTest
     func testMismatchedReadbackKeepsTheTempBasalAtThePumpsRateAndFails() {
         let bluetooth = StubPumpBluetooth()
         bluetooth.stubBasalPump(profileMilliunits: 1000, capMilliunits: 1200)
-        let (manager, delegate, queue) = makeReadbackManager(bluetooth: bluetooth)
+        let (manager, delegate) = makeReadbackManager(bluetooth: bluetooth)
 
         let error = enactTempBasal(manager, unitsPerHour: 1.5, for: .minutes(30))
-        queue.sync {}
+        manager.waitForDelegateCalls()
 
         XCTAssertEqual(validationError(from: error), .tempBasalRateMismatch(expected: 1.5, actual: 1.2))
         let sent = bluetooth.sentMessages.map { String(describing: type(of: $0)) }
@@ -450,10 +448,10 @@ import XCTest
         let bluetooth = StubPumpBluetooth()
         bluetooth.stub(CurrentBasalStatusRequest.self, with: status(profile: 1000, current: 1000, bitmask: 0))
         bluetooth.stub(SetTempRateRequest.self, with: SetTempRateResponse(status: 0, tempRateId: 42))
-        let (manager, delegate, queue) = makeReadbackManager(bluetooth: bluetooth)
+        let (manager, delegate) = makeReadbackManager(bluetooth: bluetooth)
 
         let error = enactTempBasal(manager, unitsPerHour: 1.5, for: .minutes(30))
-        queue.sync {}
+        manager.waitForDelegateCalls()
 
         XCTAssertEqual(validationError(from: error), .tempBasalRateMismatch(expected: 1.5, actual: 1.0))
         XCTAssertFalse(bluetooth.didSend(StopTempRateRequest.self))
@@ -465,10 +463,10 @@ import XCTest
         let bluetooth = StubPumpBluetooth()
         bluetooth.enqueue(CurrentBasalStatusRequest.self, responses: [status(profile: 1000, current: 1000, bitmask: 0), nil])
         bluetooth.stub(SetTempRateRequest.self, with: SetTempRateResponse(status: 0, tempRateId: 42))
-        let (manager, delegate, queue) = makeReadbackManager(bluetooth: bluetooth)
+        let (manager, delegate) = makeReadbackManager(bluetooth: bluetooth)
 
         XCTAssertNil(enactTempBasal(manager, unitsPerHour: 1.5, for: .minutes(30)))
-        queue.sync {}
+        manager.waitForDelegateCalls()
 
         XCTAssertEqual(reportedTempBasalRates(delegate), [1.5])
     }
@@ -700,34 +698,32 @@ import XCTest
 
     // MARK: - Temp basal across a pump segment change
 
-    private func attachDelegate(_ manager: TandemPumpManager) -> (MockPumpManagerDelegate, DispatchQueue) {
+    private func attachDelegate(_ manager: TandemPumpManager) -> MockPumpManagerDelegate {
         let delegate = MockPumpManagerDelegate()
-        let queue = DispatchQueue(label: "segment-change-test")
         manager.pumpManagerDelegate = delegate
-        manager.delegateQueue = queue
-        queue.sync {}
-        return (delegate, queue)
+        manager.waitForDelegateCalls()
+        return delegate
     }
 
     private func at(_ time: TimeInterval) -> Date {
         Self.referenceDay.addingTimeInterval(time)
     }
 
-    private func tempBasals(_ delegate: MockPumpManagerDelegate, _ queue: DispatchQueue) -> [DoseEntry] {
-        queue.sync {}
+    private func tempBasals(_ delegate: MockPumpManagerDelegate, _ manager: TandemPumpManager) -> [DoseEntry] {
+        manager.waitForDelegateCalls()
         return delegate.pumpEvents.compactMap(\.dose).filter { $0.type == .tempBasal }
     }
 
     func testATempCrossingARiseIsCutAtTheChangeOnTheNextReading() {
         let bluetooth = StubPumpBluetooth()
         let manager = makeBaselineManager(at: .hours(14) - .minutes(20), pumpMilliunits: 1000, bluetooth: bluetooth)
-        let (delegate, queue) = attachDelegate(manager)
+        let delegate = attachDelegate(manager)
         XCTAssertNil(enactTempBasal(manager, unitsPerHour: 1.5, for: .minutes(30)))
 
         manager.clock = ManualClock(at(.hours(14) + .minutes(3)))
         manager.fetchBasalStatus()
 
-        let doses = tempBasals(delegate, queue).suffix(2)
+        let doses = tempBasals(delegate, manager).suffix(2)
         XCTAssertEqual(doses.map(\.startDate), [at(.hours(14) - .minutes(20)), at(.hours(14))])
         XCTAssertEqual(doses.map(\.unitsPerHour), [1.5, 3.0])
         XCTAssertEqual(doses.map(\.isMutable), [false, true])
@@ -740,13 +736,13 @@ import XCTest
     func testATempCrossingAFallIsCutAtTheChangeOnTheNextReading() {
         let bluetooth = StubPumpBluetooth()
         let manager = makeBaselineManager(at: .hours(24) - .minutes(20), pumpMilliunits: 2000, bluetooth: bluetooth)
-        let (delegate, queue) = attachDelegate(manager)
+        let delegate = attachDelegate(manager)
         XCTAssertNil(enactTempBasal(manager, unitsPerHour: 1.5, for: .minutes(30)))
 
         manager.clock = ManualClock(at(.hours(24) + .minutes(3)))
         manager.fetchBasalStatus()
 
-        XCTAssertEqual(tempBasals(delegate, queue).suffix(2).map(\.unitsPerHour), [1.5, 0.75])
+        XCTAssertEqual(tempBasals(delegate, manager).suffix(2).map(\.unitsPerHour), [1.5, 0.75])
         XCTAssertEqual(manager.state.basalDose.startDate, at(.hours(24)))
     }
 
@@ -754,14 +750,14 @@ import XCTest
     func testATempSetWithinFiveMinutesOfARiseIsNotCutAtIt() {
         let bluetooth = StubPumpBluetooth()
         let manager = makeBaselineManager(at: .hours(14) - .minutes(4), pumpMilliunits: 1000, bluetooth: bluetooth)
-        let (delegate, queue) = attachDelegate(manager)
+        let delegate = attachDelegate(manager)
         XCTAssertNil(enactTempBasal(manager, unitsPerHour: 1.5, for: .minutes(30)))
-        let reported = tempBasals(delegate, queue).count
+        let reported = tempBasals(delegate, manager).count
 
         manager.clock = ManualClock(at(.hours(14) + .minutes(1)))
         manager.fetchBasalStatus()
 
-        XCTAssertEqual(tempBasals(delegate, queue).count, reported)
+        XCTAssertEqual(tempBasals(delegate, manager).count, reported)
         XCTAssertEqual(manager.state.basalDose.startDate, at(.hours(14) - .minutes(4)))
     }
 
@@ -780,13 +776,13 @@ import XCTest
     func testATempReplacedAfterCrossingAChangeIsReportedInTwoParts() {
         let bluetooth = StubPumpBluetooth()
         let manager = makeBaselineManager(at: .hours(14) - .minutes(20), pumpMilliunits: 1000, bluetooth: bluetooth)
-        let (delegate, queue) = attachDelegate(manager)
+        let delegate = attachDelegate(manager)
         XCTAssertNil(enactTempBasal(manager, unitsPerHour: 1.5, for: .minutes(30)))
 
         manager.clock = ManualClock(at(.hours(14) + .minutes(3)))
         XCTAssertNil(enactTempBasal(manager, unitsPerHour: 1.2, for: .minutes(30)))
 
-        let finished = tempBasals(delegate, queue).filter { !$0.isMutable }
+        let finished = tempBasals(delegate, manager).filter { !$0.isMutable }
         XCTAssertEqual(finished.map(\.startDate), [at(.hours(14) - .minutes(20)), at(.hours(14))])
         XCTAssertEqual(finished.map(\.endDate), [at(.hours(14)), at(.hours(14) + .minutes(3))])
         XCTAssertEqual(finished.map(\.unitsPerHour), [1.5, 3.0])
@@ -796,14 +792,14 @@ import XCTest
         let bluetooth = StubPumpBluetooth()
         let manager = makeBaselineManager(at: .hours(14) - .minutes(20), pumpMilliunits: 1000, bluetooth: bluetooth)
         manager.state.featureFlags[.historyBackfill] = false
-        let (delegate, queue) = attachDelegate(manager)
+        let delegate = attachDelegate(manager)
         XCTAssertNil(enactTempBasal(manager, unitsPerHour: 1.5, for: .minutes(30)))
 
         manager.clock = ManualClock(at(.hours(14) + .minutes(3)))
         bluetooth.stub(CurrentBasalStatusRequest.self, with: status(profile: 2000, current: 2000, bitmask: 0))
         manager.fetchBasalStatus()
 
-        let finished = tempBasals(delegate, queue).filter { !$0.isMutable }
+        let finished = tempBasals(delegate, manager).filter { !$0.isMutable }
         XCTAssertEqual(finished.map(\.startDate), [at(.hours(14) - .minutes(20)), at(.hours(14))])
         XCTAssertEqual(finished.map(\.unitsPerHour), [1.5, 3.0])
         XCTAssertEqual(manager.state.basalDose.type, .basal)
@@ -827,7 +823,7 @@ import XCTest
     func testASkewedPumpRunsATempThatDeliversTheHostsScheduledRate() {
         let bluetooth = StubPumpBluetooth()
         let manager = makeSkewedManager(bluetooth: bluetooth)
-        let (delegate, queue) = attachDelegate(manager)
+        let delegate = attachDelegate(manager)
 
         manager.fetchBasalStatus()
 
@@ -835,7 +831,7 @@ import XCTest
         XCTAssertEqual(bluetooth.sent(SetTempRateRequest.self).map(\.minutes), [30])
         XCTAssertEqual(manager.skewCompensationTemp?.percent, 50)
         XCTAssertEqual(manager.state.basalDose.type, .basal)
-        XCTAssertEqual(tempBasals(delegate, queue), [], "the host keeps counting its own scheduled rate")
+        XCTAssertEqual(tempBasals(delegate, manager), [], "the host keeps counting its own scheduled rate")
     }
 
     func testNoSkewTempWhileThePumpsRateMatchesTheHosts() {
@@ -954,11 +950,11 @@ import XCTest
     func testASkewedPumpClockIssuesOneAlertAndRetractsItOnceSynced() {
         let bluetooth = StubPumpBluetooth()
         let manager = makeSkewedManager(bluetooth: bluetooth)
-        let (delegate, queue) = attachDelegate(manager)
+        let delegate = attachDelegate(manager)
 
         manager.reconcilePumpClockSkewAlert()
         manager.reconcilePumpClockSkewAlert()
-        queue.sync {}
+        manager.waitForDelegateCalls()
         delegate.waitForAlerts { !delegate.issuedAlerts.isEmpty }
 
         XCTAssertEqual(delegate.issuedAlerts.map(\.identifier.alertIdentifier), [TandemPumpManager.pumpClockSkewAlertIdentifier])
@@ -966,7 +962,7 @@ import XCTest
 
         skewPumpClock(manager, minutes: 0)
         manager.reconcilePumpClockSkewAlert()
-        queue.sync {}
+        manager.waitForDelegateCalls()
         delegate.waitForAlerts { !delegate.retractedAlerts.isEmpty }
 
         XCTAssertEqual(delegate.retractedAlerts.map(\.alertIdentifier), [TandemPumpManager.pumpClockSkewAlertIdentifier])
@@ -977,10 +973,10 @@ import XCTest
         let bluetooth = StubPumpBluetooth()
         let manager = makeBaselineManager(at: .hours(10), pumpMilliunits: 1000, bluetooth: bluetooth)
         skewPumpClock(manager, minutes: 4)
-        let (delegate, queue) = attachDelegate(manager)
+        let delegate = attachDelegate(manager)
 
         manager.reconcilePumpClockSkewAlert()
-        queue.sync {}
+        manager.waitForDelegateCalls()
 
         XCTAssertEqual(delegate.issuedAlerts.count, 0)
     }
@@ -1011,11 +1007,11 @@ import XCTest
         let bluetooth = StubPumpBluetooth()
         let manager = makeSkewedManager(bluetooth: bluetooth)
         stubPumpClock(bluetooth, reading: manager.now.addingTimeInterval(.minutes(15)))
-        let (delegate, queue) = attachDelegate(manager)
+        let delegate = attachDelegate(manager)
 
         XCTAssertNil(writePumpTime(manager))
 
-        queue.sync {}
+        manager.waitForDelegateCalls()
         XCTAssertEqual(delegate.clockAdjustments, [-TimeInterval.minutes(15)])
     }
 
@@ -1023,11 +1019,11 @@ import XCTest
         let bluetooth = StubPumpBluetooth()
         let manager = makeSkewedManager(bluetooth: bluetooth)
         bluetooth.stub(ChangeTimeDateRequest.self, with: ChangeTimeDateResponse(status: 0))
-        let (delegate, queue) = attachDelegate(manager)
+        let delegate = attachDelegate(manager)
 
         XCTAssertNil(writePumpTime(manager))
 
-        queue.sync {}
+        manager.waitForDelegateCalls()
         XCTAssertEqual(delegate.clockAdjustments, [-TimeInterval.minutes(11)])
     }
 
@@ -1035,11 +1031,11 @@ import XCTest
         let bluetooth = StubPumpBluetooth()
         let manager = makeSkewedManager(bluetooth: bluetooth)
         stubPumpClock(bluetooth, reading: manager.now.addingTimeInterval(.minutes(15)), writeStatus: 1)
-        let (delegate, queue) = attachDelegate(manager)
+        let delegate = attachDelegate(manager)
 
         XCTAssertNotNil(writePumpTime(manager))
 
-        queue.sync {}
+        manager.waitForDelegateCalls()
         XCTAssertEqual(delegate.clockAdjustments, [])
     }
 
@@ -1049,9 +1045,9 @@ import XCTest
         stubPumpClock(bluetooth, reading: manager.now.addingTimeInterval(.hours(1)))
 
         XCTAssertNil(writePumpTime(manager))
-        let (delegate, queue) = attachDelegate(manager)
+        let delegate = attachDelegate(manager)
 
-        queue.sync {}
+        manager.waitForDelegateCalls()
         XCTAssertEqual(delegate.clockAdjustments, [-TimeInterval.hours(1)])
     }
 
@@ -1128,19 +1124,19 @@ import XCTest
     func testATempBasalIsReportedForTheWholeMinutesSentToThePump() {
         let bluetooth = StubPumpBluetooth()
         let manager = makeBaselineManager(at: .hours(10), pumpMilliunits: 1000, bluetooth: bluetooth)
-        let (delegate, queue) = attachDelegate(manager)
+        let delegate = attachDelegate(manager)
 
         XCTAssertNil(enactTempBasal(manager, unitsPerHour: 1.5, for: .minutes(30) + 40))
 
         XCTAssertEqual(bluetooth.sent(SetTempRateRequest.self).map(\.minutes), [30])
-        XCTAssertEqual(tempBasals(delegate, queue).last?.endDate, at(.hours(10) + .minutes(30)))
+        XCTAssertEqual(tempBasals(delegate, manager).last?.endDate, at(.hours(10) + .minutes(30)))
         XCTAssertEqual(manager.state.basalDose.estimatedEndDate, at(.hours(10) + .minutes(30)))
     }
 
     // MARK: - The scheduled basal after a temp
 
-    private func scheduledBasalRates(_ delegate: MockPumpManagerDelegate, _ queue: DispatchQueue) -> [Double] {
-        queue.sync {}
+    private func scheduledBasalRates(_ delegate: MockPumpManagerDelegate, _ manager: TandemPumpManager) -> [Double] {
+        manager.waitForDelegateCalls()
         return delegate.pumpEvents.compactMap(\.dose).filter { $0.type == .basal }.map(\.unitsPerHour)
     }
 
@@ -1148,12 +1144,12 @@ import XCTest
     func testACancelReportsTheScheduledBasalAtThePumpsProfileRate() {
         let bluetooth = StubPumpBluetooth()
         let manager = makeBaselineManager(at: .hours(10), pumpMilliunits: 800, bluetooth: bluetooth)
-        let (delegate, queue) = attachDelegate(manager)
+        let delegate = attachDelegate(manager)
         XCTAssertNil(enactTempBasal(manager, unitsPerHour: 1.5, for: .minutes(30)))
 
         XCTAssertNil(enactTempBasal(manager, unitsPerHour: 0, for: 0))
 
-        XCTAssertEqual(scheduledBasalRates(delegate, queue), [0.8])
+        XCTAssertEqual(scheduledBasalRates(delegate, manager), [0.8])
         XCTAssertEqual(manager.state.basalDose.value, 0.8, accuracy: 0.0001)
     }
 

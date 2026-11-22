@@ -14,7 +14,6 @@ import XCTest
     private var clock: ManualClock!
     private var manager: TandemPumpManager!
     private var delegate: MockPumpManagerDelegate!
-    private var delegateQueue: DispatchQueue!
 
     override func setUp() {
         super.setUp()
@@ -27,7 +26,6 @@ import XCTest
     override func tearDown() {
         manager = nil
         delegate = nil
-        delegateQueue = nil
         clock = nil
         bluetooth = nil
         super.tearDown()
@@ -49,17 +47,15 @@ import XCTest
         let manager = TandemPumpManager(state: state, bluetooth: bluetooth, clock: clock)
         delegate = MockPumpManagerDelegate()
         delegate.journalClock = clock
-        delegateQueue = DispatchQueue(label: "sync-pending-dose-report-test")
         manager.pumpManagerDelegate = delegate
-        manager.delegateQueue = delegateQueue
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         return manager
     }
 
     // MARK: - Driving the pump
 
     private var batches: [MockPumpManagerDelegate.PumpEventBatch] {
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         return delegate.pumpEventBatches
     }
 
@@ -71,7 +67,7 @@ import XCTest
         let synced = expectation(description: "syncPumpData")
         manager.syncPumpData { _ in synced.fulfill() }
         wait(for: [synced], timeout: 5)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
     }
 
     /// Returns the `raw` the bolus was first reported under.
@@ -140,19 +136,19 @@ import XCTest
             }
         }
         manager.fetchBolusStatus(fromSync: false)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
     }
 
     private func feedLoop() -> LoopDoseStoreOracle {
         let loop = LoopDoseStoreOracle()
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         delegate.feed(loop)
         return loop
     }
 
     private func feedTrio() -> TrioDoseStoreOracle {
         let trio = TrioDoseStoreOracle()
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         delegate.feed(trio)
         return trio
     }

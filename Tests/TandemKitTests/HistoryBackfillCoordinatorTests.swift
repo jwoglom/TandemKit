@@ -675,7 +675,6 @@ import XCTest
     func testHostFloorDoesNotBoundTheWalkOrRatchetTheStoredFloor() throws {
         setPumpSerial()
         let now = Date()
-        manager.delegateQueue = DispatchQueue(label: "history-backfill-floor-test")
         let delegate = MockPumpManagerDelegate()
         delegate.startDateToFilterNewPumpEvents = now.addingTimeInterval(-.minutes(15))
         manager.pumpManagerDelegate = delegate

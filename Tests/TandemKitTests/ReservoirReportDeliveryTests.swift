@@ -9,19 +9,16 @@ import XCTest
     private var bluetooth: StubPumpBluetooth!
     private var manager: TandemPumpManager!
     /// Shared by every attach, since a host keeps one queue for the manager's life.
-    private var delegateQueue: DispatchQueue!
 
     override func setUp() {
         super.setUp()
         bluetooth = StubPumpBluetooth()
-        delegateQueue = DispatchQueue(label: "reservoir-report-test")
         manager = TandemPumpManager(state: TandemPumpManagerState(rawValue: [:]), bluetooth: bluetooth)
     }
 
     override func tearDown() {
         manager = nil
         bluetooth = nil
-        delegateQueue = nil
         super.tearDown()
     }
 
@@ -41,30 +38,15 @@ import XCTest
         wait(for: [synced], timeout: 5.0)
     }
 
-    /// Drains the queue on the way out so assertions see everything the attach kicked off.
-    @discardableResult
-    private func attachDelegate(
-        _ delegate: MockPumpManagerDelegate,
-        queueFirst: Bool = false
-    ) -> DispatchQueue {
-        let queue: DispatchQueue = delegateQueue
-
-        if queueFirst {
-            manager.delegateQueue = queue
-            manager.pumpManagerDelegate = delegate
-        } else {
-            // Trio's order.
-            manager.pumpManagerDelegate = delegate
-            manager.delegateQueue = queue
-        }
-
-        queue.sync {}
-        return queue
+    /// Waits on the way out so assertions see everything the attach kicked off.
+    private func attachDelegate(_ delegate: MockPumpManagerDelegate) {
+        manager.pumpManagerDelegate = delegate
+        manager.waitForDelegateCalls()
     }
 
     func testASyncsReadingIsReportedWhenADelegateIsAttached() {
         let delegate = MockPumpManagerDelegate()
-        let queue = attachDelegate(delegate)
+        attachDelegate(delegate)
 
         let readReservoir = expectation(description: "delegate received reservoir value")
         delegate.didReadReservoirExpectation = readReservoir
@@ -72,7 +54,7 @@ import XCTest
 
         sync()
         wait(for: [readReservoir], timeout: 2.0)
-        queue.sync {}
+        manager.waitForDelegateCalls()
 
         XCTAssertEqual(delegate.reservoirReadings.map(\.units), [150])
         XCTAssertFalse(
@@ -96,9 +78,9 @@ import XCTest
         let readReservoir = expectation(description: "delegate received the held reservoir value")
         delegate.didReadReservoirExpectation = readReservoir
 
-        let queue = attachDelegate(delegate)
+        attachDelegate(delegate)
         wait(for: [readReservoir], timeout: 2.0)
-        queue.sync {}
+        manager.waitForDelegateCalls()
 
         XCTAssertEqual(delegate.reservoirReadings.map(\.units), [50])
         XCTAssertEqual(
@@ -117,23 +99,23 @@ import XCTest
         let readReservoir = expectation(description: "delegate received the held reservoir value")
         delegate.didReadReservoirExpectation = readReservoir
 
-        let queue = attachDelegate(delegate, queueFirst: true)
+        attachDelegate(delegate)
         wait(for: [readReservoir], timeout: 2.0)
-        queue.sync {}
+        manager.waitForDelegateCalls()
 
         XCTAssertEqual(delegate.reservoirReadings.map(\.units), [75])
     }
 
     func testAttachingADelegateDoesNotResendAnAlreadyDeliveredReading() {
         let delegate = MockPumpManagerDelegate()
-        let queue = attachDelegate(delegate)
+        attachDelegate(delegate)
 
         let readReservoir = expectation(description: "delegate received reservoir value")
         delegate.didReadReservoirExpectation = readReservoir
         stubReservoir(units: 120)
         sync()
         wait(for: [readReservoir], timeout: 2.0)
-        queue.sync {}
+        manager.waitForDelegateCalls()
 
         delegate.didReadReservoirExpectation = nil
         let second = MockPumpManagerDelegate()
@@ -158,8 +140,8 @@ import XCTest
         manager.fetchReservoirStatus()
 
         let delegate = MockPumpManagerDelegate()
-        let queue = attachDelegate(delegate)
-        queue.sync {}
+        attachDelegate(delegate)
+        manager.waitForDelegateCalls()
 
         XCTAssertTrue(delegate.reservoirReadings.isEmpty)
         XCTAssertTrue(manager.state.lastReservoirReadingNeedsReport, "Held for the next sync, not dropped")
@@ -178,12 +160,10 @@ import XCTest
         let readReservoir = expectation(description: "delegate received the held reservoir value")
         delegate.didReadReservoirExpectation = readReservoir
 
-        let queue = DispatchQueue(label: "reservoir-report-relaunch-test")
         relaunched.pumpManagerDelegate = delegate
-        relaunched.delegateQueue = queue
 
         wait(for: [readReservoir], timeout: 2.0)
-        queue.sync {}
+        relaunched.waitForDelegateCalls()
 
         XCTAssertEqual(delegate.reservoirReadings.map(\.units), [90])
         XCTAssertFalse(relaunched.state.lastReservoirReadingNeedsReport)
@@ -202,7 +182,7 @@ import XCTest
         bluetooth.stubBasalPump(profileMilliunits: 1000, tempRateId: 41)
         let delegate = MockPumpManagerDelegate()
         delegate.journalClock = clock
-        let queue = attachDelegate(delegate)
+        attachDelegate(delegate)
 
         let bolusId = 4100
         bluetooth.stub(BolusPermissionRequest.self, with: BolusPermissionResponse(status: 0, bolusId: bolusId, nackReasonId: 0))
@@ -213,12 +193,12 @@ import XCTest
             enacted.fulfill()
         }
         wait(for: [enacted], timeout: 5)
-        queue.sync {}
+        manager.waitForDelegateCalls()
 
         clock.advance(by: 60)
         bluetooth.stub(InsulinStatusRequest.self, with: InsulinStatusResponse(currentInsulinAmount: 17, isEstimate: 0, insulinLowAmount: 20))
         manager.fetchReservoirStatus()
-        queue.sync {}
+        manager.waitForDelegateCalls()
         XCTAssertTrue(delegate.reservoirReadings.isEmpty, "Past the boundary until the bolus ends")
 
         clock.advance(by: 60)
@@ -230,25 +210,25 @@ import XCTest
             bolusStatusId: 0, bolusSourceId: 0, bolusTypeBitmask: 0, extendedBolusDuration: 0
         ))
         manager.fetchBolusStatus(fromSync: false)
-        queue.sync {}
+        manager.waitForDelegateCalls()
 
         XCTAssertEqual(delegate.reservoirReadings.map(\.units), [17])
         XCTAssertTrue(delegate.reservoirReadingsAheadOfTheBoundary.isEmpty)
         XCTAssertFalse(manager.state.lastReservoirReadingNeedsReport)
     }
 
-    func testABatchSentBeforeTheDelegateQueueRunsDoesNotReportTheReadingTwice() {
+    func testABatchSentBeforeTheDelegateCallsRunDoesNotReportTheReadingTwice() {
         let delegate = MockPumpManagerDelegate()
-        let queue = attachDelegate(delegate)
+        attachDelegate(delegate)
         stubReservoir(units: 140)
         manager.fetchReservoirStatus()
         manager.state.lastReconciliation = Date()
 
-        queue.suspend()
+        let release = manager.holdDelegateCalls()
         manager.reportReconciliationBoundary()
         manager.reportReconciliationBoundary()
-        queue.resume()
-        queue.sync {}
+        release()
+        manager.waitForDelegateCalls()
 
         XCTAssertEqual(delegate.reservoirReadings.map(\.units), [140])
     }

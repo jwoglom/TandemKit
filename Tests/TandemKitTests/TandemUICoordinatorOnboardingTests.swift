@@ -76,7 +76,6 @@ import XCTest
         let manager = TandemPumpManager(state: TandemPumpManagerState(rawValue: [:]), bluetooth: StubPumpBluetooth())
         let delegate = MockPumpManagerDelegate()
         manager.pumpManagerDelegate = delegate
-        manager.delegateQueue = DispatchQueue(label: "remove-pump-test")
         let recorder = CompletionRecorder(expectation(description: "the host is told the flow is done"))
         var coordinator: TandemUICoordinator? = TandemUICoordinator(pumpManager: manager, colorPalette: palette, allowDebugFeatures: false)
         coordinator?.completionDelegate = recorder

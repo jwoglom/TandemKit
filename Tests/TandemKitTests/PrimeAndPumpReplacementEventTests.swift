@@ -13,13 +13,11 @@ import XCTest
     private var clock: ManualClock!
     private var manager: TandemPumpManager!
     private var delegate: MockPumpManagerDelegate!
-    private var delegateQueue: DispatchQueue!
 
     override func setUp() {
         super.setUp()
         bluetooth = StubPumpBluetooth()
         clock = ManualClock(Self.t0)
-        delegateQueue = DispatchQueue(label: "prime-and-pump-replacement-test")
         manager = makeManager(state: TandemPumpManagerState(rawValue: [:]))
     }
 
@@ -27,7 +25,6 @@ import XCTest
         manager = nil
         delegate = nil
         bluetooth = nil
-        delegateQueue = nil
         clock = nil
         super.tearDown()
     }
@@ -36,16 +33,15 @@ import XCTest
         let manager = TandemPumpManager(state: state, bluetooth: bluetooth, clock: clock)
         delegate = MockPumpManagerDelegate()
         manager.pumpManagerDelegate = delegate
-        manager.delegateQueue = delegateQueue
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         return manager
     }
 
     private func reported(_ body: () -> Void) -> [MockPumpManagerDelegate.PumpEventBatch] {
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         let before = delegate.pumpEventBatches.count
         body()
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         return Array(delegate.pumpEventBatches.dropFirst(before))
     }
 

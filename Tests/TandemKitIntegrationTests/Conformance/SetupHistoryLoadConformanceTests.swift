@@ -243,10 +243,9 @@ final class SetupHistoryLoadConformanceTests: ConformanceTestCase {
         return since
     }
 
-    /// The host takes the manager as Trio does, delegate then queue, and is handed what was held.
+    /// The host takes the manager and is handed what was held.
     private func adopt(_ driver: FaketandemHarness.Driver) {
         driver.manager.pumpManagerDelegate = driver.delegate
-        driver.manager.delegateQueue = driver.delegateQueue
         driver.drainDelegate()
     }
 

@@ -177,38 +177,33 @@
     @available(macOS 13.0, iOS 14.0, *) public protocol PumpManagerDelegate: DeviceManagerDelegate, PumpManagerStatusObserver,
         AnyObject
     {
-        func pumpManagerBLEHeartbeatDidFire(_ pumpManager: PumpManager)
-        func pumpManagerMustProvideBLEHeartbeat(_ pumpManager: PumpManager) -> Bool
+        func pumpManagerBLEHeartbeatDidFire(_ pumpManager: PumpManager) async
+        func pumpManagerMustProvideBLEHeartbeat(_ pumpManager: PumpManager) async -> Bool
         func pumpManagerWantsDeletion(_ pumpManager: PumpManager) async
-        func pumpManagerPumpWasReplaced(_ pumpManager: PumpManager)
+        func pumpManagerPumpWasReplaced(_ pumpManager: PumpManager) async
         func pumpManager(
             _ pumpManager: PumpManager,
             didUpdatePumpRecordsBasalProfileStartEvents pumpRecordsBasalProfileStartEvents: Bool
-        )
-        func pumpManager(_ pumpManager: PumpManager, didError error: PumpManagerError)
+        ) async
+        func pumpManager(_ pumpManager: PumpManager, didError error: PumpManagerError) async
         func pumpManager(
             _ pumpManager: PumpManager,
             hasNewPumpEvents events: [NewPumpEvent],
             lastReconciliation: Date?,
-            replacePendingEvents: Bool,
-            completion: @escaping (_ error: Error?) -> Void
-        )
+            replacePendingEvents: Bool
+        ) async throws
         func pumpManager(
             _ pumpManager: PumpManager,
             didReadReservoirValue units: Double,
-            at date: Date,
-            completion: @escaping (
-                _ result: Result<(newValue: ReservoirValue, lastValue: ReservoirValue?, areStoredValuesContinuous: Bool), Error>
-            ) -> Void
-        )
-        func pumpManager(_ pumpManager: PumpManager, didAdjustPumpClockBy adjustment: TimeInterval)
-        func pumpManagerDidUpdateState(_ pumpManager: PumpManager)
+            at date: Date
+        ) async throws -> (newValue: ReservoirValue, lastValue: ReservoirValue?, areStoredValuesContinuous: Bool)
+        func pumpManager(_ pumpManager: PumpManager, didAdjustPumpClockBy adjustment: TimeInterval) async
+        func pumpManagerDidUpdateState(_ pumpManager: PumpManager) async
         func pumpManager(
             _ pumpManager: PumpManager,
-            didRequestBasalRateScheduleChange basalRateSchedule: BasalRateSchedule,
-            completion: @escaping (Error?) -> Void
-        )
-        func startDateToFilterNewPumpEvents(for manager: PumpManager) -> Date
+            didRequestBasalRateScheduleChange basalRateSchedule: BasalRateSchedule
+        ) async throws
+        func startDateToFilterNewPumpEvents(for manager: PumpManager) async -> Date
         var detectedSystemTimeOffset: TimeInterval { get }
         var automaticDosingEnabled: Bool { get }
         var automatedTreatmentState: AutomatedTreatmentState? { get }
@@ -260,8 +255,6 @@
         static var onboardingSupportedBolusVolumes: [Double] { get }
         static var onboardingSupportedMaximumBolusVolumes: [Double] { get }
 
-        var delegateQueue: DispatchQueue! { get set }
-
         func roundToSupportedBasalRate(unitsPerHour: Double) -> Double
         func roundToSupportedBolusVolume(units: Double) -> Double
 
@@ -287,14 +280,14 @@
         func estimatedDuration(toBolus units: Double) -> TimeInterval
 
         func enactBolus(
-            decisionId: UUID?,
+            doseId: UUID,
             units: Double,
             activationType: BolusActivationType,
             completion: @escaping (_ error: PumpManagerError?) -> Void
         )
         func cancelBolus(completion: @escaping (_ result: PumpManagerResult<DoseEntry?>) -> Void)
         func enactTempBasal(
-            decisionId: UUID?,
+            doseId: UUID,
             unitsPerHour: Double,
             for duration: TimeInterval,
             completion: @escaping (_ error: PumpManagerError?) -> Void
@@ -383,7 +376,7 @@
         // Internal in real LoopKit too — read doses through programmedUnits/unitsPerHour.
         let value: Double
         public let unit: DoseUnit
-        public let decisionId: UUID?
+        public var doseId: UUID?
         public let deliveredUnits: Double?
         public let description: String?
         public let insulinType: InsulinType?
@@ -452,7 +445,7 @@
                 endDate: endDate,
                 value: trimmedValue,
                 unit: unit,
-                decisionId: decisionId,
+                doseId: doseId,
                 deliveredUnits: trimmedDeliveredUnits,
                 description: description,
                 syncIdentifier: syncIdentifier,
@@ -476,7 +469,6 @@
                 startDate: suspendDate,
                 value: 0,
                 unit: .units,
-                decisionId: nil,
                 deliveredUnits: nil,
                 description: nil,
                 syncIdentifier: nil,
@@ -501,7 +493,6 @@
                 startDate: resumeDate,
                 value: 0,
                 unit: .units,
-                decisionId: nil,
                 deliveredUnits: nil,
                 description: nil,
                 syncIdentifier: nil,
@@ -520,7 +511,7 @@
             endDate: Date? = nil,
             value: Double,
             unit: DoseUnit,
-            decisionId: UUID?,
+            doseId: UUID? = nil,
             deliveredUnits: Double? = nil,
             description: String? = nil,
             syncIdentifier: String? = nil,
@@ -536,7 +527,7 @@
             self.endDate = endDate ?? startDate
             self.value = value
             self.unit = unit
-            self.decisionId = decisionId
+            self.doseId = doseId
             self.deliveredUnits = deliveredUnits
             self.description = description
             self.syncIdentifier = syncIdentifier
@@ -555,7 +546,7 @@
             endDate = try container.decode(Date.self, forKey: .endDate)
             value = try container.decode(Double.self, forKey: .value)
             unit = try container.decode(DoseUnit.self, forKey: .unit)
-            decisionId = try container.decodeIfPresent(UUID.self, forKey: .decisionId)
+            doseId = try container.decodeIfPresent(UUID.self, forKey: .doseId) ?? container.decodeIfPresent(UUID.self, forKey: .decisionId)
             deliveredUnits = try container.decodeIfPresent(Double.self, forKey: .deliveredUnits)
             description = try container.decodeIfPresent(String.self, forKey: .description)
             syncIdentifier = try container.decodeIfPresent(String.self, forKey: .syncIdentifier)
@@ -579,7 +570,7 @@
             try container.encode(endDate, forKey: .endDate)
             try container.encode(value, forKey: .value)
             try container.encode(unit, forKey: .unit)
-            try container.encodeIfPresent(decisionId, forKey: .decisionId)
+            try container.encodeIfPresent(doseId, forKey: .doseId)
             try container.encodeIfPresent(deliveredUnits, forKey: .deliveredUnits)
             try container.encodeIfPresent(description, forKey: .description)
             try container.encodeIfPresent(syncIdentifier, forKey: .syncIdentifier)
@@ -606,7 +597,8 @@
             case endDate
             case value
             case unit
-            case decisionId
+            case doseId
+            case decisionId // Before doseId replaced it
             case deliveredUnits
             case description
             case syncIdentifier
@@ -1006,14 +998,12 @@
         }
     }
 
-    public final class WeakSynchronizedDelegate<Delegate> {
-        private weak var _delegate: AnyObject?
-        private var _queue: DispatchQueue
+    public final class WeakSynchronizedDelegate<Delegate>: @unchecked Sendable {
         private let lock = NSLock()
+        private weak var _delegate: AnyObject?
+        private var last: Task<Void, Never>?
 
-        public init(queue: DispatchQueue = .main) {
-            _queue = queue
-        }
+        public init() {}
 
         public var delegate: Delegate? {
             get {
@@ -1028,44 +1018,30 @@
             }
         }
 
-        public var queue: DispatchQueue! {
-            get {
-                lock.lock()
-                defer { lock.unlock() }
-                return _queue
-            }
-            set {
-                lock.lock()
-                _queue = newValue ?? .main
-                lock.unlock()
-            }
-        }
-
-        private func currentDelegateAndQueue() -> (Delegate?, DispatchQueue) {
+        /// Runs `block` once every block passed to `notify` before it has finished.
+        @discardableResult
+        public func notify(_ block: @escaping (_ delegate: Delegate?) async -> Void) -> Task<Void, Never> {
             lock.lock()
             defer { lock.unlock() }
-            return (_delegate as? Delegate, _queue)
-        }
-
-        /// Async: `block` has not necessarily run when this returns.
-        public func notify(_ block: @escaping (Delegate?) -> Void) {
-            let (delegate, queue) = currentDelegateAndQueue()
-            queue.async { block(delegate) }
-        }
-
-        public func notifyDelayed(by interval: TimeInterval, _ block: @escaping (Delegate?) -> Void) {
-            let (delegate, queue) = currentDelegateAndQueue()
-            queue.asyncAfter(deadline: .now() + interval) { block(delegate) }
-        }
-
-        public func call<ReturnType>(_ block: (Delegate?) -> ReturnType) -> ReturnType {
-            lock.lock()
-            defer { lock.unlock() }
-            var result: ReturnType!
-            _queue.sync {
-                result = block(_delegate as? Delegate)
+            let previous = last
+            let delegate = _delegate as? Delegate
+            let task = Task {
+                await previous?.value
+                await block(delegate)
             }
-            return result
+            last = task
+            return task
+        }
+
+        public func notifyDelayed(by interval: TimeInterval, _ block: @escaping (_ delegate: Delegate?) async -> Void) {
+            Task {
+                try? await Task.sleep(nanoseconds: UInt64(max(0, interval) * 1_000_000_000))
+                notify(block)
+            }
+        }
+
+        public func call<ReturnType>(_ block: (_ delegate: Delegate?) async -> ReturnType) async -> ReturnType {
+            await block(delegate)
         }
     }
 

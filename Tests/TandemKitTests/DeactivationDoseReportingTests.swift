@@ -14,7 +14,6 @@ import XCTest
     private var clock: ManualClock!
     private var manager: TandemPumpManager!
     private var delegate: MockPumpManagerDelegate!
-    private var delegateQueue: DispatchQueue!
     /// What the stub pump runs; nil for its profile.
     private var runningPercent: Int?
 
@@ -27,7 +26,6 @@ import XCTest
     override func tearDown() {
         manager = nil
         delegate = nil
-        delegateQueue = nil
         clock = nil
         bluetooth = nil
         super.tearDown()
@@ -52,10 +50,8 @@ import XCTest
         manager = TandemPumpManager(state: state, bluetooth: bluetooth, clock: clock)
         delegate = MockPumpManagerDelegate()
         delegate.journalClock = clock
-        delegateQueue = DispatchQueue(label: "deactivation-dose-reporting-test")
         manager.pumpManagerDelegate = delegate
-        manager.delegateQueue = delegateQueue
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
 
         bluetooth.stub(CurrentBasalStatusRequest.self) { [unowned self] _ in
             let profile = UInt32((self.manager.getScheduledBasalRate() * 1000).rounded())
@@ -119,21 +115,21 @@ import XCTest
             done.fulfill()
         }
         wait(for: [done], timeout: 5)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
     }
 
     private var events: [NewPumpEvent] {
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         return delegate.pumpEventBatches.flatMap(\.events)
     }
 
     private var batchCount: Int {
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         return delegate.pumpEventBatches.count
     }
 
     private func batches(since count: Int) -> [MockPumpManagerDelegate.PumpEventBatch] {
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         return Array(delegate.pumpEventBatches.dropFirst(count))
     }
 

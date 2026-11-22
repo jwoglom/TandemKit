@@ -138,18 +138,6 @@ nonisolated final class MockPumpManagerDelegate: PumpManagerDelegate {
 
     // MARK: - Delegate queue
 
-    private static let delegateQueueKey = DispatchSpecificKey<ObjectIdentifier>()
-
-    /// Loop's delegate methods `dispatchPrecondition` onto its `delegateQueue`, and crashed when a
-    /// backfill tick called `startDateToFilterNewPumpEvents` from the command queue.
-    private func expectDelegateQueue(of manager: DeviceManager, _ method: String = #function) {
-        guard let queue = (manager as? PumpManager)?.delegateQueue else { return }
-        let id = ObjectIdentifier(queue)
-        queue.setSpecific(key: Self.delegateQueueKey, value: id)
-        guard DispatchQueue.getSpecific(key: Self.delegateQueueKey) != id else { return }
-        XCTFail("\(method) was called off the pump manager's delegateQueue")
-    }
-
     // MARK: - Journal
 
     /// Must be called with `lock` held.
@@ -216,7 +204,6 @@ nonisolated final class MockPumpManagerDelegate: PumpManagerDelegate {
         message: String,
         completion: ((Error?) -> Void)?
     ) {
-        expectDelegateQueue(of: manager)
         synchronized {
             _deviceLogEntries.append(DeviceLogEntry(deviceIdentifier: deviceIdentifier, type: type, message: message))
         }
@@ -309,7 +296,6 @@ nonisolated final class MockPumpManagerDelegate: PumpManagerDelegate {
     // MARK: - PumpManagerStatusObserver
 
     func pumpManager(_ manager: PumpManager, didUpdate status: PumpManagerStatus, oldStatus: PumpManagerStatus) {
-        expectDelegateQueue(of: manager)
         synchronized {
             let update = StatusUpdate(newStatus: status, oldStatus: oldStatus)
             _statusUpdates.append(update)
@@ -319,17 +305,14 @@ nonisolated final class MockPumpManagerDelegate: PumpManagerDelegate {
 
     // MARK: - PumpManagerDelegate
 
-    func pumpManagerBLEHeartbeatDidFire(_ manager: PumpManager) {
-        expectDelegateQueue(of: manager)
+    func pumpManagerBLEHeartbeatDidFire(_ manager: PumpManager) async {
         synchronized { record(.bleHeartbeatDidFire) }
     }
 
-    func pumpManagerMustProvideBLEHeartbeat(_ manager: PumpManager) -> Bool {
-        expectDelegateQueue(of: manager)
+    func pumpManagerMustProvideBLEHeartbeat(_ manager: PumpManager) async -> Bool {
         return false
     }
 
-    // Async, so off the delegate queue; `lastBatchAndDeactivation` pins its order instead.
     func pumpManagerWantsDeletion(_: PumpManager) async {
         synchronized {
             _willDeactivateCount += 1
@@ -337,21 +320,18 @@ nonisolated final class MockPumpManagerDelegate: PumpManagerDelegate {
         }
     }
 
-    func pumpManagerPumpWasReplaced(_ manager: PumpManager) {
-        expectDelegateQueue(of: manager)
+    func pumpManagerPumpWasReplaced(_ manager: PumpManager) async {
         synchronized {
             _pumpWasReplacedCount += 1
             record(.pumpWasReplaced)
         }
     }
 
-    func pumpManager(_ manager: PumpManager, didUpdatePumpRecordsBasalProfileStartEvents value: Bool) {
-        expectDelegateQueue(of: manager)
+    func pumpManager(_ manager: PumpManager, didUpdatePumpRecordsBasalProfileStartEvents value: Bool) async {
         synchronized { record(.didUpdatePumpRecordsBasalProfileStartEvents(value)) }
     }
 
-    func pumpManager(_ manager: PumpManager, didError error: PumpManagerError) {
-        expectDelegateQueue(of: manager)
+    func pumpManager(_ manager: PumpManager, didError error: PumpManagerError) async {
         synchronized {
             _errors.append(error)
             record(.didError(error))
@@ -362,10 +342,8 @@ nonisolated final class MockPumpManagerDelegate: PumpManagerDelegate {
         _ manager: PumpManager,
         hasNewPumpEvents events: [NewPumpEvent],
         lastReconciliation: Date?,
-        replacePendingEvents: Bool,
-        completion: @escaping (Error?) -> Void
-    ) {
-        expectDelegateQueue(of: manager)
+        replacePendingEvents: Bool
+    ) async throws {
         synchronized {
             let batch = PumpEventBatch(
                 events: events,
@@ -377,38 +355,30 @@ nonisolated final class MockPumpManagerDelegate: PumpManagerDelegate {
             record(.pumpEvents(batch))
         }
         didReceivePumpEventsExpectation?.fulfill()
-        completion(nil)
     }
 
     func pumpManager(
         _ manager: PumpManager,
         didReadReservoirValue units: Double,
-        at date: Date,
-        completion: @escaping (Swift.Result<
-            (newValue: ReservoirValue, lastValue: ReservoirValue?, areStoredValuesContinuous: Bool),
-            Error
-        >) -> Void
-    ) {
-        expectDelegateQueue(of: manager)
+        at date: Date
+    ) async throws -> (newValue: ReservoirValue, lastValue: ReservoirValue?, areStoredValuesContinuous: Bool) {
         synchronized {
             let reading = ReservoirReading(units: units, date: date)
             _reservoirReadings.append(reading)
             record(.reservoirReading(reading))
         }
         didReadReservoirExpectation?.fulfill()
-        completion(.success((SimpleReservoirValue(startDate: date, unitVolume: units), nil, true)))
+        return (SimpleReservoirValue(startDate: date, unitVolume: units), nil, true)
     }
 
-    func pumpManager(_ manager: PumpManager, didAdjustPumpClockBy adjustment: TimeInterval) {
-        expectDelegateQueue(of: manager)
+    func pumpManager(_ manager: PumpManager, didAdjustPumpClockBy adjustment: TimeInterval) async {
         synchronized {
             _clockAdjustments.append(adjustment)
             record(.didAdjustPumpClock(by: adjustment))
         }
     }
 
-    func pumpManagerDidUpdateState(_ manager: PumpManager) {
-        expectDelegateQueue(of: manager)
+    func pumpManagerDidUpdateState(_ manager: PumpManager) async {
         synchronized {
             _didUpdateStateCount += 1
             record(.didUpdateState)
@@ -418,16 +388,30 @@ nonisolated final class MockPumpManagerDelegate: PumpManagerDelegate {
 
     func pumpManager(
         _ manager: PumpManager,
-        didRequestBasalRateScheduleChange schedule: BasalRateSchedule,
-        completion: @escaping (Error?) -> Void
-    ) {
-        expectDelegateQueue(of: manager)
+        didRequestBasalRateScheduleChange schedule: BasalRateSchedule
+    ) async throws {
         synchronized { record(.didRequestBasalRateScheduleChange(schedule)) }
-        completion(nil)
     }
 
-    func startDateToFilterNewPumpEvents(for manager: PumpManager) -> Date {
-        expectDelegateQueue(of: manager)
+    func startDateToFilterNewPumpEvents(for manager: PumpManager) async -> Date {
         return startDateToFilterNewPumpEvents
+    }
+}
+
+extension TandemPumpManager {
+    /// Blocks until the delegate has finished every call made before this one.
+    func waitForDelegateCalls() {
+        let done = DispatchSemaphore(value: 0)
+        pumpDelegate.notify { _ in done.signal() }
+        done.wait()
+    }
+
+    /// Holds every delegate call made after this one until the returned closure is called.
+    func holdDelegateCalls() -> () -> Void {
+        let (released, release) = AsyncStream<Void>.makeStream()
+        pumpDelegate.notify { _ in
+            for await _ in released {}
+        }
+        return { release.finish() }
     }
 }

@@ -212,7 +212,7 @@ import XCTest
 
         viewModel.exitFillTubingMode()
         drainMainQueue()
-        manager.delegateQueue.sync {}
+        manager.waitForDelegateCalls()
 
         XCTAssertEqual(delegate.pumpEventBatches.flatMap(\.events).map(\.type), [.prime])
         XCTAssertEqual(delegate.pumpEventBatches.last?.replacePendingEvents, false)
@@ -224,7 +224,7 @@ import XCTest
 
         viewModel.exitFillTubingMode()
         drainMainQueue()
-        manager.delegateQueue.sync {}
+        manager.waitForDelegateCalls()
 
         XCTAssertEqual(delegate.pumpEventBatches.flatMap(\.events), [])
     }
@@ -239,7 +239,7 @@ import XCTest
 
         viewModel.exitFillTubingMode()
         drainMainQueue()
-        manager.delegateQueue.sync {}
+        manager.waitForDelegateCalls()
 
         XCTAssertEqual(delegate.pumpEventBatches.flatMap(\.events), [])
         XCTAssertTrue(viewModel.failedExitMode)
@@ -429,8 +429,7 @@ import XCTest
     private func attachDelegate() -> MockPumpManagerDelegate {
         let delegate = MockPumpManagerDelegate()
         manager.pumpManagerDelegate = delegate
-        manager.delegateQueue = DispatchQueue(label: "fill-tubing-view-model-test")
-        manager.delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         return delegate
     }
 

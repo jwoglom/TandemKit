@@ -9,7 +9,6 @@ import XCTest
     private var bluetooth: StubPumpBluetooth!
     private var manager: TandemPumpManager!
     private var delegate: MockPumpManagerDelegate!
-    private var delegateQueue: DispatchQueue!
 
     private static let bolusId = 2004
 
@@ -18,14 +17,11 @@ import XCTest
         bluetooth = StubPumpBluetooth()
         manager = TandemPumpManager(state: TandemPumpManagerState(rawValue: [:]), bluetooth: bluetooth)
         delegate = MockPumpManagerDelegate()
-        delegateQueue = DispatchQueue(label: "bolus-delivered-volume-test")
         manager.pumpManagerDelegate = delegate
-        manager.delegateQueue = delegateQueue
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
     }
 
     override func tearDown() {
-        delegateQueue = nil
         delegate = nil
         manager = nil
         bluetooth = nil
@@ -66,7 +62,7 @@ import XCTest
             enacted.fulfill()
         }
         wait(for: [enacted], timeout: 5.0)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         XCTAssertEqual(manager.state.bolusDose?.bolusId, Self.bolusId)
     }
 
@@ -94,7 +90,7 @@ import XCTest
 
     /// The delivered volume of the last finalized (immutable) bolus the host was told about.
     private func lastFinalizedBolusDeliveredUnits() -> Double? {
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         return delegate.pumpEvents
             .compactMap(\.dose)
             .last { $0.type == .bolus && !$0.isMutable }?

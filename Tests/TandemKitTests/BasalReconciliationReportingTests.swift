@@ -9,7 +9,6 @@ import XCTest
     private var bluetooth: StubPumpBluetooth!
     private var manager: TandemPumpManager!
     private var delegate: MockPumpManagerDelegate!
-    private var delegateQueue: DispatchQueue!
     private var clock: ManualClock!
 
     override func setUp() {
@@ -22,7 +21,6 @@ import XCTest
     override func tearDown() {
         manager = nil
         delegate = nil
-        delegateQueue = nil
         bluetooth = nil
         super.tearDown()
     }
@@ -43,10 +41,8 @@ import XCTest
         let manager = TandemPumpManager(state: state, bluetooth: bluetooth)
         manager.clock = clock
         delegate = MockPumpManagerDelegate()
-        delegateQueue = DispatchQueue(label: "basal-reconciliation-reporting-test")
         manager.pumpManagerDelegate = delegate
-        manager.delegateQueue = delegateQueue
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         return manager
     }
 
@@ -66,7 +62,7 @@ import XCTest
             ),
             now: clock.now
         )
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
     }
 
     private func controlIQHour() -> PumpBasalHistory {
@@ -131,7 +127,7 @@ import XCTest
         )
         manager.state.basalDose = dose
         manager.emitPumpEvents([NewPumpEvent.tempBasal(dose: dose.toDoseEntry(isMutable: true, now: at(0)), of: dose)])
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         setupBatches = delegate.pumpEventBatches.count
     }
 
@@ -450,7 +446,7 @@ import XCTest
             dose: UnfinalizedDose(basalRate: 1, insulinType: .novolog, startDate: at(310)).toDoseEntry(),
             date: at(310)
         )])
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         setupBatches = delegate.pumpEventBatches.count
         var log = PumpBasalHistory()
         log.delivery(10, source: 3, rate: 1000)
@@ -541,7 +537,7 @@ import XCTest
             events.append(NewPumpEvent.basal(dose: dose.toDoseEntry(), date: at(marker)))
         }
         manager.emitPumpEvents(events, replacePendingEvents: false)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         setupBatches = delegate.pumpEventBatches.count
     }
 
@@ -701,7 +697,7 @@ import XCTest
             NewPumpEvent.tempBasal(dose: entry, of: dose),
             NewPumpEvent.basal(dose: marker.toDoseEntry(), date: at(end))
         ], replacePendingEvents: false)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         setupBatches = delegate.pumpEventBatches.count
     }
 

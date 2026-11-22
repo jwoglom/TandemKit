@@ -9,7 +9,6 @@ import XCTest
     private var bluetooth: StubPumpBluetooth!
     private var manager: TandemPumpManager!
     private var delegate: MockPumpManagerDelegate!
-    private var delegateQueue: DispatchQueue!
 
     private let now = Date()
     private lazy var phoneNowPumpTimeSec = UInt32(Dates.fromInstantToJan12008EpochSeconds(now))
@@ -26,7 +25,6 @@ import XCTest
     override func tearDown() {
         manager = nil
         delegate = nil
-        delegateQueue = nil
         bluetooth = nil
         super.tearDown()
     }
@@ -43,10 +41,8 @@ import XCTest
     private func makeManager(state: TandemPumpManagerState) -> TandemPumpManager {
         let manager = TandemPumpManager(state: state, bluetooth: bluetooth)
         delegate = MockPumpManagerDelegate()
-        delegateQueue = DispatchQueue(label: "history-dose-reporting-test")
         manager.pumpManagerDelegate = delegate
-        manager.delegateQueue = delegateQueue
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         return manager
     }
 
@@ -128,7 +124,7 @@ import XCTest
             floor: floor ?? now.addingTimeInterval(-BolusReportLedger.reportingHorizon),
             now: now
         )
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
     }
 
     private var reportedBoluses: [NewPumpEvent] {
@@ -251,7 +247,7 @@ import XCTest
         let raw = try XCTUnwrap(reportedBoluses.last?.raw)
 
         manager.startScheduledBasalDose()
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
 
         let stored = try XCTUnwrap(feedLoop().assertPermanent(raw: raw))
         XCTAssertEqual(stored.dose.deliveredUnits, 1.0)
@@ -272,7 +268,7 @@ import XCTest
             automatic: false,
             isFinalized: false
         ))
-        let inFlight = DoseEntry(type: .bolus, startDate: date, value: 1.0, unit: .units, decisionId: nil, isMutable: true)
+        let inFlight = DoseEntry(type: .bolus, startDate: date, value: 1.0, unit: .units, doseId: nil, isMutable: true)
         manager.emitPumpEvents(
             [NewPumpEvent(date: date, dose: inFlight, raw: raw, title: "Bolus", type: .bolus)],
             replacePendingEvents: false
@@ -430,7 +426,7 @@ import XCTest
         manager.state.bolusReportLedger.record(entry)
         let finalized = NewPumpEvent(
             date: entry.eventDate,
-            dose: DoseEntry(type: .bolus, startDate: entry.eventDate, value: 1.0, unit: .units, decisionId: nil, deliveredUnits: 1.0),
+            dose: DoseEntry(type: .bolus, startDate: entry.eventDate, value: 1.0, unit: .units, doseId: nil, deliveredUnits: 1.0),
             raw: entry.raw,
             title: "Bolus"
         )
@@ -517,7 +513,7 @@ import XCTest
             ),
             now: now
         )
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
 
         XCTAssertTrue(delegate.pumpEventBatches.isEmpty)
     }
@@ -578,7 +574,7 @@ import XCTest
     @discardableResult
     private func reportBoundary() -> Date? {
         manager.reportReconciliationBoundary()
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         return delegate.pumpEventBatches.last?.lastReconciliation
     }
 
@@ -714,7 +710,7 @@ import XCTest
             synced.fulfill()
         }
         wait(for: [synced], timeout: timeout)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
     }
 
     func testASyncUnderControlIQCompletesOnlyOnceHistoryHasReportedAPumpBolus() {
@@ -782,7 +778,7 @@ import XCTest
         let ticked = expectation(description: "backfill tick completes")
         manager.historyBackfillCoordinator.runTick(now: now) { _ in ticked.fulfill() }
         wait(for: [ticked], timeout: 90.0)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
     }
 
     func testABackfillTickReportsAPumpBolusItRead() throws {
@@ -977,21 +973,21 @@ import XCTest
         let raw = HistoryLogSyncIdentifier.bolus(pumpSerial: serial, bolusId: 78)
         manager.state.heldHistory.update(examined: [raw], held: [raw: 0], now: now.addingTimeInterval(-.minutes(14)))
         manager.reconcileHeldHistoryAlert()
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         XCTAssertFalse(manager.isHistoryHeldTooLong)
         XCTAssertFalse(manager.state.heldHistoryAlertIssued)
 
         manager.state.heldHistory = HeldHistoryLedger()
         manager.state.heldHistory.update(examined: [raw], held: [raw: 0], now: now.addingTimeInterval(-.minutes(16)))
         manager.reconcileHeldHistoryAlert()
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         delegate.waitForAlerts { !self.delegate.issuedAlerts.isEmpty }
         XCTAssertEqual(delegate.issuedAlerts.map(\.identifier.alertIdentifier), [TandemPumpManager.heldHistoryAlertIdentifier])
         XCTAssertTrue(manager.isHistoryHeldTooLong)
 
         manager.state.heldHistory.update(examined: [raw], held: [:], now: now)
         manager.reconcileHeldHistoryAlert()
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         delegate.waitForAlerts { !self.delegate.retractedAlerts.isEmpty }
         XCTAssertEqual(delegate.retractedAlerts.map(\.alertIdentifier), [TandemPumpManager.heldHistoryAlertIdentifier])
     }
@@ -1016,7 +1012,7 @@ import XCTest
 
     private func reportAfterATick(reading logs: [HistoryLog], clock: HistoryBackfillCoordinator.TickOutcome.ClockRead) {
         manager.reportHistoryDoses(after: outcome(reading: logs, clock: clock), now: now)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
     }
 
     func testATickWhoseClockReadsAgreeSavesItsAnchorAndDatesByIt() throws {

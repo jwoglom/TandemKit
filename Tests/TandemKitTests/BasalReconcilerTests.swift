@@ -44,7 +44,7 @@ final class BasalReconcilerTests: XCTestCase {
             endDate: at(end),
             value: rate,
             unit: .unitsPerHour,
-            decisionId: nil,
+            doseId: nil,
             deliveredUnits: rate * (end - start) / .hours(1)
         )
         let raw = HistoryLogSyncIdentifier.logSequence(pumpSerial: Self.serial, sequenceNum: sequenceNum)
@@ -337,7 +337,7 @@ final class BasalReconcilerTests: XCTestCase {
                 endDate: chunk.end,
                 value: chunk.unitsPerHour,
                 unit: .unitsPerHour,
-                decisionId: nil,
+                doseId: nil,
                 deliveredUnits: chunk.units
             )
             return NewPumpEvent(date: chunk.start, dose: entry, raw: Data("\(chunk.sequenceNum)".utf8), title: "Control-IQ Basal")

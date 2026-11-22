@@ -8,7 +8,6 @@ import XCTest
     private var bluetooth: StubPumpBluetooth!
     private var manager: TandemPumpManager!
     private var delegate: MockPumpManagerDelegate!
-    private var delegateQueue: DispatchQueue!
     private var clock: ManualClock!
 
     override func setUp() {
@@ -26,16 +25,13 @@ import XCTest
         manager = TandemPumpManager(state: state, bluetooth: bluetooth)
         manager.clock = clock
         delegate = MockPumpManagerDelegate()
-        delegateQueue = DispatchQueue(label: "reconciliation-log-test")
         manager.pumpManagerDelegate = delegate
-        manager.delegateQueue = delegateQueue
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
     }
 
     override func tearDown() {
         manager = nil
         delegate = nil
-        delegateQueue = nil
         bluetooth = nil
         super.tearDown()
     }
@@ -45,7 +41,7 @@ import XCTest
         let sequences = log.logs.map(\.sequenceNum)
         let range = sequences.min()! ... sequences.max()!
         manager.reportHistoryDoses(after: outcome(range), now: clock.now)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
     }
 
     private func outcome(_ range: ClosedRange<UInt32>) -> HistoryBackfillCoordinator.TickOutcome {

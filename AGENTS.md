@@ -66,23 +66,20 @@ Insulin amounts are compared and converted in whole milliunits, through
 `TandemPumpCapabilities.milliunits(_:)` and `floor(_:ontoGrid:)`, never by `==` or `Int(x * 1000)`
 on the Doubles. A discrepancy that rounding explains never fails a command.
 
-### Delegate queue
-`PumpManagerDelegate` methods are only called through `pumpDelegate.notify` or
-`delegateQueue.async`. Loop opens them with `dispatchPrecondition(condition: .onQueue(queue))`, so
-a direct call from a driver queue crashes it, as a backfill tick reading
-`startDateToFilterNewPumpEvents` from the command queue did. `pumpDelegate.call` is a
-`queue.sync`, which deadlocks a caller already on the delegate queue. The exception is
-`pumpManagerWantsDeletion`, which is async and awaited off it, as LoopKit's default `delete()` does;
-`delete()` first takes a turn on the queue, so it follows every batch sent before it.
+### Delegate calls
+`PumpManagerDelegate` methods are only called through `pumpDelegate.notify`, which runs its blocks
+one at a time, in the order they were made, each awaiting the delegate (LoopKit#696). A block holds
+the delegate as it was when the block was made. `delete()` awaits a block made after the batches it
+finalizes, so the host stores them before it deletes the manager.
 
-Nothing goes out until the host has set both the delegate and its queue (`canNotifyDelegate`):
-`pumpDelegate.queue` reads `.main` until then, and Trio sets the delegate first. Loop next-dev
-sets no queue and takes its pump calls on `.main`, so a delegate still without a queue
-`unsetDelegateQueueGrace` later is reported to on `.main`.
-`deliverStateMissedByTheDelegate` replays what was held once the second one lands, with the status
-but not `pumpManagerDidUpdateState`: Loop and Trio save `rawValue` on the main thread right after
-attaching, and a second save from their delegate queue races it (Trio's launch hung in a Thread
+Nothing goes out until the host has set the delegate (`canNotifyDelegate`).
+`deliverStateMissedByTheDelegate` replays what was held then, with the status but not
+`pumpManagerDidUpdateState`: Loop and Trio save `rawValue` on the main thread right after
+attaching, and a second save from the manager's call races it (Trio's launch hung in a Thread
 Sanitizer report of it).
+
+Tests wait for the delegate with `waitForDelegateCalls()`, which blocks its thread; never call it
+from a task.
 
 Both hosts save the whole `rawValue` on every `pumpManagerDidUpdateState`, so a reading the host
 doesn't use waits for the next state change instead of notifying: `fetchInsulinOnBoard` answers

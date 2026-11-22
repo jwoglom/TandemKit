@@ -12,7 +12,6 @@ import XCTest
     private var clock: ManualClock!
     private var manager: TandemPumpManager!
     private var delegate: MockPumpManagerDelegate!
-    private var delegateQueue: DispatchQueue!
 
     override func setUp() {
         super.setUp()
@@ -25,7 +24,6 @@ import XCTest
     }
 
     override func tearDown() {
-        delegateQueue = nil
         delegate = nil
         manager = nil
         clock = nil
@@ -37,10 +35,8 @@ import XCTest
         let manager = TandemPumpManager(state: state, bluetooth: bluetooth, clock: clock)
         delegate = MockPumpManagerDelegate()
         delegate.journalClock = clock
-        delegateQueue = DispatchQueue(label: "unanswered-bolus-test")
         manager.pumpManagerDelegate = delegate
-        manager.delegateQueue = delegateQueue
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         return manager
     }
 
@@ -62,7 +58,7 @@ import XCTest
             finished.fulfill()
         }
         wait(for: [finished], timeout: 5.0)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         return result
     }
 
@@ -106,11 +102,11 @@ import XCTest
 
     private func readBolusStatus() {
         manager.fetchBolusStatus(fromSync: true)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
     }
 
     private var reportedBoluses: [NewPumpEvent] {
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         return delegate.pumpEventBatches.flatMap(\.events).filter { $0.dose?.type == .bolus }
     }
 
@@ -333,7 +329,7 @@ import XCTest
         let synced = expectation(description: "ensureCurrentPumpData")
         manager.ensureCurrentPumpData { _ in synced.fulfill() }
         wait(for: [synced], timeout: 5.0)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
 
         XCTAssertTrue(bluetooth.didSend(CurrentBolusStatusRequest.self))
         XCTAssertFalse(manager.status.deliveryIsUncertain)
@@ -441,7 +437,7 @@ import XCTest
             floor: clock.now.addingTimeInterval(-BolusReportLedger.reportingHorizon),
             now: clock.now
         )
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
 
         XCTAssertEqual(Set(reportedBoluses.map(\.raw)), [registered.raw], "one bolus, not a second from history")
         let finalized = try XCTUnwrap(reportedBoluses.last)

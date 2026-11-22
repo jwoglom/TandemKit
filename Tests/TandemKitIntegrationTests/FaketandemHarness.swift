@@ -163,25 +163,22 @@ final class FaketandemHarness {
     // MARK: - Driver
 
     /// One real driver stack. Everything a test needs to reach is exposed; the delegate is attached
-    /// in Trio's order (delegate first, then queue) unless `attachDelegate` is false.
+    /// unless `attachDelegate` is false.
     struct Driver {
         let central: CBCentralManager
         let bluetooth: TandemBluetoothManager
         let manager: TandemPumpManager
         let delegate: MockPumpManagerDelegate
-        let delegateQueue: DispatchQueue
         let clock: TandemClock
 
-        /// Drains the delegate queue so assertions see every callback issued so far.
+        /// Waits for the delegate so assertions see every callback issued so far.
         func drainDelegate() {
-            delegateQueue.sync {}
+            manager.waitForDelegateCalls()
         }
 
-        /// The host takes a manager made with `attachDelegate: false`, as a setup flow hands it over:
-        /// delegate, then queue, Trio's order.
+        /// The host takes a manager made with `attachDelegate: false`, as a setup flow hands it over.
         func adoptByHost() {
             manager.pumpManagerDelegate = delegate
-            manager.delegateQueue = delegateQueue
             drainDelegate()
         }
 
@@ -236,17 +233,14 @@ final class FaketandemHarness {
         // Before the delegate is attached: attaching fires the first callbacks synchronously, and
         // every journal entry should carry the driver's clock.
         delegate.journalClock = clock
-        let queue = DispatchQueue(label: "com.jwoglom.TandemKitIntegrationTests.delegate")
         if attachDelegate {
             manager.pumpManagerDelegate = delegate
-            manager.delegateQueue = queue
         }
         return Driver(
             central: central,
             bluetooth: bluetooth,
             manager: manager,
             delegate: delegate,
-            delegateQueue: queue,
             clock: clock
         )
     }

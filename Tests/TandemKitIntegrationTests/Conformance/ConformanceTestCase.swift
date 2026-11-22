@@ -262,7 +262,7 @@ class ConformanceTestCase: FaketandemIntegrationTestCase {
         return try box.wait("loadHistoryForSetup completion", timeout: timeout ?? syncTimeout)
     }
 
-    /// Drains the current delegate queue so the journal holds every callback issued so far.
+    /// Waits for the delegate so the journal holds every callback issued so far.
     func drainDelegate() {
         driver?.drainDelegate()
     }

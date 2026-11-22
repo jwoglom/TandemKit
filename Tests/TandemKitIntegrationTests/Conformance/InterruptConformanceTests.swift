@@ -81,7 +81,7 @@ final class InterruptConformanceTests: ConformanceTestCase {
     }
 
     /// The finalized (`isMutable == false`) report of the dose with this `raw`, waiting for the
-    /// delegate queue to deliver it.
+    /// delegate to be handed it.
     private func finalizedEvent(raw: Data, timeout: TimeInterval = 30) throws -> NewPumpEvent {
         try IntegrationWait.value("finalized report of \(LoopDoseStoreOracle.describe(raw))", timeout: timeout) {
             self.allPumpEventBatches.flatMap(\.events).first { $0.raw == raw && $0.dose?.isMutable == false }

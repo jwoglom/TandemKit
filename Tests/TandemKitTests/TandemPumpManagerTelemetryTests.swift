@@ -113,7 +113,6 @@ import XCTest
         let manager = makeManager(apiVersion: .apiV3_4)
         let delegate = MockPumpManagerDelegate()
         let queue = DispatchQueue(label: "reservoir-telemetry-test")
-        manager.delegateQueue = queue
         manager.pumpManagerDelegate = delegate
 
         bluetooth.stub(InsulinStatusRequest.self, with: InsulinStatusResponse(

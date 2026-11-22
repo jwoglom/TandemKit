@@ -7,7 +7,6 @@ import XCTest
 
     private var manager: TandemPumpManager!
     private var delegate: MockPumpManagerDelegate!
-    private var delegateQueue: DispatchQueue!
     private let logger = TandemLogger(category: "HostDeviceLogTests")
 
     override func setUp() {
@@ -16,13 +15,11 @@ import XCTest
         state.pumpState.pumpSerial = Self.pumpSerial
         manager = TandemPumpManager(state: state, bluetooth: StubPumpBluetooth())
         delegate = MockPumpManagerDelegate()
-        delegateQueue = DispatchQueue(label: "host-device-log-test")
     }
 
     override func tearDown() {
         manager = nil
         delegate = nil
-        delegateQueue = nil
         super.tearDown()
     }
 
@@ -33,7 +30,7 @@ import XCTest
         logger.info("info line")
         logger.warning("warning line")
         logger.error("error line")
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
 
         let entries = loggedEntries()
         XCTAssertEqual(entries.map(\.level), ["[INFO]", "[WARNING]", "[ERROR]"])
@@ -42,13 +39,11 @@ import XCTest
         XCTAssertTrue(entries[0].entry.message.hasSuffix(": info line"), entries[0].entry.message)
     }
 
-    func testNothingReachesAHostThatHasNotSetItsQueue() {
-        // Trio sets the delegate first.
-        manager.pumpManagerDelegate = delegate
+    func testALineLoggedBeforeTheHostAdoptsTheManagerIsNotSentLater() {
         logger.info("info line")
+        adopt()
 
-        manager.delegateQueue = delegateQueue
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
 
         XCTAssertTrue(loggedEntries().isEmpty)
     }
@@ -60,14 +55,13 @@ import XCTest
         logger.info("info line")
         manager.state.pumpState.pumpSerial = Self.pumpSerial + 1
         logger.info("info line")
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
 
         XCTAssertEqual(loggedEntries().map(\.entry.deviceIdentifier), [nil, String(Self.pumpSerial + 1)])
     }
 
     private func adopt() {
         manager.pumpManagerDelegate = delegate
-        manager.delegateQueue = delegateQueue
     }
 
     /// The manager logs as it is adopted, so only this test's own lines.

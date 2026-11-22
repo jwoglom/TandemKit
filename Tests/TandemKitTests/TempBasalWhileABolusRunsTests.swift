@@ -8,7 +8,6 @@ import XCTest
     private var clock: ManualClock!
     private var manager: TandemPumpManager!
     private var delegate: MockPumpManagerDelegate!
-    private var delegateQueue: DispatchQueue!
     /// What the stub pump runs; nil for its profile.
     private var runningPercent: Int?
 
@@ -39,7 +38,6 @@ import XCTest
     }
 
     override func tearDown() {
-        delegateQueue = nil
         delegate = nil
         manager = nil
         clock = nil
@@ -52,10 +50,8 @@ import XCTest
     private func start(state: TandemPumpManagerState) {
         manager = TandemPumpManager(state: state, bluetooth: bluetooth, clock: clock)
         delegate = MockPumpManagerDelegate()
-        delegateQueue = DispatchQueue(label: "temp-basal-while-a-bolus-runs-test")
         manager.pumpManagerDelegate = delegate
-        manager.delegateQueue = delegateQueue
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
     }
 
     private func relaunch() {
@@ -70,7 +66,7 @@ import XCTest
             finished.fulfill()
         }
         wait(for: [finished], timeout: 5.0)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         return result
     }
 
@@ -82,7 +78,7 @@ import XCTest
             finished.fulfill()
         }
         wait(for: [finished], timeout: 5.0)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         return result
     }
 
@@ -119,7 +115,7 @@ import XCTest
     private func seeTheBolusDelivering() {
         stubCurrentBolus(statusId: 1, bolusId: Self.bolusId)
         manager.fetchBolusStatus(fromSync: false)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
     }
 
     private var estimatedDuration: TimeInterval {

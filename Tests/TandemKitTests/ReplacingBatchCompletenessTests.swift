@@ -8,7 +8,6 @@ import XCTest
     private var bluetooth: StubPumpBluetooth!
     private var manager: TandemPumpManager!
     private var delegate: MockPumpManagerDelegate!
-    private var delegateQueue: DispatchQueue!
 
     private static let bolusId = 7311
     private static let programmedUnits = 2.0
@@ -20,7 +19,6 @@ import XCTest
     }
 
     override func tearDown() {
-        delegateQueue = nil
         delegate = nil
         manager = nil
         bluetooth = nil
@@ -30,10 +28,8 @@ import XCTest
     private func makeManager(state: TandemPumpManagerState) -> TandemPumpManager {
         let manager = TandemPumpManager(state: state, bluetooth: bluetooth)
         delegate = MockPumpManagerDelegate()
-        delegateQueue = DispatchQueue(label: "replacing-batch-completeness-test")
         manager.pumpManagerDelegate = delegate
-        manager.delegateQueue = delegateQueue
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         return manager
     }
 
@@ -49,7 +45,7 @@ import XCTest
             enacted.fulfill()
         }
         wait(for: [enacted], timeout: 5.0)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         return delegate.pumpEventBatches.last?.events.first { $0.dose?.type == .bolus }?.raw
     }
 
@@ -77,12 +73,12 @@ import XCTest
             bolusTypeBitmask: 0
         ))
         manager.fetchBolusStatus(fromSync: false)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
     }
 
     private func emitReplacingBatch() -> MockPumpManagerDelegate.PumpEventBatch? {
         manager.startScheduledBasalDose()
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         return delegate.pumpEventBatches.last
     }
 
@@ -186,7 +182,7 @@ import XCTest
         let before = delegate.pumpEventBatches.count
 
         manager.reportReconciliationBoundary()
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
 
         let batch = try XCTUnwrap(delegate.pumpEventBatches.dropFirst(before).first)
         XCTAssertFalse(batch.replacePendingEvents)

@@ -8,7 +8,6 @@ import XCTest
     private var clock: ManualClock!
     private var manager: TandemPumpManager!
     private var delegate: MockPumpManagerDelegate!
-    private var delegateQueue: DispatchQueue!
     private var hostApp: HostApp = .trio
 
     private static let bolusId = 6902
@@ -30,7 +29,6 @@ import XCTest
     }
 
     override func tearDown() {
-        delegateQueue = nil
         delegate = nil
         manager = nil
         clock = nil
@@ -45,10 +43,8 @@ import XCTest
         manager.bolusStartPollInterval = 0
         manager.hostApp = hostApp
         delegate = MockPumpManagerDelegate()
-        delegateQueue = DispatchQueue(label: "bolus-delivery-start-test")
         manager.pumpManagerDelegate = delegate
-        manager.delegateQueue = delegateQueue
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
     }
 
     private func runUnder(_ host: HostApp) {
@@ -79,7 +75,7 @@ import XCTest
             finished.fulfill()
         }
         wait(for: [finished], timeout: 5.0)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         return result
     }
 
@@ -250,7 +246,7 @@ import XCTest
 
         XCTAssertTrue(isInProgress, "\(manager.status.bolusState)")
         XCTAssertNil(manager.state.bolusDose?.deliveryStartDate)
-        let reporter = try XCTUnwrap(manager.createBolusProgressReporter(reportingOn: delegateQueue))
+        let reporter = try XCTUnwrap(manager.createBolusProgressReporter(reportingOn: .main))
         XCTAssertEqual(reporter.progress.deliveredUnits, 0)
     }
 
@@ -330,7 +326,7 @@ import XCTest
         relaunch()
 
         XCTAssertTrue(isInProgress, "\(manager.status.bolusState)")
-        XCTAssertNotNil(manager.createBolusProgressReporter(reportingOn: delegateQueue))
+        XCTAssertNotNil(manager.createBolusProgressReporter(reportingOn: .main))
     }
 
     // MARK: - Cancel
@@ -356,7 +352,7 @@ import XCTest
             cancelled.fulfill()
         }
         wait(for: [cancelled], timeout: 15.0)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         return result
     }
 
@@ -501,7 +497,7 @@ import XCTest
 
         relaunch()
 
-        let reporter = try XCTUnwrap(manager.createBolusProgressReporter(reportingOn: delegateQueue))
+        let reporter = try XCTUnwrap(manager.createBolusProgressReporter(reportingOn: .main))
         manager.bolusProgressReport?.notify()
         let expected = TandemPumpCapabilities.roundToReportingResolution(
             clock.now.timeIntervalSince(deliveryStart) * TandemPumpCapabilities.bolusSpeedUnder10U
@@ -517,7 +513,7 @@ import XCTest
 
         relaunch()
 
-        let reporter = try XCTUnwrap(manager.createBolusProgressReporter(reportingOn: delegateQueue))
+        let reporter = try XCTUnwrap(manager.createBolusProgressReporter(reportingOn: .main))
         XCTAssertEqual(reporter.progress.deliveredUnits, 0)
         XCTAssertEqual(manager.status.bolusState, .initiating)
     }
@@ -530,6 +526,6 @@ import XCTest
 
         relaunch()
 
-        XCTAssertNil(manager.createBolusProgressReporter(reportingOn: delegateQueue))
+        XCTAssertNil(manager.createBolusProgressReporter(reportingOn: .main))
     }
 }

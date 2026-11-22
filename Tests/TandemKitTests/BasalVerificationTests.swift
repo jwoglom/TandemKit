@@ -340,20 +340,18 @@ import XCTest
 
     func testFailureNotifiesTheDelegate() {
         let delegate = MockPumpManagerDelegate()
-        let delegateQueue = DispatchQueue(label: "basal-verification-test")
         manager.pumpManagerDelegate = delegate
-        manager.delegateQueue = delegateQueue
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
 
         setSchedule([(0, 0.65)])
         manager.clock = ManualClock(Self.referenceDate)
         manager.verifyDeliveredBasalRate(basalStatus(rate: 0, type: 0))
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         let updatesBefore = delegate.didUpdateStateCount
 
         manager.clock = ManualClock(Self.referenceDate.addingTimeInterval(.minutes(5)))
         manager.verifyDeliveredBasalRate(basalStatus(rate: 0, type: 0))
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
 
         XCTAssertEqual(delegate.didUpdateStateCount, updatesBefore + 1)
     }
@@ -408,10 +406,8 @@ import XCTest
 
     func testMismatchReadingsAfterFailureDoNotNotifyTheDelegateAgain() {
         let delegate = MockPumpManagerDelegate()
-        let delegateQueue = DispatchQueue(label: "basal-verification-test")
         manager.pumpManagerDelegate = delegate
-        manager.delegateQueue = delegateQueue
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
 
         setSchedule([(0, 0.65)])
         manager.state.basalRateMismatchDetectedAt = Date(timeIntervalSinceNow: -.hours(1))
@@ -420,7 +416,7 @@ import XCTest
         let updatesBefore = delegate.didUpdateStateCount
 
         manager.verifyDeliveredBasalRate(basalStatus(rate: 0, type: 0))
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
 
         XCTAssertEqual(delegate.didUpdateStateCount, updatesBefore)
     }

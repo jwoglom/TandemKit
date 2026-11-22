@@ -7,7 +7,6 @@ import XCTest
     private var bluetooth: StubPumpBluetooth!
     private var manager: TandemPumpManager!
     private var delegate: MockPumpManagerDelegate!
-    private var delegateQueue: DispatchQueue!
     private var clock: ManualClock!
     /// What the stub pump runs; nil for its profile.
     private var runningPercent: Int?
@@ -23,10 +22,8 @@ import XCTest
         manager = TandemPumpManager(state: state, bluetooth: bluetooth)
         manager.clock = clock
         delegate = MockPumpManagerDelegate()
-        delegateQueue = DispatchQueue(label: "unanswered-suspend-test")
         manager.pumpManagerDelegate = delegate
-        manager.delegateQueue = delegateQueue
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
 
         bluetooth.stub(CurrentBasalStatusRequest.self) { [unowned self] _ in
             if self.isSuspended {
@@ -54,7 +51,6 @@ import XCTest
     override func tearDown() {
         manager = nil
         delegate = nil
-        delegateQueue = nil
         bluetooth = nil
         super.tearDown()
     }
@@ -78,7 +74,7 @@ import XCTest
             done.fulfill()
         }
         wait(for: [done], timeout: 5)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         return error
     }
 
@@ -90,7 +86,7 @@ import XCTest
             done.fulfill()
         }
         wait(for: [done], timeout: 5)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         return error
     }
 

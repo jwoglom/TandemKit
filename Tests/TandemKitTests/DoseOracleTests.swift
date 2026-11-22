@@ -15,7 +15,7 @@ final class DoseOracleTests: XCTestCase {
             endDate: end ?? start.addingTimeInterval(30),
             value: units,
             unit: .units,
-            decisionId: nil,
+            doseId: nil,
             deliveredUnits: mutable ? nil : delivered,
             insulinType: .novolog,
             automatic: false,
@@ -33,7 +33,7 @@ final class DoseOracleTests: XCTestCase {
             endDate: actualEnd,
             value: rate,
             unit: .unitsPerHour,
-            decisionId: nil,
+            doseId: nil,
             deliveredUnits: mutable ? nil : rate * actualEnd.timeIntervalSince(start) / .hours(1),
             insulinType: .novolog,
             automatic: true,
@@ -397,7 +397,7 @@ final class DoseOracleTests: XCTestCase {
 
     private func scheduledBasal(rate: Double, at date: Date) -> NewPumpEvent {
         NewPumpEvent.basal(
-            dose: DoseEntry(type: .basal, startDate: date, endDate: date, value: rate, unit: .unitsPerHour, decisionId: nil, insulinType: .novolog),
+            dose: DoseEntry(type: .basal, startDate: date, endDate: date, value: rate, unit: .unitsPerHour, doseId: nil, insulinType: .novolog),
             date: date
         )
     }
@@ -577,7 +577,7 @@ final class DoseOracleTests: XCTestCase {
             endDate: t0.addingTimeInterval(.minutes(30)),
             value: 2,
             unit: .unitsPerHour,
-            decisionId: nil,
+            doseId: nil,
             deliveredUnits: 5,
             insulinType: .novolog
         )
@@ -619,17 +619,17 @@ final class DoseOracleTests: XCTestCase {
 
     // MARK: - Journal replay
 
-    func testJournalFeedReplaysBatchesInOrderWithTheClockTime() {
+    func testJournalFeedReplaysBatchesInOrderWithTheClockTime() async throws {
         let delegate = MockPumpManagerDelegate()
         let clock = ManualClock(t0)
         delegate.journalClock = clock
         let manager = TandemPumpManager(state: TandemPumpManagerState(rawValue: [:]), bluetooth: StubPumpBluetooth())
 
         let first = bolus(units: 2, start: t0, mutable: true)
-        delegate.pumpManager(manager, hasNewPumpEvents: [first], lastReconciliation: t0, replacePendingEvents: true) { _ in }
+        try await delegate.pumpManager(manager, hasNewPumpEvents: [first], lastReconciliation: t0, replacePendingEvents: true)
         clock.advance(by: 60)
-        delegate.pumpManager(manager, didError: .communication(PumpCommError.pumpNotConnected))
-        delegate.pumpManager(manager, hasNewPumpEvents: [], lastReconciliation: clock.now, replacePendingEvents: false) { _ in }
+        await delegate.pumpManager(manager, didError: .communication(PumpCommError.pumpNotConnected))
+        try await delegate.pumpManager(manager, hasNewPumpEvents: [], lastReconciliation: clock.now, replacePendingEvents: false)
 
         XCTAssertEqual(delegate.journal.count, 3)
         XCTAssertEqual(delegate.journal.map(\.index), [0, 1, 2])

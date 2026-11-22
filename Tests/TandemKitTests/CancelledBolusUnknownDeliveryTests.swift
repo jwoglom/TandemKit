@@ -7,7 +7,6 @@ import XCTest
     private var bluetooth: StubPumpBluetooth!
     private var manager: TandemPumpManager!
     private var delegate: MockPumpManagerDelegate!
-    private var delegateQueue: DispatchQueue!
 
     private static let bolusId = 3011
     private static let programmedUnits = 2.0
@@ -17,14 +16,11 @@ import XCTest
         bluetooth = StubPumpBluetooth()
         manager = TandemPumpManager(state: TandemPumpManagerState(rawValue: [:]), bluetooth: bluetooth)
         delegate = MockPumpManagerDelegate()
-        delegateQueue = DispatchQueue(label: "cancelled-bolus-unknown-delivery-test")
         manager.pumpManagerDelegate = delegate
-        manager.delegateQueue = delegateQueue
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
     }
 
     override func tearDown() {
-        delegateQueue = nil
         delegate = nil
         manager = nil
         bluetooth = nil
@@ -64,7 +60,7 @@ import XCTest
             enacted.fulfill()
         }
         wait(for: [enacted], timeout: 5.0)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         XCTAssertEqual(manager.state.bolusDose?.bolusId, Self.bolusId)
     }
 
@@ -89,17 +85,17 @@ import XCTest
             cancelled.fulfill()
         }
         wait(for: [cancelled], timeout: 15.0)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         return returnedDose
     }
 
     private var reportedBolusDoses: [DoseEntry] {
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         return delegate.pumpEvents.compactMap(\.dose).filter { $0.type == .bolus }
     }
 
     private var reportedBolusRaws: [Data] {
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         return delegate.pumpEvents.filter { $0.dose?.type == .bolus }.map(\.raw)
     }
 
@@ -178,7 +174,7 @@ import XCTest
 
         stubLastBolus(deliveredVolume: 1041)
         manager.finalizePendingBolus()
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
 
         let lastDose = try XCTUnwrap(reportedBolusDoses.last)
         XCTAssertFalse(lastDose.isMutable)
@@ -193,7 +189,7 @@ import XCTest
         cancelBolus()
 
         manager.finalizePendingBolus()
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
 
         XCTAssertFalse(reportedBolusDoses.contains { !$0.isMutable })
         XCTAssertEqual(manager.state.pendingBolusFinalization?.bolusId, Self.bolusId)
@@ -210,7 +206,7 @@ import XCTest
         let afterWindow = Date.now
             .addingTimeInterval(TandemPumpManager.bolusFinalizationWindow + .minutes(1))
         manager.finalizePendingBolus(now: afterWindow)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
 
         let lastDose = try XCTUnwrap(reportedBolusDoses.last)
         XCTAssertFalse(lastDose.isMutable)
@@ -229,7 +225,7 @@ import XCTest
         bluetooth.resetRecordedTraffic()
 
         manager.finalizePendingBolus()
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
 
         XCTAssertFalse(bluetooth.didSend(LastBolusStatusRequest.self))
         XCTAssertEqual(manager.state.pendingBolusFinalization?.bolusId, Self.bolusId)
@@ -242,7 +238,7 @@ import XCTest
         let before = reportedBolusDoses.count
 
         manager.finalizePendingBolus()
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
 
         XCTAssertEqual(reportedBolusDoses.count, before)
     }

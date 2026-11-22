@@ -10,7 +10,6 @@ import XCTest
     private var bluetooth: StubPumpBluetooth!
     private var manager: TandemPumpManager!
     private var delegate: MockPumpManagerDelegate!
-    private var delegateQueue: DispatchQueue!
 
     private static let bolusId = 2004
 
@@ -19,14 +18,11 @@ import XCTest
         bluetooth = StubPumpBluetooth()
         manager = TandemPumpManager(state: TandemPumpManagerState(rawValue: [:]), bluetooth: bluetooth)
         delegate = MockPumpManagerDelegate()
-        delegateQueue = DispatchQueue(label: "bolus-end-date-test")
         manager.pumpManagerDelegate = delegate
-        manager.delegateQueue = delegateQueue
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
     }
 
     override func tearDown() {
-        delegateQueue = nil
         delegate = nil
         manager = nil
         bluetooth = nil
@@ -123,7 +119,7 @@ import XCTest
     }
 
     private func lastFinalizedBolusEvent() -> NewPumpEvent? {
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         return delegate.pumpEvents.last { $0.dose?.type == .bolus && $0.dose?.isMutable == false }
     }
 
@@ -239,8 +235,7 @@ import XCTest
         manager = TandemPumpManager(state: restoredState, bluetooth: bluetooth)
         delegate = MockPumpManagerDelegate()
         manager.pumpManagerDelegate = delegate
-        manager.delegateQueue = delegateQueue
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
 
         let pumpEnd = startDate.addingTimeInterval(73)
         stubLastBolus(deliveredVolume: 1949, timestamp: pumpEnd)
@@ -284,8 +279,7 @@ import XCTest
         manager = TandemPumpManager(state: restoredState, bluetooth: bluetooth)
         delegate = MockPumpManagerDelegate()
         manager.pumpManagerDelegate = delegate
-        manager.delegateQueue = delegateQueue
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
 
         let pumpEnd = startDate.addingTimeInterval(73)
         stubLastBolus(deliveredVolume: 1949, timestamp: pumpEnd)

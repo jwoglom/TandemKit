@@ -8,7 +8,6 @@ import XCTest
     private var clock: ManualClock!
     private var manager: TandemPumpManager!
     private var delegate: MockPumpManagerDelegate!
-    private var delegateQueue: DispatchQueue!
 
     private static let firstBolusId = 4100
     private static let secondBolusId = 4101
@@ -20,14 +19,11 @@ import XCTest
         clock = ManualClock(Date(timeIntervalSinceReferenceDate: 700_000_000))
         manager = TandemPumpManager(state: TandemPumpManagerState(rawValue: [:]), bluetooth: bluetooth, clock: clock)
         delegate = MockPumpManagerDelegate()
-        delegateQueue = DispatchQueue(label: "bolus-in-flight-test")
         manager.pumpManagerDelegate = delegate
-        manager.delegateQueue = delegateQueue
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
     }
 
     override func tearDown() {
-        delegateQueue = nil
         delegate = nil
         manager = nil
         clock = nil
@@ -54,7 +50,7 @@ import XCTest
             finished.fulfill()
         }
         wait(for: [finished], timeout: 5.0)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         return result
     }
 

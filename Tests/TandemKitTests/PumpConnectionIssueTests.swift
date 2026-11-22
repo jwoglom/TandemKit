@@ -249,7 +249,6 @@ import XCTest
     /// Nothing on screen reads `state` directly, so the change has to be published as well.
     func testLosingBluetoothPublishesAStatusUpdate() {
         let delegate = MockPumpManagerDelegate()
-        manager.delegateQueue = DispatchQueue(label: "bluetooth-off-test")
         manager.pumpManagerDelegate = delegate
 
         let published = expectation(description: "delegate told about the state change")
@@ -260,7 +259,7 @@ import XCTest
 
         wait(for: [published], timeout: 5.0)
         // The status update follows didUpdateState in the same delegate-queue block, so let it land.
-        manager.delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         XCTAssertFalse(delegate.statusUpdates.isEmpty)
     }
 }

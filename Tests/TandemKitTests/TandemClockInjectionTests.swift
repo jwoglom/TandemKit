@@ -9,7 +9,6 @@ import XCTest
     private var clock: ManualClock!
     private var manager: TandemPumpManager!
     private var delegate: MockPumpManagerDelegate!
-    private var delegateQueue: DispatchQueue!
 
     private static let bolusId = 7321
     private static let programmedUnits = 3.0
@@ -25,14 +24,11 @@ import XCTest
             clock: clock
         )
         delegate = MockPumpManagerDelegate()
-        delegateQueue = DispatchQueue(label: "tandem-clock-injection-test")
         manager.pumpManagerDelegate = delegate
-        manager.delegateQueue = delegateQueue
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
     }
 
     override func tearDown() {
-        delegateQueue = nil
         delegate = nil
         manager = nil
         clock = nil
@@ -60,7 +56,7 @@ import XCTest
             enacted.fulfill()
         }
         wait(for: [enacted], timeout: 5.0)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
     }
 
     /// bolusId 0 with no delivery in progress is how the pump says the bolus is over.
@@ -74,11 +70,11 @@ import XCTest
             bolusTypeBitmask: 0
         ))
         manager.fetchBolusStatus(fromSync: false)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
     }
 
     private var reportedBolusDoses: [DoseEntry] {
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         return delegate.pumpEvents.compactMap(\.dose).filter { $0.type == .bolus }
     }
 
@@ -199,7 +195,7 @@ import XCTest
             done.fulfill()
         }
         wait(for: [done], timeout: 5.0)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
 
         XCTAssertEqual(manager.state.basalDose.type, .suspend)
         XCTAssertEqual(manager.state.basalDose.startDate, Self.start.addingTimeInterval(.hours(2)))

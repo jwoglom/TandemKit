@@ -58,7 +58,6 @@ import XCTest
         let delegate = MockPumpManagerDelegate()
         let queue = DispatchQueue(label: "temp-basal-rounding-test")
         manager.pumpManagerDelegate = delegate
-        manager.delegateQueue = queue
         queue.sync {}
         return (delegate, queue)
     }

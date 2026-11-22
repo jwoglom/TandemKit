@@ -12,7 +12,6 @@ import XCTest
     private var clock: ManualClock!
     private var manager: TandemPumpManager!
     private var delegate: MockPumpManagerDelegate!
-    private var delegateQueue: DispatchQueue!
     /// What the stub pump runs; nil for its profile. It never ends a temp on its own.
     private var runningPercent: Int?
     private var isSuspended = false
@@ -27,10 +26,8 @@ import XCTest
         manager = TandemPumpManager(state: state, bluetooth: bluetooth, clock: clock)
         delegate = MockPumpManagerDelegate()
         delegate.journalClock = clock
-        delegateQueue = DispatchQueue(label: "delivery-change-identity-test")
         manager.pumpManagerDelegate = delegate
-        manager.delegateQueue = delegateQueue
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
 
         bluetooth.stub(CurrentBasalStatusRequest.self) { [unowned self] _ in
             if self.isSuspended {
@@ -63,7 +60,6 @@ import XCTest
     override func tearDown() {
         manager = nil
         delegate = nil
-        delegateQueue = nil
         clock = nil
         bluetooth = nil
         super.tearDown()
@@ -100,7 +96,7 @@ import XCTest
     }
 
     private var batches: [MockPumpManagerDelegate.PumpEventBatch] {
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         return delegate.pumpEventBatches
     }
 
@@ -116,7 +112,7 @@ import XCTest
     }
 
     private static func marker(at date: Date) -> NewPumpEvent {
-        NewPumpEvent.basal(dose: DoseEntry(type: .basal, startDate: date, endDate: date, value: 1, unit: .unitsPerHour, decisionId: nil, insulinType: .novolog), date: date)
+        NewPumpEvent.basal(dose: DoseEntry(type: .basal, startDate: date, endDate: date, value: 1, unit: .unitsPerHour, doseId: nil, insulinType: .novolog), date: date)
     }
 
     private static func suspend(at date: Date) -> NewPumpEvent {

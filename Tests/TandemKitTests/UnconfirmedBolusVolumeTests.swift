@@ -11,7 +11,6 @@ import XCTest
     private var clock: ManualClock!
     private var manager: TandemPumpManager!
     private var delegate: MockPumpManagerDelegate!
-    private var delegateQueue: DispatchQueue!
 
     private static let t0 = Date(timeIntervalSinceReferenceDate: 700_000_000)
     private static let bolusId = 5120
@@ -30,7 +29,6 @@ import XCTest
     }
 
     override func tearDown() {
-        delegateQueue = nil
         delegate = nil
         manager = nil
         clock = nil
@@ -43,10 +41,8 @@ import XCTest
     private func makeManager(state: TandemPumpManagerState) {
         manager = TandemPumpManager(state: state, bluetooth: bluetooth, clock: clock)
         delegate = MockPumpManagerDelegate()
-        delegateQueue = DispatchQueue(label: "unconfirmed-bolus-volume-test")
         manager.pumpManagerDelegate = delegate
-        manager.delegateQueue = delegateQueue
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
     }
 
     private func relaunch() {
@@ -71,7 +67,7 @@ import XCTest
             enacted.fulfill()
         }
         wait(for: [enacted], timeout: 5.0)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         XCTAssertEqual(manager.state.bolusDose?.bolusId, Self.bolusId)
     }
 
@@ -128,12 +124,12 @@ import XCTest
         }
         // The cancel path sleeps ~2s to let the pump store the bolus before reading it back.
         wait(for: [cancelled], timeout: 15.0)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         return returned
     }
 
     private var finalizedBoluses: [DoseEntry] {
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         return delegate.pumpEvents.compactMap(\.dose).filter { $0.type == .bolus && !$0.isMutable }
     }
 

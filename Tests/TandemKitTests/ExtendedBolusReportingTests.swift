@@ -12,7 +12,6 @@ import XCTest
     private var clock: ManualClock!
     private var manager: TandemPumpManager!
     private var delegate: MockPumpManagerDelegate!
-    private var delegateQueue: DispatchQueue!
 
     // Whole seconds, so the pump's records land on it; in the past, as the oracles need.
     private let now = Date(timeIntervalSinceReferenceDate: Date().timeIntervalSinceReferenceDate.rounded(.down))
@@ -28,7 +27,6 @@ import XCTest
     override func tearDown() {
         manager = nil
         delegate = nil
-        delegateQueue = nil
         clock = nil
         bluetooth = nil
         super.tearDown()
@@ -46,10 +44,8 @@ import XCTest
     private func makeManager(state: TandemPumpManagerState) -> TandemPumpManager {
         let manager = TandemPumpManager(state: state, bluetooth: bluetooth, clock: clock)
         delegate = MockPumpManagerDelegate()
-        delegateQueue = DispatchQueue(label: "extended-bolus-reporting-test")
         manager.pumpManagerDelegate = delegate
-        manager.delegateQueue = delegateQueue
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         return manager
     }
 
@@ -168,12 +164,12 @@ import XCTest
             floor: floor ?? clock.now.addingTimeInterval(-BolusReportLedger.reportingHorizon),
             now: clock.now
         )
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
     }
 
     private func reportPendingDoses() {
         manager.reportPendingDoses()
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
     }
 
     private func extendedRaw(_ bolusId: Int) -> Data {
@@ -314,7 +310,7 @@ import XCTest
         reportPendingDoses()
         runTempBasal()
         manager.emitPumpEvents(manager.getActivePumpEvents())
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
 
         let replacing = delegate.pumpEventBatches.filter(\.replacePendingEvents)
         XCTAssertEqual(replacing.count, 2)
@@ -359,7 +355,7 @@ import XCTest
         let completion = bolexCompletion(bolusId: 35, delivered: 2.0, requested: 2.0, sequenceNum: 605, secondsAgo: 5)
         report(start + [completion])
         manager.startScheduledBasalDose()
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
 
         let loop = feedLoop()
         loop.assertNoDuplicates()
@@ -411,7 +407,7 @@ import XCTest
         let programmedEnd = pumpDate(start[2]).addingTimeInterval(.minutes(240))
 
         manager.finalizeHeldDosesForDeactivation()
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
 
         let batch = try XCTUnwrap(delegate.pumpEventBatches.last)
         XCTAssertTrue(batch.replacePendingEvents)

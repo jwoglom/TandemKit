@@ -11,7 +11,7 @@ import XCTest
     }
 
     private func bolus(from start: Date, to end: Date) -> NewPumpEvent {
-        let dose = DoseEntry(type: .bolus, startDate: start, endDate: end, value: 1, unit: .units, decisionId: nil, deliveredUnits: 1, insulinType: .novolog)
+        let dose = DoseEntry(type: .bolus, startDate: start, endDate: end, value: 1, unit: .units, doseId: nil, deliveredUnits: 1, insulinType: .novolog)
         return NewPumpEvent(date: start, dose: dose, raw: Data([1, 2, 3]), title: "Bolus", type: .bolus)
     }
 
@@ -51,13 +51,11 @@ import XCTest
         let clock = ManualClock(now)
         let manager = TandemPumpManager(state: TandemPumpManagerState(rawValue: [:]), bluetooth: StubPumpBluetooth(), clock: clock)
         let delegate = MockPumpManagerDelegate()
-        let queue = DispatchQueue(label: "host-dose-dates-test")
         manager.pumpManagerDelegate = delegate
-        manager.delegateQueue = queue
-        queue.sync {}
+        manager.waitForDelegateCalls()
 
         manager.emitPumpEvents([temp(0.42, from: now.addingTimeInterval(.minutes(56)), to: now.addingTimeInterval(-2))], replacePendingEvents: false)
-        queue.sync {}
+        manager.waitForDelegateCalls()
 
         let doses = delegate.pumpEvents.compactMap(\.dose)
         XCTAssertEqual(doses.count, 1)

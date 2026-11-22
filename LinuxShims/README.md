@@ -18,7 +18,8 @@ check of genuine LoopKit conformance. Keep that job.
 
 To limit the drift, the LoopKit shim is written against the real source at the
 revision Trio pins (`loopandlearn/LoopKit`, see the `LOOPKIT_REVISION` in the
-macOS workflow). When a signature is uncertain, check it there rather than
+macOS workflow). Its pump delegate, `doseId` and `WeakSynchronizedDelegate` follow
+LoopKit `next-dev` (`f6b36463`) instead, where Trio's fork has yet to catch up. When a signature is uncertain, check it there rather than
 guessing — several members in this shim were once invented and silently wrong
 (a `static localizedTitle`, a `dosingDecisionDelegate` property, a
 `pumpManagerRecommendsLoop` delegate callback), and a synchronous `notify` on

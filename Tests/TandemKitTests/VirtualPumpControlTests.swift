@@ -8,7 +8,6 @@ final class VirtualPumpControlTests: XCTestCase {
     private var bluetooth: StubPumpBluetooth!
     private var manager: TandemPumpManager!
     private var delegate: MockPumpManagerDelegate!
-    private var delegateQueue: DispatchQueue!
     private var server: VirtualPumpControl.Server!
     private var client: VirtualPumpControl.Client!
 
@@ -17,10 +16,8 @@ final class VirtualPumpControlTests: XCTestCase {
         bluetooth = StubPumpBluetooth()
         manager = TandemPumpManager(state: TandemPumpManagerState(rawValue: [:]), bluetooth: bluetooth)
         delegate = MockPumpManagerDelegate()
-        delegateQueue = DispatchQueue(label: "virtual-pump-control-test")
         manager.pumpManagerDelegate = delegate
-        manager.delegateQueue = delegateQueue
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         let manager = manager
         server = try VirtualPumpControl.Server { manager }
         client = try VirtualPumpControl.Client(port: server.port)
@@ -33,7 +30,6 @@ final class VirtualPumpControlTests: XCTestCase {
         server = nil
         manager = nil
         delegate = nil
-        delegateQueue = nil
         bluetooth = nil
         super.tearDown()
     }
@@ -46,7 +42,7 @@ final class VirtualPumpControlTests: XCTestCase {
 
     func testABatchSentToTheDelegateReadsBackWithItsCompletion() throws {
         manager.reportReconciliationBoundary()
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
 
         let batches = try XCTUnwrap(client.send(.init(command: .pumpEventBatches)).batches)
 
@@ -61,7 +57,7 @@ final class VirtualPumpControlTests: XCTestCase {
     func testBatchesAfterAnIndexLeaveOutTheEarlierOnes() throws {
         manager.reportReconciliationBoundary()
         manager.reportReconciliationBoundary()
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         let all = try XCTUnwrap(client.send(.init(command: .pumpEventBatches)).batches)
 
         let later = try XCTUnwrap(client.send(.init(command: .pumpEventBatches, after: all.first?.index)).batches)
@@ -127,7 +123,7 @@ final class VirtualPumpControlTests: XCTestCase {
         try client.send(.init(command: .recordCartridgeChange))
         try client.send(.init(command: .recordTubingFill))
         try client.send(.init(command: .recordSiteChange, units: 0.3))
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
 
         let events = try XCTUnwrap(client.send(.init(command: .pumpEventBatches)).batches).flatMap(\.pumpEvents)
 
@@ -167,7 +163,7 @@ final class VirtualPumpControlTests: XCTestCase {
                     endDate: start.addingTimeInterval(40),
                     value: 1.25,
                     unit: .units,
-                    decisionId: nil,
+                    doseId: nil,
                     deliveredUnits: 1.2,
                     automatic: false
                 ),
@@ -182,7 +178,7 @@ final class VirtualPumpControlTests: XCTestCase {
                     endDate: start.addingTimeInterval(2100),
                     value: 0.45,
                     unit: .unitsPerHour,
-                    decisionId: nil,
+                    doseId: nil,
                     automatic: true,
                     isMutable: true
                 ),

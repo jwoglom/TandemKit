@@ -12,7 +12,6 @@ import XCTest
     private var clock: ManualClock!
     private var manager: TandemPumpManager!
     private var delegate: MockPumpManagerDelegate!
-    private var delegateQueue: DispatchQueue!
 
     /// Whole seconds: pump timestamps are.
     private let start = Date(timeIntervalSinceReferenceDate: 800_000_000)
@@ -30,7 +29,6 @@ import XCTest
     override func tearDown() {
         manager = nil
         delegate = nil
-        delegateQueue = nil
         clock = nil
         bluetooth = nil
         super.tearDown()
@@ -53,10 +51,8 @@ import XCTest
         let manager = TandemPumpManager(state: state, bluetooth: bluetooth, clock: clock)
         delegate = MockPumpManagerDelegate()
         delegate.journalClock = clock
-        delegateQueue = DispatchQueue(label: "delivery-transition-test")
         manager.pumpManagerDelegate = delegate
-        manager.delegateQueue = delegateQueue
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         return manager
     }
 
@@ -82,7 +78,7 @@ import XCTest
     private func observe(_ bitmask: Int) {
         stubBasalStatus(bitmask)
         manager.fetchBasalStatus()
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
     }
 
     private func pumpTimeSec(_ date: Date, pumpAhead offset: TimeInterval = 0) -> UInt32 {
@@ -142,7 +138,7 @@ import XCTest
             pumpSerial: serial
         )
         manager.emitHistoryReports(batch)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
     }
 
     private var batches: [MockPumpManagerDelegate.PumpEventBatch] { delegate.pumpEventBatches }
@@ -166,7 +162,7 @@ import XCTest
             done.fulfill()
         }
         wait(for: [done], timeout: 5)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
     }
 
     private func appResume() {
@@ -177,7 +173,7 @@ import XCTest
             done.fulfill()
         }
         wait(for: [done], timeout: 60)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
     }
 
     private func appTempBasal(_ rate: Double) {
@@ -188,7 +184,7 @@ import XCTest
             done.fulfill()
         }
         wait(for: [done], timeout: 5)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
     }
 
     private func runningTempBasal(_ rate: Double, tempRateId: Int? = 7, percent: Int? = nil, from startDate: Date? = nil) {
@@ -598,7 +594,7 @@ import XCTest
         XCTAssertEqual(manager.state.deliveryTransitions.pending?.replacement?.start, minutes(12))
 
         manager.historyTickFailed(startedAt: minutes(12))
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
 
         let temps = events(.tempBasal).compactMap(\.dose)
         XCTAssertEqual(temps.map(\.startDate), [start, minutes(12)])
@@ -617,7 +613,7 @@ import XCTest
         )
 
         manager.historyTickFailed(startedAt: minutes(7))
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
 
         let temps = events(.tempBasal).compactMap(\.dose)
         XCTAssertEqual(temps.count, 2)
@@ -664,7 +660,7 @@ import XCTest
         observeTemp(percent: 50, from: minutes(5))
 
         manager.historyTickFailed(startedAt: minutes(17))
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
 
         XCTAssertEqual(events(.tempBasal).last?.dose?.endDate, minutes(12))
     }
@@ -682,7 +678,7 @@ import XCTest
             done.fulfill()
         }
         wait(for: [done], timeout: 5)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
 
         let temps = events(.tempBasal).compactMap(\.dose)
         XCTAssertEqual(temps.map(\.startDate), [start, minutes(5), minutes(14)])
@@ -930,7 +926,7 @@ import XCTest
         let synced = expectation(description: "syncPumpData")
         manager.syncPumpData { _ in synced.fulfill() }
         wait(for: [synced], timeout: 60)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
     }
 
     func testASyncThatSeesAChangeCompletesOnceHistoryHasDatedIt() {
@@ -1000,7 +996,7 @@ import XCTest
             done.fulfill()
         }
         wait(for: [done], timeout: 60)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         return answer
     }
 
@@ -1159,7 +1155,7 @@ import XCTest
             done.fulfill()
         }
         wait(for: [done], timeout: 60)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
 
         let finished = events(.tempBasal).filter { $0.dose?.isMutable == false }
         XCTAssertEqual(finished.map(\.dose?.endDate), [minutes(10)])
@@ -1184,7 +1180,7 @@ import XCTest
             done.fulfill()
         }
         wait(for: [done], timeout: 60)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
 
         let finished = try XCTUnwrap(events(.tempBasal).last { $0.dose?.isMutable == false }?.dose)
         XCTAssertEqual(finished.endDate, minutes(10).addingTimeInterval(0.6), "Loop drops a temp basal of no length, and keeps its mutable copy")
@@ -1239,14 +1235,16 @@ import XCTest
         let acknowledged = expectation(description: "qualifying events acknowledged")
         manager.handleQualifyingEvents(events: events) { acknowledged.fulfill() }
         wait(for: [acknowledged], timeout: 60)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
     }
 
     /// The history tick an event kicks runs on after the event is acknowledged, and its fetch
     /// completes on the main queue.
     private func waitUntilReported(_ type: DoseType, timeout: TimeInterval = 10) {
         let deadline = Date().addingTimeInterval(timeout)
-        while delegateQueue.sync(execute: { events(type).isEmpty }), Date() < deadline {
+        while Date() < deadline {
+            manager.waitForDelegateCalls()
+            guard events(type).isEmpty else { return }
             RunLoop.current.run(until: Date().addingTimeInterval(0.01))
         }
     }
@@ -1306,7 +1304,7 @@ import XCTest
             done.fulfill()
         }
         wait(for: [done], timeout: 5)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         return try XCTUnwrap(events(.bolus).last?.raw)
     }
 
@@ -1327,14 +1325,14 @@ import XCTest
 
     private func feedLoop() -> LoopDoseStoreOracle {
         let loop = LoopDoseStoreOracle()
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         delegate.feed(loop)
         return loop
     }
 
     private func feedTrio() -> TrioDoseStoreOracle {
         let trio = TrioDoseStoreOracle()
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         delegate.feed(trio)
         return trio
     }
@@ -1368,7 +1366,7 @@ import XCTest
 
         stubBolusOver(deliveredMilliunits: 800)
         manager.fetchBolusStatus(fromSync: false)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
 
         XCTAssertTrue(batches.dropFirst(before).contains { $0.events.contains { $0.raw == bolusRaw && $0.dose?.isMutable == false } })
         assertCarriesTheHeldTemp(tempRaw, since: before)
@@ -1439,7 +1437,7 @@ import XCTest
             cancelled.fulfill()
         }
         wait(for: [cancelled], timeout: 10)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
 
         assertCarriesTheHeldTemp(tempRaw, since: before)
         XCTAssertNotNil(manager.state.deliveryTransitions.pending, "a bolus cancel changes no basal, so the change keeps its history dating")
@@ -1463,7 +1461,7 @@ import XCTest
 
         stubBolusOver(deliveredMilliunits: 2000)
         manager.finalizePendingBolus()
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
 
         XCTAssertNil(manager.state.pendingBolusFinalization)
         XCTAssertEqual(feedLoop().dose(raw: bolusRaw)?.isMutable, false)
@@ -1489,7 +1487,7 @@ import XCTest
 
         stubBolusOver(deliveredMilliunits: 2000)
         manager.fetchBolusStatus(fromSync: false)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
 
         let temps = batches.dropFirst(before).flatMap(\.events).filter { $0.dose?.type == .tempBasal }
         XCTAssertEqual(temps.map(\.raw), [tempRaw], "the held temp as the host holds it, uncut")
@@ -1519,7 +1517,7 @@ import XCTest
             done.fulfill()
         }
         wait(for: [done], timeout: 5)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
 
         XCTAssertNil(manager.state.deliveryTransitions.pending)
         XCTAssertTrue(bluetooth.didSend(StopTempRateRequest.self), "the temp the pump runs is stopped before Control-IQ takes over")
@@ -1546,7 +1544,7 @@ import XCTest
             basalModifiedBitmask: 2
         ))
         manager.fetchBasalStatus()
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
     }
 
     private func resumedTemps() -> [NewPumpEvent] {
@@ -1778,7 +1776,7 @@ import XCTest
             done.fulfill()
         }
         wait(for: [done], timeout: 5)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         XCTAssertEqual(events(.resume).map(\.date), [minutes(10)])
         let reported = events.count
 

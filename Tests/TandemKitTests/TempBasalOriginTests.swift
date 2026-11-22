@@ -11,7 +11,6 @@ import XCTest
     private var clock: ManualClock!
     private var manager: TandemPumpManager!
     private var delegate: MockPumpManagerDelegate!
-    private var delegateQueue: DispatchQueue!
     /// What the stub pump runs; nil for its profile.
     private var runningPercent: Int?
     private var nextTempRateId = 41
@@ -27,7 +26,6 @@ import XCTest
     override func tearDown() {
         manager = nil
         delegate = nil
-        delegateQueue = nil
         clock = nil
         bluetooth = nil
         super.tearDown()
@@ -49,10 +47,8 @@ import XCTest
         state.pumpState.pumpSerial = Self.pumpSerial
         manager = TandemPumpManager(state: state, bluetooth: bluetooth, clock: clock)
         delegate = MockPumpManagerDelegate()
-        delegateQueue = DispatchQueue(label: "temp-basal-origin-test")
         manager.pumpManagerDelegate = delegate
-        manager.delegateQueue = delegateQueue
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
 
         bluetooth.stub(CurrentBasalStatusRequest.self) { [unowned self] _ in
             let profile = UInt32((self.manager.getScheduledBasalRate() * 1000).rounded())
@@ -112,7 +108,7 @@ import XCTest
 
         XCTAssertTrue(manager.state.basalDose.setByHost)
         XCTAssertTrue(manager.state.basalDose.automatic)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         let reported = delegate.pumpEventBatches.flatMap(\.events).compactMap(\.dose).filter { $0.type == .tempBasal }
         XCTAssertEqual(reported.map(\.automatic), [true])
     }

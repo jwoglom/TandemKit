@@ -12,20 +12,17 @@ import XCTest
     private var clock: ManualClock!
     private var manager: TandemPumpManager!
     private var delegate: MockPumpManagerDelegate!
-    private var delegateQueue: DispatchQueue!
 
     override func setUp() {
         super.setUp()
         bluetooth = StubPumpBluetooth()
         clock = ManualClock(Self.t0)
-        delegateQueue = DispatchQueue(label: "alert-routing-test")
     }
 
     override func tearDown() {
         manager = nil
         delegate = nil
         bluetooth = nil
-        delegateQueue = nil
         clock = nil
         super.tearDown()
     }
@@ -34,9 +31,8 @@ import XCTest
         manager = TandemPumpManager(state: state, bluetooth: bluetooth, clock: clock)
         delegate = MockPumpManagerDelegate()
         manager.pumpManagerDelegate = delegate
-        manager.delegateQueue = delegateQueue
         delegate.addAlertResponder(manager)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
     }
 
     private func stubAlerts(_ alerts: [AlertStatusResponse.AlertResponseType]) {
@@ -51,7 +47,7 @@ import XCTest
 
     private func fetchNotifications() {
         manager.fetchNotifications()
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
     }
 
     private func skewPumpClock(minutes: Double) {
@@ -72,7 +68,7 @@ import XCTest
         fetchNotifications()
         skewPumpClock(minutes: 0)
         manager.reconcilePumpClockSkewAlert()
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         delegate.waitForAlerts { delegate.issuedAlerts.count == 3 && delegate.retractedAlerts.count == 3 }
 
         XCTAssertEqual(delegate.issuedAlerts.count, 3, "\(delegate.issuedAlerts)")
@@ -101,7 +97,7 @@ import XCTest
         var result: Error??
         XCTAssertTrue(delegate.acknowledgeAlert(alert.identifier) { result = $0 }, "the host found no responder for \(alert.identifier)")
         delegate.waitForAlerts { result != nil && !delegate.retractedAlerts.isEmpty }
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
 
         let dismissals = bluetooth.sent(DismissNotificationRequest.self)
         XCTAssertEqual(dismissals.map(\.notificationType), [.alert])
@@ -124,8 +120,8 @@ import XCTest
         var result: Error??
         XCTAssertTrue(delegate.acknowledgeAlert(alert.identifier) { result = $0 }, "the host found no responder for \(alert.identifier)")
         delegate.waitForAlerts { result != nil }
-        delegateQueue.sync {}
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
+        manager.waitForDelegateCalls()
         return result ?? nil
     }
 

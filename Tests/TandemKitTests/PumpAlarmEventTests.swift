@@ -11,13 +11,11 @@ import XCTest
     private var clock: ManualClock!
     private var manager: TandemPumpManager!
     private var delegate: MockPumpManagerDelegate!
-    private var delegateQueue: DispatchQueue!
 
     override func setUp() {
         super.setUp()
         bluetooth = StubPumpBluetooth()
         clock = ManualClock(Self.t0)
-        delegateQueue = DispatchQueue(label: "pump-alarm-event-test")
         manager = makeManager(state: TandemPumpManagerState(rawValue: [:]))
     }
 
@@ -25,7 +23,6 @@ import XCTest
         manager = nil
         delegate = nil
         bluetooth = nil
-        delegateQueue = nil
         clock = nil
         super.tearDown()
     }
@@ -34,8 +31,7 @@ import XCTest
         let manager = TandemPumpManager(state: state, bluetooth: bluetooth, clock: clock)
         delegate = MockPumpManagerDelegate()
         manager.pumpManagerDelegate = delegate
-        manager.delegateQueue = delegateQueue
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         return manager
     }
 
@@ -47,7 +43,7 @@ import XCTest
     private func fetchNotifications() -> [NewPumpEvent] {
         let before = delegate.pumpEventBatches.count
         manager.fetchNotifications()
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         return delegate.pumpEventBatches.dropFirst(before).flatMap(\.events)
     }
 
@@ -147,8 +143,7 @@ import XCTest
 
         delegate = MockPumpManagerDelegate()
         manager.pumpManagerDelegate = delegate
-        manager.delegateQueue = delegateQueue
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
 
         let alarm = try XCTUnwrap(delegate.pumpEventBatches.flatMap(\.events).first)
         XCTAssertEqual(alarm.alarmType, .autoOff)

@@ -7,7 +7,6 @@ import XCTest
     private var bluetooth: StubPumpBluetooth!
     private var manager: TandemPumpManager!
     private var delegate: MockPumpManagerDelegate!
-    private var delegateQueue: DispatchQueue!
 
     private static let bolusId = 5150
     private static let programmedUnits = 2.0
@@ -22,14 +21,11 @@ import XCTest
         bluetooth = StubPumpBluetooth()
         manager = TandemPumpManager(state: TandemPumpManagerState(rawValue: [:]), bluetooth: bluetooth)
         delegate = MockPumpManagerDelegate()
-        delegateQueue = DispatchQueue(label: "bolus-event-identity-test")
         manager.pumpManagerDelegate = delegate
-        manager.delegateQueue = delegateQueue
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
     }
 
     override func tearDown() {
-        delegateQueue = nil
         delegate = nil
         manager = nil
         bluetooth = nil
@@ -69,7 +65,7 @@ import XCTest
             enacted.fulfill()
         }
         wait(for: [enacted], timeout: 5.0)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
     }
 
     private func cancelBolus() {
@@ -88,7 +84,7 @@ import XCTest
         }
         // The cancel path sleeps ~2s to let the pump store the bolus before reading it back.
         wait(for: [cancelled], timeout: 15.0)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
     }
 
     private func reportBolusFinished() {
@@ -101,11 +97,11 @@ import XCTest
             bolusTypeBitmask: 0
         ))
         manager.fetchBolusStatus(fromSync: false)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
     }
 
     private var bolusEvents: [NewPumpEvent] {
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         return delegate.pumpEvents.filter { $0.dose?.type == .bolus }
     }
 

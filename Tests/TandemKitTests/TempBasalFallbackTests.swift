@@ -45,7 +45,6 @@ import XCTest
         let manager = TandemPumpManager(state: state, bluetooth: bluetooth, clock: clock)
         bluetooth.stubBasalPump(profileMilliunits: pumpMilliunits, capMilliunits: capMilliunits)
         manager.pumpManagerDelegate = delegate
-        manager.delegateQueue = queue
         queue.sync {}
         return manager
     }

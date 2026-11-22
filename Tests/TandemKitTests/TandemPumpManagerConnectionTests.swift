@@ -363,19 +363,17 @@ import XCTest
     // MARK: - Reconnect
 
     @discardableResult
-    private func attachDelegate() -> (MockPumpManagerDelegate, DispatchQueue) {
+    private func attachDelegate() -> MockPumpManagerDelegate {
         let delegate = MockPumpManagerDelegate()
-        let queue = DispatchQueue(label: "connection-test-delegate")
         manager.pumpManagerDelegate = delegate
-        manager.delegateQueue = queue
-        queue.sync {}
+        manager.waitForDelegateCalls()
         self.delegate = delegate
-        return (delegate, queue)
+        return delegate
     }
 
     /// The pump's qualifying events go nowhere while the link is down (#351).
     func testAReconnectSyncsAndReportsAFreshBoundary() {
-        let (delegate, queue) = attachDelegate()
+        let delegate = attachDelegate()
         stubSyncResponses()
         // Inside the poll's throttle, which the reconnect does not wait out.
         let beforeTheDrop = Date().addingTimeInterval(-60)
@@ -383,7 +381,7 @@ import XCTest
         manager.state.isConnected = true
 
         manager.didReconnect()
-        queue.sync {}
+        manager.waitForDelegateCalls()
 
         XCTAssertEqual(bluetooth.ensureConnectedCount, 1)
         XCTAssertTrue(bluetooth.didSend(InsulinStatusRequest.self))
@@ -400,7 +398,7 @@ import XCTest
         persisted.lastReconciliation = beforeRelaunch
         persisted.isConnected = true
         manager = TandemPumpManager(state: TandemPumpManagerState(rawValue: persisted.rawValue), bluetooth: bluetooth)
-        let (delegate, queue) = attachDelegate()
+        let delegate = attachDelegate()
         stubSyncResponses()
 
         let polled = expectation(description: "ensureCurrentPumpData completes")
@@ -410,7 +408,7 @@ import XCTest
             polled.fulfill()
         }
         wait(for: [polled], timeout: 5.0)
-        queue.sync {}
+        manager.waitForDelegateCalls()
 
         XCTAssertEqual(bluetooth.ensureConnectedCount, 1)
         let boundary = try XCTUnwrap(manager.state.lastReconciliation)
@@ -421,7 +419,7 @@ import XCTest
 
     /// The link is up only after a sync in this launch, which already reported its boundary.
     func testAPollSkippedInsideTheThrottleTellsTheHostNothing() {
-        let (delegate, queue) = attachDelegate()
+        let delegate = attachDelegate()
         manager.state.lastReconciliation = Date().addingTimeInterval(-60)
         manager.state.isConnected = true
         let batchesBefore = delegate.pumpEventBatches.count
@@ -429,7 +427,7 @@ import XCTest
         let polled = expectation(description: "ensureCurrentPumpData completes")
         manager.ensureCurrentPumpData { _ in polled.fulfill() }
         wait(for: [polled], timeout: 5.0)
-        queue.sync {}
+        manager.waitForDelegateCalls()
 
         XCTAssertEqual(bluetooth.ensureConnectedCount, 0)
         XCTAssertEqual(delegate.pumpEventBatches.count, batchesBefore)

@@ -7,7 +7,6 @@ import XCTest
     private var bluetooth: StubPumpBluetooth!
     private var manager: TandemPumpManager!
     private var delegate: MockPumpManagerDelegate!
-    private var delegateQueue: DispatchQueue!
     private var clock: ManualClock!
     private var isSuspended = true
     private var suspendedAt: Date!
@@ -23,10 +22,8 @@ import XCTest
         state.basalDose = UnfinalizedDose(suspendStartTime: suspendedAt)
         manager = TandemPumpManager(state: state, bluetooth: bluetooth, clock: clock)
         delegate = MockPumpManagerDelegate()
-        delegateQueue = DispatchQueue(label: "unanswered-resume-test")
         manager.pumpManagerDelegate = delegate
-        manager.delegateQueue = delegateQueue
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
 
         bluetooth.stub(CurrentBasalStatusRequest.self) { [unowned self] _ in
             self.basalStatus(suspended: self.isSuspended)
@@ -37,7 +34,6 @@ import XCTest
     override func tearDown() {
         manager = nil
         delegate = nil
-        delegateQueue = nil
         clock = nil
         bluetooth = nil
         super.tearDown()
@@ -66,7 +62,7 @@ import XCTest
             done.fulfill()
         }
         wait(for: [done], timeout: 5)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         return error
     }
 
@@ -74,7 +70,7 @@ import XCTest
         let done = expectation(description: "syncPumpData")
         manager.syncPumpData { _ in done.fulfill() }
         wait(for: [done], timeout: 5)
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
     }
 
     private var doses: [DoseEntry] {

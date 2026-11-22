@@ -9,7 +9,6 @@ import XCTest
     private var bluetooth: StubPumpBluetooth!
     private var manager: TandemPumpManager!
     private var delegate: MockPumpManagerDelegate!
-    private var delegateQueue: DispatchQueue!
 
     private lazy var nowPumpTimeSec = UInt32(Dates.fromInstantToJan12008EpochSeconds(Date()))
 
@@ -28,7 +27,6 @@ import XCTest
     override func tearDown() {
         manager = nil
         delegate = nil
-        delegateQueue = nil
         bluetooth = nil
         super.tearDown()
     }
@@ -149,11 +147,9 @@ import XCTest
 
     private func adoptByHost() {
         delegate = MockPumpManagerDelegate()
-        delegateQueue = DispatchQueue(label: "setup-history-load-test")
         manager.pumpManagerDelegate = delegate
-        manager.delegateQueue = delegateQueue
-        delegateQueue.sync {}
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
+        manager.waitForDelegateCalls()
     }
 
     private var reportedBoluses: [NewPumpEvent] {

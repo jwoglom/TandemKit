@@ -61,9 +61,8 @@ import XCTest
 
     private func attachDelegate() -> MockPumpManagerDelegate {
         let delegate = MockPumpManagerDelegate()
-        manager.delegateQueue = DispatchQueue(label: "jpake-failure-limit-test")
         manager.pumpManagerDelegate = delegate
-        manager.delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         return delegate
     }
 
@@ -234,11 +233,11 @@ import XCTest
     func testReachingTheLimitIsPublishedToTheHost() {
         let delegate = attachDelegate()
         failHandshakes(TandemBluetoothManager.jpakeFailureLimit - 1)
-        manager.delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         let before = delegate.didUpdateStateCount
 
         failHandshakes(1)
-        manager.delegateQueue.sync {}
+        manager.waitForDelegateCalls()
 
         XCTAssertGreaterThan(delegate.didUpdateStateCount, before)
     }
@@ -246,11 +245,11 @@ import XCTest
     func testClearingTheLimitIsPublishedToTheHost() {
         let delegate = attachDelegate()
         reachTheLimit()
-        manager.delegateQueue.sync {}
+        manager.waitForDelegateCalls()
         let before = delegate.didUpdateStateCount
 
         bluetooth.recordJpakeSuccess()
-        manager.delegateQueue.sync {}
+        manager.waitForDelegateCalls()
 
         XCTAssertGreaterThan(delegate.didUpdateStateCount, before)
     }

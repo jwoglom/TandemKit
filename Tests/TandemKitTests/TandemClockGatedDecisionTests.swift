@@ -245,7 +245,6 @@ import XCTest
     private var clock: ManualClock!
     private var manager: TandemPumpManager!
     private var delegate: MockPumpManagerDelegate!
-    private var delegateQueue: DispatchQueue!
 
     /// A clearly distinguishable interval: long enough that a T0 stamp can never be mistaken for a
     /// T1 one, short enough to stay inside the 4.5-minute-plus windows where a test needs it to.
@@ -268,14 +267,11 @@ import XCTest
             clock: clock
         )
         delegate = MockPumpManagerDelegate()
-        delegateQueue = DispatchQueue(label: "tandem-clock-gated-decision-test")
         manager.pumpManagerDelegate = delegate
-        manager.delegateQueue = delegateQueue
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
     }
 
     override func tearDown() {
-        delegateQueue = nil
         delegate = nil
         manager = nil
         clock = nil
@@ -300,7 +296,7 @@ import XCTest
     }
 
     private func settle() {
-        delegateQueue.sync {}
+        manager.waitForDelegateCalls()
     }
 
     private var reportedDoses: [DoseEntry] {
