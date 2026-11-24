@@ -313,7 +313,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
     private static func makeStatus(from state: TandemPumpManagerState) -> PumpManagerStatus {
         PumpManagerStatus(
-            timeZone: TimeZone.current,
+            timeZone: state.scheduleTimeZone,
             device: state.deviceInfo,
             pumpBatteryChargeRemaining: state.lastBatteryReading?.chargeRemaining,
             basalDeliveryState: state.basalDeliveryState,
@@ -2169,6 +2169,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
             // Read on the clock just replaced.
             self.lastPumpClockReading = nil
+            self.state.basalRateSchedule.timeZone = TandemPumpManagerState.currentFixedTimeZone
+            self.notifyDelegateStateUpdated()
             if let offset {
                 self.reportPumpClockAdjustment(by: -offset)
             } else {
@@ -3275,8 +3277,11 @@ extension TandemPumpManager {
         return pumpScheduledBasalRate(at: date)
     }
 
+    /// Loop runs its schedules on the status's time zone, Trio on the phone's wall clock.
     var hostBasalSchedule: HostBasalSchedule {
-        HostBasalSchedule(state.basalRateSchedule)
+        hostApp == .trio
+            ? HostBasalSchedule(state.basalRateSchedule)
+            : HostBasalSchedule(state.basalRateSchedule, timeZone: state.scheduleTimeZone)
     }
 
     var pumpBasalSchedule: HostBasalSchedule {

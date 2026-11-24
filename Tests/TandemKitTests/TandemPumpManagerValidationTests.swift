@@ -1019,6 +1019,29 @@ import XCTest
         XCTAssertEqual(delegate.clockAdjustments, [-TimeInterval.minutes(15)])
     }
 
+    func testSettingThePumpsClockMovesTheSchedulesToThePhonesOffset() {
+        let bluetooth = StubPumpBluetooth()
+        let manager = makeSkewedManager(bluetooth: bluetooth)
+        manager.state.basalRateSchedule.timeZone = TimeZone(secondsFromGMT: TimeZone.current.secondsFromGMT() + 3600)!
+        stubPumpClock(bluetooth, reading: manager.now.addingTimeInterval(.hours(1)))
+
+        XCTAssertNil(writePumpTime(manager))
+
+        XCTAssertEqual(manager.status.timeZone, TimeZone(secondsFromGMT: TimeZone.current.secondsFromGMT()))
+    }
+
+    func testARefusedClockWriteLeavesTheSchedulesZone() {
+        let bluetooth = StubPumpBluetooth()
+        let manager = makeSkewedManager(bluetooth: bluetooth)
+        let zone = TimeZone(secondsFromGMT: TimeZone.current.secondsFromGMT() + 3600)!
+        manager.state.basalRateSchedule.timeZone = zone
+        stubPumpClock(bluetooth, reading: manager.now.addingTimeInterval(.hours(1)), writeStatus: 1)
+
+        XCTAssertNotNil(writePumpTime(manager))
+
+        XCTAssertEqual(manager.status.timeZone, zone)
+    }
+
     func testWithoutAClockReadingTheLastMeasuredOffsetIsReported() {
         let bluetooth = StubPumpBluetooth()
         let manager = makeSkewedManager(bluetooth: bluetooth)

@@ -259,7 +259,7 @@ extension TandemPumpManager {
                 throw error
             }
 
-            let schedule = BasalRateSchedule(dailyItems: sortedItems, timeZone: TimeZone.current) ?? self.state.basalRateSchedule
+            let schedule = BasalRateSchedule(dailyItems: sortedItems, timeZone: self.state.scheduleTimeZone) ?? self.state.basalRateSchedule
 
             self.state.basalRateSchedule = schedule
             self.state.hasSyncedBasalRateSchedule = true
