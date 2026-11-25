@@ -91,12 +91,19 @@ final class TimeChangeConformanceTests: ConformanceTestCase {
         return driver
     }
 
+    /// Until a tick has read the pump's log to its end and the host has been given what it found. The
+    /// fetch gate opens before the tick hands its outcome to the report pass, so the watermark and the
+    /// gate alone let a check run before the doses reach the delegate.
     private func waitForBackfill(_ driver: FaketandemHarness.Driver, timeout: TimeInterval = 180) throws {
         let last = try harness.client.snapshot().history.lastSequence
         try IntegrationWait.until("the driver to read the pump's history through \(last)", timeout: timeout) {
             (driver.manager.state.historyBackfill?.watermark).map { Int($0) >= last } == true
-                && !driver.manager.historyFetchGate.isBusy
+                && !driver.manager.historyFetchGate.isBusy && !driver.manager.historyBackfillCoordinator.isTickRunning
         }
+        let jobsDone = ResultBox<Void>()
+        driver.bluetooth.ensureConnected { _ in jobsDone.set(()) }
+        try jobsDone.wait("the history pass's command job", timeout: timeout)
+        driver.drainDelegate()
     }
 
     private func radioOff(_ driver: FaketandemHarness.Driver) throws {
