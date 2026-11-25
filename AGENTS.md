@@ -499,7 +499,7 @@ host queue, so its state stays behind its lock.
   Loop asks for one only when it first reads `.inProgress`, which after a relaunch comes before any
   read of the pump. An unconfirmed bolus still gets none until the pump is seen delivering it.
 - A zero temp basal is always allowed, whatever the profile, sync or update state, since 0% of any
-  profile is 0. Control-IQ, a running bolus and a duration the pump refuses still refuse it.
+  profile is 0. Control-IQ, a running bolus, a suspended pump and a duration the pump refuses still refuse it.
 - `enactTempBasal` refuses a temp outside 15 minutes to 72 hours before connecting: the pump
   refuses one too, but only after the running temp is stopped. It sends whole minutes and reports
   the temp for the minutes sent.
@@ -518,7 +518,7 @@ host queue, so its state stays behind its lock.
 - `enactTempBasal` and `enactManualTempBasal` refuse any temp, zero included, with `pumpIsSuspended`
   when the pump's `CurrentBasalStatus` reads suspended, before stopping or setting anything. Commands
   run one job at a time on the command queue, so a suspend from the settings screen queued ahead of
-  the host's job has already run when the host's reads the pump, and a Mobi answered the zero temp
+  the host's job has already run when that job reads the pump, and a Mobi answered the zero temp
   after it with status 1. A cancel still goes through.
 - The pump refuses a percent whose share of its rate is under its 0.1 U/hr minimum (a Mobi
   refused 17% of 0.58 U/hr), so `tempBasalPercentAndRate` sends the lowest percent it accepts
