@@ -515,6 +515,11 @@ host queue, so its state stays behind its lock.
 - `enactTempBasal` refuses a non-zero temp with `pumpProfileBasalRateIsZero` when the pump's
   `CurrentBasalStatus` reads a profile rate of 0 U/hr, before stopping a running temp basal; a
   Mobi ran a 0 U/hr profile for a day while the host was told its temp rates ran (#335, #343).
+- `enactTempBasal` and `enactManualTempBasal` refuse any temp, zero included, with `pumpIsSuspended`
+  when the pump's `CurrentBasalStatus` reads suspended, before stopping or setting anything. Commands
+  run one job at a time on the command queue, so a suspend from the settings screen queued ahead of
+  the host's job has already run when the host's reads the pump, and a Mobi answered the zero temp
+  after it with status 1. A cancel still goes through.
 - The pump refuses a percent whose share of its rate is under its 0.1 U/hr minimum (a Mobi
   refused 17% of 0.58 U/hr), so `tempBasalPercentAndRate` sends the lowest percent it accepts
   instead, nearer the request than 0%.

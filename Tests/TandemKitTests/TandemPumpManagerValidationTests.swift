@@ -302,6 +302,64 @@ import XCTest
         XCTAssertFalse(bluetooth.didSend(SetTempRateRequest.self))
     }
 
+    // MARK: - Suspended pump
+
+    private func suspendedManager(_ bluetooth: StubPumpBluetooth) -> TandemPumpManager {
+        makeSyncedManager(bluetooth: bluetooth, pumpBasal: CurrentBasalStatusResponse(
+            profileBasalRate: 1000,
+            currentBasalRate: 0,
+            basalModifiedBitmask: 0x01
+        ))
+    }
+
+    func testTempBasalIsRefusedWhileThePumpIsSuspended() {
+        let bluetooth = StubPumpBluetooth()
+        let manager = suspendedManager(bluetooth)
+
+        let error = enactTempBasal(manager, unitsPerHour: 1.46, for: .minutes(30))
+
+        XCTAssertEqual(validationError(from: error), .pumpIsSuspended)
+        XCTAssertFalse(bluetooth.didSend(StopTempRateRequest.self))
+        XCTAssertFalse(bluetooth.didSend(SetTempRateRequest.self))
+    }
+
+    /// The field report: a suspend from the settings screen ran first, and the loop's zero temp met a suspended pump.
+    func testZeroTempBasalIsRefusedWhileThePumpIsSuspended() {
+        let bluetooth = StubPumpBluetooth()
+        let manager = suspendedManager(bluetooth)
+
+        let error = enactTempBasal(manager, unitsPerHour: 0, for: .minutes(120))
+
+        XCTAssertEqual(validationError(from: error), .pumpIsSuspended)
+        XCTAssertFalse(bluetooth.didSend(SetTempRateRequest.self))
+        XCTAssertNotEqual(manager.state.basalDose.type, .tempBasal)
+    }
+
+    func testManualTempBasalIsRefusedWhileThePumpIsSuspended() {
+        let bluetooth = StubPumpBluetooth()
+        let manager = suspendedManager(bluetooth)
+
+        let expectation = expectation(description: "Manual temp basal completion")
+        var error: PumpManagerError?
+        manager.enactManualTempBasal(percent: 50, duration: .minutes(30)) {
+            error = $0
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: 5.0)
+
+        XCTAssertEqual(validationError(from: error), .pumpIsSuspended)
+        XCTAssertFalse(bluetooth.didSend(StopTempRateRequest.self))
+        XCTAssertFalse(bluetooth.didSend(SetTempRateRequest.self))
+    }
+
+    func testTempBasalCancelStillGoesThroughWhileThePumpIsSuspended() {
+        let bluetooth = StubPumpBluetooth()
+        let manager = suspendedManager(bluetooth)
+
+        XCTAssertNil(enactTempBasal(manager, unitsPerHour: 0, for: 0))
+        XCTAssertFalse(bluetooth.didSend(SetTempRateRequest.self))
+    }
+
     func testTempBasalGoesOutOnANonZeroPumpProfile() {
         let bluetooth = StubPumpBluetooth()
         let manager = makeUnsyncedManager(bluetooth: bluetooth)

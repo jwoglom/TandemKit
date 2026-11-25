@@ -125,6 +125,10 @@ extension TandemPumpManager {
             case let .success(status):
                 currentBasal = status
             }
+            if let refusal = self.tempBasalRefusalWhileSuspended(currentBasal, .enactManualTempBasal) {
+                completion(refusal)
+                return
+            }
 
             if !isZeroTemp {
                 let accepted = self.manualTempBasalPercents(for: programmedDuration, profileBasalRate: currentBasal.profileBasalRate)

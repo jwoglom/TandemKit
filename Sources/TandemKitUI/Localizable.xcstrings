@@ -2930,6 +2930,9 @@
         }
       }
     },
+    "Insulin delivery is suspended on the pump" : {
+
+    },
     "Insulin delivery is suspended. Resume delivery before setting a temp basal." : {
       "comment" : "Temp basal screen while the pump is suspended",
       "localizations" : {
@@ -3353,6 +3356,9 @@
           }
         }
       }
+    },
+    "No temporary basal rate was set. Resume insulin delivery to let the app control basal again." : {
+
     },
     "No Recent Pump Data" : {
 

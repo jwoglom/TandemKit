@@ -73,6 +73,7 @@ public enum TandemPumpManagerValidationError: LocalizedError, Equatable {
     /// `accepted` is the non-zero percents the pump takes over the whole duration; nil for none.
     case manualTempBasalOutOfRange(percent: Int, accepted: ClosedRange<Int>?)
     case tempBasalAlreadyRunning
+    case pumpIsSuspended
 
     public var errorDescription: String? {
         switch self {
@@ -170,6 +171,11 @@ public enum TandemPumpManagerValidationError: LocalizedError, Equatable {
                 localized: "Another temporary basal rate is running",
                 comment: "Error when a temp basal set from TandemKit's settings finds another temp running on the pump"
             )
+        case .pumpIsSuspended:
+            return String(
+                localized: "Insulin delivery is suspended on the pump",
+                comment: "Error when a temp basal is blocked because the pump is suspended"
+            )
         }
     }
 
@@ -253,6 +259,11 @@ public enum TandemPumpManagerValidationError: LocalizedError, Equatable {
             return String(
                 localized: "Stop the temporary basal rate that is running, or wait for it to end.",
                 comment: "Recovery suggestion when a temp basal set from TandemKit's settings finds another temp running"
+            )
+        case .pumpIsSuspended:
+            return String(
+                localized: "No temporary basal rate was set. Resume insulin delivery to let the app control basal again.",
+                comment: "Recovery suggestion when a temp basal is blocked because the pump is suspended"
             )
         }
     }

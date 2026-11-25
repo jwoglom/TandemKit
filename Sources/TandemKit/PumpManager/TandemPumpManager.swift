@@ -1303,6 +1303,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
             case let .success(status):
                 currentBasal = status
             }
+            if let refusal = self.tempBasalRefusalWhileSuspended(currentBasal, .enactTempBasal) {
+                completion(refusal)
+                return
+            }
 
             // Everything the pump could refuse is settled before the running temp is stopped: a
             // refusal after the stop leaves the pump on its profile until the next cycle.
@@ -1489,6 +1493,15 @@ public class TandemPumpManager: PumpManager, Pluggable {
             return .failure(.deviceState(TandemPumpManagerValidationError.pumpProfileBasalRateIsZero))
         }
         return .success(status)
+    }
+
+    /// A suspend queued ahead of the host's job (the settings screen's) has run by the time this
+    /// one reads the pump, and the pump refuses a `SetTempRate` while suspended. Zero temps too: the
+    /// host would count a temp over the suspend it holds.
+    func tempBasalRefusalWhileSuspended(_ status: CurrentBasalStatusResponse, _ command: DosingCommand) -> PumpManagerError? {
+        guard status.basalType == .suspend else { return nil }
+        logger.warning("[\(command.rawValue)] Blocked: the pump is suspended")
+        return .deviceState(TandemPumpManagerValidationError.pumpIsSuspended)
     }
 
     /// Stops the temp `status` shows running, if any: the pump refuses a `SetTempRate` while one runs.
