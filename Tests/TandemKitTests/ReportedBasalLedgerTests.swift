@@ -154,7 +154,7 @@ final class ReportedBasalLedgerTests: XCTestCase {
         let schedule = HostBasalSchedule(BasalRateSchedule(dailyItems: [
             RepeatingScheduleValue(startTime: 0, value: 1.0),
             RepeatingScheduleValue(startTime: .minutes(70), value: 2.0)
-        ])!)
+        ])!, timeZone: TimeZone(secondsFromGMT: TimeZone.current.secondsFromGMT())!)
 
         XCTAssertEqual(schedule.rate(at: at(.minutes(59))), 1.0)
         XCTAssertEqual(schedule.rate(at: at(.minutes(61))), 2.0)
