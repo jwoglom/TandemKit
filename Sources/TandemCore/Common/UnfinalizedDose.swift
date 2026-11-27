@@ -343,7 +343,7 @@ public class UnfinalizedDose: Equatable {
         now: Date = Date()
     ) -> UnfinalizedDose {
         // The wall clock's time of day, which the time since midnight is not on a DST change's day.
-        let local = now.timeIntervalSince1970 + TimeInterval(TimeZone.current.secondsFromGMT(for: now))
+        let local = now.timeIntervalSince1970 + TimeInterval(basalSchedule.timeZone.secondsFromGMT(for: now))
         let nowTimeInterval = local - (local / 86400).rounded(.down) * 86400
 
         let currentRate = basalSchedule.items.last(where: { $0.startTime < nowTimeInterval })?.value ?? 0

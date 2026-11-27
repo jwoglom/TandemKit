@@ -295,9 +295,9 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         maxBasalRateUnitsPerHour: Double? = nil,
         maxBolusUnits: Double? = nil
     ) {
-        self.basalRateSchedule = basalRateSchedule
+        self.basalRateSchedule = Self.withFixedTimeZone(basalRateSchedule)
         pumpState = PumpState()
-        basalDose = .defaultBasalDose(basalSchedule: basalRateSchedule, insulineType: nil)
+        basalDose = .defaultBasalDose(basalSchedule: self.basalRateSchedule, insulineType: nil)
         settings = TandemPumpManagerSettings(
             maxBolus: maxBolusUnits,
             maxTempBasalRate: maxBasalRateUnitsPerHour,
@@ -679,6 +679,31 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         pumpClockOffset + TimeInterval(TimeZone.current.secondsFromGMT())
     }
 
+    /// The one fixed UTC offset every schedule runs on, reported as the status's time zone. It
+    /// follows the pump's clock, never the phone's DST.
+    public var scheduleTimeZone: TimeZone {
+        basalRateSchedule.timeZone
+    }
+
+    /// A fixed zone at `seconds` from UTC, to the nearest quarter hour so clock drift is left out.
+    public static func fixedTimeZone(secondsFromGMT seconds: TimeInterval) -> TimeZone? {
+        TimeZone(secondsFromGMT: Int((seconds / .minutes(15)).rounded()) * Int(TimeInterval.minutes(15)))
+    }
+
+    /// How near a quarter-hour offset a set pump clock must read for the schedules to follow it: a
+    /// clock set by hand on the pump is a minute or so off the time it was set to.
+    public static let scheduleTimeZoneTolerance: TimeInterval = .minutes(2)
+
+    public static var currentFixedTimeZone: TimeZone {
+        TimeZone(secondsFromGMT: TimeZone.current.secondsFromGMT())!
+    }
+
+    static func withFixedTimeZone(_ schedule: BasalRateSchedule) -> BasalRateSchedule {
+        var schedule = schedule
+        schedule.timeZone = TimeZone(secondsFromGMT: schedule.timeZone.secondsFromGMT()) ?? currentFixedTimeZone
+        return schedule
+    }
+
     /// Past this the settings screen shows its time-change notice; nothing else acts on it.
     public static let pumpClockSmallSkewThreshold: TimeInterval = .minutes(1)
 
@@ -1043,7 +1068,7 @@ private extension TandemPumpManagerState {
         }
 
         let timeZone = TimeZone(identifier: timeZoneIdentifier) ?? .current
-        return BasalRateSchedule(dailyItems: items, timeZone: timeZone)
+        return BasalRateSchedule(dailyItems: items, timeZone: timeZone).map(withFixedTimeZone)
     }
 }
 

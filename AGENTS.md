@@ -524,8 +524,13 @@ host queue, so its state stays behind its lock.
   the request: delivery never exceeds the request on either side, and the host can only over-count,
   until the change. Segment changes come from the host's schedule on the pump's clock
   (`pumpSegmentChanges`), which is the pump's profile whenever non-zero temps are allowed.
-- The host's schedule is read by the phone's wall clock (`getScheduledBasalRate`), the pump's by
-  its own, which observes no DST (`pumpScheduledBasalRate`, on `pumpWallClockShift`), and neither by
+- The schedules run on one fixed UTC offset, `scheduleTimeZone` (the basal schedule's zone, never a
+  DST-following one), which `status.timeZone` reports and Loop puts all its schedules on. It follows
+  the pump's clock, to the quarter hour: it moves when the pump's clock is set (`writePumpTime` or
+  the pump's menu, found by a clock read), never at a phone DST or zone change.
+- The host's schedule (`getScheduledBasalRate`) is read on `scheduleTimeZone` for Loop and on the
+  phone's wall clock for Trio, which runs its schedules by the phone's clock. The pump's is read by
+  its own clock (`pumpScheduledBasalRate`, on `pumpWallClockShift`). Neither is read by
   the time since midnight, which runs an hour off the wall clock from a DST change to the next
   midnight. On a fall-back day that took a pump's 0.5 U/hr at 05:00 for its 06:00 segment's 0.7,
   refused temp basals for the hour, and cut a running temp at a segment change an hour early.

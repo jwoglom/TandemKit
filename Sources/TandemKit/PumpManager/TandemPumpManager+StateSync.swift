@@ -27,11 +27,26 @@ extension TandemPumpManager {
             if abs(step) >= TandemPumpManagerState.pumpClockStepThreshold {
                 logger.warning("The pump's clock moved \(Int(step.rounded())) s since it was last read; it was set")
                 state.lastPumpClockStep = PumpClockStep(foundAt: checkedAt, by: step)
+                followPumpClockWithScheduleTimeZone()
             }
         }
 
         notifyDelegateStateUpdated()
         reconcilePumpClockSkewAlert()
+    }
+
+    /// After a read finds the pump's clock was set, the schedules move to it. Drift alone, a phone DST
+    /// or zone change, or a first read never move them: the clock skew temp covers those.
+    func followPumpClockWithScheduleTimeZone() {
+        guard TandemPumpManagerState.trustsPumpClockOffset(state.pumpClockOffset),
+              let zone = TandemPumpManagerState.fixedTimeZone(secondsFromGMT: state.pumpWallClockShift),
+              abs(state.pumpWallClockShift - TimeInterval(zone.secondsFromGMT())) < TandemPumpManagerState.scheduleTimeZoneTolerance,
+              zone.secondsFromGMT() != state.scheduleTimeZone.secondsFromGMT()
+        else {
+            return
+        }
+        logger.info("Schedules move from \(state.scheduleTimeZone.identifier) to the pump's clock, \(zone.identifier)")
+        state.basalRateSchedule.timeZone = zone
     }
 
     @discardableResult func fetchControlIQStatus() -> ControlIQInfoAbstractResponse? {

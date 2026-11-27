@@ -84,21 +84,58 @@ import XCTest
         )
     }
 
-    // MARK: - The schedule on the phone's clock
+    // MARK: - The schedules' one fixed offset
 
-    func testTheHostsScheduleFollowsThePhonesWallClock() {
+    private func scheduleZone(_ utcOffset: Int) {
+        manager.state.basalRateSchedule.timeZone = TimeZone(secondsFromGMT: utcOffset)!
+    }
+
+    func testLoopsScheduleStaysOnTheFixedOffsetAcrossTheDSTChange() {
+        manager.hostApp = .loop
+        scheduleZone(Self.daylightOffset)
+
+        XCTAssertEqual(manager.getScheduledBasalRate(at: Self.utc(11, 1, 9, 50)), 0.5, "05:50 EDT")
+        XCTAssertEqual(manager.getScheduledBasalRate(at: Self.utc(11, 1, 10, 2)), 0.7, "06:02 on the fixed offset, 05:02 EST")
+    }
+
+    func testTriosScheduleFollowsThePhonesWallClock() {
+        manager.hostApp = .trio
+        scheduleZone(Self.daylightOffset)
+
         XCTAssertEqual(manager.getScheduledBasalRate(at: Self.utc(11, 1, 10, 2)), 0.5, "05:02 EST")
         XCTAssertEqual(manager.getScheduledBasalRate(at: Self.utc(11, 1, 11, 2)), 0.7, "06:02 EST")
     }
 
-    func testTheDefaultBasalDoseFollowsThePhonesWallClock() {
+    func testTheStatusReportsTheFixedOffset() {
+        scheduleZone(Self.daylightOffset)
+
+        XCTAssertEqual(manager.status.timeZone, TimeZone(secondsFromGMT: Self.daylightOffset))
+    }
+
+    func testTheDefaultBasalDoseRunsOnTheScheduleZone() {
+        scheduleZone(Self.daylightOffset)
         let dose = UnfinalizedDose.defaultBasalDose(
             basalSchedule: manager.state.basalRateSchedule,
             insulineType: .novolog,
             now: Self.utc(11, 1, 10, 2)
         )
 
-        XCTAssertEqual(dose.value, 0.5)
+        XCTAssertEqual(dose.value, 0.7)
+    }
+
+    func testASavedNamedZoneComesBackAsTheFixedOffset() throws {
+        var raw = manager.state.rawValue
+        var schedule = try XCTUnwrap(raw["basalRateSchedule"] as? [String: Any])
+        schedule["timeZoneIdentifier"] = "America/New_York"
+        raw["basalRateSchedule"] = schedule
+
+        let zone = try XCTUnwrap(TandemPumpManagerState(rawValue: raw)).scheduleTimeZone
+        XCTAssertEqual(zone, TimeZone(secondsFromGMT: TimeZone(identifier: "America/New_York")!.secondsFromGMT()))
+    }
+
+    func testAFixedZoneLeavesOutClockDrift() {
+        XCTAssertEqual(TandemPumpManagerState.fixedTimeZone(secondsFromGMT: TimeInterval(Self.standardOffset) + 200), TimeZone(secondsFromGMT: Self.standardOffset))
+        XCTAssertEqual(TandemPumpManagerState.fixedTimeZone(secondsFromGMT: 5.5 * 3600 - 90), TimeZone(secondsFromGMT: 19800))
     }
 
     // MARK: - The schedule on the pump's clock
@@ -184,5 +221,53 @@ import XCTest
         readPumpClock(localTimeAt: Self.standardOffset, sinceReset: 1000)
 
         XCTAssertNil(manager.state.lastPumpClockStep)
+    }
+
+    func testTheScheduleZoneMovesWhenThePumpsClockIsSetAndNotWhenThePhoneFallsBack() throws {
+        try phoneZone("Etc/GMT+4")
+        scheduleZone(Self.daylightOffset)
+        clock.set(Self.utc(11, 1, 5, 40))
+        readPumpClock(localTimeAt: Self.daylightOffset, sinceReset: 1000)
+        XCTAssertEqual(manager.state.scheduleTimeZone, TimeZone(secondsFromGMT: Self.daylightOffset))
+
+        try phoneZone("Etc/GMT+5")
+        clock.set(Self.utc(11, 1, 6, 20))
+        readPumpClock(localTimeAt: Self.daylightOffset, sinceReset: 3400)
+        XCTAssertEqual(manager.state.scheduleTimeZone, TimeZone(secondsFromGMT: Self.daylightOffset), "the pump still reads daylight time")
+
+        clock.set(Self.utc(11, 1, 6, 30))
+        readPumpClock(localTimeAt: Self.standardOffset, sinceReset: 4000)
+        XCTAssertEqual(manager.state.scheduleTimeZone, TimeZone(secondsFromGMT: Self.standardOffset))
+        XCTAssertEqual(manager.status.timeZone, TimeZone(secondsFromGMT: Self.standardOffset))
+    }
+
+    func testAnUntrustedPumpClockLeavesTheScheduleZone() {
+        scheduleZone(Self.standardOffset)
+        readPumpClock(localTimeAt: Self.standardOffset, sinceReset: 1000)
+        clock.set(Self.utc(11, 1, 10, 10))
+        readPumpClock(localTimeAt: Self.standardOffset + 3 * 86400, sinceReset: 1480)
+
+        XCTAssertNotNil(manager.state.lastPumpClockStep)
+        XCTAssertEqual(manager.state.scheduleTimeZone, TimeZone(secondsFromGMT: Self.standardOffset))
+    }
+
+    /// The skewed clock H6 runs: drift, not a set, so the clock skew temp covers it.
+    func testAPumpClockElevenMinutesAheadLeavesTheScheduleZone() {
+        scheduleZone(Self.standardOffset)
+        readPumpClock(localTimeAt: Self.standardOffset + 11 * 60, sinceReset: 1000)
+        clock.set(Self.utc(11, 1, 10, 10))
+        readPumpClock(localTimeAt: Self.standardOffset + 11 * 60, sinceReset: 1480)
+
+        XCTAssertEqual(manager.state.scheduleTimeZone, TimeZone(secondsFromGMT: Self.standardOffset))
+    }
+
+    func testAPumpClockSetElevenMinutesAheadLeavesTheScheduleZone() {
+        scheduleZone(Self.standardOffset)
+        readPumpClock(localTimeAt: Self.standardOffset, sinceReset: 1000)
+        clock.set(Self.utc(11, 1, 10, 10))
+        readPumpClock(localTimeAt: Self.standardOffset + 11 * 60, sinceReset: 1480)
+
+        XCTAssertNotNil(manager.state.lastPumpClockStep)
+        XCTAssertEqual(manager.state.scheduleTimeZone, TimeZone(secondsFromGMT: Self.standardOffset))
     }
 }
