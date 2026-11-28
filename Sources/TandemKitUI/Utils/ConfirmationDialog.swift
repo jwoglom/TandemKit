@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// The title, message and buttons of a confirmation dialog.
 ///
@@ -16,6 +17,7 @@ import SwiftUI
 /// problem, not just a layout one.
 struct ConfirmationDialogContent {
     struct Action {
+        /// An alert drops any styling on a button's label; only the role and `isPreferred` reach UIKit.
         let title: Text
         let role: ButtonRole?
         var isPreferred = false
@@ -45,6 +47,87 @@ struct ConfirmationDialogContent {
     let title: Text
     let message: Text
     let actions: [Action]
+
+    var hasPreferredAction: Bool {
+        actions.contains(where: \.isPreferred)
+    }
+}
+
+/// The preferred action's label takes the host's tint over iOS's blue fill, which is unreadable, and
+/// SwiftUI gives no way to style it. So once the alert is up, this draws that one label white.
+private struct PreferredActionLabelColor: UIViewRepresentable {
+    let isPresented: Bool
+
+    private static let log = TandemLogger(category: "ConfirmationDialog")
+    private static let pollInterval: TimeInterval = 0.05
+    private static let pollAttempts = 20
+
+    final class Coordinator {
+        var wasPresented = false
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeUIView(context _: Context) -> UIView {
+        let view = UIView()
+        view.isHidden = true
+        view.isUserInteractionEnabled = false
+        return view
+    }
+
+    func updateUIView(_ view: UIView, context: Context) {
+        let wasPresented = context.coordinator.wasPresented
+        context.coordinator.wasPresented = isPresented
+        guard isPresented, !wasPresented else { return }
+        Self.recolorWhenPresented(from: view, attemptsLeft: Self.pollAttempts)
+    }
+
+    // SwiftUI presents the alert a runloop or more after the binding flips.
+    private static func recolorWhenPresented(from view: UIView, attemptsLeft: Int) {
+        guard let alert = topPresentedController(in: view.window) as? UIAlertController else {
+            guard attemptsLeft > 0 else {
+                log.info("No alert came up to recolor the preferred action of")
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + pollInterval) { [weak view] in
+                guard let view else { return }
+                recolorWhenPresented(from: view, attemptsLeft: attemptsLeft - 1)
+            }
+            return
+        }
+        recolorPreferredAction(of: alert)
+        // The fill and labels are laid out during the presentation, which can reset the color.
+        alert.transitionCoordinator?.animate(alongsideTransition: nil) { _ in
+            recolorPreferredAction(of: alert)
+        }
+    }
+
+    private static func topPresentedController(in window: UIWindow?) -> UIViewController? {
+        var controller = window?.rootViewController
+        while let presented = controller?.presentedViewController {
+            controller = presented
+        }
+        return controller
+    }
+
+    private static func recolorPreferredAction(of alert: UIAlertController) {
+        guard let title = alert.preferredAction?.title else {
+            log.info("Alert has no preferred action, so its label keeps the tint")
+            return
+        }
+        let labels = labels(in: alert.view).filter { $0.text == title }
+        if labels.isEmpty {
+            log.info("Alert has no label for its preferred action, so it keeps the tint")
+        }
+        for label in labels {
+            label.textColor = .white
+        }
+    }
+
+    private static func labels(in view: UIView) -> [UILabel] {
+        if let label = view as? UILabel { return [label] }
+        return view.subviews.flatMap(labels(in:))
+    }
 }
 
 @ViewBuilder
@@ -52,8 +135,7 @@ private func alertButton(for action: ConfirmationDialogContent.Action) -> some V
     // An alert takes its preferred action from the default-action shortcut; `Alert.Button`
     // has no way to set one, which is why this isn't built on `Alert`.
     if action.isPreferred {
-        // Unset, the label took the app tint, unreadable on the preferred button's blue fill.
-        Button(role: action.role, action: action.action) { action.title.foregroundStyle(.white) }
+        Button(role: action.role, action: action.action) { action.title }
             .keyboardShortcut(.defaultAction)
     } else {
         Button(role: action.role, action: action.action) { action.title }
@@ -75,7 +157,9 @@ private struct ItemConfirmationDialog<Item: Identifiable>: ViewModifier {
     let dialog: (Item) -> ConfirmationDialogContent
 
     func body(content base: Content) -> some View {
-        base.alert(
+        base.background(
+            PreferredActionLabelColor(isPresented: item.map { dialog($0).hasPreferredAction } ?? false)
+        ).alert(
             item.map { dialog($0).title } ?? Text(verbatim: ""),
             isPresented: Binding(get: { item != nil }, set: { if !$0 { item = nil } }),
             presenting: item
@@ -93,7 +177,9 @@ private struct BoolConfirmationDialog: ViewModifier {
 
     func body(content base: Content) -> some View {
         let content = dialog()
-        return base.alert(content.title, isPresented: $isPresented) {
+        return base.background(
+            PreferredActionLabelColor(isPresented: isPresented && content.hasPreferredAction)
+        ).alert(content.title, isPresented: $isPresented) {
             alertButtons(for: content)
         } message: {
             content.message
